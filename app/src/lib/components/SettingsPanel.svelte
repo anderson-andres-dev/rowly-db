@@ -3,6 +3,7 @@
   import { Code2, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Sun, X } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
   import Select from "$lib/components/Select.svelte";
+  import NumberStepper from "$lib/components/NumberStepper.svelte";
   import { newerRelease } from "$lib/stores/updates";
   import { LOCALE_NAMES, LOCALES, locale, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
@@ -131,10 +132,17 @@
     },
   ] as const;
 
+  // El nombre basta; solo lleva una segunda linea el atajo que la necesita
+  // para no confundirse.
+  const SHORTCUT_HINTS: Record<string, MessageKey> = {
+    "execute-query": "settings.shortcuts.hint.execute",
+    "submit-result-changes": "settings.shortcuts.hint.submit",
+  };
+
   let shortcutQuery = $state("");
   let recordingId = $state<string | null>(null);
 
-  function shortcutText(id: string, field: "label" | "description"): string {
+  function shortcutText(id: string, field: "label"): string {
     return $t(`shortcuts.${id}.${field}` as MessageKey);
   }
 
@@ -344,7 +352,7 @@
           <div class="set-group">
             <div class="set-row">
               <div class="set-text">
-                <label class="set-label" for="formatter-line-width">{$t("settings.editor.lineWidth")}</label>
+                <span class="set-label">{$t("settings.editor.lineWidth")}</span>
                 <span class="set-desc">{$t("settings.editor.lineWidth.description")}</span>
               </div>
               <div class="row-control">
@@ -358,24 +366,20 @@
                     <RotateCcw size={14} aria-hidden="true" />
                   </button>
                 {/if}
-                <label class="ui-field number-field">
-                  <input
-                    id="formatter-line-width"
-                    type="number"
-                    min={MIN_FORMATTER_LINE_WIDTH}
-                    max={MAX_FORMATTER_LINE_WIDTH}
-                    step="1"
-                    value={$editorSettings.formatterLineWidth}
-                    onchange={(event) => setFormatterLineWidth(event.currentTarget.valueAsNumber)}
-                  />
-                  <span class="ui-field-suffix">{$t("settings.editor.characters")}</span>
-                </label>
+                <NumberStepper
+                  id="formatter-line-width"
+                  label={$t("settings.editor.lineWidth")}
+                  value={$editorSettings.formatterLineWidth}
+                  min={MIN_FORMATTER_LINE_WIDTH}
+                  max={MAX_FORMATTER_LINE_WIDTH}
+                  suffix={$t("settings.editor.characters")}
+                  onchange={setFormatterLineWidth}
+                />
               </div>
             </div>
             <div class="set-row">
               <div class="set-text">
                 <span class="set-label" id="uppercase-label">{$t("settings.editor.uppercase")}</span>
-                <span class="set-desc">{$t("settings.editor.uppercase.description")}</span>
               </div>
               <button
                 class="ui-switch"
@@ -395,7 +399,6 @@
             <div class="set-row">
               <div class="set-text">
                 <span class="set-label" id="tab-navigation-label">{$t("settings.editor.tabNavigation")}</span>
-                <span class="set-desc">{$t("settings.editor.tabNavigation.description")}</span>
               </div>
               <button
                 class="ui-switch"
@@ -429,8 +432,8 @@
                       <span class="set-desc conflict">
                         {$t("settings.shortcuts.conflict", { name: shortcutText(shortcut.conflict.id, "label") })}
                       </span>
-                    {:else}
-                      <span class="set-desc">{shortcutText(shortcut.id, "description")}</span>
+                    {:else if SHORTCUT_HINTS[shortcut.id]}
+                      <span class="set-desc">{$t(SHORTCUT_HINTS[shortcut.id])}</span>
                     {/if}
                   </div>
                   <div class="row-control">
@@ -622,13 +625,7 @@
     gap: var(--space-1);
   }
 
-  .number-field {
-    width: 8.5rem;
-  }
 
-  .number-field input {
-    text-align: right;
-  }
 
   .notice,
   .empty {

@@ -20,13 +20,23 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow: hidden;
-  border-radius: var(--radius-md);
+}
+
+/* Las esquinas se redondean en las filas y no con overflow en el grupo: un
+   desplegable dentro de una fila tiene que poder salir del grupo. */
+.set-group > :first-child {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.set-group > :last-child {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
 }
 
 .set-row {
   display: flex;
-  min-height: 3.25rem;
+  min-height: 2.875rem;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
