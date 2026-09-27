@@ -303,8 +303,9 @@ describe("queryConsoles: pestañas de tabla", () => {
     });
     const reloaded = await import("./queryConsoles");
     const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
-    expect(item.table?.where).toBe("a = 1");
-    expect(item.table?.mode).toBe("sql");
+    // Lo escrito en modo SQL no se restaura: la pestaña vuelve al constructor.
+    expect(item.table?.where).toBe("");
+    expect(item.table?.mode).toBe("builder");
   });
 
   it("una pestaña guardada antes del constructor abre en el constructor, sin el filtro viejo", async () => {

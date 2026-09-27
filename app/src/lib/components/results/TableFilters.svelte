@@ -330,9 +330,12 @@
     gap: var(--space-2);
   }
 
+  /* Compacto a la izquierda: cada parte con el ancho que necesita (el valor
+     hasta 20rem) y lo que sobra queda libre a la derecha, en vez de estirar
+     el valor de lado a lado. Aplicar va justo despues de las acciones. */
   .builder {
     display: grid;
-    grid-template-columns: 1.75rem 12rem 8.5rem minmax(0, 1fr) 1.75rem 1.75rem auto;
+    grid-template-columns: 1.75rem 11rem 7.5rem minmax(8rem, 20rem) 1.75rem 1.75rem 1fr;
     align-items: center;
     gap: var(--space-1) var(--space-2);
   }
@@ -344,7 +347,8 @@
   .status-cell {
     display: flex;
     min-width: 0;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    padding-left: var(--space-2);
   }
 
   .mode-toggle.sql {
