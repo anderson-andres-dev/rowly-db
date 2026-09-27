@@ -16,10 +16,11 @@ describe("neighborZone", () => {
     expect(neighborZone("files", "up", "files", "editor")).toBe("explorer");
   });
 
-  it("no hay vecino hacia el borde de la ventana", () => {
-    expect(neighborZone("explorer", "left", "explorer", "editor")).toBeNull();
-    expect(neighborZone("editor", "right", "explorer", "editor")).toBeNull();
-    expect(neighborZone("editor", "up", "explorer", "editor")).toBeNull();
-    expect(neighborZone("results", "down", "explorer", "results")).toBeNull();
+  it("en los bordes da la vuelta, asi se recorren todas las zonas", () => {
+    expect(neighborZone("explorer", "left", "explorer", "editor")).toBe("editor");
+    expect(neighborZone("editor", "right", "explorer", "editor")).toBe("explorer");
+    expect(neighborZone("editor", "up", "explorer", "editor")).toBe("results");
+    expect(neighborZone("results", "down", "explorer", "results")).toBe("editor");
+    expect(neighborZone("explorer", "up", "explorer", "editor")).toBe("files");
   });
 });

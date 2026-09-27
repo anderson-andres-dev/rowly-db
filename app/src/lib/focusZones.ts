@@ -6,8 +6,9 @@ import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
 //   ┌──────────┬────────────┐
 //   │ explorer │   editor   │    Ctrl+W y despues una flecha lleva el
 //   │          ├────────────┤    foco a la zona vecina en esa direccion.
-//   │  files   │  results   │
-//   └──────────┴────────────┘
+//   │  files   │  results   │    Con Ctrl apretado, cada flecha sigue
+//   └──────────┴────────────┘    moviendo (y en los bordes da la vuelta)
+//                                hasta soltar Ctrl.
 //
 // La zona activa la deciden solo el foco real y el clic, nunca el mouse
 // encima: WebKit no enfoca un boton al hacer clic, asi que el clic tambien
@@ -40,13 +41,13 @@ export function setSidebarRevealer(reveal: (() => Promise<void> | void) | null):
 }
 
 // Zona vecina en una direccion. `leftZone`/`rightZone`: la ultima usada de
-// cada lado, a la que se vuelve al cruzar.
-export function neighborZone(from: Zone, direction: Direction, leftZone: Zone, rightZone: Zone): Zone | null {
+// cada lado, a la que se vuelve al cruzar. En los bordes da la vuelta: asi,
+// con Ctrl apretado, las flechas recorren todas las zonas.
+export function neighborZone(from: Zone, direction: Direction, leftZone: Zone, rightZone: Zone): Zone {
   const left = from === "explorer" || from === "files";
-  if (direction === "left") return left ? null : leftZone;
-  if (direction === "right") return left ? rightZone : null;
-  if (direction === "up") return from === "files" ? "explorer" : from === "results" ? "editor" : null;
-  return from === "explorer" ? "files" : from === "editor" ? "results" : null;
+  if (direction === "left" || direction === "right") return left ? rightZone : leftZone;
+  if (left) return from === "explorer" ? "files" : "explorer";
+  return from === "editor" ? "results" : "editor";
 }
 
 function zoneOf(node: EventTarget | null): Zone | null {
@@ -113,7 +114,6 @@ export async function focusZone(zone: Zone): Promise<boolean> {
 export function moveFocus(direction: Direction): void {
   const from = get(activeZone) ?? "editor";
   const target = neighborZone(from, direction, lastLeft, lastRight);
-  if (!target) return;
   void focusZone(target).then((moved) => {
     // Sin panel de archivos, bajar desde el explorador no tiene a donde ir.
     if (!moved && target === "files") lastLeft = "explorer";
@@ -156,28 +156,50 @@ let installed = false;
 export function installFocusZones(isBlocked: () => boolean): () => void {
   if (installed) return () => {};
   installed = true;
-  let pendingUntil = 0;
+  // Modo mover: empieza con el prefijo. Con Ctrl apretado cada flecha
+  // mueve y el modo sigue hasta soltar Ctrl; con Ctrl suelto, la primera
+  // flecha (dentro del plazo) mueve una vez y termina. Cualquier otra tecla
+  // lo termina y sigue su camino normal.
+  let moving = false;
+  let moved = false;
+  let deadline = 0;
+
+  function stopMoving() {
+    moving = false;
+    moved = false;
+  }
 
   function onKeydown(event: KeyboardEvent) {
     if (isBlocked()) return;
     const prefix = get(shortcuts).find((shortcut) => shortcut.id === "focus-zone-prefix")?.keys ?? "";
 
-    if (pendingUntil > Date.now()) {
-      if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
-      pendingUntil = 0;
-      // Ctrl puede seguir apretado (Ctrl+W, Ctrl+flecha): es lo natural.
-      const direction = !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (direction) moveFocus(direction);
-      return;
-    }
-
     if (prefix && eventMatchesShortcut(event, prefix)) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      pendingUntil = Date.now() + CHORD_TIMEOUT_MS;
+      moving = true;
+      moved = false;
+      deadline = Date.now() + CHORD_TIMEOUT_MS;
+      return;
     }
+
+    if (!moving) return;
+    if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
+    const direction = !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
+    if (!direction || (!event.ctrlKey && Date.now() > deadline)) {
+      stopMoving();
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    moveFocus(direction);
+    moved = true;
+    if (!event.ctrlKey) stopMoving();
+  }
+
+  // Soltar Ctrl despues de moverse termina el modo. Si todavia no hubo
+  // flecha, queda la espera normal de la primera.
+  function onKeyup(event: KeyboardEvent) {
+    if (moving && moved && event.key === "Control") stopMoving();
   }
 
   // Esc desde el explorador, los archivos o el resultado vuelve al editor,
@@ -208,12 +230,14 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   }
 
   window.addEventListener("keydown", onKeydown, true);
+  window.addEventListener("keyup", onKeyup, true);
   window.addEventListener("keydown", onEscape);
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("pointerdown", onPointerDown, true);
   return () => {
     installed = false;
     window.removeEventListener("keydown", onKeydown, true);
+    window.removeEventListener("keyup", onKeyup, true);
     window.removeEventListener("keydown", onEscape);
     document.removeEventListener("focusin", onFocusIn);
     document.removeEventListener("pointerdown", onPointerDown, true);
