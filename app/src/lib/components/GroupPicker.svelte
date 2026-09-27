@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { fly } from "svelte/transition";
   import { Check, ChevronDown, FolderMinus, Plus } from "@lucide/svelte";
@@ -99,7 +100,7 @@
     class:add={!value}
     class:open
     {disabled}
-    title={value ? $t("connections.group.change") : undefined}
+    use:tooltip={value ? $t("connections.group.change") : undefined}
     aria-haspopup="listbox"
     aria-expanded={open}
     onclick={() => (open ? close() : openPicker())}

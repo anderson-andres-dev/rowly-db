@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { t } from "$lib/i18n";
+  import { tooltip } from "$lib/tooltip";
   import { opticalIconSize, TOOLBAR_ICON_STROKE } from "$lib/iconOptics";
 
-  // Boton de icono de las barras del resultado, con tooltip propio (etiqueta
-  // + atajo) debajo del boton — el mismo estilo que el de la paginacion.
+  // Boton de icono de las barras del resultado, con el tooltip de la app
+  // (etiqueta + atajo, lib/tooltip.ts).
   let {
     icon: Icon,
     label,
@@ -33,32 +33,6 @@
     size?: number;
     onclick: () => void;
   } = $props();
-
-  let tooltip = $state<{ x: number; y: number } | null>(null);
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  function prettyShortcut(keys: string): string {
-    return keys
-      .replace("ArrowDown", $t("results.key.down"))
-      .replace("ArrowUp", $t("results.key.up"))
-      .replace("Insert", $t("results.key.insert"));
-  }
-
-  function show(event: Event) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => (tooltip = { x: rect.left + rect.width / 2, y: rect.bottom + 6 }), 350);
-  }
-
-  function hide() {
-    if (timer) clearTimeout(timer);
-    timer = null;
-    tooltip = null;
-  }
-
-  $effect(() => () => {
-    if (timer) clearTimeout(timer);
-  });
 </script>
 
 <button
@@ -67,14 +41,8 @@
   class:submit={tone === "submit"}
   aria-label={label}
   {disabled}
-  onclick={() => {
-    hide();
-    onclick();
-  }}
-  onpointerenter={show}
-  onpointerleave={hide}
-  onfocus={show}
-  onblur={hide}
+  use:tooltip={{ label, shortcut }}
+  {onclick}
 >
   <Icon
     size={size ?? opticalIconSize(Icon as Component<never>)}
@@ -90,13 +58,6 @@
     {/key}
   {/if}
 </button>
-
-{#if tooltip}
-  <div class="toolbar-tooltip" role="tooltip" style={`left:${tooltip.x}px; top:${tooltip.y}px;`}>
-    <span>{label}</span>
-    {#if shortcut}<span class="shortcut">{prettyShortcut(shortcut)}</span>{/if}
-  </div>
-{/if}
 
 <style>
   .toolbar-button {
@@ -177,26 +138,5 @@
   .toolbar-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
-  }
-
-  .toolbar-tooltip {
-    position: fixed;
-    z-index: 1001;
-    display: flex;
-    gap: var(--space-3);
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateX(-50%);
-  }
-
-  .shortcut {
-    color: var(--text-secondary);
   }
 </style>

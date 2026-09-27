@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Filter, ListOrdered } from "@lucide/svelte";
   import { t } from "$lib/i18n";
 
@@ -75,7 +76,7 @@
     />
   </label>
   {#if error}
-    <span class="error" role="alert" title={error}>{error}</span>
+    <span class="error" role="alert" use:tooltip={error}>{error}</span>
   {:else if dirty}
     <span class="hint">{$t("results.filters.hint")}</span>
   {/if}

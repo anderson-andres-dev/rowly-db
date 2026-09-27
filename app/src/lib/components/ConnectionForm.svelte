@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
   import { Check, ChevronDown, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
   import { slide } from "svelte/transition";
@@ -532,7 +533,7 @@
                 aria-expanded={sslExpanded}
                 aria-controls="ssl-modes"
                 aria-label={$t("connections.form.ssl.options")}
-                title={$t("connections.form.ssl.options")}
+                use:tooltip={$t("connections.form.ssl.options")}
                 disabled={busy}
                 onclick={() => (sslExpanded = !sslExpanded)}
               >
@@ -586,12 +587,12 @@
       <div class="url-row">
         <span class="row-label">{$t("connections.form.url")}</span>
         <div class="url-box">
-          <code title={connectionUrl}>{connectionUrl}</code>
+          <code use:tooltip={connectionUrl}>{connectionUrl}</code>
           <button
             type="button"
             class="icon-action"
             aria-label={$t("connections.form.copyUrl")}
-            title={copied === "url" ? $t("connections.form.urlCopied") : $t("connections.form.copyUrl")}
+            use:tooltip={copied === "url" ? $t("connections.form.urlCopied") : $t("connections.form.copyUrl")}
             onclick={() => copy(connectionUrl, "url")}
           >
             {#if copied === "url"}
@@ -636,7 +637,7 @@
             class={`test-badge ${testSummary.outcome}`}
             aria-expanded={testPopoverOpen}
             aria-controls="test-report"
-            title={$t("connections.form.testDetail")}
+            use:tooltip={$t("connections.form.testDetail")}
             onclick={() => (testPopoverOpen = !testPopoverOpen)}
           >
             {#if testSummary.outcome === "success"}

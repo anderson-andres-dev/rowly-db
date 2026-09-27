@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { onMount } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { ArrowDownToLine, CircleCheck, ExternalLink, LoaderCircle, RefreshCw, RotateCcw, Undo2 } from "@lucide/svelte";
@@ -130,7 +131,7 @@
                   class="version-toggle"
                   type="button"
                   aria-expanded={openNotes === release.tag}
-                  title={$t("updates.action.notes")}
+                  use:tooltip={$t("updates.action.notes")}
                   onclick={() => (openNotes = openNotes === release.tag ? null : release.tag)}
                 >
                   v{release.version}

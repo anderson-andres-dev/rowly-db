@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import {
     CalendarClock,
     Check,
@@ -208,7 +209,7 @@
         type="button"
         class="row"
         style:--depth={depth}
-        title={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
         onclick={() => toggle(node.key, open)}
         ondblclick={() => {
           if (!node.relation) return;
@@ -225,7 +226,7 @@
       <div
         class="row leaf"
         style:--depth={depth}
-        title={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
         ondblclick={() => node.relation && onopentable(node.relation.schema, node.relation.name)}
       >
         {@render nodeContent(node, Icon)}
@@ -252,7 +253,7 @@
     <span class="detail">{node.detail}</span>
   {/if}
   {#if node.warnings}
-    <span class="warning" title={node.warnings.join("\n")}>
+    <span class="warning" use:tooltip={node.warnings.join("\n")}>
       <TriangleAlert size={12} aria-label={$t("explorer.schema.warnings")} />
     </span>
   {/if}
@@ -265,7 +266,7 @@
       <button
         type="button"
         class="action"
-        title={$t("explorer.open.label")}
+        use:tooltip={$t("explorer.open.label")}
         aria-label={$t("explorer.open.label")}
         aria-haspopup="menu"
         onclick={openMenu}
@@ -275,7 +276,7 @@
       <button
         type="button"
         class="action"
-        title={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
+        use:tooltip={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
         aria-label={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
         onclick={() => (anyOpen ? collapseAll() : expandAll())}
       >
@@ -289,7 +290,7 @@
         type="button"
         class="action"
         class:spinning={refreshing}
-        title={$t("explorer.refresh")}
+        use:tooltip={$t("explorer.refresh")}
         aria-label={$t("explorer.refresh.label")}
         disabled={refreshing}
         onclick={onrefresh}
@@ -299,7 +300,7 @@
       <button
         type="button"
         class="action"
-        title={hideShortcut ? $t("explorer.hide.withShortcut", { shortcut: hideShortcut }) : $t("explorer.hide")}
+        use:tooltip={hideShortcut ? $t("explorer.hide.withShortcut", { shortcut: hideShortcut }) : $t("explorer.hide")}
         aria-label={$t("explorer.hide.label")}
         onclick={onhide}
       >
@@ -331,7 +332,7 @@
             type="button"
             class="row"
             style:--depth={0}
-            title={connectionTitle}
+            use:tooltip={connectionTitle}
             onclick={() => toggle(CONNECTION_KEY, isConnectionOpen())}
           >
             {@render chevron(isConnectionOpen())}
@@ -340,7 +341,7 @@
             {#if unencrypted}
               <span
                 class="warning"
-                title={explorer?.tls.fellBack
+                use:tooltip={explorer?.tls.fellBack
                   ? $t("explorer.unencrypted.fellBack")
                   : $t("explorer.unencrypted.noTls")}
               >
@@ -356,7 +357,7 @@
                 class="schema-count"
                 aria-haspopup="true"
                 aria-expanded={schemaPickerOpen}
-                title={$t("explorer.schemas.pick")}
+                use:tooltip={$t("explorer.schemas.pick")}
                 onclick={() => (schemaPickerOpen = !schemaPickerOpen)}
               >
                 {#if loadingSchemas}
@@ -376,7 +377,7 @@
                       aria-checked={visibleSchemas.has(schema)}
                       class="schema-option"
                       disabled={isDefault || loadingSchemas}
-                      title={isDefault ? $t("explorer.schemas.defaultTitle") : undefined}
+                      use:tooltip={isDefault ? $t("explorer.schemas.defaultTitle") : undefined}
                       onclick={() => toggleSchema(schema)}
                     >
                       <span class="checkbox" class:checked={visibleSchemas.has(schema)}>

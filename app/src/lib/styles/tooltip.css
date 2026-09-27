@@ -1,0 +1,52 @@
+/* Tooltip propio de la app (lib/tooltip.ts). */
+
+.app-tooltip {
+  position: fixed;
+  inset: auto;
+  z-index: 2000;
+  display: none;
+  gap: var(--space-3);
+  max-width: min(22rem, calc(100vw - 16px));
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  box-sizing: border-box;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.app-tooltip.visible {
+  display: flex;
+  animation: app-tooltip-in 110ms ease-out;
+}
+
+.app-tooltip > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.app-tooltip-shortcut {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@keyframes app-tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip.visible {
+    animation: none;
+  }
+}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
@@ -1187,14 +1188,14 @@
         {:else}
           <span
             class="console-tab-title"
-            title={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{consoleDisplayTitle(item.title, $t)}</span
+            use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{consoleDisplayTitle(item.title, $t)}</span
           >
         {/if}
         <button
           type="button"
           class="close-tab"
           aria-label={$t(dirty ? "workspace.tabs.closeDirty" : "workspace.tabs.close", { title: consoleDisplayTitle(item.title, $t) })}
-          title={dirty
+          use:tooltip={dirty
             ? $t(item.filePath ? "workspace.tabs.unsavedFile" : "workspace.tabs.unsavedConsole", {
                 shortcut: shortcutKeys("save-query-console"),
               })
@@ -1210,7 +1211,7 @@
     <button
       type="button"
       class="new-console"
-      title={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
+      use:tooltip={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
       aria-label={$t("workspace.tabs.newAria")}
       onclick={() => createQueryConsole(profileId)}
     >

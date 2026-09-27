@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { ArrowLeft, Code2, Keyboard, Languages, Monitor, Moon, Palette, Pencil, RefreshCw, RotateCcw, Sun } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
   import { newerRelease } from "$lib/stores/updates";
@@ -156,7 +157,7 @@
         <RefreshCw size={15} aria-hidden="true" />
         {$t("settings.nav.updates")}
         {#if $newerRelease}
-          <span class="nav-dot" title={$t("settings.nav.updatesAvailable")}>
+          <span class="nav-dot" use:tooltip={$t("settings.nav.updatesAvailable")}>
             <span class="visually-hidden">{$t("settings.nav.updatesAvailable")}</span>
           </span>
         {/if}
@@ -335,7 +336,7 @@
                   class="shortcut-icon-button"
                   type="button"
                   aria-label={$t("settings.editor.lineWidth.resetLabel", { width: DEFAULT_FORMATTER_LINE_WIDTH })}
-                  title={$t("settings.editor.lineWidth.resetTitle", { width: DEFAULT_FORMATTER_LINE_WIDTH })}
+                  use:tooltip={$t("settings.editor.lineWidth.resetTitle", { width: DEFAULT_FORMATTER_LINE_WIDTH })}
                   onclick={() => setFormatterLineWidth(DEFAULT_FORMATTER_LINE_WIDTH)}
                 >
                   <RotateCcw size={13} aria-hidden="true" />
@@ -424,7 +425,7 @@
                         class="shortcut-icon-button"
                         type="button"
                         aria-label={$t("settings.shortcuts.resetLabel", { name: shortcutText(shortcut.id, "label") })}
-                        title={$t("settings.shortcuts.resetTitle")}
+                        use:tooltip={$t("settings.shortcuts.resetTitle")}
                         onclick={() => resetShortcutKeys(shortcut.id)}
                       >
                         <RotateCcw size={13} aria-hidden="true" />
@@ -434,7 +435,7 @@
                       class="shortcut-icon-button"
                       type="button"
                       aria-label={$t("settings.shortcuts.changeLabel", { name: shortcutText(shortcut.id, "label") })}
-                      title={$t("settings.shortcuts.changeTitle")}
+                      use:tooltip={$t("settings.shortcuts.changeTitle")}
                       onclick={() => startRecording(shortcut.id)}
                     >
                       <Pencil size={13} aria-hidden="true" />

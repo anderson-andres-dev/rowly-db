@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { downloadDir, join } from "@tauri-apps/api/path";
@@ -195,7 +196,7 @@
         <span class="label">{$t("results.export.file")}</span>
         <div class="path">
           <input aria-label={$t("results.export.target")} bind:value={path} spellcheck="false" />
-          <button type="button" class="icon-button" title={$t("results.export.chooseFile")} aria-label={$t("results.export.chooseFile")} onclick={() => void chooseFile()}>
+          <button type="button" class="icon-button" use:tooltip={$t("results.export.chooseFile")} aria-label={$t("results.export.chooseFile")} onclick={() => void chooseFile()}>
             <FolderOpen size={15} aria-hidden="true" />
           </button>
         </div>

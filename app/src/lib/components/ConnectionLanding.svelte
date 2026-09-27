@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
   import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
   import { browser } from "$app/environment";
@@ -98,7 +99,7 @@
     class="corner-button"
     type="button"
     aria-label={$t("connections.landing.editLabel", { name: profile.name })}
-    title={$t("connections.landing.editTitle")}
+    use:tooltip={$t("connections.landing.editTitle")}
     disabled={busy}
     onclick={(event) => {
       event.stopPropagation();
@@ -111,7 +112,7 @@
     class="corner-button danger"
     type="button"
     aria-label={$t("connections.landing.deleteLabel", { name: profile.name })}
-    title={$t("connections.landing.deleteTitle")}
+    use:tooltip={$t("connections.landing.deleteTitle")}
     disabled={busy}
     onclick={(event) => {
       event.stopPropagation();
@@ -146,7 +147,7 @@
               type="button"
               aria-pressed={view === "cards"}
               aria-label={$t("connections.landing.viewCards")}
-              title={$t("connections.landing.cards")}
+              use:tooltip={$t("connections.landing.cards")}
               onclick={() => setView("cards")}
             >
               <LayoutGrid size={15} aria-hidden="true" />
@@ -155,7 +156,7 @@
               type="button"
               aria-pressed={view === "list"}
               aria-label={$t("connections.landing.viewList")}
-              title={$t("connections.landing.list")}
+              use:tooltip={$t("connections.landing.list")}
               onclick={() => setView("list")}
             >
               <List size={15} aria-hidden="true" />

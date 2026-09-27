@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { onMount, onDestroy } from "svelte";
   import type { Snippet } from "svelte";
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
   import "$lib/styles/alert-dialog.css";
+  import "$lib/styles/tooltip.css";
   import {
     connection,
     connectToProfile,
@@ -277,7 +279,7 @@
         <button
           class="icon-button"
           type="button"
-          title={toggleSidebarKeys
+          use:tooltip={toggleSidebarKeys
             ? $t("shell.showTablesPanelWithKeys", { keys: toggleSidebarKeys })
             : $t("shell.showTablesPanel")}
           aria-label={$t("shell.showTablesPanel")}
@@ -291,7 +293,7 @@
         <button
           class="icon-button"
           type="button"
-          title={$t("shell.backToConnections")}
+          use:tooltip={$t("shell.backToConnections")}
           aria-label={$t("shell.backToConnections")}
           disabled={$connection.connecting}
           onclick={reset}
@@ -309,7 +311,7 @@
     <button
       class="icon-button"
       type="button"
-      title={$t("shell.settings")}
+      use:tooltip={$t("shell.settings")}
       aria-label={settingsOpen ? $t("shell.closeSettings") : $t("shell.openSettings")}
       aria-expanded={settingsOpen}
       aria-pressed={settingsOpen}
@@ -323,7 +325,7 @@
     <div class="window-controls" aria-label={$t("shell.windowControls")}>
       <button
         type="button"
-        title={$t("shell.minimize")}
+        use:tooltip={$t("shell.minimize")}
         aria-label={$t("shell.minimize")}
         onclick={() => appWindow.minimize()}
       >
@@ -331,7 +333,7 @@
       </button>
       <button
         type="button"
-        title={$t("shell.maximizeRestore")}
+        use:tooltip={$t("shell.maximizeRestore")}
         aria-label={$t("shell.maximizeRestore")}
         onclick={() => appWindow.toggleMaximize()}
       >
@@ -340,7 +342,7 @@
       <button
         class="close-window"
         type="button"
-        title={$t("common.close")}
+        use:tooltip={$t("common.close")}
         aria-label={$t("common.close")}
         onclick={() => appWindow.close()}
       >
@@ -420,7 +422,7 @@
           aria-valuemin={MIN_SIDEBAR_WIDTH}
           aria-valuemax={MAX_SIDEBAR_WIDTH}
           tabindex="0"
-          title={$t("shell.resizeSidebarHint")}
+          use:tooltip={$t("shell.resizeSidebarHint")}
           onpointerdown={startSidebarResize}
           ondblclick={() => sidebarWidth.set(DEFAULT_SIDEBAR_WIDTH)}
           onkeydown={onSidebarHandleKeydown}

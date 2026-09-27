@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
   import type { ColumnCatalogInfo, QueryColumn, QueryRow, SortKey } from "$lib/types";
@@ -1581,7 +1582,7 @@
                         aria-label={active
                           ? $t(active.descending ? "grid.sort.descendingLabel" : "grid.sort.ascendingLabel")
                           : $t("grid.sort.by", { column: column.name })}
-                        title={active
+                        use:tooltip={active
                           ? $t(active.descending ? "grid.sort.descendingTitle" : "grid.sort.ascendingTitle")
                           : $t("grid.sort.title")}
                         onclick={(event) => {
@@ -1696,7 +1697,7 @@
               <button
                 type="button"
                 class="null-chip"
-                title={$t("grid.edit.setNull")}
+                use:tooltip={$t("grid.edit.setNull")}
                 onpointerdown={(event) => event.preventDefault()}
                 onclick={setEditingNull}>NULL</button
               >

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Ban, Check, ChevronDown, Pipette } from "@lucide/svelte";
   import { CONNECTION_COLORS, colorLabel, isPaletteColor } from "$lib/connectionColors";
   import { t } from "$lib/i18n";
@@ -45,7 +46,7 @@
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={$t("connections.color.buttonLabel", { color: colorLabel(value, $t) })}
-    title={colorLabel(value, $t)}
+    use:tooltip={colorLabel(value, $t)}
     {disabled}
     onclick={() => (open = !open)}
   >

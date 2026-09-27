@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { Check, ChevronDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, LoaderCircle } from "@lucide/svelte";
   import type { ResultPage } from "$lib/types";
@@ -82,7 +83,6 @@
   let menuPosition = $state({ left: 0, bottom: 0 });
 
   async function toggleMenu() {
-    hideTooltip();
     if (menuOpen) {
       menuOpen = false;
       return;
@@ -134,40 +134,6 @@
     items[(next + items.length) % items.length]?.focus();
     event.preventDefault();
   }
-
-  // --- Tooltips ----------------------------------------------------------
-  // Propios (no el title nativo): salen enseguida, con el atajo al lado y
-  // encima de la barra, que esta al pie del panel.
-  let tooltip = $state<{ label: string; shortcut: string; x: number; bottom: number } | null>(null);
-  let tooltipTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function prettyShortcut(keys: string): string {
-    return keys.replace("ArrowDown", $t("results.key.down")).replace("ArrowUp", $t("results.key.up"));
-  }
-
-  function showTooltip(event: Event, label: string, shortcut = "") {
-    if (menuOpen) return;
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-    tooltipTimer = setTimeout(() => {
-      tooltip = {
-        label,
-        shortcut: prettyShortcut(shortcut),
-        x: rect.left + rect.width / 2,
-        bottom: window.innerHeight - rect.top + 6,
-      };
-    }, 350);
-  }
-
-  function hideTooltip() {
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-    tooltipTimer = null;
-    tooltip = null;
-  }
-
-  $effect(() => () => {
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-  });
 </script>
 
 <svelte:window onpointerdown={onWindowPointerDown} />
@@ -178,14 +144,8 @@
     class="nav-button"
     aria-label={label}
     disabled={!enabled}
-    onclick={() => {
-      hideTooltip();
-      action();
-    }}
-    onpointerenter={(event) => showTooltip(event, label, shortcut)}
-    onpointerleave={hideTooltip}
-    onfocus={(event) => showTooltip(event, label, shortcut)}
-    onblur={hideTooltip}
+    use:tooltip={{ label, shortcut, placement: "above" }}
+    onclick={action}
   >
     <Icon size={15} aria-hidden="true" />
   </button>
@@ -204,8 +164,7 @@
     disabled={busy}
     bind:this={sizeButton}
     onclick={() => void toggleMenu()}
-    onpointerenter={(event) => showTooltip(event, $t("results.pager.changeSize"))}
-    onpointerleave={hideTooltip}
+    use:tooltip={menuOpen ? null : { label: $t("results.pager.changeSize"), placement: "above" }}
   >
     <span class="range">{format(start)}-{format(end)}</span>
     <ChevronDown size={13} aria-hidden="true" />
@@ -220,12 +179,8 @@
       type="button"
       class="total-button"
       disabled={busy || counting}
-      onclick={() => {
-        hideTooltip();
-        void oncount();
-      }}
-      onpointerenter={(event) => showTooltip(event, $t("results.pager.countHint"))}
-      onpointerleave={hideTooltip}
+      onclick={() => void oncount()}
+      use:tooltip={{ label: $t("results.pager.countHint"), placement: "above" }}
     >
       {#if counting}
         <LoaderCircle size={13} class="spin" aria-label={$t("results.pager.counting")} />
@@ -234,7 +189,7 @@
       {/if}
     </button>
   {:else}
-    <span class="total" title={$t("results.pager.notPageable")}>{format(end)}+</span>
+    <span class="total" use:tooltip={$t("results.pager.notPageable")}>{format(end)}+</span>
   {/if}
 
   {@render navButton($t("results.pager.next"), nextShortcut, canGoForward, goNext, ChevronRight)}
@@ -319,13 +274,6 @@
       <span class="check"></span>
       <span>{$t("results.pager.setDefault")}</span>
     </button>
-  </div>
-{/if}
-
-{#if tooltip}
-  <div class="pager-tooltip" role="tooltip" style={`left:${tooltip.x}px; bottom:${tooltip.bottom}px;`}>
-    <span>{tooltip.label}</span>
-    {#if tooltip.shortcut}<span class="tooltip-shortcut">{tooltip.shortcut}</span>{/if}
   </div>
 {/if}
 
@@ -517,24 +465,5 @@
     cursor: pointer;
   }
 
-  .pager-tooltip {
-    position: fixed;
-    z-index: 1001;
-    display: flex;
-    gap: var(--space-3);
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateX(-50%);
-  }
 
-  .tooltip-shortcut {
-    color: var(--text-secondary);
-  }
 </style>

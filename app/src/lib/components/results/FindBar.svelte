@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { ArrowDown, ArrowUp, Search, X } from "@lucide/svelte";
   import type { FindOptions } from "$lib/gridFind";
@@ -99,7 +100,7 @@
       class="toggle"
       class:on={options.matchCase}
       aria-pressed={options.matchCase}
-      title={$t("results.find.matchCase")}
+      use:tooltip={$t("results.find.matchCase")}
       onclick={() => toggle("matchCase")}>Cc</button
     >
     <button
@@ -107,7 +108,7 @@
       class="toggle mono"
       class:on={options.regex}
       aria-pressed={options.regex}
-      title={$t("results.find.regex")}
+      use:tooltip={$t("results.find.regex")}
       onclick={() => toggle("regex")}>.*</button
     >
     <button
@@ -115,19 +116,19 @@
       class="toggle"
       class:on={options.wholeWord}
       aria-pressed={options.wholeWord}
-      title={$t("results.find.wholeWord")}
+      use:tooltip={$t("results.find.wholeWord")}
       onclick={() => toggle("wholeWord")}>W</button
     >
   </div>
 
-  <span class="status" class:error={error !== null} title={error ?? undefined} aria-live="polite">{status}</span>
+  <span class="status" class:error={error !== null} use:tooltip={error ?? undefined} aria-live="polite">{status}</span>
 
   <div class="nav">
     <button
       type="button"
       class="icon"
       aria-label={$t("results.find.previousLabel")}
-      title={$t("results.find.previousTitle")}
+      use:tooltip={$t("results.find.previousTitle")}
       disabled={count === 0}
       onclick={onprevious}
     >
@@ -137,7 +138,7 @@
       type="button"
       class="icon"
       aria-label={$t("results.find.nextLabel")}
-      title={$t("results.find.nextTitle")}
+      use:tooltip={$t("results.find.nextTitle")}
       disabled={count === 0}
       onclick={onnext}
     >
@@ -150,7 +151,7 @@
     <span>{$t("results.find.filterRows")}</span>
   </label>
 
-  <button type="button" class="icon close" aria-label={$t("results.find.closeLabel")} title={$t("results.find.closeTitle")} onclick={onclose}>
+  <button type="button" class="icon close" aria-label={$t("results.find.closeLabel")} use:tooltip={$t("results.find.closeTitle")} onclick={onclose}>
     <X size={14} aria-hidden="true" />
   </button>
 </div>

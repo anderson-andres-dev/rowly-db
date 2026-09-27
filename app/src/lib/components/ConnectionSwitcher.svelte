@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Check, ChevronDown, SquareArrowOutUpRight } from "@lucide/svelte";
   import ConnectionAvatar from "$lib/components/ConnectionAvatar.svelte";
   import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
@@ -193,7 +194,7 @@
               class="new-window"
               tabindex="-1"
               aria-label={$t("connections.switcher.openLabel", { name: profile.name })}
-              title={$t("connections.switcher.openTitle")}
+              use:tooltip={$t("connections.switcher.openTitle")}
               onclick={() => openInNewWindow(profile)}
             >
               <SquareArrowOutUpRight size={14} aria-hidden="true" />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Code, Globe, Laptop } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import type { ConnectionEnvironment } from "$lib/stores/connectionProfiles";
@@ -18,7 +19,7 @@
 {#if compact}
   <span
     class="environment-icon {environment}"
-    title={$t(`connections.environment.${environment}`)}
+    use:tooltip={$t(`connections.environment.${environment}`)}
     aria-label={$t(`connections.environment.${environment}`)}
     role="img"
   >

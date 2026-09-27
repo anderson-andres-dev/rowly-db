@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import {
     ArrowUpFromLine,
     Eye,
@@ -517,7 +518,7 @@
           class:open={formatMenuOpen}
           aria-haspopup="menu"
           aria-expanded={formatMenuOpen}
-          title={$t("results.copyFormat.title")}
+          use:tooltip={$t("results.copyFormat.title")}
           bind:this={formatButton}
           onclick={toggleFormatMenu}
         >
@@ -656,7 +657,7 @@
             count: result.columns.length,
           })} · {result.executionTimeMs} ms
           {#if result.truncated && !page?.pageable}
-            <span class="truncated" title={$t("results.stats.truncatedTitle")}>
+            <span class="truncated" use:tooltip={$t("results.stats.truncatedTitle")}>
               · {$t("results.stats.truncated")}
             </span>
           {/if}

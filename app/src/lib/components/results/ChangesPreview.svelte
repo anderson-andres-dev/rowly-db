@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { t, type MessageKey } from "$lib/i18n";
   import { highlightSql } from "$lib/sqlHighlight";
@@ -134,7 +135,7 @@
     <div class="summary">
       {#each summary as item (item.tone)}
         {@const label = $t(item.count === 1 ? item.one : item.many, { count: item.count })}
-        <span class={`kind ${item.tone}`} title={label} aria-label={label}>
+        <span class={`kind ${item.tone}`} use:tooltip={label} aria-label={label}>
           {item.keyword}<span class="count" aria-hidden="true">{item.count}</span>
         </span>
       {/each}
