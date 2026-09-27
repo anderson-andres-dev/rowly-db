@@ -236,6 +236,18 @@
     cursor: not-allowed;
   }
 
+  /* Sin las flechas del navegador en los numeros (puerto): se escribe. */
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
+
   input:focus-visible {
     border-color: var(--focus-ring);
     outline: none;

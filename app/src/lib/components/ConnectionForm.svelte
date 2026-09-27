@@ -185,8 +185,13 @@
     }
   });
 
+  // Al abrir, el foco va al Nombre (lo primero que se escribe), no a la ✕
+  // con su anillo.
   $effect(() => {
-    if (dialogEl && !dialogEl.open) dialogEl.showModal();
+    if (dialogEl && !dialogEl.open) {
+      dialogEl.showModal();
+      dialogEl.querySelector<HTMLInputElement>("#connection-name")?.focus();
+    }
   });
 
   async function hydratePassword(id: string, policy: PasswordPolicy) {
@@ -788,7 +793,7 @@
   .form-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-5);
     overflow-y: auto;
     padding: var(--space-3) var(--space-5) var(--space-5);
   }
@@ -1012,16 +1017,19 @@
     font-size: 0.75rem;
   }
 
+  /* Mismo tamaño que las etiquetas de Field: una sola columna de rotulos. */
   .row-label {
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
+  /* Campo principal a lo ancho y, a su derecha, uno corto (Puerto, Guardar)
+     con el mismo ancho en ambas filas para que queden alineados. */
   .endpoint,
   .password-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 13rem;
-    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr) 12.5rem;
+    gap: var(--space-4);
   }
 
   .url-row {

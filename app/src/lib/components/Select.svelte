@@ -218,9 +218,14 @@
     width: 100%;
   }
 
+  /* Suelto (p. ej. en una fila de Ajustes) tiene un ancho minimo; a lo
+     ancho (dentro de un campo) respeta el espacio de su columna. */
+  .select:not(.wide) .trigger {
+    min-width: 11rem;
+  }
+
   .trigger {
     width: 100%;
-    min-width: 11rem;
     justify-content: space-between;
     padding-right: var(--space-2);
     color: var(--text-primary);
