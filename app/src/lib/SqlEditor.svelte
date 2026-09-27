@@ -381,6 +381,7 @@
         code: result.code,
         source: "server",
         fixes,
+        unresolved: ["tableMissing", "columnMissing"].includes(errorHelp(result.code) ?? ""),
       },
     ];
   }
@@ -401,6 +402,13 @@
   }
 
   const ANALYSIS_DELAY_MS = 700;
+  // Nombres que no existen: se pintan en rojo en vez de subrayarse.
+  const UNRESOLVED_KEYS = new Set([
+    "diagnostic.unknownTable",
+    "diagnostic.unknownColumn",
+    "diagnostic.unknownColumnAny",
+    "diagnostic.unknownQualifier",
+  ]);
   // Con documentos enormes, solo las sentencias alrededor del cursor.
   const MAX_ANALYZED_STATEMENTS = 300;
   let analysisTimer: ReturnType<typeof setTimeout> | null = null;
@@ -458,7 +466,7 @@
           to: at(suggestion.end),
           insert: suggestion.replacement,
         }));
-        list.push({ from, to, message: message + hint, source: "analysis", fixes });
+        list.push({ from, to, message: message + hint, source: "analysis", fixes, unresolved: UNRESOLVED_KEYS.has(key) });
       }
     });
     view.dispatch({ effects: setAnalysis.of(list) });
@@ -477,13 +485,7 @@
     if (!view) return;
     const coords = view.coordsAtPos(diagnostic.from);
     if (!coords) return;
-    // Debajo de las filas con la flecha, si estan abiertas: no las tapa.
-    let bottom = coords.bottom;
-    for (const block of view.dom.querySelectorAll(".cm-diagnosticBlock")) {
-      const rect = block.getBoundingClientRect();
-      if (rect.top >= coords.bottom - 2 && rect.top <= coords.bottom + 4) bottom = rect.bottom;
-    }
-    popup = { diagnostic, anchor: { left: coords.left, top: coords.top, bottom }, focused };
+    popup = { diagnostic, anchor: { left: coords.left, top: coords.top, bottom: coords.bottom }, focused };
   }
 
   function closePopup(refocusEditor: boolean) {
