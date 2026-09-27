@@ -146,6 +146,10 @@ const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
 // Normaliza un KeyboardEvent a un string estable como "Ctrl+Alt+1" para
 // guardar/comparar atajos. Devuelve null mientras solo se sostiene un
 // modificador (todavia no hay una tecla "principal" que capturar).
+export function resetAllShortcuts(): void {
+  shortcutOverrides.set({});
+}
+
 export function formatShortcutEvent(event: KeyboardEvent): string | null {
   if (MODIFIER_KEYS.has(event.key)) return null;
 

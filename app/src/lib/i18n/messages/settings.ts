@@ -41,6 +41,10 @@ export default defineMessages({
     "shortcuts.resetTitle": "Restablecer",
     "shortcuts.changeLabel": "Cambiar atajo de {name}",
     "shortcuts.changeTitle": "Cambiar",
+    "shortcuts.resetAll": "Restablecer todos los atajos",
+    "shortcuts.resetAllAction": "Restablecer",
+    "shortcuts.resetAllTitle": "¿Restablecer todos los atajos?",
+    "shortcuts.resetAllMessage": "Vuelven a sus teclas por defecto.",
   },
   en: {
     sections: "Settings sections",
@@ -82,6 +86,10 @@ export default defineMessages({
     "shortcuts.resetTitle": "Reset",
     "shortcuts.changeLabel": "Change shortcut for {name}",
     "shortcuts.changeTitle": "Change",
+    "shortcuts.resetAll": "Reset all shortcuts",
+    "shortcuts.resetAllAction": "Reset",
+    "shortcuts.resetAllTitle": "Reset all shortcuts?",
+    "shortcuts.resetAllMessage": "They go back to their default keys.",
   },
   "pt-BR": {
     sections: "Seções de configurações",
@@ -123,6 +131,10 @@ export default defineMessages({
     "shortcuts.resetTitle": "Redefinir",
     "shortcuts.changeLabel": "Alterar atalho de {name}",
     "shortcuts.changeTitle": "Alterar",
+    "shortcuts.resetAll": "Redefinir todos os atalhos",
+    "shortcuts.resetAllAction": "Redefinir",
+    "shortcuts.resetAllTitle": "Redefinir todos os atalhos?",
+    "shortcuts.resetAllMessage": "Eles voltam às teclas padrão.",
   },
   fr: {
     sections: "Sections des paramètres",
@@ -164,6 +176,10 @@ export default defineMessages({
     "shortcuts.resetTitle": "Rétablir",
     "shortcuts.changeLabel": "Modifier le raccourci de {name}",
     "shortcuts.changeTitle": "Modifier",
+    "shortcuts.resetAll": "Rétablir tous les raccourcis",
+    "shortcuts.resetAllAction": "Rétablir",
+    "shortcuts.resetAllTitle": "Rétablir tous les raccourcis ?",
+    "shortcuts.resetAllMessage": "Ils reprennent leurs touches par défaut.",
   },
   de: {
     sections: "Einstellungsbereiche",
@@ -205,5 +221,9 @@ export default defineMessages({
     "shortcuts.resetTitle": "Zurücksetzen",
     "shortcuts.changeLabel": "Tastenkürzel für {name} ändern",
     "shortcuts.changeTitle": "Ändern",
+    "shortcuts.resetAll": "Alle Tastenkürzel zurücksetzen",
+    "shortcuts.resetAllAction": "Zurücksetzen",
+    "shortcuts.resetAllTitle": "Alle Tastenkürzel zurücksetzen?",
+    "shortcuts.resetAllMessage": "Sie erhalten wieder ihre Standardtasten.",
   },
 });

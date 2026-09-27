@@ -8,7 +8,8 @@
   import { LOCALE_NAMES, LOCALES, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
   import { requestedScheme, themeChoice, type SchemePreference } from "$lib/theming/theme";
-  import { formatShortcutEvent, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
+  import { formatShortcutEvent, resetAllShortcuts, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import {
     DEFAULT_FORMATTER_LINE_WIDTH,
     MAX_FORMATTER_LINE_WIDTH,
@@ -135,6 +136,8 @@
 
   let shortcutQuery = $state("");
   let recordingId = $state<string | null>(null);
+  let confirmingReset = $state(false);
+  const anyCustomShortcut = $derived($shortcuts.some((shortcut) => shortcut.isCustom));
 
   function shortcutText(id: string, field: "label"): string {
     return $t(`shortcuts.${id}.${field}` as MessageKey);
@@ -469,6 +472,22 @@
               {/each}
             </div>
           {/each}
+          {#if shortcutQuery.trim() === ""}
+            <div class="set-group reset-all">
+              <div class="set-row">
+                <span class="set-label">{$t("settings.shortcuts.resetAll")}</span>
+                <button
+                  class="action-button secondary small"
+                  type="button"
+                  disabled={!anyCustomShortcut}
+                  onclick={() => (confirmingReset = true)}
+                >
+                  <RotateCcw size={13} aria-hidden="true" />
+                  {$t("settings.shortcuts.resetAllAction")}
+                </button>
+              </div>
+            </div>
+          {/if}
         {:else}
           <UpdatesSection />
         {/if}
@@ -476,6 +495,20 @@
     </div>
   </section>
 </dialog>
+
+{#if confirmingReset}
+  <ConfirmDialog
+    tone="warning"
+    title={$t("settings.shortcuts.resetAllTitle")}
+    message={$t("settings.shortcuts.resetAllMessage")}
+    confirmLabel={$t("settings.shortcuts.resetAllAction")}
+    onconfirm={() => {
+      confirmingReset = false;
+      resetAllShortcuts();
+    }}
+    oncancel={() => (confirmingReset = false)}
+  />
+{/if}
 
 <style>
   dialog {
@@ -631,11 +664,11 @@
     font-size: 0.75rem;
   }
 
-  /* Titulo "Tema" y buscador en la misma linea, sin superponerse. */
+  /* "Tema" y su buscador juntos a la izquierda: a la derecha quedarian
+     apilados bajo el selector de idioma, dos cajas iguales una sobre otra. */
   .block-head {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
+    align-items: center;
     gap: var(--space-4);
     margin: var(--space-6) 0 var(--space-3);
   }
@@ -645,7 +678,11 @@
   }
 
   .theme-search {
-    width: 13rem;
+    width: 15rem;
+  }
+
+  .reset-all {
+    margin-top: var(--space-6);
   }
 
   .shortcut-search {
