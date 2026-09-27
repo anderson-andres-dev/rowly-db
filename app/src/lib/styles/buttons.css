@@ -81,3 +81,10 @@
 .action-button.danger-soft:not(:disabled):hover {
   background: color-mix(in srgb, var(--danger) 20%, var(--surface-elevated));
 }
+
+/* Compacto, para filas de tablas y listas. */
+.action-button.small {
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  font-size: 0.75rem;
+}

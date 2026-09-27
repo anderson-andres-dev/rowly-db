@@ -515,8 +515,7 @@
           <span class="row-label" id="ssl-label">{$t("connections.form.ssl")}</span>
           <div class="ssl-controls">
             <button
-              class="switch"
-              class:enabled={sslEnabled}
+              class="ui-switch"
               type="button"
               role="switch"
               aria-checked={sslEnabled}
@@ -900,50 +899,16 @@
     gap: var(--space-3);
   }
 
-  .switch {
-    position: relative;
-    width: 2.25rem;
-    height: 1.25rem;
-    flex: 0 0 auto;
-    padding: 2px;
-    border: 1px solid var(--control-border);
-    border-radius: 999px;
-    background: var(--surface);
-    cursor: pointer;
-    transition:
-      border-color var(--duration-fast),
-      background-color var(--duration-fast);
-  }
 
-  .switch span {
-    display: block;
-    width: 0.875rem;
-    height: 0.875rem;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    transition:
-      transform var(--duration-fast),
-      background-color var(--duration-fast);
-  }
 
-  .switch.enabled {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 30%, var(--surface));
-  }
 
-  .switch.enabled span {
-    transform: translateX(0.95rem);
-    background: var(--accent);
-  }
 
-  .switch:focus-visible,
   .ssl-summary:focus-visible,
   .ssl-mode:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
 
-  .switch:disabled,
   .ssl-summary:disabled,
   .ssl-mode:disabled {
     cursor: default;
