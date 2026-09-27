@@ -400,26 +400,33 @@
 
 /* --- Zona de foco -------------------------------------------------------------- */
 
-/* Al llegar con el teclado a una zona (focusZones.ts): un contorno fino del
-   acento que se desvanece. Ninguna marca queda fija. */
-.zone-flash {
+/* Capa encima del contenido de la zona (focusZones.ts): el editor y los
+   encabezados del grid llegan de borde a borde y taparian un contorno
+   propio del contenedor. */
+[data-focus-zone].zone-current::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  pointer-events: none;
+}
+
+/* Al llegar: un destello mas marcado que se asienta en la marca tenue. */
+[data-focus-zone].zone-flash::after {
   animation: zone-flash 560ms ease-out;
 }
 
 @keyframes zone-flash {
   0%,
-  25% {
-    outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
-    outline-offset: -1px;
-  }
-  100% {
-    outline: 1px solid transparent;
-    outline-offset: -1px;
+  30% {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zone-flash {
+  [data-focus-zone].zone-flash::after {
     animation: none;
   }
 }

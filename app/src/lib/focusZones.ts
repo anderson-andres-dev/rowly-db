@@ -69,12 +69,27 @@ function isUsable(element: HTMLElement | undefined, zone: HTMLElement): element 
   return !!element && element.isConnected && zone.contains(element) && element.getClientRects().length > 0;
 }
 
+// Al llegar con el teclado, la zona destella y queda marcada con un
+// contorno tenue mientras se siga con el teclado: asi siempre se sabe donde
+// esta el foco. El primer clic quita la marca (con el mouse no hace falta).
+// Ambos van en una capa encima del contenido (controls.css), para que el
+// editor o los encabezados del grid no los tapen.
+let marked: HTMLElement | null = null;
+
 function flash(element: HTMLElement) {
+  marked?.classList.remove("zone-current");
+  marked = element;
+  element.classList.add("zone-current");
   element.classList.remove("zone-flash");
   // Reinicia la animacion aunque se vuelva a la misma zona enseguida.
   void element.offsetWidth;
   element.classList.add("zone-flash");
   setTimeout(() => element.classList.remove("zone-flash"), 600);
+}
+
+function clearMark() {
+  marked?.classList.remove("zone-current");
+  marked = null;
 }
 
 export async function focusZone(zone: Zone): Promise<boolean> {
@@ -108,6 +123,8 @@ export function moveFocus(direction: Direction): void {
 // Accion para marcar un contenedor como zona.
 export function focusZoneAction(node: HTMLElement, params: { zone: Zone; focusDefault?: (zone: HTMLElement) => boolean | void }) {
   node.dataset.focusZone = params.zone;
+  // La capa del destello se ubica respecto de la zona.
+  if (getComputedStyle(node).position === "static") node.style.position = "relative";
   zones.set(params.zone, { element: node, focusDefault: params.focusDefault });
   return {
     update(next: { zone: Zone; focusDefault?: (zone: HTMLElement) => boolean | void }) {
@@ -179,8 +196,10 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     if (zone) markActive(zone, event.target as HTMLElement);
   }
 
-  // El clic tambien elige zona (WebKit no enfoca botones al hacer clic).
+  // El clic tambien elige zona (WebKit no enfoca botones al hacer clic) y
+  // quita la marca de navegacion por teclado.
   function onPointerDown(event: PointerEvent) {
+    clearMark();
     const zone = zoneOf(event.target);
     if (!zone) return;
     const target = (event.target as Element).closest<HTMLElement>(FOCUSABLE);
