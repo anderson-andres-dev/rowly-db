@@ -34,6 +34,20 @@
 
   let dialog = $state<HTMLDialogElement>();
 
+  const errorDetail = $derived(
+    error
+      ? [
+          error.statementIndex !== null
+            ? $t("results.changes.statement", { index: error.statementIndex + 1 })
+            : null,
+          error.message,
+          error.code ? `(${error.code})` : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "",
+  );
+
   const summary = $derived(
     [
       { count: changes.deletes.length, one: "results.changes.deletesOne", many: "results.changes.deletesOther", tone: "delete" },
@@ -99,10 +113,9 @@
   {#if error}
     <div class="apply-error" role="alert">
       <strong>{$t("results.changes.notApplied")}</strong>
-      <span>
-        {#if error.statementIndex !== null}{$t("results.changes.statement", { index: error.statementIndex + 1 })} {/if}{error.message}{#if error.code}
-          ({error.code}){/if}
-      </span>
+      <!-- Armado como un solo texto: Svelte recorta los espacios en los bordes
+           de los bloques {#if} y pegaba "Sentencia 1:" al mensaje. -->
+      <span>{errorDetail}</span>
     </div>
   {/if}
 
