@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { statementAt } from "$lib/sqlStatements";
   import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
   import { sql } from "@codemirror/lang-sql";
-  import { syntaxTree } from "@codemirror/language";
   import { autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
   import { keymap } from "@codemirror/view";
@@ -178,11 +178,10 @@
     const selection = view.state.selection.main;
     if (!selection.empty) return { from: selection.from, to: selection.to, selected: true };
 
-    let node = syntaxTree(view.state).resolveInner(selection.head, -1);
-    while (node.parent && node.name !== "Statement") node = node.parent;
-    if (node.name === "Statement") return { from: node.from, to: node.to, selected: false };
-
-    return { from: 0, to: view.state.doc.length, selected: false };
+    // Sentencia bajo el cursor (sqlStatements.ts): nunca el documento
+    // entero; sin sentencias, nada que ejecutar.
+    const range = statementAt(view.state.doc.toString(), selection.head);
+    return range ? { ...range, selected: false } : null;
   }
 
   function mappedCursorOffset(source: string, offset: number, formatted: string): number {
