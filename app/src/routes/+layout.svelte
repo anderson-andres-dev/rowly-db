@@ -41,6 +41,7 @@
     X,
   } from "@lucide/svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import RowlyMark from "$lib/components/RowlyMark.svelte";
   import SchemaTree from "$lib/components/SchemaTree.svelte";
   import FileTree from "$lib/components/FileTree.svelte";
   import { installDialogMotion } from "$lib/dialogMotion";
@@ -289,9 +290,15 @@
        en la pantalla de conexiones. -->
   <header
     class="topbar"
-    class:tinted={$connection.connected && !!activeProfile?.color}
-    style:--identity={$connection.connected ? activeProfile?.color : undefined}
+    class:tinted={$connection.connected ? !!activeProfile?.color : true}
+    style:--identity={$connection.connected ? activeProfile?.color : "var(--accent)"}
   >
+    <!-- En la pantalla de conexiones, el logo y el degradado toman el acento
+         del tema elegido; con una conexion abierta, el color de la
+         conexion. -->
+    {#if !$connection.connected}
+      <span class="topbar-mark"><RowlyMark size="1.125rem" /></span>
+    {/if}
     {#if $connection.connected}
       <!-- Con el panel visible, ocultarlo vive en su propia barra
            (SchemaTree); aca solo queda la forma de volver a abrirlo. -->
@@ -513,6 +520,14 @@
        margen sin cubrir.
      - Muchos puntos de paso con una caida tipo ease-out: con solo dos o
        tres se nota donde termina el degradado. */
+  .topbar-mark {
+    position: relative;
+    display: inline-flex;
+    margin-left: var(--space-1);
+    color: var(--text-primary);
+    opacity: 0.8;
+  }
+
   .topbar::before {
     content: "";
     position: absolute;
