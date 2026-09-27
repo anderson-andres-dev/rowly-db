@@ -5,10 +5,13 @@
   // Etiqueta del entorno de una conexion (topbar, tarjetas, guard). Solo
   // Produccion llama la atencion; el resto queda en un tono apagado para que
   // la marca de produccion siga significando algo.
-  let { environment }: { environment: ConnectionEnvironment } = $props();
+  // short: la abreviatura (DEV, PROD) para espacios chicos como la tarjeta.
+  let { environment, short = false }: { environment: ConnectionEnvironment; short?: boolean } = $props();
 </script>
 
-<span class="environment-badge {environment}">{$t(`connections.environment.${environment}`)}</span>
+<span class="environment-badge {environment}"
+  >{short ? $t(`connections.environment.${environment}.short`) : $t(`connections.environment.${environment}`)}</span
+>
 
 <style>
   .environment-badge {
