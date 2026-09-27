@@ -825,7 +825,8 @@
     const current = currentChanges(key);
     if (!current || applyingChanges) return;
     applyingChanges = true;
-    applyError = null;
+    // El error anterior sigue a la vista mientras se reintenta: si vuelve a
+    // fallar, la vista previa lo "golpea" en vez de borrarlo y redibujarlo.
     // Las mismas sentencias que muestra la vista previa, para la Salida.
     const statements = await previewChanges(current.target, current.changes).catch(() => [] as string[]);
     const startedAt = Date.now();
@@ -845,6 +846,7 @@
           ms: formatMs(performance.now() - started),
         }),
       });
+      applyError = null;
       clearResultPendingEdits(key);
       // El modal (si estaba abierto) se cierra animado; lo quita su onclose.
       if (preview) preview = { ...preview, dismiss: true };

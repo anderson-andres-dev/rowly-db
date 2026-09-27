@@ -268,10 +268,7 @@
   <ConfirmDialog
     tone="warning"
     title={$t("updates.rollback.title", { version: `v${target.version}` })}
-    message={$t("updates.rollback.message", {
-      version: `v${target.version}`,
-      current: `v${$updateContext?.currentVersion ?? ""}`,
-    })}
+    message={$t("updates.rollback.message")}
     confirmLabel={$t("updates.rollback.confirm", { version: `v${target.version}` })}
     onconfirm={() => {
       pendingRollback = null;

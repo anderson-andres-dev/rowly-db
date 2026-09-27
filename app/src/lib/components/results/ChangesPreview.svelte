@@ -59,7 +59,30 @@
   // Se resalta linea por linea (no el texto entero y despues se corta): un
   // valor con saltos de linea dentro de un string no deja spans abiertos
   // entre dos <li>.
-  const lines = $derived(statements.join("\n\n").split("\n").map(highlightSql));
+  // Cada linea sabe a que sentencia pertenece (null = la linea en blanco
+  // entre dos), para marcar la que fallo.
+  const lines = $derived(
+    statements.flatMap((statement, index) => [
+      ...(index > 0 ? [{ html: "", statement: null }] : []),
+      ...statement.split("\n").map((line) => ({ html: highlightSql(line), statement: index })),
+    ]),
+  );
+
+  // Cada intento fallido "golpea": el aviso de error se sacude y la
+  // sentencia culpable destella y queda a la vista. Asi un reintento que
+  // choca con el mismo error se nota, sin que el modal parpadee.
+  let codeBox = $state<HTMLElement>();
+  let attempt = $state(0);
+  let lastError: ChangeError | null = null;
+
+  $effect(() => {
+    if (!error || error === lastError) return;
+    lastError = error;
+    attempt += 1;
+    void tick().then(() => {
+      codeBox?.querySelector("li.failed")?.scrollIntoView({ block: "nearest" });
+    });
+  });
 
   $effect(() => {
     void tick().then(() => {
@@ -101,32 +124,36 @@
 
   <!-- Una fila por linea: el numero en su propia columna (no seleccionable)
        y el codigo resaltado al lado. -->
-  <div class="code" role="region" aria-label={$t("results.changes.sql")}>
-    <ol>
-      {#each lines as line, index (index)}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <li><span class="line-code">{@html line || " "}</span></li>
-      {/each}
-    </ol>
+  <div class="code" role="region" aria-label={$t("results.changes.sql")} bind:this={codeBox}>
+    {#key attempt}
+      <ol>
+        {#each lines as line, index (index)}
+          <li class:failed={error !== null && line.statement !== null && line.statement === error.statementIndex}>
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            <span class="line-code">{@html line.html || " "}</span>
+          </li>
+        {/each}
+      </ol>
+    {/key}
   </div>
 
   {#if error}
-    <div class="apply-error" role="alert">
-      <strong>{$t("results.changes.notApplied")}</strong>
-      <!-- Armado como un solo texto: Svelte recorta los espacios en los bordes
-           de los bloques {#if} y pegaba "Sentencia 1:" al mensaje. -->
-      <span>{errorDetail}</span>
-    </div>
+    {#key attempt}
+      <div class="apply-error" class:nudge={attempt > 1} role="alert">
+        <strong>{$t("results.changes.notApplied")}</strong>
+        <!-- Armado como un solo texto: Svelte recorta los espacios en los bordes
+             de los bloques {#if} y pegaba "Sentencia 1:" al mensaje. -->
+        <span>{errorDetail}</span>
+      </div>
+    {/key}
   {/if}
 
   <footer>
     <button type="button" class="secondary-action" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
     <button type="button" class="primary-action" class:production disabled={applying} onclick={onapply}>
-      {applying
-        ? $t("results.changes.applying")
-        : production
-          ? $t("results.changes.applyInProduction")
-          : $t("results.applyChanges")}
+      <!-- El texto no cambia mientras aplica: un reintento rapido no hace
+           saltar el boton; basta con que quede deshabilitado. -->
+      {production ? $t("results.changes.applyInProduction") : $t("results.applyChanges")}
     </button>
   </footer>
 </dialog>
@@ -250,6 +277,47 @@
     font-variant-numeric: tabular-nums;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  /* La sentencia que fallo: fondo y barra del tono de error, con un destello
+     al llegar. */
+  li.failed {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    box-shadow: inset 2px 0 0 var(--danger);
+    animation: failed-flash 700ms ease-out;
+  }
+
+  @keyframes failed-flash {
+    0%,
+    40% {
+      background: color-mix(in srgb, var(--danger) 30%, transparent);
+    }
+  }
+
+  .apply-error.nudge {
+    animation: nudge 320ms ease-in-out;
+  }
+
+  @keyframes nudge {
+    20% {
+      transform: translateX(-4px);
+    }
+    40% {
+      transform: translateX(4px);
+    }
+    60% {
+      transform: translateX(-2px);
+    }
+    80% {
+      transform: translateX(2px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    li.failed,
+    .apply-error.nudge {
+      animation: none;
+    }
   }
 
   .line-code {

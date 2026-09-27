@@ -126,8 +126,8 @@
   {#if deletingProfile}
     {@const profile = deletingProfile}
     <ConfirmDialog
-      title={$t("connections.delete.title")}
-      message={$t("connections.delete.message", { name: profile.name })}
+      title={$t("connections.delete.title", { name: profile.name })}
+      message={$t("connections.delete.message")}
       confirmLabel={$t("connections.delete.confirm")}
       onconfirm={() => void confirmDelete(profile)}
       oncancel={() => (deletingProfile = null)}

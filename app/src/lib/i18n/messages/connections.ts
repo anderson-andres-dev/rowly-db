@@ -23,8 +23,8 @@ export default defineMessages({
     "landing.editTitle": "Editar conexión",
     "landing.deleteLabel": "Eliminar {name}",
     "landing.deleteTitle": "Eliminar conexión",
-    "delete.title": "¿Eliminar la conexión?",
-    "delete.message": "Se eliminará «{name}» junto con su contraseña guardada y sus consolas de consulta. Los archivos .sql en disco no se tocan. Esta acción no se puede deshacer.",
+    "delete.title": "¿Eliminar «{name}»?",
+    "delete.message": "También se borran su contraseña y sus consolas.",
     "delete.confirm": "Eliminar",
     "delete.failed": "No se pudo eliminar la conexión: {error}",
 
@@ -62,7 +62,7 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Desarrollo",
     "environment.production": "Producción",
-    "environment.productionHint": "Cada escritura pedirá confirmación antes de ejecutarse.",
+    "environment.productionHint": "Cada escritura pedirá confirmación.",
 
     "form.name": "Nombre",
     "form.host": "Host",
@@ -149,8 +149,8 @@ export default defineMessages({
     "landing.editTitle": "Edit connection",
     "landing.deleteLabel": "Delete {name}",
     "landing.deleteTitle": "Delete connection",
-    "delete.title": "Delete this connection?",
-    "delete.message": "“{name}” will be deleted along with its saved password and its query consoles. Your .sql files on disk are not touched. This cannot be undone.",
+    "delete.title": "Delete “{name}”?",
+    "delete.message": "Its password and consoles are deleted too.",
     "delete.confirm": "Delete",
     "delete.failed": "Could not delete the connection: {error}",
 
@@ -188,7 +188,7 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Development",
     "environment.production": "Production",
-    "environment.productionHint": "Every write will ask for confirmation before it runs.",
+    "environment.productionHint": "Every write asks for confirmation.",
 
     "form.name": "Name",
     "form.host": "Host",
@@ -274,8 +274,8 @@ export default defineMessages({
     "landing.editTitle": "Editar conexão",
     "landing.deleteLabel": "Excluir {name}",
     "landing.deleteTitle": "Excluir conexão",
-    "delete.title": "Excluir esta conexão?",
-    "delete.message": "“{name}” será excluída junto com a senha salva e os consoles de consulta. Os arquivos .sql no disco não são alterados. Esta ação não pode ser desfeita.",
+    "delete.title": "Excluir “{name}”?",
+    "delete.message": "A senha e os consoles também são excluídos.",
     "delete.confirm": "Excluir",
     "delete.failed": "Não foi possível excluir a conexão: {error}",
 
@@ -313,7 +313,7 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Desenvolvimento",
     "environment.production": "Produção",
-    "environment.productionHint": "Cada escrita pedirá confirmação antes de ser executada.",
+    "environment.productionHint": "Cada escrita pedirá confirmação.",
 
     "form.name": "Nome",
     "form.host": "Host",
@@ -399,8 +399,8 @@ export default defineMessages({
     "landing.editTitle": "Modifier la connexion",
     "landing.deleteLabel": "Supprimer {name}",
     "landing.deleteTitle": "Supprimer la connexion",
-    "delete.title": "Supprimer cette connexion ?",
-    "delete.message": "« {name} » sera supprimée avec son mot de passe enregistré et ses consoles de requêtes. Vos fichiers .sql sur le disque ne sont pas modifiés. Cette action est irréversible.",
+    "delete.title": "Supprimer « {name} » ?",
+    "delete.message": "Son mot de passe et ses consoles sont aussi supprimés.",
     "delete.confirm": "Supprimer",
     "delete.failed": "Impossible de supprimer la connexion : {error}",
 
@@ -438,7 +438,7 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Développement",
     "environment.production": "Production",
-    "environment.productionHint": "Chaque écriture demandera une confirmation avant de s’exécuter.",
+    "environment.productionHint": "Chaque écriture demandera une confirmation.",
 
     "form.name": "Nom",
     "form.host": "Hôte",
@@ -525,8 +525,8 @@ export default defineMessages({
     "landing.editTitle": "Verbindung bearbeiten",
     "landing.deleteLabel": "{name} löschen",
     "landing.deleteTitle": "Verbindung löschen",
-    "delete.title": "Diese Verbindung löschen?",
-    "delete.message": "„{name}“ wird zusammen mit dem gespeicherten Passwort und den Abfragekonsolen gelöscht. Deine .sql-Dateien auf der Festplatte bleiben unverändert. Das kann nicht rückgängig gemacht werden.",
+    "delete.title": "„{name}“ löschen?",
+    "delete.message": "Passwort und Konsolen werden ebenfalls gelöscht.",
     "delete.confirm": "Löschen",
     "delete.failed": "Die Verbindung konnte nicht gelöscht werden: {error}",
 
@@ -564,7 +564,7 @@ export default defineMessages({
     "environment.local": "Lokal",
     "environment.development": "Entwicklung",
     "environment.production": "Produktion",
-    "environment.productionHint": "Jeder Schreibvorgang muss vor der Ausführung bestätigt werden.",
+    "environment.productionHint": "Jeder Schreibvorgang muss bestätigt werden.",
 
     "form.name": "Name",
     "form.host": "Host",
