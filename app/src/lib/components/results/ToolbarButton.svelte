@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import { t } from "$lib/i18n";
+  import { opticalIconSize, TOOLBAR_ICON_STROKE } from "$lib/iconOptics";
 
   // Boton de icono de las barras del resultado, con tooltip propio (etiqueta
   // + atajo) debajo del boton — el mismo estilo que el de la paginacion.
@@ -11,10 +12,15 @@
     disabled = false,
     tone = "default",
     badge = 0,
-    size = 16,
+    size,
     onclick,
   }: {
-    icon: Component<{ size?: number; "aria-hidden"?: boolean | "true" }>;
+    icon: Component<{
+      size?: number;
+      strokeWidth?: number;
+      absoluteStrokeWidth?: boolean;
+      "aria-hidden"?: boolean | "true";
+    }>;
     label: string;
     shortcut?: string;
     disabled?: boolean;
@@ -22,8 +28,8 @@
     tone?: "default" | "submit";
     // Contador tipo notificacion en la esquina superior derecha (0 = oculto).
     badge?: number;
-    // Tamaño del icono. En una misma barra todos usan el mismo (16): mezclar
-    // tamaños rompe la simetria aunque cada glifo llene distinto su caja.
+    // Sin valor usa la correccion optica de iconOptics.ts: cada glifo a su
+    // tamaño medido para que todos se vean del mismo tamaño.
     size?: number;
     onclick: () => void;
   } = $props();
@@ -70,7 +76,12 @@
   onfocus={show}
   onblur={hide}
 >
-  <Icon {size} aria-hidden="true" />
+  <Icon
+    size={size ?? opticalIconSize(Icon as Component<never>)}
+    strokeWidth={TOOLBAR_ICON_STROKE}
+    absoluteStrokeWidth
+    aria-hidden="true"
+  />
   {#if badge > 0}
     <!-- {#key}: cada cambio del numero vuelve a montar la burbuja y repite
          su pequeño "pop", asi se nota que el contador cambio. -->
