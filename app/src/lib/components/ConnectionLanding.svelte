@@ -525,9 +525,7 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition:
-      border-color 200ms ease,
-      transform 200ms ease;
+    transition: border-color 240ms ease;
   }
 
   .card-main::before {
@@ -552,12 +550,12 @@
     position: relative;
   }
 
-  /* Solo el degradado lleva el color; el borde apenas se aclara, en
-     neutro, a medio camino entre el borde normal y el de los controles. */
-  .card-main:hover:not(:disabled),
+  /* Dos estados, una sola senal: el color de la conexion. Al pasar el
+     mouse aparece su degradado; la elegida (la ultima usada, o la que esta
+     conectando) ademas se contornea con su color. Sin saltos ni sombras. */
+  .card.recent .card-main,
   .card.connecting .card-main {
-    border-color: color-mix(in srgb, var(--border) 65%, var(--control-border));
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--identity) 50%, var(--border));
   }
 
   .card-main:hover:not(:disabled)::before,
@@ -771,10 +769,6 @@
     .card-main::before,
     .row-main::before {
       transition: none;
-    }
-
-    .card-main:hover:not(:disabled) {
-      transform: none;
     }
 
     .card-corner :global(.spin),
