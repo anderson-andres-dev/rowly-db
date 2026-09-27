@@ -641,7 +641,14 @@
   }
 
   .row-wrap.relation > .row {
+    overflow: hidden;
     padding-right: 2.25rem;
+  }
+
+  /* Un nombre largo termina en "…" antes del alfiler, no pasa por debajo. */
+  .row-wrap.relation > .row .label {
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   /* Aire a la derecha: pegado al borde, el clic caia en la barra de scroll. */
