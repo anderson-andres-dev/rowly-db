@@ -86,6 +86,11 @@
   function endpoint(profile: ConnectionProfile): string {
     return `${profile.host}:${profile.port}`;
   }
+
+  // En la tarjeta el puerto solo aparece si no es el de siempre del motor.
+  function shortEndpoint(profile: ConnectionProfile): string {
+    return profile.port === getDriver(profile.driver).defaultPort ? profile.host : endpoint(profile);
+  }
 </script>
 
 {#snippet cornerActions(profile: ConnectionProfile)}
@@ -192,23 +197,32 @@
                     use:focusIfLast={profile.id}
                     onclick={() => onconnect(profile)}
                   >
-                    <ConnectionAvatar name={profile.name} color={profile.color} size={40} />
+                    <ConnectionAvatar name={profile.name} color={profile.color} size={32} />
+                    <!-- Dos lineas: nombre y a donde apunta. El motor lo dice el
+                         logo de la esquina; de los entornos solo Produccion se
+                         marca aqui, el resto se ve en la vista de lista. -->
                     <span class="card-text">
                       <span class="card-name">
                         <strong>{profile.name}</strong>
-                        {#if profile.environment}
-                          <EnvironmentBadge environment={profile.environment} />
+                        {#if profile.environment === "production"}
+                          <EnvironmentBadge environment="production" />
                         {/if}
                       </span>
-                      <span class="meta">{driver.name}<span class="sep">·</span>{profile.database}</span>
-                      <code class="endpoint">{endpoint(profile)}</code>
+                      <span class="meta" title={endpoint(profile)}>
+                        {profile.database}<span class="sep">·</span>{shortEndpoint(profile)}
+                      </span>
                     </span>
                   </button>
                   <div class="card-corner">
                     {#if connectingId === profile.id}
                       <LoaderCircle size={15} class="spin" aria-label={$t("connections.connecting")} />
                     {:else}
-                      {@render cornerActions(profile)}
+                      <span class="card-driver" title={driver.name}>
+                        <DriverLogo driver={profile.driver} size={14} />
+                      </span>
+                      <span class="card-actions">
+                        {@render cornerActions(profile)}
+                      </span>
                     {/if}
                   </div>
                 </div>
@@ -446,9 +460,9 @@
   }
 
   .card:hover .corner-button,
-  .card:focus-within .corner-button,
+  .card:has(.corner-button:focus-visible) .corner-button,
   .row:hover .corner-button,
-  .row:focus-within .corner-button {
+  .row:has(.corner-button:focus-visible) .corner-button {
     opacity: 1;
   }
 
@@ -606,10 +620,36 @@
 
   .card-corner {
     position: absolute;
-    top: var(--space-2);
+    top: 50%;
     right: var(--space-2);
+    display: grid;
+    align-items: center;
+    justify-items: end;
+    transform: translateY(-50%);
+  }
+
+  /* El logo del motor y las acciones ocupan el mismo lugar: al pasar el
+     mouse, o al llegar con Tab a una accion, el logo se apaga y aparecen las
+     acciones. El foco en la tarjeta misma (la ultima conexion) no las
+     muestra: la tarjeta queda limpia. */
+  .card-driver,
+  .card-actions {
+    grid-area: 1 / 1;
     display: flex;
+    align-items: center;
     gap: 2px;
+    transition: opacity var(--duration-fast);
+  }
+
+  .card-driver {
+    padding-right: var(--space-2);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .card:hover .card-driver,
+  .card:has(.corner-button:focus-visible) .card-driver {
+    opacity: 0;
   }
 
   /* --- Lista compacta ---------------------------------------------------- */
