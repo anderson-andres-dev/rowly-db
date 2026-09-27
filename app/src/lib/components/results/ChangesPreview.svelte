@@ -279,10 +279,9 @@
     user-select: none;
   }
 
-  /* La sentencia que fallo: fondo y barra del tono de error, con un destello
-     al llegar. */
+  /* La sentencia que fallo: destella en rojo al llegar y despues queda solo
+     una barra fina a la izquierda; el codigo conserva sus colores. */
   li.failed {
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
     box-shadow: inset 2px 0 0 var(--danger);
     animation: failed-flash 700ms ease-out;
   }
@@ -290,7 +289,10 @@
   @keyframes failed-flash {
     0%,
     40% {
-      background: color-mix(in srgb, var(--danger) 30%, transparent);
+      background: color-mix(in srgb, var(--danger) 26%, transparent);
+    }
+    100% {
+      background: transparent;
     }
   }
 

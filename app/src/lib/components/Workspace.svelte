@@ -11,6 +11,7 @@
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { catalogTables, connection, isProduction } from "$lib/stores/connection";
+  import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
   import { extractFromContext } from "$lib/sqlSchema";
@@ -792,11 +793,17 @@
 
   // El SQL se pide ANTES de abrir: el modal aparece ya completo, sin un
   // instante vacio ni contenido que salta al llegar.
+  // Ancho de la vista previa (ver sqlPreviewFormat.ts): una clausula por
+  // linea, sin lineas kilometricas ni un valor por linea.
+  const PREVIEW_LINE_WIDTH = 100;
+
   async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
     const current = currentChanges(consoleId);
     if (!current) return;
     try {
-      const statements = await previewChanges(current.target, current.changes);
+      const statements = (await previewChanges(current.target, current.changes)).map((statement) =>
+        formatPreviewSql(statement, PREVIEW_LINE_WIDTH),
+      );
       applyError = error;
       preview = { consoleId, ...current, statements, dismiss: false };
     } catch (cause) {
