@@ -7,7 +7,7 @@ mod sql_files;
 mod updates;
 
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryCancel,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
     QueryExecutionOptions, QueryExecutionResult, SchemaObjects, TlsStatus,
 };
 use khipu_engine::Dialect;
@@ -199,7 +199,7 @@ async fn set_visible_schemas(
     names: Vec<String>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<DatabaseExplorer, String> {
+) -> Result<DatabaseExplorer, Message> {
     let (connector, wanted, missing) = {
         let guard = state
             .connections
@@ -207,7 +207,7 @@ async fn set_visible_schemas(
             .expect("connections mutex poisoned");
         let active = guard
             .get(window.label())
-            .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+            .ok_or_else(|| Message::key("noActiveConnection"))?;
 
         let mut wanted: Vec<String> = names
             .into_iter()
@@ -232,7 +232,7 @@ async fn set_visible_schemas(
                 let mut objects = SchemaObjects::new(&name);
                 objects
                     .warnings
-                    .push(format!("No se pudo cargar el schema: {error}"));
+                    .push(Message::key("introspect.schema").with("error", error));
                 objects
             }
         };
@@ -245,11 +245,11 @@ async fn set_visible_schemas(
         .expect("connections mutex poisoned");
     let active = guard
         .get_mut(window.label())
-        .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+        .ok_or_else(|| Message::key("noActiveConnection"))?;
     // Si mientras se introspectaba se conecto a otra base, lo cargado es de
     // la conexion anterior y no se mezcla con la nueva.
     if !Arc::ptr_eq(&active.connector, &connector) {
-        return Err("La conexión cambió mientras se cargaban los schemas.".to_string());
+        return Err(Message::key("connectionChanged"));
     }
     active.schemas.retain(|name, _| wanted.contains(name));
     for objects in loaded {
@@ -331,13 +331,13 @@ async fn execute_query(
     execution_id: Option<String>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<ExecuteQueryResponse, String> {
+) -> Result<ExecuteQueryResponse, Message> {
     let sql = sql.trim();
     if sql.is_empty() {
         return Ok(ExecuteQueryResponse::Completed {
             page: None,
             result: QueryExecutionResult::Error {
-                message: "No hay ninguna consulta para ejecutar.".to_string(),
+                message: Message::key("query.empty"),
                 code: None,
                 position: None,
             },
@@ -359,7 +359,7 @@ async fn execute_query(
                 return Ok(ExecuteQueryResponse::Completed {
                     page: None,
                     result: QueryExecutionResult::Error {
-                        message: "No hay ninguna conexión activa.".to_string(),
+                        message: Message::key("noActiveConnection"),
                         code: None,
                         position: None,
                     },
@@ -374,7 +374,7 @@ async fn execute_query(
             return Ok(ExecuteQueryResponse::Completed {
                 page: None,
                 result: QueryExecutionResult::Error {
-                    message: error.to_string(),
+                    message: error.to_string().into(),
                     code: None,
                     position: None,
                 },
@@ -393,7 +393,7 @@ async fn execute_query(
             return Ok(ExecuteQueryResponse::Completed {
                 page: None,
                 result: QueryExecutionResult::Error {
-                    message: "La confirmación ya no corresponde a esta consulta.".to_string(),
+                    message: Message::key("query.staleConfirmation"),
                     code: None,
                     position: None,
                 },
@@ -475,7 +475,7 @@ fn classify_statements(
     statements: Vec<String>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<Vec<StatementCheck>, String> {
+) -> Result<Vec<StatementCheck>, Message> {
     let (dialect, production) = {
         let guard = state
             .connections
@@ -483,7 +483,7 @@ fn classify_statements(
             .expect("connections mutex poisoned");
         let active = guard
             .get(window.label())
-            .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+            .ok_or_else(|| Message::key("noActiveConnection"))?;
         (active.dialect, active.production)
     };
     Ok(statements
@@ -517,7 +517,7 @@ async fn cancel_query(
     execution_id: String,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), Message> {
     let Some(cancel) = state
         .running
         .lock()
@@ -540,7 +540,7 @@ async fn cancel_query(
     connector
         .cancel_query(&cancel)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| Message::from(e.to_string()))
 }
 
 /// Total rows `sql` would return, via `SELECT COUNT(*) FROM (...)`. Only
@@ -550,7 +550,7 @@ async fn count_query_rows(
     sql: String,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<u64, String> {
+) -> Result<u64, Message> {
     let (connector, dialect) = {
         let guard = state
             .connections
@@ -558,11 +558,11 @@ async fn count_query_rows(
             .expect("connections mutex poisoned");
         let active = guard
             .get(window.label())
-            .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+            .ok_or_else(|| Message::key("noActiveConnection"))?;
         (Arc::clone(&active.connector), active.dialect)
     };
     let count_sql = khipu_engine::pagination::count_sql(sql.trim(), dialect)
-        .ok_or_else(|| "No se puede contar el total de esta consulta.".to_string())?;
+        .ok_or_else(|| Message::key("count.unsupported"))?;
     match connector
         .execute_query(&count_sql, QueryExecutionOptions { max_rows: 1 })
         .await
@@ -571,11 +571,9 @@ async fn count_query_rows(
             .first()
             .and_then(|row| row.first().cloned().flatten())
             .and_then(|value| value.parse::<u64>().ok())
-            .ok_or_else(|| "El servidor no devolvió un total.".to_string()),
+            .ok_or_else(|| Message::key("count.noTotal")),
         QueryExecutionResult::Error { message, .. } => Err(message),
-        QueryExecutionResult::Command { .. } => {
-            Err("El servidor no devolvió un total.".to_string())
-        }
+        QueryExecutionResult::Command { .. } => Err(Message::key("count.noTotal")),
     }
 }
 
@@ -585,7 +583,7 @@ async fn table_definition(
     table: String,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, Message> {
     let connector = {
         let guard = state
             .connections
@@ -593,14 +591,14 @@ async fn table_definition(
             .expect("connections mutex poisoned");
         match guard.get(window.label()) {
             Some(active) => Arc::clone(&active.connector),
-            None => return Err("No hay ninguna conexión activa.".to_string()),
+            None => return Err(Message::key("noActiveConnection")),
         }
     };
 
     connector
         .table_definition(&schema, &table)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| Message::from(e.to_string()))
 }
 
 #[tauri::command]
@@ -612,47 +610,49 @@ async fn test_connection(
 }
 
 #[tauri::command]
-async fn save_connection_password(profile_id: String, password: String) -> Result<(), String> {
-    credentials::save(profile_id, password).await
+async fn save_connection_password(profile_id: String, password: String) -> Result<(), Message> {
+    credentials::save(profile_id, password)
+        .await
+        .map_err(Message::from)
 }
 
 #[tauri::command]
-async fn load_connection_password(profile_id: String) -> Result<Option<String>, String> {
-    credentials::load(profile_id).await
+async fn load_connection_password(profile_id: String) -> Result<Option<String>, Message> {
+    credentials::load(profile_id).await.map_err(Message::from)
 }
 
 #[tauri::command]
-async fn delete_connection_password(profile_id: String) -> Result<(), String> {
-    credentials::delete(profile_id).await
+async fn delete_connection_password(profile_id: String) -> Result<(), Message> {
+    credentials::delete(profile_id).await.map_err(Message::from)
 }
 
 #[tauri::command]
-async fn read_sql_file(path: String) -> Result<String, String> {
+async fn read_sql_file(path: String) -> Result<String, Message> {
     sql_files::read(path).await
 }
 
 #[tauri::command]
-async fn write_sql_file(path: String, contents: String) -> Result<(), String> {
+async fn write_sql_file(path: String, contents: String) -> Result<(), Message> {
     sql_files::write(path, contents).await
 }
 
 #[tauri::command]
-async fn rename_sql_file(path: String, new_name: String) -> Result<String, String> {
+async fn rename_sql_file(path: String, new_name: String) -> Result<String, Message> {
     sql_files::rename(path, new_name).await
 }
 
 #[tauri::command]
-async fn list_sql_dir(path: String) -> Result<Vec<sql_files::SqlDirEntry>, String> {
+async fn list_sql_dir(path: String) -> Result<Vec<sql_files::SqlDirEntry>, Message> {
     sql_files::list_dir(path).await
 }
 
 #[tauri::command]
-async fn create_sql_file(dir: String, name: String) -> Result<String, String> {
+async fn create_sql_file(dir: String, name: String) -> Result<String, Message> {
     sql_files::create(dir, name).await
 }
 
 #[tauri::command]
-async fn trash_sql_file(path: String) -> Result<(), String> {
+async fn trash_sql_file(path: String) -> Result<(), Message> {
     sql_files::trash(path).await
 }
 
@@ -662,15 +662,15 @@ async fn trash_sql_file(path: String) -> Result<(), String> {
 fn with_active_connection<T>(
     window: &tauri::Window,
     state: &tauri::State<'_, AppState>,
-    f: impl FnOnce(&ActiveConnection) -> Result<T, String>,
-) -> Result<T, String> {
+    f: impl FnOnce(&ActiveConnection) -> Result<T, Message>,
+) -> Result<T, Message> {
     let guard = state
         .connections
         .lock()
         .expect("connections mutex poisoned");
     let active = guard
         .get(window.label())
-        .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+        .ok_or_else(|| Message::key("noActiveConnection"))?;
     f(active)
 }
 
@@ -683,7 +683,7 @@ fn result_edit_info(
     column_names: Vec<String>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<result_editing::ResultEditInfo, String> {
+) -> Result<result_editing::ResultEditInfo, Message> {
     with_active_connection(&window, &state, |active| {
         result_editing::edit_info(
             sql.trim(),
@@ -702,7 +702,7 @@ fn preview_result_changes(
     changes: khipu_engine::editing::ResultChanges,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, Message> {
     with_active_connection(&window, &state, |active| {
         let statements =
             result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
@@ -767,7 +767,7 @@ async fn export_query_to_file(
     request: ExportRequest,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<ExportSummary, String> {
+) -> Result<ExportSummary, Message> {
     let ExportRequest {
         sql,
         sort,
@@ -780,7 +780,7 @@ async fn export_query_to_file(
     let path = export::validated_path(&path)?;
     let (connector, export_sql) = with_active_connection(&window, &state, |active| {
         if !khipu_engine::pagination::is_read_only_query(&sql, active.dialect) {
-            return Err("Solo se pueden exportar consultas de lectura (SELECT).".to_string());
+            return Err(Message::key("export.readOnly"));
         }
         // El archivo sale en el mismo orden que el grid (orden de los
         // encabezados, aplicado en la base igual que al paginar).

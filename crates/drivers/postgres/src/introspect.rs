@@ -12,8 +12,8 @@
 use crate::version::Capabilities;
 use khipu_driver_core::assembly::{IndexColumnRow, KeyColumnRow, TableSet, TriggerEventRow};
 use khipu_driver_core::{
-    CheckInfo, ColumnInfo, DriverError, ForeignKeyInfo, RelationKind, RoutineInfo, RoutineKind,
-    SchemaObjects, SequenceInfo,
+    CheckInfo, ColumnInfo, DriverError, ForeignKeyInfo, Message, RelationKind, RoutineInfo,
+    RoutineKind, SchemaObjects, SequenceInfo,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
@@ -39,9 +39,11 @@ async fn fetch(pool: &PgPool, sql: &str, schema: &str) -> Result<Vec<PgRow>, Dri
 
 /// Runs a secondary category: on failure the category stays empty and a
 /// note goes to `warnings` (see `SchemaObjects`).
-fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<String>) -> T {
+/// `what` is the category ("keys", "indexes"...): the frontend translates
+/// `introspect.<what>`.
+fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<Message>) -> T {
     result.unwrap_or_else(|error| {
-        warnings.push(format!("No se pudieron leer {what}: {error}"));
+        warnings.push(Message::key(format!("introspect.{what}")).with("error", error));
         T::default()
     })
 }
@@ -119,7 +121,7 @@ pub async fn introspect_schema(
 
     let constraint_rows: Vec<ConstraintColumnRow> = soft(
         map_rows(constraints, constraint_column_row),
-        "las claves y checks",
+        "keysAndChecks",
         warnings,
     );
     let (key_rows, checks) = split_constraints(constraint_rows);
@@ -130,25 +132,21 @@ pub async fn introspect_schema(
 
     let foreign_key_rows = soft(
         map_rows(foreign_keys, foreign_key_row),
-        "las claves foráneas",
+        "foreignKeys",
         warnings,
     );
     for (table, foreign_key) in foreign_key_rows {
         set.add_foreign_key(&table, foreign_key);
     }
 
-    let index_rows = soft(map_rows(indexes, index_rows), "los índices", warnings);
+    let index_rows = soft(map_rows(indexes, index_rows), "indexes", warnings);
     set.add_index_columns(index_rows.into_iter().flatten());
 
-    let trigger_rows = soft(map_rows(triggers, trigger_rows), "los triggers", warnings);
+    let trigger_rows = soft(map_rows(triggers, trigger_rows), "triggers", warnings);
     set.add_trigger_events(trigger_rows.into_iter().flatten());
 
-    objects.routines = soft(map_rows(routines, routine_row), "las rutinas", warnings);
-    objects.sequences = soft(
-        map_rows(sequences, sequence_row),
-        "las secuencias",
-        warnings,
-    );
+    objects.routines = soft(map_rows(routines, routine_row), "routines", warnings);
+    objects.sequences = soft(map_rows(sequences, sequence_row), "sequences", warnings);
 
     objects.tables = set.into_tables();
     Ok(objects)

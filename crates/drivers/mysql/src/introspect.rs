@@ -15,8 +15,8 @@
 use crate::version::{Capabilities, CheckConstraints};
 use khipu_driver_core::assembly::{IndexColumnRow, KeyColumnRow, TableSet, TriggerEventRow};
 use khipu_driver_core::{
-    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, RelationKind, RoutineInfo,
-    RoutineKind, SchemaObjects, SequenceInfo,
+    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, Message, RelationKind,
+    RoutineInfo, RoutineKind, SchemaObjects, SequenceInfo,
 };
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySqlPool, Row};
@@ -45,9 +45,11 @@ async fn fetch(pool: &MySqlPool, sql: &str, schema: &str) -> Result<Vec<MySqlRow
 
 /// Runs a secondary category: on failure the category stays empty and a
 /// note goes to `warnings` (see `SchemaObjects`).
-fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<String>) -> T {
+/// `what` is the category ("keys", "indexes"...): the frontend translates
+/// `introspect.<what>`.
+fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<Message>) -> T {
     result.unwrap_or_else(|error| {
-        warnings.push(format!("No se pudieron leer {what}: {error}"));
+        warnings.push(Message::key(format!("introspect.{what}")).with("error", error));
         T::default()
     })
 }
@@ -122,14 +124,14 @@ pub async fn introspect_schema(
 
     let key_rows: Vec<KeyColumnRow> = soft(
         keys.and_then(|rows| rows.iter().map(key_row).collect()),
-        "las claves",
+        "keys",
         warnings,
     );
     set.add_key_columns(key_rows);
 
     let foreign_key_rows: Vec<(String, ForeignKeyInfo)> = soft(
         foreign_keys.and_then(|rows| rows.iter().map(foreign_key_row).collect()),
-        "las claves foráneas",
+        "foreignKeys",
         warnings,
     );
     for (table, foreign_key) in foreign_key_rows {
@@ -138,26 +140,26 @@ pub async fn introspect_schema(
 
     let index_rows: Vec<IndexColumnRow> = soft(
         indexes.and_then(|rows| rows.iter().map(index_row).collect()),
-        "los índices",
+        "indexes",
         warnings,
     );
     set.add_index_columns(index_rows);
 
-    for (table, check) in soft(checks, "los checks", warnings) {
+    for (table, check) in soft(checks, "checks", warnings) {
         set.add_check(&table, check);
     }
 
     let trigger_rows: Vec<TriggerEventRow> = soft(
         triggers.and_then(|rows| rows.iter().map(trigger_row).collect()),
-        "los triggers",
+        "triggers",
         warnings,
     );
     set.add_trigger_events(trigger_rows);
 
-    objects.routines = soft(routines, "las rutinas", warnings);
+    objects.routines = soft(routines, "routines", warnings);
     objects.events = soft(
         events.and_then(|rows| rows.iter().map(event_row).collect()),
-        "los eventos",
+        "events",
         warnings,
     );
 

@@ -1,3 +1,4 @@
+import backend from "./backend";
 import common from "./common";
 import connections from "./connections";
 import editor from "./editor";
@@ -13,6 +14,7 @@ import workspace from "./workspace";
 
 // Un archivo por área de la interfaz; la clave completa es "área.clave".
 export const messages = {
+  backend,
   common,
   connections,
   editor,

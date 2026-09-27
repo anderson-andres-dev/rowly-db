@@ -5,9 +5,9 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryCancel, QueryColumn,
-    QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects,
-    TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
+    QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
+    SchemaObjects, TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
 };
 use sqlx::postgres::{
     PgConnectOptions, PgConnection, PgDatabaseError, PgErrorPosition, PgPoolOptions,
@@ -85,7 +85,7 @@ fn postgres_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
                 _ => None,
             };
             return QueryExecutionResult::Error {
-                message: pg_error.message().to_string(),
+                message: pg_error.message().into(),
                 code: Some(pg_error.code().to_string()),
                 position,
             };
@@ -93,7 +93,7 @@ fn postgres_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
     }
 
     QueryExecutionResult::Error {
-        message: error.to_string(),
+        message: error.to_string().into(),
         code: None,
         position: None,
     }
@@ -169,11 +169,9 @@ impl DbConnector for PostgresConnector {
         if self.version.is_below_minimum() {
             objects.warnings.insert(
                 0,
-                format!(
-                    "{} es anterior a la version soportada (PostgreSQL 10): \
-                     algunos objetos pueden faltar.",
-                    self.version.display()
-                ),
+                Message::key("introspect.unsupportedVersion")
+                    .with("version", self.version.display())
+                    .with("minimum", "PostgreSQL 10"),
             );
         }
         Ok(objects)
@@ -267,16 +265,16 @@ impl DbConnector for PostgresConnector {
         &'a self,
         sql: &'a str,
         sink: &'a mut dyn RowSink,
-    ) -> Pin<Box<dyn Future<Output = Result<u64, String>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<u64, Message>> + Send + 'a>> {
         Box::pin(async move {
             let message = |error: sqlx::Error| match postgres_error_to_result(error) {
                 QueryExecutionResult::Error { message, .. } => message,
-                _ => "Error al leer las filas.".to_string(),
+                _ => Message::key("export.readFailed"),
             };
             let mut conn = self.pool.acquire().await.map_err(message)?;
             let describe = conn.describe(sql).await.map_err(message)?;
             if describe.columns().is_empty() {
-                return Err("La sentencia no devuelve filas: no hay nada que exportar.".to_string());
+                return Err(Message::key("export.noRows"));
             }
             let columns: Vec<QueryColumn> = describe
                 .columns()
@@ -293,7 +291,7 @@ impl DbConnector for PostgresConnector {
             let mut count = 0u64;
             let mut values: Vec<QueryValue> = Vec::with_capacity(columns.len());
             let mut finished = false;
-            let outcome: Result<(), String> = async {
+            let outcome: Result<(), Message> = async {
                 let mut stream = Executor::fetch(&mut *conn, RawStatement(sql));
                 while let Some(row) = stream.try_next().await.map_err(message)? {
                     values.clear();
@@ -429,7 +427,7 @@ impl PostgresConnector {
 
 fn cancelled_before_start() -> QueryExecutionResult {
     QueryExecutionResult::Error {
-        message: "query cancelled before it started".to_string(),
+        message: Message::key("query.cancelledBeforeStart"),
         code: None,
         position: None,
     }

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { backendText, invoke } from "$lib/backend";
 import type { DestructiveStatement, ExecuteQueryResponse, SortKey } from "$lib/types";
 
 export interface PageRequest {
@@ -22,12 +22,18 @@ export async function executeQuery(
   executionId: string | null = null,
 ): Promise<ExecuteQueryResponse> {
   try {
-    return await invoke<ExecuteQueryResponse>("execute_query", {
+    const response = await invoke<ExecuteQueryResponse>("execute_query", {
       sql,
       confirmedStatement,
       page,
       executionId,
     });
+    // El error de la base llega como texto; el de la app (sin conexion,
+    // nada que ejecutar...), como mensaje a traducir.
+    if (response.type === "completed" && response.result.type === "error") {
+      return { ...response, result: { ...response.result, message: backendText(response.result.message) } };
+    }
+    return response;
   } catch (e) {
     return {
       type: "completed",

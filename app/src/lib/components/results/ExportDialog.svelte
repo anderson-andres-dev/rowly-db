@@ -2,7 +2,7 @@
   import Checkbox from "$lib/components/Checkbox.svelte";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke } from "$lib/backend";
   import { downloadDir, join } from "@tauri-apps/api/path";
   import { save } from "@tauri-apps/plugin-dialog";
   import { FolderOpen } from "@lucide/svelte";

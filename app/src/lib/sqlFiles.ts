@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "$lib/backend";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { get } from "svelte/store";
 import { translate } from "$lib/i18n";

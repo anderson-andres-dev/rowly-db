@@ -1,5 +1,6 @@
 pub mod assembly;
 mod connection_error;
+mod message;
 mod query_cancel;
 
 use async_trait::async_trait;
@@ -8,6 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
+pub use message::Message;
 pub use query_cancel::QueryCancel;
 
 /// How a connection negotiates TLS. Chosen per connection profile.
@@ -251,7 +253,7 @@ pub struct SchemaObjects {
     pub routines: Vec<RoutineInfo>,
     pub sequences: Vec<SequenceInfo>,
     pub events: Vec<EventInfo>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Message>,
 }
 
 impl SchemaObjects {
@@ -331,7 +333,7 @@ pub enum QueryExecutionResult {
         execution_time_ms: u64,
     },
     Error {
-        message: String,
+        message: Message,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         code: Option<String>,
@@ -441,16 +443,16 @@ pub trait DbConnector: Send + Sync {
         &'a self,
         sql: &'a str,
         sink: &'a mut dyn RowSink,
-    ) -> Pin<Box<dyn Future<Output = Result<u64, String>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Result<u64, Message>> + Send + 'a>>;
 }
 
 /// Destination of `DbConnector::stream_query` (e.g. a file being written).
 pub trait RowSink: Send {
     /// Called once, before the first row.
-    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), String>;
-    fn row(&mut self, row: &[QueryValue]) -> Result<(), String>;
+    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), Message>;
+    fn row(&mut self, row: &[QueryValue]) -> Result<(), Message>;
     /// Called once after the last row (not called if streaming failed).
-    fn finish(&mut self) -> Result<(), String>;
+    fn finish(&mut self) -> Result<(), Message>;
 }
 
 /// One statement of `DbConnector::execute_in_transaction`.
@@ -469,7 +471,7 @@ pub struct TransactionStatement {
 pub struct TransactionError {
     /// Index of the statement that failed (None: begin/commit failed).
     pub statement_index: Option<usize>,
-    pub message: String,
+    pub message: Message,
     pub code: Option<String>,
 }
 
@@ -485,7 +487,7 @@ impl TransactionError {
             },
             _ => Self {
                 statement_index,
-                message: "Error desconocido al aplicar los cambios.".to_string(),
+                message: Message::key("changes.unknownError"),
                 code: None,
             },
         }
@@ -495,11 +497,9 @@ impl TransactionError {
         Self {
             statement_index: Some(statement_index),
             message: if affected == 0 {
-                "La fila ya no existe o su clave cambió (otra sesión la modificó). No se aplicó ningún cambio.".to_string()
+                Message::key("changes.rowGone")
             } else {
-                format!(
-                    "La sentencia afectaría {affected} filas en lugar de 1. No se aplicó ningún cambio."
-                )
+                Message::key("changes.wrongRowCount").with("count", affected)
             },
             code: None,
         }
@@ -646,7 +646,7 @@ mod tests {
     #[test]
     fn error_omits_code_and_position_when_none() {
         let result = QueryExecutionResult::Error {
-            message: "syntax error".to_string(),
+            message: "syntax error".into(),
             code: None,
             position: None,
         };
@@ -662,7 +662,7 @@ mod tests {
     #[test]
     fn error_includes_code_and_position_when_present() {
         let result = QueryExecutionResult::Error {
-            message: "syntax error".to_string(),
+            message: "syntax error".into(),
             code: Some("42601".to_string()),
             position: Some(7),
         };

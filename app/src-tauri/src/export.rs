@@ -6,7 +6,7 @@
 //! Los formatos son los mismos que el copiado del grid (gridClipboard.ts) y
 //! se serializan igual: TSV, CSV, JSON, Markdown y SQL INSERT.
 
-use khipu_driver_core::{QueryColumn, QueryValue, RowSink};
+use khipu_driver_core::{Message, QueryColumn, QueryValue, RowSink};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -26,10 +26,10 @@ pub enum ExportFormat {
 /// nativo), pero aunque mandara otra cosa no puede pisar un `.bashrc`.
 const ALLOWED_EXTENSIONS: &[&str] = &["tsv", "csv", "json", "md", "sql", "txt"];
 
-pub fn validated_path(path: &str) -> Result<PathBuf, String> {
+pub fn validated_path(path: &str) -> Result<PathBuf, Message> {
     let path = PathBuf::from(path);
     if !path.is_absolute() {
-        return Err("La ruta del archivo debe ser absoluta.".to_string());
+        return Err(Message::key("files.pathNotAbsolute"));
     }
     let allowed = path
         .extension()
@@ -40,13 +40,13 @@ pub fn validated_path(path: &str) -> Result<PathBuf, String> {
                 .any(|allowed| allowed.eq_ignore_ascii_case(extension))
         });
     if !allowed {
-        return Err(format!(
-            "Solo se puede exportar a archivos {}.",
+        return Err(Message::key("export.extensions").with(
+            "extensions",
             ALLOWED_EXTENSIONS
                 .iter()
                 .map(|extension| format!(".{extension}"))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
         ));
     }
     Ok(path)
@@ -100,9 +100,12 @@ impl FileSink {
         format: ExportFormat,
         headers: bool,
         table_name: String,
-    ) -> Result<Self, String> {
-        let file = File::create(path)
-            .map_err(|error| format!("No se pudo crear {}: {error}", path.display()))?;
+    ) -> Result<Self, Message> {
+        let file = File::create(path).map_err(|error| {
+            Message::key("files.createFailed")
+                .with("path", path.display())
+                .with("error", error)
+        })?;
         Ok(Self {
             out: BufWriter::with_capacity(256 * 1024, file),
             format,
@@ -113,10 +116,10 @@ impl FileSink {
         })
     }
 
-    fn write(&mut self, text: &str) -> Result<(), String> {
+    fn write(&mut self, text: &str) -> Result<(), Message> {
         self.out
             .write_all(text.as_bytes())
-            .map_err(|error| format!("No se pudo escribir el archivo: {error}"))
+            .map_err(|error| Message::key("export.writeFailed").with("error", error))
     }
 
     fn json_value(&self, value: &QueryValue, column: &QueryColumn) -> String {
@@ -143,7 +146,7 @@ impl FileSink {
 }
 
 impl RowSink for FileSink {
-    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), String> {
+    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), Message> {
         self.columns = columns.to_vec();
         let names: Vec<String> = columns.iter().map(|column| column.name.clone()).collect();
         match self.format {
@@ -166,7 +169,7 @@ impl RowSink for FileSink {
         }
     }
 
-    fn row(&mut self, row: &[QueryValue]) -> Result<(), String> {
+    fn row(&mut self, row: &[QueryValue]) -> Result<(), Message> {
         let line = match self.format {
             ExportFormat::Tsv => {
                 let fields: Vec<String> = row
@@ -235,14 +238,14 @@ impl RowSink for FileSink {
         self.write(&line)
     }
 
-    fn finish(&mut self) -> Result<(), String> {
+    fn finish(&mut self) -> Result<(), Message> {
         if self.format == ExportFormat::Json {
             let closing = if self.rows == 0 { "]\n" } else { "\n]\n" };
             self.write(closing)?;
         }
         self.out
             .flush()
-            .map_err(|error| format!("No se pudo terminar de escribir el archivo: {error}"))
+            .map_err(|error| Message::key("export.finishFailed").with("error", error))
     }
 }
 

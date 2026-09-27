@@ -1,5 +1,5 @@
 import { derived, get, writable } from "svelte/store";
-import { invoke } from "@tauri-apps/api/core";
+import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
 import { toConnectionFailure } from "$lib/connectionErrors";
@@ -83,13 +83,22 @@ function saveVisibleSchemas(profileId: string, schemas: string[]): void {
   }
 }
 
+// Los avisos de cada schema (una categoria que no se pudo leer, una version
+// no soportada) llegan como mensajes del backend: se traducen al recibirlos.
+function withTranslatedWarnings(explorer: DatabaseExplorer): DatabaseExplorer {
+  return {
+    ...explorer,
+    schemas: explorer.schemas.map((objects) => ({ ...objects, warnings: objects.warnings.map(backendText) })),
+  };
+}
+
 // Pide al backend que muestre exactamente `schemas` (mas el por defecto) y
 // refresca el arbol y el autocompletado, que tambien ve los schemas nuevos.
 export async function setVisibleSchemas(schemas: string[]): Promise<void> {
   const profileId = get(connection).profileId;
   explorerLoading.set(true);
   try {
-    const explorer = await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas });
+    const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas }));
     databaseExplorer.set(explorer);
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
     if (profileId) {
@@ -123,7 +132,8 @@ export async function connect(
   try {
     const tableCount = await invoke<number>("connect", { kind, config, production });
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
-    databaseExplorer.set(await invoke<DatabaseExplorer | null>("database_explorer"));
+    const explorer = await invoke<DatabaseExplorer | null>("database_explorer");
+    databaseExplorer.set(explorer && withTranslatedWarnings(explorer));
     return tableCount;
   } catch (e) {
     connection.update((state) => ({
