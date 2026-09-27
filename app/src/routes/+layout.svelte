@@ -241,8 +241,21 @@
     }
   }
 
+  // El menu contextual del navegador (Recargar, Inspeccionar elemento...)
+  // no es parte de la app: un clic derecho descuidado no debe ofrecerlo. Se
+  // bloquea donde la app no tiene menu propio, salvo en campos de texto,
+  // donde el nativo da cortar/copiar/pegar. El inspector sigue a mano con su
+  // atajo de teclado en desarrollo.
+  function blockNativeContextMenu(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) return;
+    event.preventDefault();
+  }
+
   onMount(() => {
     installDialogMotion();
+    window.addEventListener("contextmenu", blockNativeContextMenu);
     cleanupThemeEffects = initThemeEffects();
     cleanupLocaleEffects = initLocaleEffects();
     // Solo la ventana principal busca versiones al arrancar: las de conexión
@@ -260,6 +273,7 @@
     document.removeEventListener("keydown", handleGlobalKeydown);
     window.removeEventListener("pointerdown", trackPointerRegion, true);
     window.removeEventListener("keydown", onSidebarFindKeydown, true);
+    window.removeEventListener("contextmenu", blockNativeContextMenu);
   });
 </script>
 
