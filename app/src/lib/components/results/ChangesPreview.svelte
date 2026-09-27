@@ -50,10 +50,13 @@
 
   const summary = $derived(
     [
-      { count: changes.deletes.length, one: "results.changes.deletesOne", many: "results.changes.deletesOther", tone: "delete" },
-      { count: changes.updates.length, one: "results.changes.updatesOne", many: "results.changes.updatesOther", tone: "update" },
-      { count: changes.inserts.length, one: "results.changes.insertsOne", many: "results.changes.insertsOther", tone: "insert" },
-    ].filter((item): item is { count: number; one: MessageKey; many: MessageKey; tone: string } => item.count > 0),
+      { count: changes.deletes.length, one: "results.changes.deletesOne", many: "results.changes.deletesOther", tone: "delete", keyword: "DELETE" },
+      { count: changes.updates.length, one: "results.changes.updatesOne", many: "results.changes.updatesOther", tone: "update", keyword: "UPDATE" },
+      { count: changes.inserts.length, one: "results.changes.insertsOne", many: "results.changes.insertsOther", tone: "insert", keyword: "INSERT" },
+    ].filter(
+      (item): item is { count: number; one: MessageKey; many: MessageKey; tone: string; keyword: string } =>
+        item.count > 0,
+    ),
   );
 
   // Se resalta linea por linea (no el texto entero y despues se corta): un
@@ -123,16 +126,19 @@
   }}
   onclose={onclose}
 >
-  <!-- Titulo y, debajo, el resumen en texto tenue. El mismo punto de color
+  <!-- Titulo y, debajo, una pastilla por tipo de sentencia: la palabra SQL
+       (igual en cualquier idioma) y la cantidad en su bolita. El mismo color
        marca en el margen donde empieza cada sentencia de ese tipo. -->
   <header>
     <h2>{$t("results.changes.title")}</h2>
-    <p class="summary">
-      {#each summary as item, index (item.tone)}
-        {#if index > 0}<span class="sep" aria-hidden="true">·</span>{/if}
-        <span class={`kind ${item.tone}`}>{$t(item.count === 1 ? item.one : item.many, { count: item.count })}</span>
+    <div class="summary">
+      {#each summary as item (item.tone)}
+        {@const label = $t(item.count === 1 ? item.one : item.many, { count: item.count })}
+        <span class={`kind ${item.tone}`} title={label} aria-label={label}>
+          {item.keyword}<span class="count" aria-hidden="true">{item.count}</span>
+        </span>
       {/each}
-    </p>
+    </div>
   </header>
 
   <!-- Una fila por linea: el numero en su propia columna (no seleccionable)
@@ -211,7 +217,7 @@
   header {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-2);
   }
 
   h2 {
@@ -224,24 +230,41 @@
   .summary {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0 var(--space-2);
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-  }
-
-  .sep {
-    opacity: 0.6;
+    gap: var(--space-2);
   }
 
   .kind {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    height: 1.375rem;
+    padding: 0 3px 0 var(--space-2);
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--kind-color) 14%, transparent);
+    color: var(--kind-color);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
   }
 
-  .kind::before,
+  .count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--kind-color);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.625rem;
+    font-variant-numeric: tabular-nums;
+  }
+
   li.start::after {
     content: "";
     width: 6px;
