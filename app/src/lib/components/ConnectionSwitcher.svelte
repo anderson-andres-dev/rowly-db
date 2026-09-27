@@ -176,7 +176,12 @@
             <button type="button" class="option-main" tabindex="-1" onclick={() => select(profile)}>
               <ConnectionAvatar name={profile.name} color={profile.color} size={24} />
               <span class="option-text">
-                <span class="option-name">{profile.name}</span>
+                <span class="option-title">
+                  <span class="option-name">{profile.name}</span>
+                  {#if profile.environment}
+                    <EnvironmentBadge environment={profile.environment} compact />
+                  {/if}
+                </span>
                 <span class="option-detail">{driver.name} · {profile.database}@{profile.host}</span>
               </span>
               {#if profile.id === activeProfileId}
@@ -363,6 +368,13 @@
     flex: 1;
     flex-direction: column;
     gap: 1px;
+  }
+
+  .option-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .option-name,
