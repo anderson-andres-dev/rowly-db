@@ -5,7 +5,7 @@
   import Select from "$lib/components/Select.svelte";
   import NumberStepper from "$lib/components/NumberStepper.svelte";
   import { newerRelease } from "$lib/stores/updates";
-  import { LOCALE_NAMES, LOCALES, locale, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
+  import { LOCALE_NAMES, LOCALES, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
   import { requestedScheme, themeChoice, type SchemePreference } from "$lib/theming/theme";
   import { formatShortcutEvent, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
@@ -93,13 +93,7 @@
     THEME_FAMILIES.filter((family) => family.label.toLowerCase().includes(themeQuery.trim().toLowerCase())),
   );
 
-  const languageOptions = $derived(
-    (["system", ...LOCALES] as LocalePreference[]).map((option) =>
-      option === "system"
-        ? { value: option, label: $t("settings.appearance.languageSystem", { language: LOCALE_NAMES[$locale] }) }
-        : { value: option, label: LOCALE_NAMES[option], lang: option },
-    ),
-  );
+  const languageOptions = LOCALES.map((option) => ({ value: option, label: LOCALE_NAMES[option], lang: option }));
 
   // --- Atajos -------------------------------------------------------------
   // Agrupados por donde actuan. Un choque solo cuenta dentro del mismo grupo:
