@@ -1331,6 +1331,7 @@
         onsubmit={() => void submitChanges(viewKey)}
         onnotice={notifyError}
         filters={activeConsole?.table ? tableFiltersBar : undefined}
+        tableView={!!activeConsole?.table}
       />
       {#snippet tableFiltersBar()}
         {#if activeConsole?.table}

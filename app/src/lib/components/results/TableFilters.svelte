@@ -96,6 +96,25 @@
     font-size: 0.8125rem;
   }
 
+  /* Dentro de la barra de herramientas (vista de tabla): sin fila propia. */
+  :global(.toolbar-filters) .table-filters {
+    min-width: 0;
+    flex: 1;
+    gap: var(--space-2);
+    min-height: 0;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  :global(.toolbar-filters) .filter {
+    flex: 2 1 10rem;
+  }
+
+  :global(.toolbar-filters) .filter.order {
+    flex: 1 1 8rem;
+  }
+
   .filter {
     display: flex;
     min-width: 0;

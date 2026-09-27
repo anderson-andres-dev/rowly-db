@@ -86,6 +86,7 @@
     onunpin = () => {},
     onrepin = () => {},
     filters,
+    tableView = false,
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -138,6 +139,11 @@
     // Barra extra entre la barra de herramientas y el grid (los filtros
     // WHERE / ORDER BY de una pestaña de tabla).
     filters?: Snippet;
+    // Pestaña de tabla (abierta desde el explorador): una sola vista, sin la
+    // fila de pestañas del resultado (la pestaña de afuera ya la nombra y los
+    // errores del filtro salen junto al filtro) y con los filtros dentro de
+    // la barra de herramientas.
+    tableView?: boolean;
   } = $props();
 
   // --- Pestañas ----------------------------------------------------------
@@ -399,6 +405,7 @@
 
 <div class="result-pane">
   {#if consoleRunning || isExecuting || tabs.length > 0 || outputLog.length > 0}
+    {#if !tableView}
     <div
       class="result-tabs"
       role="tablist"
@@ -438,6 +445,7 @@
         </div>
       {/each}
     </div>
+    {/if}
     {#if showingResult}
       <!-- Barra de herramientas del resultado: fila propia debajo de las
            pestañas. Una pestaña fijada es de solo lectura: solo copia y
@@ -494,7 +502,9 @@
           />
         </div>
         <div class="toolbar-group">
-          {#if activeResultTab?.pinned}
+          {#if tableView}
+            <!-- Una tabla no se fija: se vuelve a abrir desde el explorador. -->
+          {:else if activeResultTab?.pinned}
             <ToolbarButton icon={PinOff} label={$t("results.unpin")} onclick={onunpin} />
           {:else if activeResultTab && activeResultTab.key.includes("#pin")}
             <!-- Desfijada pero todavia abierta: se puede volver a fijar. -->
@@ -509,6 +519,9 @@
             onclick={openFind}
           />
         </div>
+        {#if tableView && filters}
+          <div class="toolbar-filters">{@render filters()}</div>
+        {/if}
         <!-- A la derecha, juntos: con que formato copia Ctrl+C varias celdas
              y exportar (misma familia: sacar datos del resultado). -->
         <div class="toolbar-group end">
@@ -533,7 +546,7 @@
           />
         </div>
       </div>
-      {#if filters}{@render filters()}{/if}
+      {#if filters && !tableView}{@render filters()}{/if}
       {#if findOpen}
         <FindBar
           bind:this={findBar}
@@ -600,9 +613,19 @@
     </div>
   {:else if !showingResult || result?.type !== "resultSet"}
     {#if filters}{@render filters()}{/if}
-    <div class="output-region">
-      <OutputLog entries={outputLog} running={consoleRunning} />
-    </div>
+    {#if tableView}
+      <!-- Tabla cargando o con un filtro invalido (el error sale junto al
+           filtro): sin registro de Salida. -->
+      <div class="centered">
+        {#if isExecuting || consoleRunning}
+          <div class="spinner" role="status" aria-label={$t("results.executingQuery")}></div>
+        {/if}
+      </div>
+    {:else}
+      <div class="output-region">
+        <OutputLog entries={outputLog} running={consoleRunning} />
+      </div>
+    {/if}
   {:else}
     <div class="grid-region">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -852,6 +875,16 @@
 
   .toolbar-group.end {
     margin-left: auto;
+  }
+
+  .toolbar-filters {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .toolbar-filters + .toolbar-group.end {
+    margin-left: 0;
   }
 
   /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
