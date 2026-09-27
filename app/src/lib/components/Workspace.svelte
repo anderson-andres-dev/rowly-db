@@ -1488,18 +1488,23 @@
     justify-content: center;
     min-height: 1.75rem;
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     font-size: 0.75rem;
     cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
   }
 
   /* Pestaña tomada al arrastrar (reorder.ts): por encima de las demas, con
      una sombra sutil. */
   .console-tab:global(.reorder-dragging) {
+    /* Sin fondo propio, al arrastrarla se veria vacia. */
+    background: var(--surface-elevated);
     position: relative;
     z-index: 2;
     box-shadow: var(--shadow-elevated);
@@ -1512,17 +1517,17 @@
     padding: 0 var(--space-2) 0 var(--space-3);
   }
 
-  /* Antes el hover repetia el fondo de reposo y no se notaba en ningun
-     tema: ahora aclara/oscurece apenas hacia el color del texto. */
+  /* Mismo resaltado que las pestañas del resultado (ResultPane): sin
+     bordes; en reposo solo texto e icono, la activa con un relleno tenue y
+     su icono en acento. */
   .console-tab:hover,
   .new-console:hover {
-    background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary));
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     color: var(--text-primary);
   }
 
   .console-tab.active {
-    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated));
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
     color: var(--text-primary);
   }
 

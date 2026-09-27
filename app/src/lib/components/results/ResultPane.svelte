@@ -946,6 +946,8 @@
   }
 
   .result-tab.closable:global(.reorder-dragging) {
+    /* Sin fondo propio, al arrastrarla se veria vacia. */
+    background: var(--surface-elevated);
     position: relative;
     z-index: 2;
     box-shadow: var(--shadow-elevated);
