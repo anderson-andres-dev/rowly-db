@@ -22,9 +22,8 @@
     tone?: "default" | "submit";
     // Contador tipo notificacion en la esquina superior derecha (0 = oculto).
     badge?: number;
-    // Tamaño del icono: cada glifo de lucide ocupa distinto su caja (una
-    // flecha circular llena mas que un "+"), se ajusta para que se vean
-    // parejos.
+    // Tamaño del icono. En una misma barra todos usan el mismo (16): mezclar
+    // tamaños rompe la simetria aunque cada glifo llene distinto su caja.
     size?: number;
     onclick: () => void;
   } = $props();

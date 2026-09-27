@@ -447,7 +447,6 @@
         <div class="toolbar-group">
           <ToolbarButton
             icon={RotateCw}
-            size={15}
             label={$t("results.rerun")}
             disabled={isExecuting}
             onclick={onreload}
@@ -495,16 +494,15 @@
         </div>
         <div class="toolbar-group">
           {#if activeResultTab?.pinned}
-            <ToolbarButton icon={PinOff} size={15} label={$t("results.unpin")} onclick={onunpin} />
+            <ToolbarButton icon={PinOff} label={$t("results.unpin")} onclick={onunpin} />
           {:else if activeResultTab && activeResultTab.key.includes("#pin")}
             <!-- Desfijada pero todavia abierta: se puede volver a fijar. -->
-            <ToolbarButton icon={Pin} size={15} label={$t("results.pin")} onclick={onrepin} />
+            <ToolbarButton icon={Pin} label={$t("results.pin")} onclick={onrepin} />
           {:else}
-            <ToolbarButton icon={Pin} size={15} label={$t("results.pin")} disabled={isExecuting} onclick={onpin} />
+            <ToolbarButton icon={Pin} label={$t("results.pin")} disabled={isExecuting} onclick={onpin} />
           {/if}
           <ToolbarButton
             icon={Search}
-            size={15}
             label={$t("results.find.label")}
             shortcut="Ctrl+F"
             onclick={openFind}
