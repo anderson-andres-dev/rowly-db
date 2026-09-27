@@ -1,3 +1,4 @@
+import { isFilterOperator, type FilterCondition } from "$lib/filterBuilder";
 import { browser } from "$app/environment";
 import { get, writable } from "svelte/store";
 import { translate, type Translate } from "$lib/i18n";
@@ -28,8 +29,27 @@ export interface QueryConsole {
 export interface TableTab {
   schema: string;
   name: string;
+  // Lo aplicado (lo que se ejecuta), venga del constructor o del SQL.
   where: string;
   orderBy: string;
+  // Como se filtra: con el constructor visual o escribiendo SQL.
+  mode: "builder" | "sql";
+  // Las condiciones del constructor (se recuerdan aunque se pase a SQL).
+  conditions: FilterCondition[];
+}
+
+function parseCondition(value: unknown): FilterCondition | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<FilterCondition>;
+  if (typeof candidate.column !== "string" || !isFilterOperator(candidate.operator)) return null;
+  return {
+    id: typeof candidate.id === "string" ? candidate.id : crypto.randomUUID(),
+    join: candidate.join === "or" ? "or" : "and",
+    column: candidate.column,
+    operator: candidate.operator,
+    value: typeof candidate.value === "string" ? candidate.value : "",
+    value2: typeof candidate.value2 === "string" ? candidate.value2 : "",
+  };
 }
 
 export interface PendingQueryConfirmation {
@@ -100,6 +120,16 @@ function parseTableTab(value: unknown): TableTab | null {
     name: candidate.name,
     where: typeof candidate.where === "string" ? candidate.where : "",
     orderBy: typeof candidate.orderBy === "string" ? candidate.orderBy : "",
+    // Pestañas guardadas antes del constructor: si ya tenian un WHERE escrito
+    // a mano, siguen en SQL para no perderlo.
+    mode: candidate.mode === "sql" || candidate.mode === "builder"
+      ? candidate.mode
+      : typeof candidate.where === "string" && candidate.where.trim() !== ""
+        ? "sql"
+        : "builder",
+    conditions: Array.isArray(candidate.conditions)
+      ? candidate.conditions.map(parseCondition).filter((item): item is FilterCondition => item !== null)
+      : [],
   };
 }
 
@@ -445,7 +475,7 @@ export function openTableConsole(profileId: string, schema: string, name: string
     sql: "",
     filePath: null,
     savedSql: "",
-    table: { schema, name, where: "", orderBy: "" },
+    table: { schema, name, where: "", orderBy: "", mode: "builder", conditions: [] },
   };
   queryConsoles.set({
     ...state,
@@ -455,11 +485,14 @@ export function openTableConsole(profileId: string, schema: string, name: string
   return item.id;
 }
 
-export function setTableFilters(id: string, where: string, orderBy: string): void {
+export function setTableFilters(
+  id: string,
+  filters: Pick<TableTab, "where" | "orderBy" | "mode" | "conditions">,
+): void {
   queryConsoles.update((state) => ({
     ...state,
     consoles: state.consoles.map((item) =>
-      item.id === id && item.table ? { ...item, table: { ...item.table, where, orderBy } } : item,
+      item.id === id && item.table ? { ...item, table: { ...item.table, ...filters } } : item,
     ),
   }));
 }

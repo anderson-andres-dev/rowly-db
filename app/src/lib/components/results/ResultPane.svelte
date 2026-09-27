@@ -141,8 +141,8 @@
     filters?: Snippet;
     // Pestaña de tabla (abierta desde el explorador): una sola vista, sin la
     // fila de pestañas del resultado (la pestaña de afuera ya la nombra y los
-    // errores del filtro salen junto al filtro) y con los filtros dentro de
-    // la barra de herramientas.
+    // errores del filtro salen junto al filtro) y con los filtros en
+    // su propia fila bajo la barra de herramientas.
     tableView?: boolean;
   } = $props();
 
@@ -519,9 +519,6 @@
             onclick={openFind}
           />
         </div>
-        {#if tableView && filters}
-          <div class="toolbar-filters">{@render filters()}</div>
-        {/if}
         <!-- A la derecha, juntos: con que formato copia Ctrl+C varias celdas
              y exportar (misma familia: sacar datos del resultado). -->
         <div class="toolbar-group end">
@@ -546,7 +543,7 @@
           />
         </div>
       </div>
-      {#if filters && !tableView}{@render filters()}{/if}
+      {#if filters}{@render filters()}{/if}
       {#if findOpen}
         <FindBar
           bind:this={findBar}
@@ -877,15 +874,6 @@
     margin-left: auto;
   }
 
-  .toolbar-filters {
-    display: flex;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .toolbar-filters + .toolbar-group.end {
-    margin-left: 0;
-  }
 
   /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
      con un relleno tenue y su icono en acento. Sin bordes. */

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { quoteIdentifier as quoteSqlIdentifier } from "$lib/filterBuilder";
   import { get } from "svelte/store";
   import { activeZone, focusZoneAction } from "$lib/focusZones";
   import { tooltip } from "$lib/tooltip";
@@ -83,6 +84,7 @@
     reorderQueryConsoles,
     setTableFilters,
     type QueryConsole,
+    type TableTab,
     requireQueryConfirmation,
     setQueryCounting,
     setQuerySort,
@@ -564,8 +566,7 @@
   const tableLoadAttempted = new Set<string>();
 
   function quoteIdentifier(name: string): string {
-    if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(name)) return name;
-    return activeProfile?.driver === "postgres" ? `"${name.replace(/"/g, '""')}"` : `\`${name.replace(/`/g, "``")}\``;
+    return quoteSqlIdentifier(name, activeProfile?.driver ?? "mysql");
   }
 
   function tableSql(item: QueryConsole): string {
@@ -573,7 +574,9 @@
     if (!table) return "";
     const parts = [`SELECT * FROM ${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`];
     if (table.where.trim()) parts.push(`WHERE ${table.where.trim()}`);
-    if (table.orderBy.trim()) parts.push(`ORDER BY ${table.orderBy.trim()}`);
+    // En el constructor visual el orden se hace con los encabezados: el
+    // ORDER BY escrito en modo SQL solo cuenta en ese modo.
+    if (table.mode === "sql" && table.orderBy.trim()) parts.push(`ORDER BY ${table.orderBy.trim()}`);
     return parts.join(" ");
   }
 
@@ -612,10 +615,22 @@
     dropUnpinnedResults(consoleId);
   }
 
-  function applyTableFilters(consoleId: string, where: string, orderBy: string) {
-    setTableFilters(consoleId, where, orderBy);
+  function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "orderBy" | "mode" | "conditions">) {
+    setTableFilters(consoleId, filters);
     void runTableQuery(consoleId);
   }
+
+  // Columnas que ofrece el constructor de filtros: las del catalogo (con su
+  // tipo, para citar bien los valores); si la tabla no esta en el catalogo,
+  // las del resultado.
+  const tableFilterColumns = $derived.by(() => {
+    const table = activeConsole?.table;
+    if (!table) return [];
+    const fromCatalog = $catalogTables.find((item) => item.schema === table.schema && item.name === table.name);
+    if (fromCatalog) return fromCatalog.columns.map((column) => ({ name: column.name, dataType: column.dataType }));
+    const result = liveExecution.result;
+    return result?.type === "resultSet" ? result.columns.map((column) => ({ name: column.name, dataType: column.type })) : [];
+  });
 
   // Al abrir (o volver a) una pestaña de tabla sin datos todavia, se carga.
   $effect(() => {
@@ -1336,12 +1351,15 @@
       {#snippet tableFiltersBar()}
         {#if activeConsole?.table}
           {@const consoleId = activeConsole.id}
+          {@const table = activeConsole.table}
           <TableFilters
-            where={activeConsole.table.where}
-            orderBy={activeConsole.table.orderBy}
+            filters={table}
+            columns={tableFilterColumns}
+            driver={activeProfile?.driver ?? "mysql"}
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
-            onapply={(where, orderBy) => applyTableFilters(consoleId, where, orderBy)}
+            onapply={(filters) => applyTableFilters(consoleId, filters)}
+            onmode={(mode) => setTableFilters(consoleId, { ...table, mode })}
           />
         {/if}
       {/snippet}

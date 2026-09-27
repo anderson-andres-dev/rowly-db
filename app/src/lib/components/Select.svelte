@@ -17,6 +17,8 @@
     label,
     id,
     wide = false,
+    compact = false,
+    placeholder = "",
     disabled = false,
     onchange,
   }: {
@@ -27,6 +29,10 @@
     id?: string;
     // Ocupa todo el ancho disponible (formularios).
     wide?: boolean;
+    // 28 px, para barras (el campo compacto de controls.css).
+    compact?: boolean;
+    // Texto tenue mientras ningun valor de la lista esta elegido.
+    placeholder?: string;
     disabled?: boolean;
     onchange?: (value: string) => void;
   } = $props();
@@ -35,7 +41,7 @@
   let up = $state(false);
   let active = $state(0);
   let root = $state<HTMLElement>();
-  const selected = $derived(options.find((option) => option.value === value) ?? options[0]);
+  const selected = $derived(options.find((option) => option.value === value) ?? (placeholder ? null : options[0]));
 
   function opensUp(): boolean {
     if (!root) return false;
@@ -102,6 +108,7 @@
     {id}
     type="button"
     class="ui-field trigger"
+    class:compact
     class:open
     aria-haspopup="listbox"
     aria-expanded={open}
@@ -110,7 +117,7 @@
     onclick={() => (open ? (open = false) : openMenu())}
     onkeydown={handleKeydown}
   >
-    <span class="value" lang={selected?.lang}>{selected?.label}</span>
+    <span class="value" class:placeholder={!selected} lang={selected?.lang}>{selected?.label ?? placeholder}</span>
     <ChevronDown size={14} aria-hidden="true" />
   </button>
   {#if open}
@@ -158,6 +165,10 @@
     cursor: pointer;
   }
 
+  .trigger.compact {
+    min-width: 0;
+  }
+
   .trigger:focus-visible {
     border-color: var(--focus-ring);
     outline: none;
@@ -166,6 +177,10 @@
   .trigger:disabled {
     cursor: default;
     opacity: 0.55;
+  }
+
+  .value.placeholder {
+    color: var(--text-secondary);
   }
 
   .value {

@@ -268,10 +268,17 @@ describe("queryConsoles: pestañas de tabla", () => {
     expect(again).toBe(first);
     expect(get(mod.queryConsoles).activeByProfile.p1).toBe(first);
 
-    mod.setTableFilters(first, "estado = 'activo'", "id DESC");
+    mod.setTableFilters(first, { where: "estado = 'activo'", orderBy: "id DESC", mode: "sql", conditions: [] });
     const item = get(mod.queryConsoles).consoles.find((candidate) => candidate.id === first)!;
     expect(item.title).toBe("api_core_smoke_test");
-    expect(item.table).toEqual({ schema: "core", name: "api_core_smoke_test", where: "estado = 'activo'", orderBy: "id DESC" });
+    expect(item.table).toEqual({
+      schema: "core",
+      name: "api_core_smoke_test",
+      where: "estado = 'activo'",
+      orderBy: "id DESC",
+      mode: "sql",
+      conditions: [],
+    });
     // Nunca queda "sin guardar": no tiene texto propio.
     expect(mod.isQueryConsoleDirty(item)).toBe(false);
 
@@ -284,7 +291,7 @@ describe("queryConsoles: pestañas de tabla", () => {
   it("al recargar la app se restaura la pestaña de tabla con sus filtros", async () => {
     const mod = await freshQueryConsoles();
     const id = mod.openTableConsole("p1", "core", "t");
-    mod.setTableFilters(id, "a = 1", "");
+    mod.setTableFilters(id, { where: "a = 1", orderBy: "", mode: "sql", conditions: [] });
     const stored = localStorage.getItem("khipu:query-consoles:v1");
 
     vi.resetModules();
@@ -297,6 +304,27 @@ describe("queryConsoles: pestañas de tabla", () => {
     const reloaded = await import("./queryConsoles");
     const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
     expect(item.table?.where).toBe("a = 1");
+    expect(item.table?.mode).toBe("sql");
+  });
+
+  it("una pestaña guardada antes del constructor con WHERE escrito sigue en SQL; sin WHERE, en el constructor", async () => {
+    const legacy = (where: string) =>
+      JSON.stringify({
+        consoles: [{ id: "t1", profileId: "p1", title: "t", sql: "", filePath: null, savedSql: "", table: { schema: "s", name: "t", where, orderBy: "" } }],
+        activeByProfile: { p1: "t1" },
+      });
+    for (const [where, mode] of [["id > 1", "sql"], ["", "builder"]] as const) {
+      vi.resetModules();
+      const storage = new Map([["khipu:query-consoles:v1", legacy(where)]]);
+      vi.stubGlobal("localStorage", {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      });
+      const reloaded = await import("./queryConsoles");
+      const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === "t1");
+      expect(item?.table?.mode).toBe(mode);
+    }
   });
 });
 
