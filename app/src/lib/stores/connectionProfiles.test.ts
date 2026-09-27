@@ -51,6 +51,7 @@ describe("parseProfile", () => {
     expect(parseProfile({ ...saved, environment: "production" })?.environment).toBe("production");
     expect(parseProfile(saved)?.environment).toBeUndefined();
     expect(parseProfile({ ...saved, environment: "staging" })?.environment).toBeUndefined();
+    expect(parseProfile({ ...saved, environment: "testing" })?.environment).toBe("development");
   });
 });
 

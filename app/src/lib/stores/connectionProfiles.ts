@@ -28,17 +28,21 @@ export interface ConnectionProfile {
   environment?: ConnectionEnvironment;
 }
 
-export type ConnectionEnvironment = "local" | "development" | "testing" | "production";
+export type ConnectionEnvironment = "local" | "development" | "production";
 
 export const CONNECTION_ENVIRONMENTS: readonly ConnectionEnvironment[] = [
   "local",
   "development",
-  "testing",
   "production",
 ];
 
-function isEnvironment(value: unknown): value is ConnectionEnvironment {
-  return CONNECTION_ENVIRONMENTS.includes(value as ConnectionEnvironment);
+// "testing" existio en una primera version; para la app se comporta igual
+// que desarrollo, asi que los perfiles que lo tengan pasan a "development".
+function parseEnvironment(value: unknown): ConnectionEnvironment | undefined {
+  if (value === "testing") return "development";
+  return CONNECTION_ENVIRONMENTS.includes(value as ConnectionEnvironment)
+    ? (value as ConnectionEnvironment)
+    : undefined;
 }
 
 function isDriver(value: unknown): value is ConnectionDriver {
@@ -94,7 +98,7 @@ export function parseProfile(value: unknown): ConnectionProfile | null {
     caCertificatePath: optionalText(profile.caCertificatePath),
     group: optionalText(profile.group),
     color: isHexColor(profile.color) ? profile.color.toLowerCase() : undefined,
-    environment: isEnvironment(profile.environment) ? profile.environment : undefined,
+    environment: parseEnvironment(profile.environment),
   };
 }
 

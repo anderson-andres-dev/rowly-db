@@ -62,13 +62,36 @@
           : "text",
   );
   let selectOpen = $state(false);
+  let selectUp = $state(false);
+  let selectControl = $state<HTMLElement>();
   let activeOption = $state(0);
   const selectedOption = $derived(options.find((option) => option.value === String(value)) ?? options[0]);
 
   function openSelect() {
     if (disabled) return;
     activeOption = Math.max(0, options.findIndex((option) => option.value === String(value)));
+    selectUp = shouldOpenUp();
     selectOpen = true;
+  }
+
+  // El menu se abre hacia arriba si abajo no entra: el contenedor que hace
+  // scroll (p.ej. el cuerpo del formulario de conexion) lo recortaria.
+  function shouldOpenUp(): boolean {
+    if (!selectControl) return false;
+    const trigger = selectControl.getBoundingClientRect();
+    let bounds = { top: 0, bottom: window.innerHeight };
+    for (let node = selectControl.parentElement; node; node = node.parentElement) {
+      if (getComputedStyle(node).overflowY !== "visible") {
+        const rect = node.getBoundingClientRect();
+        bounds = { top: Math.max(bounds.top, rect.top), bottom: Math.min(bounds.bottom, rect.bottom) };
+        break;
+      }
+    }
+    // Alto aproximado: una fila por opcion mas el relleno del menu.
+    const menuHeight = options.length * 34 + 12;
+    const below = bounds.bottom - trigger.bottom;
+    const above = trigger.top - bounds.top;
+    return below < menuHeight && above > below;
   }
 
   function handleSelectKeydown(event: KeyboardEvent) {
@@ -109,6 +132,7 @@
   {#if type === "select"}
     <div
       class="select-control"
+      bind:this={selectControl}
       onfocusout={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) selectOpen = false;
       }}
@@ -130,7 +154,7 @@
         <span class="select-chevron" aria-hidden="true">⌄</span>
       </button>
       {#if selectOpen}
-        <div class="select-menu" role="listbox" aria-labelledby={id}>
+        <div class="select-menu" class:up={selectUp} role="listbox" aria-labelledby={id}>
           {#each options as option, index (option.value)}
             <button
               id={`${id}-${option.value}`}
@@ -371,6 +395,11 @@
     border-radius: var(--radius-sm);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-elevated);
+  }
+
+  .select-menu.up {
+    top: auto;
+    bottom: calc(100% + 4px);
   }
 
   .select-menu button {

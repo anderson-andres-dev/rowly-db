@@ -31,10 +31,6 @@
     white-space: nowrap;
   }
 
-  .testing {
-    --tone: var(--warning);
-  }
-
   .production {
     --tone: var(--danger);
     border-color: color-mix(in srgb, var(--tone) 55%, transparent);
