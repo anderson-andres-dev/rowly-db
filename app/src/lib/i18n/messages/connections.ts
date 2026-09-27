@@ -62,9 +62,6 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Desarrollo",
     "environment.production": "Producción",
-    "environment.local.short": "LOCAL",
-    "environment.development.short": "DEV",
-    "environment.production.short": "PROD",
     "environment.productionHint": "Cada escritura pedirá confirmación.",
 
     "form.name": "Nombre",
@@ -191,9 +188,6 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Development",
     "environment.production": "Production",
-    "environment.local.short": "LOCAL",
-    "environment.development.short": "DEV",
-    "environment.production.short": "PROD",
     "environment.productionHint": "Every write asks for confirmation.",
 
     "form.name": "Name",
@@ -319,9 +313,6 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Desenvolvimento",
     "environment.production": "Produção",
-    "environment.local.short": "LOCAL",
-    "environment.development.short": "DEV",
-    "environment.production.short": "PROD",
     "environment.productionHint": "Cada escrita pedirá confirmação.",
 
     "form.name": "Nome",
@@ -447,9 +438,6 @@ export default defineMessages({
     "environment.local": "Local",
     "environment.development": "Développement",
     "environment.production": "Production",
-    "environment.local.short": "LOCAL",
-    "environment.development.short": "DEV",
-    "environment.production.short": "PROD",
     "environment.productionHint": "Chaque écriture demandera une confirmation.",
 
     "form.name": "Nom",
@@ -576,9 +564,6 @@ export default defineMessages({
     "environment.local": "Lokal",
     "environment.development": "Entwicklung",
     "environment.production": "Produktion",
-    "environment.local.short": "LOKAL",
-    "environment.development.short": "DEV",
-    "environment.production.short": "PROD",
     "environment.productionHint": "Jeder Schreibvorgang muss bestätigt werden.",
 
     "form.name": "Name",

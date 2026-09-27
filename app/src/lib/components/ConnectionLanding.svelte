@@ -199,12 +199,12 @@
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={32} />
                     <!-- Dos lineas: nombre, y motor · base@host. El entorno va
-                         abreviado (DEV, PROD); Local no se marca. -->
+                         como icono (Local no se marca). -->
                     <span class="card-text">
                       <span class="card-name">
                         <strong>{profile.name}</strong>
                         {#if profile.environment && profile.environment !== "local"}
-                          <EnvironmentBadge environment={profile.environment} short />
+                          <EnvironmentBadge environment={profile.environment} compact />
                         {/if}
                       </span>
                       <span class="meta">
