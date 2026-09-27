@@ -31,6 +31,8 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Alt+1" },
   // Busca en la zona activa: cada zona registra su propio handler.
   { id: "find", zone: "global", group: "general", defaultKeys: "Ctrl+F" },
+  // Ctrl+/ (lo habitual en otras apps) es comentar linea en el editor.
+  { id: "shortcut-sheet", zone: "global", group: "general", defaultKeys: "F1" },
   { id: "new-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+Q" },
   { id: "rename-query-console", zone: "global", group: "general", defaultKeys: "Shift+F6" },
   { id: "save-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+S" },

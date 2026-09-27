@@ -43,6 +43,7 @@
     X,
   } from "@lucide/svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import ShortcutSheet from "$lib/components/ShortcutSheet.svelte";
   import RowlyMark from "$lib/components/RowlyMark.svelte";
   import SchemaTree from "$lib/components/SchemaTree.svelte";
   import FileTree from "$lib/components/FileTree.svelte";
@@ -56,6 +57,32 @@
   let cleanupThemeEffects: (() => void) | undefined;
   let cleanupLocaleEffects: (() => void) | undefined;
   let settingsOpen = $state(false);
+  let settingsSection = $state<"appearance" | "shortcuts">("appearance");
+
+  // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
+  let sheetOpen = $state(false);
+  let focusBeforeSheet: HTMLElement | null = null;
+
+  function toggleShortcutSheet() {
+    if (sheetOpen) {
+      closeShortcutSheet(true);
+      return;
+    }
+    focusBeforeSheet = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    sheetOpen = true;
+  }
+
+  function closeShortcutSheet(restoreFocus: boolean) {
+    sheetOpen = false;
+    if (restoreFocus) focusBeforeSheet?.focus({ preventScroll: true });
+    focusBeforeSheet = null;
+  }
+
+  function customizeShortcuts() {
+    closeShortcutSheet(false);
+    settingsSection = "shortcuts";
+    settingsOpen = true;
+  }
   let sidebarCollapsed = $state(false);
   let refreshingTables = $state(false);
   let sidebar = $state<HTMLElement>();
@@ -252,7 +279,10 @@
     // Primero las zonas: sus flechas del modo mover van antes que los atajos.
     cleanupFocusZones = installFocusZones(shortcutsBlocked);
     cleanupKeybindings = installKeybindings(shortcutsBlocked);
-    const cleanupSidebarCommands = registerCommands("global", { "toggle-sidebar": toggleSidebar });
+    const cleanupSidebarCommands = registerCommands("global", {
+      "toggle-sidebar": toggleSidebar,
+      "shortcut-sheet": toggleShortcutSheet,
+    });
     const cleanupExplorerFind = registerCommands("explorer", { find: findInSidebar });
     const cleanupFilesFind = registerCommands("files", { find: findInSidebar });
     cleanupCommands = () => {
@@ -341,7 +371,10 @@
       aria-label={settingsOpen ? $t("shell.closeSettings") : $t("shell.openSettings")}
       aria-expanded={settingsOpen}
       aria-pressed={settingsOpen}
-      onclick={() => (settingsOpen = !settingsOpen)}
+      onclick={() => {
+        settingsSection = "appearance";
+        settingsOpen = !settingsOpen;
+      }}
     >
       <Settings size={17} aria-hidden="true" />
       {#if $newerRelease}
@@ -465,8 +498,11 @@
     </div>
   </main>
 
+  {#if sheetOpen}
+    <ShortcutSheet onclose={closeShortcutSheet} oncustomize={customizeShortcuts} />
+  {/if}
   {#if settingsOpen}
-    <SettingsPanel onclose={() => (settingsOpen = false)} />
+    <SettingsPanel initialSection={settingsSection} onclose={() => (settingsOpen = false)} />
   {/if}
 </div>
 
