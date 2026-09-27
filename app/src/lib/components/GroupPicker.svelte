@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
-  import { fly } from "svelte/transition";
   import { Check, ChevronDown, FolderMinus, Plus } from "@lucide/svelte";
   import { t } from "$lib/i18n";
 
@@ -115,7 +114,7 @@
   </button>
 
   {#if open}
-    <div class="menu" transition:fly={{ y: -4, duration: 120 }}>
+    <div class="ui-menu menu">
       <input
         bind:this={input}
         bind:value={query}
@@ -137,6 +136,7 @@
               id={`group-option-${index}`}
               type="button"
               role="option"
+              class="ui-menu-item"
               aria-selected={index === active}
               class:active={index === active}
               class:remove={option.kind === "remove"}
@@ -146,13 +146,13 @@
               onclick={() => choose(option)}
             >
               {#if option.kind === "create"}
-                <Plus size={13} aria-hidden="true" />
+                <span class="ui-menu-check"><Plus size={13} aria-hidden="true" /></span>
                 <span>{$t("connections.group.create", { name: option.group })}</span>
               {:else if option.kind === "remove"}
-                <FolderMinus size={13} aria-hidden="true" />
+                <span class="ui-menu-check remove-icon"><FolderMinus size={13} aria-hidden="true" /></span>
                 <span>{$t("connections.group.remove")}</span>
               {:else}
-                <span class="check">
+                <span class="ui-menu-check">
                   {#if option.group === value}<Check size={13} aria-hidden="true" />{/if}
                 </span>
                 <span>{option.group}</span>
@@ -247,11 +247,6 @@
     top: calc(100% + 4px);
     right: 0;
     width: 13rem;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
   }
 
   .filter {
@@ -277,33 +272,11 @@
     padding-top: 4px;
   }
 
-  .menu button {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 6px var(--space-2);
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 0.8125rem;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .menu button.active {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-  }
 
-  .menu button.remove {
+  .ui-menu-item.remove,
+  .remove-icon {
     color: var(--text-secondary);
   }
 
-  .check {
-    display: inline-flex;
-    width: 13px;
-    color: var(--accent);
-  }
 </style>

@@ -551,7 +551,7 @@
       {/if}
       {#if formatMenuOpen}
         <div
-          class="format-menu"
+          class="ui-menu format-menu"
           role="menu"
           aria-label={$t("results.copyFormat.menu")}
           bind:this={formatMenu}
@@ -563,13 +563,13 @@
               type="button"
               role="menuitemradio"
               aria-checked={$copySettings.format === item.id}
-              class="menu-item"
+              class="ui-menu-item menu-item"
               onclick={() => {
                 copySettings.update((current) => ({ ...current, format: item.id }));
                 formatMenuOpen = false;
               }}
             >
-              <span class="check">{#if $copySettings.format === item.id}<Check size={13} aria-hidden="true" />{/if}</span>
+              <span class="ui-menu-check">{#if $copySettings.format === item.id}<Check size={13} aria-hidden="true" />{/if}</span>
               <span>{item.label}</span>
             </button>
           {/each}
@@ -578,10 +578,10 @@
             type="button"
             role="menuitemcheckbox"
             aria-checked={$copySettings.headers}
-            class="menu-item"
+            class="ui-menu-item menu-item"
             onclick={() => copySettings.update((current) => ({ ...current, headers: !current.headers }))}
           >
-            <span class="check">{#if $copySettings.headers}<Check size={13} aria-hidden="true" />{/if}</span>
+            <span class="ui-menu-check">{#if $copySettings.headers}<Check size={13} aria-hidden="true" />{/if}</span>
             <span>{$t("results.includeHeaders")}</span>
             <span class="hint">TSV · CSV</span>
           </button>
@@ -813,64 +813,21 @@
     outline-offset: -2px;
   }
 
-  /* Mismo menu que el selector de tamaño de pagina (ResultPager). */
+  /* El menu compartido (.ui-menu); aca solo su posicion. */
   .format-menu {
     position: fixed;
     z-index: 1000;
-    display: flex;
     min-width: 12.5rem;
-    flex-direction: column;
-    padding: var(--space-1);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    font-size: 0.8125rem;
-    animation: menu-in 120ms ease-out;
-  }
-
-  @keyframes menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-3px);
-    }
   }
 
   .menu-heading {
-    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 1.25rem);
+    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) * 2 + 1rem);
     color: var(--text-secondary);
     font-size: 0.75rem;
   }
 
-  .menu-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 1.75rem;
-    padding: 0 var(--space-3) 0 var(--space-2);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .menu-item:hover,
-  .menu-item:focus-visible {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    outline: none;
-  }
 
-  .check {
-    display: inline-flex;
-    width: 1rem;
-    flex-shrink: 0;
-    justify-content: center;
-    color: var(--accent);
-  }
 
   .hint {
     margin-left: auto;

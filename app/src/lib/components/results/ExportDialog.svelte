@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Checkbox from "$lib/components/Checkbox.svelte";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -186,10 +187,7 @@
       </div>
 
       {#if format === "tsv" || format === "csv"}
-        <label class="checkbox">
-          <input type="checkbox" bind:checked={headers} />
-          <span>{$t("results.includeHeaders")}</span>
-        </label>
+        <Checkbox bind:checked={headers} label={$t("results.includeHeaders")} />
       {/if}
 
       <div class="field">
@@ -339,17 +337,7 @@
     color: var(--text-primary);
   }
 
-  .checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: 0.8125rem;
-    cursor: pointer;
-  }
 
-  .checkbox input {
-    accent-color: var(--accent);
-  }
 
   .path {
     display: flex;
@@ -360,9 +348,9 @@
     min-width: 0;
     flex: 1;
     height: 2rem;
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-3);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-primary);
@@ -382,7 +370,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-secondary);

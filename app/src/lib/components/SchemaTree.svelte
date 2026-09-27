@@ -368,21 +368,21 @@
               </button>
 
               {#if schemaPickerOpen}
-                <div class="schema-menu" role="menu" aria-label={$t("explorer.schemas.menu")}>
+                <div class="ui-menu schema-menu" role="menu" aria-label={$t("explorer.schemas.menu")}>
                   {#each explorer.availableSchemas as schema (schema)}
                     {@const isDefault = schema === explorer.defaultSchema}
                     <button
                       type="button"
                       role="menuitemcheckbox"
                       aria-checked={visibleSchemas.has(schema)}
-                      class="schema-option"
+                      class="ui-menu-item schema-option"
                       disabled={isDefault || loadingSchemas}
                       use:tooltip={isDefault ? $t("explorer.schemas.defaultTitle") : undefined}
                       onclick={() => toggleSchema(schema)}
                     >
-                      <span class="checkbox" class:checked={visibleSchemas.has(schema)}>
+                      <span class="ui-checkbox-box">
                         {#if visibleSchemas.has(schema)}
-                          <Check size={11} aria-hidden="true" />
+                          <Check size={10} strokeWidth={3} aria-hidden="true" />
                         {/if}
                       </span>
                       <span class="label">{schema}</span>
@@ -520,20 +520,19 @@
   .filter input {
     box-sizing: border-box;
     width: 100%;
-    min-height: 1.75rem;
-    padding: var(--space-1) var(--space-5) var(--space-1) 1.75rem;
-    border: 1px solid var(--border);
+    height: 1.75rem;
+    padding: 0 var(--space-5) 0 1.75rem;
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-primary);
     font: inherit;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   .filter input:focus-visible {
     border-color: var(--focus-ring);
-    outline: 1px solid var(--focus-ring);
-    outline-offset: 0;
+    outline: none;
   }
 
   .clear-filter {
@@ -730,31 +729,9 @@
     left: var(--space-2);
     overflow-y: auto;
     max-height: 18rem;
-    padding: var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
   }
 
-  .schema-option {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 3px var(--space-2);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .schema-option:hover:not(:disabled) {
-    background: var(--surface);
-  }
 
   .schema-option:disabled {
     cursor: default;
@@ -765,24 +742,9 @@
     outline-offset: -2px;
   }
 
-  .checkbox {
-    display: inline-flex;
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--control-border);
-    border-radius: 3px;
-    color: var(--text-on-accent);
-  }
 
-  .checkbox.checked {
-    border-color: var(--accent);
-    background: var(--accent);
-  }
 
-  .schema-option:disabled .checkbox.checked {
+  .schema-option:disabled .ui-checkbox-box {
     opacity: 0.6;
   }
 

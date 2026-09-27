@@ -1,9 +1,10 @@
 <script lang="ts">
   import { ChevronDown, Check } from "@lucide/svelte";
 
-  // Desplegable compacto para una fila de ajustes: mismo aspecto que el
-  // select de Field, sin etiqueta propia. Teclado: flechas, Inicio/Fin,
-  // Enter/Espacio elige y Esc cierra.
+  // El unico select de la app. El disparador tiene el aspecto de un campo
+  // (styles/controls.css .ui-field) y la lista es el menu compartido
+  // (.ui-menu). Teclado: flechas, Inicio/Fin, Enter/Espacio elige y Esc
+  // cierra. Abre hacia arriba si abajo no entra.
   interface Option {
     value: string;
     label: string;
@@ -14,21 +15,49 @@
     value = $bindable(),
     options,
     label,
+    id,
+    wide = false,
+    disabled = false,
     onchange,
   }: {
     value: string;
     options: Option[];
-    // Nombre accesible (la fila ya lo muestra como texto).
+    // Nombre accesible (la fila o el Field ya lo muestran como texto).
     label: string;
+    id?: string;
+    // Ocupa todo el ancho disponible (formularios).
+    wide?: boolean;
+    disabled?: boolean;
     onchange?: (value: string) => void;
   } = $props();
 
   let open = $state(false);
+  let up = $state(false);
   let active = $state(0);
+  let root = $state<HTMLElement>();
   const selected = $derived(options.find((option) => option.value === value) ?? options[0]);
 
+  function opensUp(): boolean {
+    if (!root) return false;
+    const trigger = root.getBoundingClientRect();
+    let bottom = window.innerHeight;
+    let top = 0;
+    for (let node = root.parentElement; node; node = node.parentElement) {
+      if (getComputedStyle(node).overflowY !== "visible") {
+        const rect = node.getBoundingClientRect();
+        bottom = Math.min(bottom, rect.bottom);
+        top = Math.max(top, rect.top);
+        break;
+      }
+    }
+    const menuHeight = options.length * 30 + 10;
+    return bottom - trigger.bottom < menuHeight && trigger.top - top > bottom - trigger.bottom;
+  }
+
   function openMenu() {
+    if (disabled) return;
     active = Math.max(0, options.findIndex((option) => option.value === value));
+    up = opensUp();
     open = true;
   }
 
@@ -63,30 +92,35 @@
 
 <div
   class="select"
+  class:wide
+  bind:this={root}
   onfocusout={(event) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) open = false;
   }}
 >
   <button
+    {id}
     type="button"
-    class="trigger"
+    class="ui-field trigger"
     class:open
     aria-haspopup="listbox"
     aria-expanded={open}
     aria-label={label}
+    {disabled}
     onclick={() => (open ? (open = false) : openMenu())}
     onkeydown={handleKeydown}
   >
-    <span lang={selected?.lang}>{selected?.label}</span>
+    <span class="value" lang={selected?.lang}>{selected?.label}</span>
     <ChevronDown size={14} aria-hidden="true" />
   </button>
   {#if open}
-    <div class="menu" role="listbox" aria-label={label}>
+    <div class="ui-menu menu" class:up role="listbox" aria-label={label}>
       {#each options as option, index (option.value)}
         <button
           type="button"
           role="option"
           tabindex="-1"
+          class="ui-menu-item"
           lang={option.lang}
           class:active={index === active}
           aria-selected={option.value === value}
@@ -94,7 +128,7 @@
           onmousedown={(event) => event.preventDefault()}
           onclick={() => choose(option)}
         >
-          <span class="check">{#if option.value === value}<Check size={13} aria-hidden="true" />{/if}</span>
+          <span class="ui-menu-check">{#if option.value === value}<Check size={13} aria-hidden="true" />{/if}</span>
           {option.label}
         </button>
       {/each}
@@ -108,26 +142,40 @@
     flex-shrink: 0;
   }
 
+  .select.wide {
+    width: 100%;
+  }
+
   .trigger {
-    display: flex;
+    width: 100%;
     min-width: 11rem;
-    height: 2rem;
-    align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
-    padding: 0 var(--space-2) 0 var(--space-3);
-    box-sizing: border-box;
-    border: 1px solid var(--control-border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
+    padding-right: var(--space-2);
     color: var(--text-primary);
     font: inherit;
     font-size: 0.8125rem;
+    text-align: left;
     cursor: pointer;
-    transition: border-color var(--duration-fast);
+  }
+
+  .trigger:focus-visible {
+    border-color: var(--focus-ring);
+    outline: none;
+  }
+
+  .trigger:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+
+  .value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .trigger :global(svg) {
+    flex-shrink: 0;
     color: var(--text-secondary);
     transition: transform var(--duration-fast);
   }
@@ -136,61 +184,16 @@
     transform: rotate(180deg);
   }
 
-  .trigger:focus-visible {
-    border-color: var(--focus-ring);
-    outline: none;
-  }
-
   .menu {
     position: absolute;
     z-index: 30;
     top: calc(100% + 4px);
     right: 0;
-    display: flex;
     min-width: 100%;
-    flex-direction: column;
-    padding: var(--space-1);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    animation: menu-in 120ms ease-out;
   }
 
-  @keyframes menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-3px);
-    }
-  }
-
-  .menu button {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 1.875rem;
-    padding: 0 var(--space-3) 0 var(--space-2);
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 0.8125rem;
-    text-align: left;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .menu button.active {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-
-  .check {
-    display: inline-flex;
-    width: 1rem;
-    flex-shrink: 0;
-    justify-content: center;
-    color: var(--accent);
+  .menu.up {
+    top: auto;
+    bottom: calc(100% + 4px);
   }
 </style>

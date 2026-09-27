@@ -177,6 +177,9 @@
 
 /* --- Campo de texto y busqueda ------------------------------------------- */
 
+/* El unico aspecto de campo de la app: formularios, ajustes, dialogos y, en
+   su tamaño compacto (28 px), las barras (buscar, filtros). Mismas reglas en
+   Field.svelte, Select.svelte y NumberStepper.svelte. */
 .ui-field {
   display: flex;
   align-items: center;
@@ -213,6 +216,11 @@
 
 .ui-field input[type="number"] {
   font-variant-numeric: tabular-nums;
+}
+
+.ui-field.compact {
+  height: 1.75rem;
+  padding: 0 var(--space-2);
 }
 
 .ui-field-suffix {
@@ -274,4 +282,118 @@
   font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 500;
+}
+
+/* --- Menu desplegable ----------------------------------------------------- */
+
+/* Un solo menu para todos los desplegables (selects, selector de conexion,
+   formato de copia, tamaño de pagina, grupos, colores, esquemas). */
+.ui-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  font-size: 0.8125rem;
+  animation: ui-menu-in 120ms ease-out;
+}
+
+@keyframes ui-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu {
+    animation: none;
+  }
+}
+
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.875rem;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ui-menu-item:hover,
+.ui-menu-item.active,
+.ui-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: none;
+}
+
+.ui-menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Hueco fijo a la izquierda para el check del elegido. */
+.ui-menu-check {
+  display: inline-flex;
+  width: 1rem;
+  flex-shrink: 0;
+  justify-content: center;
+  color: var(--accent);
+}
+
+/* --- Casilla ------------------------------------------------------------------ */
+
+.ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.ui-checkbox-box {
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--control-border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-on-accent);
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+[aria-checked="true"] > .ui-checkbox-box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.ui-checkbox:focus-visible {
+  outline: none;
+}
+
+.ui-checkbox:focus-visible > .ui-checkbox-box {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }

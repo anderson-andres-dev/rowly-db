@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Checkbox from "$lib/components/Checkbox.svelte";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { ArrowDown, ArrowUp, Search, X } from "@lucide/svelte";
@@ -146,10 +147,7 @@
     </button>
   </div>
 
-  <label class="filter">
-    <input type="checkbox" bind:checked={filterRows} />
-    <span>{$t("results.find.filterRows")}</span>
-  </label>
+  <span class="filter"><Checkbox bind:checked={filterRows} label={$t("results.find.filterRows")} /></span>
 
   <button type="button" class="icon close" aria-label={$t("results.find.closeLabel")} use:tooltip={$t("results.find.closeTitle")} onclick={onclose}>
     <X size={14} aria-hidden="true" />
@@ -193,9 +191,9 @@
     height: 1.75rem;
     padding: 0 var(--space-1) 0 var(--space-2);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
-    background: var(--surface-content);
+    background: var(--surface);
     transition: border-color var(--duration-fast) ease;
   }
 
@@ -302,16 +300,7 @@
 
   .filter {
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    cursor: pointer;
     white-space: nowrap;
-  }
-
-  .filter input {
-    accent-color: var(--accent);
   }
 
   .close {

@@ -3,6 +3,7 @@
   import type { Snippet } from "svelte";
   import type { HTMLInputAttributes } from "svelte/elements";
   import { t } from "$lib/i18n";
+  import Select from "$lib/components/Select.svelte";
 
   interface Option {
     value: string;
@@ -61,65 +62,6 @@
           ? "number"
           : "text",
   );
-  let selectOpen = $state(false);
-  let selectUp = $state(false);
-  let selectControl = $state<HTMLElement>();
-  let activeOption = $state(0);
-  const selectedOption = $derived(options.find((option) => option.value === String(value)) ?? options[0]);
-
-  function openSelect() {
-    if (disabled) return;
-    activeOption = Math.max(0, options.findIndex((option) => option.value === String(value)));
-    selectUp = shouldOpenUp();
-    selectOpen = true;
-  }
-
-  // El menu se abre hacia arriba si abajo no entra: el contenedor que hace
-  // scroll (p.ej. el cuerpo del formulario de conexion) lo recortaria.
-  function shouldOpenUp(): boolean {
-    if (!selectControl) return false;
-    const trigger = selectControl.getBoundingClientRect();
-    let bounds = { top: 0, bottom: window.innerHeight };
-    for (let node = selectControl.parentElement; node; node = node.parentElement) {
-      if (getComputedStyle(node).overflowY !== "visible") {
-        const rect = node.getBoundingClientRect();
-        bounds = { top: Math.max(bounds.top, rect.top), bottom: Math.min(bounds.bottom, rect.bottom) };
-        break;
-      }
-    }
-    // Alto aproximado: una fila por opcion mas el relleno del menu.
-    const menuHeight = options.length * 34 + 12;
-    const below = bounds.bottom - trigger.bottom;
-    const above = trigger.top - bounds.top;
-    return below < menuHeight && above > below;
-  }
-
-  function handleSelectKeydown(event: KeyboardEvent) {
-    if (disabled) return;
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      if (!selectOpen) openSelect();
-      else activeOption = Math.min(options.length - 1, activeOption + 1);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      if (!selectOpen) openSelect();
-      else activeOption = Math.max(0, activeOption - 1);
-    } else if (event.key === "Home" && selectOpen) {
-      event.preventDefault();
-      activeOption = 0;
-    } else if (event.key === "End" && selectOpen) {
-      event.preventDefault();
-      activeOption = options.length - 1;
-    } else if ((event.key === "Enter" || event.key === " ") && selectOpen) {
-      event.preventDefault();
-      if (options[activeOption]) value = options[activeOption].value;
-      selectOpen = false;
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      selectOpen = false;
-    }
-  }
 </script>
 
 <div
@@ -130,49 +72,15 @@
   <label for={id}>{label}</label>
 
   {#if type === "select"}
-    <div
-      class="select-control"
-      bind:this={selectControl}
-      onfocusout={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) selectOpen = false;
-      }}
-    >
-      <button
-        {id}
-        class="select-trigger"
-        type="button"
-        {name}
-        aria-haspopup="listbox"
-        aria-expanded={selectOpen}
-        aria-describedby={error ? errorId : undefined}
-        data-invalid={error ? "true" : undefined}
-        {disabled}
-        onclick={() => (selectOpen ? (selectOpen = false) : openSelect())}
-        onkeydown={handleSelectKeydown}
-      >
-        <span>{selectedOption?.label ?? "Seleccionar"}</span>
-        <span class="select-chevron" aria-hidden="true">⌄</span>
-      </button>
-      {#if selectOpen}
-        <div class="select-menu" class:up={selectUp} role="listbox" aria-labelledby={id}>
-          {#each options as option, index (option.value)}
-            <button
-              id={`${id}-${option.value}`}
-              type="button"
-              class:active={index === activeOption}
-              class:selected={option.value === String(value)}
-              role="option"
-              aria-selected={option.value === String(value)}
-              tabindex="-1"
-              onclick={() => {
-                value = option.value;
-                selectOpen = false;
-              }}
-            >{option.label}</button>
-          {/each}
-        </div>
-      {/if}
-    </div>
+    <!-- El mismo select de toda la app (Select.svelte). -->
+    <Select
+      {id}
+      wide
+      {disabled}
+      {label}
+      {options}
+      bind:value={() => String(value), (next) => (value = next)}
+    />
   {:else}
     <div class:with-action={type === "password"} class:with-trailing={!!trailing} class="control">
       <input
@@ -250,21 +158,22 @@
 
   label {
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
-  input,
-  .select-trigger {
+  /* Mismas medidas que .ui-field (styles/controls.css): el unico aspecto de
+     campo de la app. */
+  input {
     box-sizing: border-box;
     width: 100%;
-    min-height: 2.125rem;
+    height: 2rem;
     color: var(--text-primary);
-    background: transparent;
-    border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
-    padding: var(--space-2) var(--space-3);
+    padding: 0 var(--space-3);
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     line-height: 1.2;
     transition:
       border-color var(--duration-fast),
@@ -327,25 +236,16 @@
     cursor: not-allowed;
   }
 
-  input:hover:not(:disabled),
-  .select-trigger:hover:not(:disabled) {
-    border-color: var(--text-secondary);
-  }
-
-  input:focus-visible,
-  .select-trigger:focus-visible {
+  input:focus-visible {
     border-color: var(--focus-ring);
-    outline: 1px solid var(--focus-ring);
-    outline-offset: 0;
+    outline: none;
   }
 
-  input[aria-invalid="true"],
-  .select-trigger[data-invalid="true"] {
+  input[aria-invalid="true"] {
     border-color: var(--danger);
   }
 
-  input:disabled,
-  .select-trigger:disabled {
+  input:disabled {
     color: var(--text-secondary);
     background: color-mix(in srgb, var(--surface) 75%, var(--surface-elevated));
     border-color: var(--border);
@@ -358,76 +258,15 @@
     background: transparent;
   }
 
-  .select-control {
-    position: relative;
-    min-width: 0;
-  }
 
-  .select-trigger {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .select-trigger:disabled {
-    cursor: not-allowed;
-  }
 
-  .select-chevron {
-    color: var(--text-secondary);
-    font-size: 1rem;
-    line-height: 0.75;
-  }
 
-  .select-menu {
-    position: absolute;
-    z-index: 20;
-    top: calc(100% + 4px);
-    right: 0;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-    padding: var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-  }
 
-  .select-menu.up {
-    top: auto;
-    bottom: calc(100% + 4px);
-  }
 
-  .select-menu button {
-    padding: var(--space-2) var(--space-3);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 0.875rem;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .select-menu button:hover,
-  .select-menu button.active {
-    background: color-mix(in srgb, var(--accent) 16%, var(--surface-elevated));
-  }
 
-  .select-menu button.selected {
-    color: var(--accent);
-    font-weight: 500;
-  }
 
-  .select-menu button:focus-visible {
-    outline: 1px solid var(--focus-ring);
-    outline-offset: -1px;
-  }
 
   .error {
     margin: 0;

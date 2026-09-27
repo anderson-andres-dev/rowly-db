@@ -156,7 +156,7 @@
   </button>
 
   {#if open}
-    <div class="switcher-menu" role="listbox" aria-label={$t("connections.switcher.saved")}>
+    <div class="ui-menu switcher-menu" role="listbox" aria-label={$t("connections.switcher.saved")}>
       {#each sections as section (section.title ?? "")}
         {#if section.title}
           <div class="section-title" role="presentation">{section.title}</div>
@@ -274,28 +274,9 @@
     z-index: 20;
     top: calc(100% + 6px);
     left: 0;
-    display: flex;
     width: 20rem;
     max-height: min(26rem, 70vh);
-    flex-direction: column;
     overflow-y: auto;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    /* Una capa por encima de la app: levemente translucida con desenfoque y
-       un brillo de 1px arriba, en vez de un bloque opaco. */
-    background: color-mix(in srgb, var(--surface-elevated) 90%, transparent);
-    backdrop-filter: blur(18px) saturate(140%);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent),
-      var(--shadow-elevated);
-    animation: menu-in 140ms ease-out;
-  }
-
-  /* El brillo interior de 1px es un recurso de vidrio oscuro: sobre claro
-     se ve como una linea gris arriba. */
-  :global(:root[data-scheme="light"]) .switcher-menu {
-    box-shadow: var(--shadow-elevated);
   }
 
   :global(:root[data-scheme="light"]) .option.active {
@@ -312,13 +293,6 @@
     background: color-mix(in srgb, var(--identity) 7%, transparent);
   }
 
-  @keyframes menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-  }
-
   .section-title {
     padding: var(--space-3) var(--space-2) var(--space-1);
     color: var(--text-secondary);
@@ -332,7 +306,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    border-radius: var(--radius-sm);
+    border-radius: 4px;
     transition: background-color var(--duration-fast);
   }
 
@@ -436,9 +410,4 @@
     font-size: 0.75rem;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .switcher-menu {
-      animation: none;
-    }
-  }
 </style>

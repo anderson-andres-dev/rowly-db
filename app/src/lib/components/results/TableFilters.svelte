@@ -105,9 +105,9 @@
     height: 1.75rem;
     padding: 0 var(--space-2);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
-    background: var(--surface-content);
+    background: var(--surface);
     cursor: text;
     transition: border-color var(--duration-fast) ease;
   }
