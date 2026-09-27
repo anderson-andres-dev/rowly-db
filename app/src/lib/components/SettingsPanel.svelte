@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
-  import { ArrowLeft, Code2, Keyboard, Languages, Monitor, Moon, Palette, Pencil, RefreshCw, RotateCcw, Sun } from "@lucide/svelte";
+  import { ArrowLeft, Code2, Keyboard, Languages, Monitor, Moon, Palette, Pencil, RefreshCw, RotateCcw, Search, Sun } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
   import { newerRelease } from "$lib/stores/updates";
   import { LOCALE_NAMES, LOCALES, locale, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
@@ -86,6 +86,12 @@
   function setScheme(scheme: SchemePreference) {
     themeChoice.update((choice) => ({ ...choice, scheme }));
   }
+
+  // Buscador de temas: filtra por nombre mientras se escribe.
+  let themeQuery = $state("");
+  const visibleThemes = $derived(
+    THEME_FAMILIES.filter((family) => family.label.toLowerCase().includes(themeQuery.trim().toLowerCase())),
+  );
 
   function setFamily(family: ThemeFamily) {
     themeChoice.update((choice) => ({ ...choice, family }));
@@ -198,10 +204,22 @@
           {/if}
         </fieldset>
 
-        <fieldset>
+        <fieldset class="themes">
           <legend>{$t("settings.appearance.palette")}</legend>
+          <label class="theme-search">
+            <Search size={13} aria-hidden="true" />
+            <input
+              type="search"
+              bind:value={themeQuery}
+              placeholder={$t("settings.appearance.themeSearch")}
+              aria-label={$t("settings.appearance.themeSearch")}
+            />
+          </label>
+          {#if visibleThemes.length === 0}
+            <p class="theme-empty">{$t("settings.appearance.noThemes", { query: themeQuery.trim() })}</p>
+          {/if}
           <div class="palette-grid">
-            {#each THEME_FAMILIES as family (family.id)}
+            {#each visibleThemes as family (family.id)}
               <!-- Cada tarjeta se pinta en el modo que se pide, así se ve cómo
                    quedaría el tema antes de elegirlo. -->
               {@const preview = themeVariant(family.id, $requestedScheme)}
@@ -818,10 +836,59 @@
     cursor: default;
   }
 
+  /* Tres por fila: tarjetas apaisadas con la vista previa mas ancha. */
   .palette-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-3);
+  }
+
+  /* El buscador comparte la linea del titulo, a la derecha. */
+  .themes {
+    position: relative;
+  }
+
+  .theme-search {
+    position: absolute;
+    top: -0.4375rem;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 13rem;
+    height: 1.875rem;
+    padding: 0 var(--space-2);
+    box-sizing: border-box;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-secondary);
+  }
+
+  .theme-search:focus-within {
+    border-color: var(--focus-ring);
+  }
+
+  .theme-search input {
+    min-width: 0;
+    flex: 1;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.8125rem;
+  }
+
+  .theme-search input::-webkit-search-cancel-button {
+    cursor: pointer;
+  }
+
+  .theme-empty {
+    margin: 0 0 var(--space-3);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
   }
 
   .palette-option {
@@ -852,9 +919,9 @@
   .theme-preview {
     display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: 17% 1fr;
+    grid-template-columns: 12% 1fr;
     grid-template-rows: 0.95rem 1fr;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16 / 7;
     overflow: hidden;
     border: 1px solid;
     border-radius: calc(var(--radius-sm) - 2px);
