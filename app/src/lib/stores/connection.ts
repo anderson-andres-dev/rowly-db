@@ -7,6 +7,7 @@ import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentia
 import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
 import { forgetProfileConsoles } from "./queryConsoles";
 import { closeSqlFolder } from "./sqlFolders";
+import { forgetPinnedTables } from "./pinnedTables";
 
 export interface ConnectionState {
   // true = el ultimo connect() cargo un catalogo con exito. El backend
@@ -250,5 +251,6 @@ export async function deleteConnectionProfile(profileId: string): Promise<void> 
   if (loadLastProfileId() === profileId) saveLastProfileId(null);
   closeSqlFolder(profileId);
   forgetProfileConsoles(profileId);
+  forgetPinnedTables(profileId);
   removeConnectionProfile(profileId);
 }

@@ -19,6 +19,8 @@
     ListOrdered,
     ListTree,
     LoaderCircle,
+    Pin,
+    PinOff,
     LockOpen,
     Minus,
     RefreshCw,
@@ -34,10 +36,12 @@
   import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/explorerTree";
   import { t } from "$lib/i18n";
   import type { DatabaseExplorer } from "$lib/types";
+  import { pinnedTables, togglePinnedTable } from "$lib/stores/pinnedTables";
 
   let {
     explorer,
     connectionLabel,
+    profileId,
     refreshing = false,
     loadingSchemas = false,
     hideShortcut = "",
@@ -51,6 +55,8 @@
     explorer: DatabaseExplorer | null;
     // "schema@host", la misma etiqueta de origen que usa Workspace.svelte.
     connectionLabel: string;
+    // Conexion activa: las tablas fijadas se guardan por conexion.
+    profileId: string;
     refreshing?: boolean;
     loadingSchemas?: boolean;
     hideShortcut?: string;
@@ -79,6 +85,7 @@
   }
 
   const ICONS: Record<ExplorerIcon, IconComponent> = {
+    pinned: Pin,
     schema: Grid2x2,
     folder: Folder,
     table: Table,
@@ -126,7 +133,21 @@
           : $t("explorer.tls.unknown");
     return `${connectionLabel}\n${explorer.serverVersion} · ${tls}`;
   });
-  const nodes = $derived(explorer ? buildExplorerTree(explorer, filter) : []);
+  const nodes = $derived(
+    explorer ? buildExplorerTree(explorer, filter, $pinnedTables[profileId] ?? [], $t("explorer.pinned")) : [],
+  );
+
+  // Fijar / desfijar una tabla: el alfiler de la fila o la tecla P con la
+  // fila enfocada.
+  function togglePin(node: ExplorerNode) {
+    if (node.relation) togglePinnedTable(profileId, node.relation.schema, node.relation.name);
+  }
+
+  function onRowKeydown(event: KeyboardEvent, node: ExplorerNode) {
+    if (!node.relation || event.ctrlKey || event.altKey || event.metaKey || event.key.toLowerCase() !== "p") return;
+    event.preventDefault();
+    togglePin(node);
+  }
   const visibleSchemas = $derived(new Set(explorer?.schemas.map((objects) => objects.schema) ?? []));
 
   function isOpen(node: ExplorerNode): boolean {
@@ -204,6 +225,7 @@
   {@const hasChildren = !!node.children && node.children.length > 0}
   {@const open = hasChildren && isOpen(node)}
   <li role="treeitem" aria-expanded={hasChildren ? open : undefined} aria-selected="false">
+    <div class="row-wrap" class:relation={!!node.relation}>
     {#if hasChildren}
       <button
         type="button"
@@ -211,6 +233,7 @@
         style:--depth={depth}
         use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
         onclick={() => toggle(node.key, open)}
+        onkeydown={(event) => onRowKeydown(event, node)}
         ondblclick={() => {
           if (!node.relation) return;
           // El doble clic ya alterno dos veces (abrio y cerro): se deja como
@@ -232,6 +255,23 @@
         {@render nodeContent(node, Icon)}
       </div>
     {/if}
+    {#if node.relation}
+      <button
+        type="button"
+        class="pin-toggle"
+        class:on={node.pinned}
+        tabindex="-1"
+        use:tooltip={node.pinned ? $t("explorer.unpin") : $t("explorer.pin")}
+        onclick={() => togglePin(node)}
+      >
+        {#if node.key.startsWith("pinned/")}
+          <PinOff size={12} aria-hidden="true" />
+        {:else}
+          <Pin size={12} aria-hidden="true" />
+        {/if}
+      </button>
+    {/if}
+    </div>
 
     {#if open}
       <ul role="group">
@@ -592,6 +632,52 @@
 
   button.row {
     cursor: pointer;
+  }
+
+  /* El alfiler de una tabla o vista: aparece al pasar el mouse; en las
+     fijadas queda siempre, tenue. La fila le deja lugar a la derecha. */
+  .row-wrap {
+    position: relative;
+  }
+
+  .row-wrap.relation > .row {
+    padding-right: 1.5rem;
+  }
+
+  .pin-toggle {
+    position: absolute;
+    top: 50%;
+    right: var(--space-1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition:
+      opacity var(--duration-fast),
+      background-color var(--duration-fast),
+      color var(--duration-fast);
+  }
+
+  .pin-toggle.on {
+    opacity: 0.55;
+  }
+
+  .row-wrap:hover .pin-toggle {
+    opacity: 1;
+  }
+
+  .pin-toggle:hover {
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    color: var(--text-primary);
   }
 
   .row:hover {

@@ -403,6 +403,7 @@
         <SchemaTree
           explorer={$databaseExplorer}
           {connectionLabel}
+          {profileId}
           refreshing={refreshingTables}
           loadingSchemas={$explorerLoading}
           hideShortcut={toggleSidebarKeys}
