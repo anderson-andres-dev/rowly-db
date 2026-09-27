@@ -304,9 +304,27 @@
   }
 
   // Para el comando find con el editor como zona activa (Workspace).
-
   export function toggleSearch() {
     if (view) toggleSearchPanel(view);
+  }
+
+  // Vuelve al editor con el cursor donde estaba (CodeMirror conserva la
+  // seleccion aunque pierda el foco).
+  export function focus() {
+    view?.focus();
+  }
+
+  // Inserta en el cursor (reemplaza la seleccion), p. ej. desde el historial.
+  export function insertAtCursor(text: string) {
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: EditorSelection.cursor(from + text.length),
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+    view.focus();
   }
 
   onMount(() => {

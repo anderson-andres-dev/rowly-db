@@ -41,6 +41,8 @@ export default defineMessages({
     "execute-query.description": "Ejecuta la selección o la sentencia donde está el cursor.",
     "cancel-query.label": "Cancelar consulta",
     "cancel-query.description": "Interrumpe la consulta que se está ejecutando.",
+    "query-history.label": "Historial de consultas",
+    "query-history.description": "Abre las consultas ejecutadas en esta conexión para insertarlas o volver a ejecutarlas.",
   },
   en: {
     "toggle-sidebar.label": "Hide tables panel",
@@ -81,6 +83,8 @@ export default defineMessages({
     "execute-query.description": "Runs the selection or the statement at the cursor.",
     "cancel-query.label": "Cancel query",
     "cancel-query.description": "Stops the query that is running.",
+    "query-history.label": "Query history",
+    "query-history.description": "Opens the queries run on this connection to insert or run them again.",
   },
   "pt-BR": {
     "toggle-sidebar.label": "Ocultar painel de tabelas",
@@ -121,6 +125,8 @@ export default defineMessages({
     "execute-query.description": "Executa a seleção ou a instrução onde está o cursor.",
     "cancel-query.label": "Cancelar consulta",
     "cancel-query.description": "Interrompe a consulta em execução.",
+    "query-history.label": "Histórico de consultas",
+    "query-history.description": "Abre as consultas executadas nesta conexão para inseri-las ou executá-las de novo.",
   },
   fr: {
     "toggle-sidebar.label": "Masquer le panneau des tables",
@@ -161,6 +167,8 @@ export default defineMessages({
     "execute-query.description": "Exécute la sélection ou l’instruction sous le curseur.",
     "cancel-query.label": "Annuler la requête",
     "cancel-query.description": "Interrompt la requête en cours d’exécution.",
+    "query-history.label": "Historique des requêtes",
+    "query-history.description": "Ouvre les requêtes exécutées sur cette connexion pour les insérer ou les relancer.",
   },
   de: {
     "toggle-sidebar.label": "Tabellenbereich ausblenden",
@@ -201,5 +209,7 @@ export default defineMessages({
     "execute-query.description": "Führt die Auswahl oder die Anweisung an der Cursorposition aus.",
     "cancel-query.label": "Abfrage abbrechen",
     "cancel-query.description": "Bricht die laufende Abfrage ab.",
+    "query-history.label": "Abfrageverlauf",
+    "query-history.description": "Öffnet die auf dieser Verbindung ausgeführten Abfragen zum Einfügen oder erneuten Ausführen.",
   },
 });

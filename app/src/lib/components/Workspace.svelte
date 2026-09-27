@@ -22,6 +22,8 @@
 
   import { extractFromContext } from "$lib/sqlSchema";
   import { cancelQuery, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { queryHistory, recordQuery } from "$lib/stores/queryHistory";
+  import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -528,6 +530,11 @@
         void runFileAction(() => openSqlFileWithDialog(profileId));
       }),
       "cancel-query": whenIdle(() => !!activeConsole && cancelExecution(activeConsole.id)),
+      "query-history": whenIdle(() => {
+        if (!activeConsole || activeConsole.table) return false;
+        if (historyOpen) closeHistory(true);
+        else historyOpen = true;
+      }),
       "close-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item) return false;
@@ -700,6 +707,28 @@
     return result.code ? `[${result.code}] ${result.message}` : result.message;
   }
 
+  // --- Historial (Ctrl+E) ---------------------------------------------------
+  // Capa flotante sobre el editor; al cerrarla, el foco vuelve al editor en
+  // la posicion exacta del cursor.
+  let historyOpen = $state(false);
+  const historyEntries = $derived($queryHistory[profileId] ?? []);
+
+  function closeHistory(refocusEditor: boolean) {
+    historyOpen = false;
+    if (refocusEditor) sqlEditor?.focus();
+  }
+
+  function insertFromHistory(sql: string) {
+    historyOpen = false;
+    sqlEditor?.insertAtCursor(sql);
+  }
+
+  function executeFromHistory(sql: string) {
+    const consoleId = activeConsole?.id;
+    closeHistory(true);
+    if (consoleId) void requestExecution(consoleId, sql);
+  }
+
   // --- Cancelar ---------------------------------------------------------
   // Cada ejecucion lleva un id; mientras corre, cancelExecution() le pide
   // al servidor que la interrumpa (cancel_query). Termina con el error del
@@ -749,19 +778,30 @@
     confirmed: DestructiveStatement | null,
     page: PageRequest,
     paging = false,
+    // Ejecucion nueva desde el editor: queda en el historial (Ctrl+E).
+    record = false,
   ) {
     const consoleId = consoleOfKey(key);
     const startedAt = Date.now();
     const started = performance.now();
     const { response, cancelled } = await executeCancellable(consoleId, sql, confirmed, page);
     if (response.type === "completed") {
+      const elapsed = performance.now() - started;
       appendLog(consoleId, { kind: "query", schema: logSchema, text: sql.trim(), at: startedAt });
       appendLog(consoleId, {
         kind: response.result.type === "error" && !cancelled ? "error" : "info",
         text: cancelled
           ? $t("workspace.output.cancelled")
-          : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
+          : describeOutcome(response.result, response.page?.offset ?? 0, elapsed),
       });
+      if (record) {
+        recordQuery(profileId, {
+          sql,
+          at: startedAt,
+          durationMs: elapsed,
+          outcome: cancelled ? "cancelled" : response.result.type === "error" ? "error" : "ok",
+        });
+      }
     }
     applyExecuteQueryResponse(key, sql, response, paging);
     if (response.type === "completed") {
@@ -1131,7 +1171,7 @@
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
-    await runQuery(consoleId, sql, null, firstPage(consoleId));
+    await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
 
@@ -1143,7 +1183,7 @@
     const pending = takeQueryConfirmation(consoleId);
     if (!pending || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
-    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId));
+    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
 
@@ -1306,6 +1346,14 @@
             onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
           />
         {/key}
+        {#if historyOpen}
+          <QueryHistory
+            entries={historyEntries}
+            oninsert={insertFromHistory}
+            onexecute={executeFromHistory}
+            onclose={closeHistory}
+          />
+        {/if}
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}

@@ -3,6 +3,7 @@ import connections from "./connections";
 import editor from "./editor";
 import explorer from "./explorer";
 import grid from "./grid";
+import history from "./history";
 import results from "./results";
 import settings from "./settings";
 import shell from "./shell";
@@ -17,6 +18,7 @@ export const messages = {
   editor,
   explorer,
   grid,
+  history,
   results,
   settings,
   shell,

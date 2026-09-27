@@ -41,6 +41,7 @@ export const commandDefinitions: CommandDefinition[] = [
   // Solo toma la tecla mientras corre una consulta; si no, Esc sigue su
   // camino (cerrar una busqueda, volver al editor...).
   { id: "cancel-query", zone: "global", group: "editor", defaultKeys: "Escape" },
+  { id: "query-history", zone: "global", group: "editor", defaultKeys: "Ctrl+E" },
   { id: "format-sql", zone: "editor", group: "editor", defaultKeys: "Ctrl+L" },
   { id: "select-all", zone: "editor", group: "editor", defaultKeys: "Ctrl+A" },
   { id: "add-result-row", zone: "results", group: "results", defaultKeys: "Alt+Insert" },

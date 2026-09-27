@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
 import { toConnectionFailure } from "$lib/connectionErrors";
+import { forgetQueryHistory } from "./queryHistory";
 import { getDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
 import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
@@ -253,5 +254,6 @@ export async function deleteConnectionProfile(profileId: string): Promise<void> 
   closeSqlFolder(profileId);
   forgetProfileConsoles(profileId);
   forgetPinnedTables(profileId);
+  forgetQueryHistory(profileId);
   removeConnectionProfile(profileId);
 }
