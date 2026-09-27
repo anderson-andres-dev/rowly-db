@@ -267,7 +267,6 @@
   <header
     class="topbar"
     class:tinted={$connection.connected && !!activeProfile?.color}
-    class:production={$connection.connected && activeProfile?.environment === "production"}
     style:--identity={$connection.connected ? activeProfile?.color : undefined}
   >
     {#if $connection.connected}
@@ -481,12 +480,6 @@
     padding: var(--space-1) var(--space-3);
     border-bottom: 1px solid var(--border);
     background: var(--topbar-background);
-  }
-
-  /* En produccion el borde inferior del topbar toma el tono de peligro:
-     una senal constante y discreta, sin franjas nuevas. */
-  .topbar.production {
-    border-bottom-color: color-mix(in srgb, var(--danger) 60%, var(--border));
   }
 
   /* Degradado en un pseudo-elemento para que aparezca con un fundido al
