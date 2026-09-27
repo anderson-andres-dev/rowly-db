@@ -297,7 +297,10 @@
          del tema elegido; con una conexion abierta, el color de la
          conexion. -->
     {#if !$connection.connected}
-      <span class="topbar-mark"><RowlyMark size="1.5rem" mono /></span>
+      <span class="topbar-brand">
+        <RowlyMark size="1.5rem" mono />
+        <span class="wordmark">Rowly<span class="wordmark-db">DB</span></span>
+      </span>
     {/if}
     {#if $connection.connected}
       <!-- Con el panel visible, ocultarlo vive en su propia barra
@@ -520,12 +523,32 @@
        margen sin cubrir.
      - Muchos puntos de paso con una caida tipo ease-out: con solo dos o
        tres se nota donde termina el degradado. */
-  .topbar-mark {
+  /* Marca en el topbar de inicio: el pajaro y "Rowly" con peso, "DB" en
+     tono secundario, mas chico y espaciado, como una etiqueta. */
+  .topbar-brand {
     position: relative;
     display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     margin-left: var(--space-1);
     color: var(--text-primary);
-    opacity: 0.9;
+    user-select: none;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+
+  .wordmark-db {
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
   }
 
   .topbar::before {
