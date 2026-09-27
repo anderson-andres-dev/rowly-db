@@ -7,8 +7,8 @@ mod sql_files;
 mod updates;
 
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, QueryExecutionOptions, QueryExecutionResult, SchemaObjects,
-    TlsStatus,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryExecutionOptions,
+    QueryExecutionResult, SchemaObjects, TlsStatus,
 };
 use khipu_engine::Dialect;
 use khipu_engine::catalog::CatalogTable;
@@ -238,6 +238,28 @@ async fn set_visible_schemas(
     Ok(active.explorer())
 }
 
+/// Why connecting (or testing a connection) failed: the cause, which the
+/// frontend explains in the app's language, and the raw detail to copy.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConnectFailure {
+    kind: ConnectionErrorKind,
+    detail: String,
+}
+
+impl From<DriverError> for ConnectFailure {
+    fn from(error: DriverError) -> Self {
+        match error {
+            DriverError::Connection { kind, detail } => Self { kind, detail },
+            // Ya conectado, fallo leer el catalogo inicial.
+            DriverError::Query(detail) => Self {
+                kind: ConnectionErrorKind::Other,
+                detail,
+            },
+        }
+    }
+}
+
 #[tauri::command]
 async fn connect(
     kind: drivers::DatabaseKind,
@@ -245,10 +267,8 @@ async fn connect(
     production: Option<bool>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
-) -> Result<usize, String> {
-    let connected = drivers::connect(kind, &config)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> Result<usize, ConnectFailure> {
+    let connected = drivers::connect(kind, &config).await?;
     let table_count = connected.default_objects.tables.len();
     let mut schemas = BTreeMap::new();
     schemas.insert(connected.default_schema.clone(), connected.default_objects);
@@ -469,10 +489,8 @@ async fn table_definition(
 async fn test_connection(
     kind: drivers::DatabaseKind,
     config: ConnectionConfig,
-) -> Result<drivers::TestConnectionReport, String> {
-    drivers::test_connection(kind, &config)
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<drivers::TestConnectionReport, ConnectFailure> {
+    Ok(drivers::test_connection(kind, &config).await?)
 }
 
 #[tauri::command]

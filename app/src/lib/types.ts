@@ -129,6 +129,27 @@ export interface TlsStatus {
   fellBack: boolean;
 }
 
+// Por que fallo conectar (ConnectionErrorKind en driver-core): la app lo
+// explica en su idioma (connectionErrors.ts) y el detalle tecnico queda para
+// copiar.
+export type ConnectionErrorKind =
+  | "authFailed"
+  | "accessDenied"
+  | "unknownDatabase"
+  | "hostNotFound"
+  | "refused"
+  | "unreachable"
+  | "timeout"
+  | "tlsUnavailable"
+  | "tlsIncompatible"
+  | "tlsCertificate"
+  | "other";
+
+export interface ConnectionFailure {
+  kind: ConnectionErrorKind;
+  detail: string;
+}
+
 // Lo que devuelve "Probar conexion" (test_connection en src-tauri).
 export interface TestConnectionReport {
   serverVersion: string;

@@ -5,9 +5,9 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, DriverError, QueryColumn, QueryExecutionOptions,
-    QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects, TlsMode, TlsStatus,
-    TransactionError, TransactionStatement,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryColumn,
+    QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects,
+    TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
 };
 use sqlx::mysql::{
     MySqlConnectOptions, MySqlConnection, MySqlDatabaseError, MySqlPoolOptions, MySqlRow,
@@ -142,6 +142,7 @@ impl DbConnector for MySqlConnector {
         // ver tls::is_tls_failure) se reintenta sin cifrar. El pool entero
         // queda con esas opciones, asi que las conexiones que abra despues
         // no vuelven a intentar TLS.
+        probe_tcp(&config.host, config.port, CONNECT_TIMEOUT).await?;
         let (pool, fell_back) = match open_pool(config, config.tls_mode).await {
             Ok(pool) => (pool, false),
             Err(error) if config.tls_mode == TlsMode::Auto && tls::is_tls_failure(&error) => {
@@ -155,7 +156,7 @@ impl DbConnector for MySqlConnector {
         let raw_version = sqlx::query("SELECT VERSION()")
             .fetch_one(&pool)
             .await
-            .map_err(|e| DriverError::Connection(e.to_string()))
+            .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))
             .and_then(|row| text_column(&row, 0))?;
         let tls = tls::read_status(&pool, fell_back).await;
         Ok(Self {
@@ -923,15 +924,17 @@ mod tests {
                 assert_eq!(connector.tls_status().encrypted, Some(true));
                 assert!(!connector.tls_status().fell_back);
             }
-            (Err(DriverError::Connection(message)), expected) => {
-                assert_ne!(expected, Some("encrypted"), "{message}");
+            (Err(DriverError::Connection { kind, detail }), expected) => {
+                assert_ne!(expected, Some("encrypted"), "{detail}");
                 assert!(
-                    message.starts_with("El servidor no ofrece un cifrado TLS compatible")
-                        || message.starts_with("El servidor no tiene TLS habilitado"),
-                    "{message}"
+                    matches!(
+                        kind,
+                        ConnectionErrorKind::TlsIncompatible | ConnectionErrorKind::TlsUnavailable
+                    ),
+                    "{kind:?}: {detail}"
                 );
                 if expected == Some("none") {
-                    assert!(message.starts_with("El servidor no tiene TLS habilitado"));
+                    assert_eq!(kind, ConnectionErrorKind::TlsUnavailable, "{detail}");
                 }
             }
             (Err(other), _) => panic!("unexpected error: {other}"),
@@ -961,8 +964,8 @@ mod tests {
         let result = MySqlConnector::connect(&config_with_tls(TlsMode::VerifyCa)).await;
 
         match result {
-            Err(DriverError::Connection(message)) => {
-                assert!(message.starts_with("Certificado inválido:"), "{message}")
+            Err(DriverError::Connection { kind, detail }) => {
+                assert_eq!(kind, ConnectionErrorKind::TlsCertificate, "{detail}")
             }
             Ok(_) => panic!("a self-signed certificate must not pass VerifyCa"),
             Err(other) => panic!("unexpected error: {other}"),

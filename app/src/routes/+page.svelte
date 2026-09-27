@@ -7,6 +7,7 @@
     type ConnectionProfile,
   } from "$lib/stores/connectionProfiles";
   import type { ConnectionDriver } from "$lib/connections";
+  import type { ConnectionFailure } from "$lib/types";
   import ConnectionLanding from "$lib/components/ConnectionLanding.svelte";
   import DriverPicker from "$lib/components/DriverPicker.svelte";
   import ConnectionForm from "$lib/components/ConnectionForm.svelte";
@@ -19,7 +20,7 @@
   let choosingDriver = $state(false);
   let selectedDriver = $state<ConnectionDriver | null>(null);
   let activeProfile = $state<ConnectionProfile | null>(null);
-  let fallbackError = $state<string | null>(null);
+  let fallbackError = $state<ConnectionFailure | null>(null);
   let formIntent = $state<"connect" | "edit">("connect");
   let connectingId = $state<string | null>(null);
   let deletingProfile = $state<ConnectionProfile | null>(null);
@@ -41,7 +42,7 @@
 
   function openProfile(
     profile: ConnectionProfile,
-    error: string | null = null,
+    error: ConnectionFailure | null = null,
     intent: "connect" | "edit" = "connect",
   ) {
     choosingDriver = false;

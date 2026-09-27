@@ -6,7 +6,9 @@
 //! classifies errors is identical on purpose (driver-core stays free of
 //! sqlx, so it can't host it).
 
-use khipu_driver_core::{DriverError, TlsMode, TlsStatus};
+use khipu_driver_core::{
+    ConnectionErrorKind, DriverError, TlsMode, TlsStatus, io_error_kind, tls_failure_kind,
+};
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use std::io::ErrorKind;
@@ -49,30 +51,29 @@ pub fn is_tls_failure(error: &sqlx::Error) -> bool {
     }
 }
 
-/// The error shown when connecting fails. TLS failures get an explanation
-/// of what to change; everything else is passed through unchanged.
+/// The error shown when connecting fails: the raw detail plus its cause
+/// (`ConnectionErrorKind`), which the app turns into a message and a hint in
+/// the user's language.
 pub fn connection_error(error: sqlx::Error, mode: TlsMode) -> DriverError {
     let detail = error.to_string();
-    if mode != TlsMode::Disabled && is_tls_failure(&error) {
-        if detail.to_ascii_lowercase().contains("certificate") {
-            return DriverError::Connection(format!("Certificado inválido: {detail}"));
+    let kind = if mode != TlsMode::Disabled && is_tls_failure(&error) {
+        tls_failure_kind(&detail)
+    } else {
+        match &error {
+            sqlx::Error::Database(database) => match database.code().as_deref() {
+                // invalid_password; invalid_authorization_specification (rol
+                // inexistente o pg_hba.conf que no admite a este usuario).
+                Some("28P01" | "28000") => ConnectionErrorKind::AuthFailed,
+                Some("42501") => ConnectionErrorKind::AccessDenied,
+                Some("3D000") => ConnectionErrorKind::UnknownDatabase,
+                _ => ConnectionErrorKind::Other,
+            },
+            sqlx::Error::PoolTimedOut => ConnectionErrorKind::Timeout,
+            sqlx::Error::Io(io) => io_error_kind(io.kind(), &detail),
+            _ => ConnectionErrorKind::Other,
         }
-        // sqlx: Error::Tls("server does not support TLS") cuando el servidor
-        // ni siquiera ofrece TLS (p.ej. MariaDB sin certificados configurados).
-        if detail.contains("does not support TLS") {
-            return DriverError::Connection(
-                "El servidor no tiene TLS habilitado. Usa SSL «Automático» o \
-                 «Desactivado», o habilita TLS en el servidor."
-                    .to_string(),
-            );
-        }
-        return DriverError::Connection(format!(
-            "El servidor no ofrece un cifrado TLS compatible (común en servidores \
-             antiguos). Usa SSL «Automático» o «Desactivado», o actualiza la \
-             configuración TLS del servidor. Detalle: {detail}"
-        ));
-    }
-    DriverError::Connection(detail)
+    };
+    DriverError::connection(kind, detail)
 }
 
 /// Reads this session's row of `pg_stat_ssl` (9.5+). Without the view, or
@@ -130,26 +131,48 @@ mod tests {
         assert!(!is_tls_failure(&sqlx::Error::PoolTimedOut));
     }
 
-    #[test]
-    fn certificate_errors_are_labelled() {
-        let DriverError::Connection(message) = connection_error(
-            sqlx::Error::Tls("invalid peer certificate: UnknownIssuer".into()),
-            TlsMode::VerifyIdentity,
-        ) else {
-            panic!("expected a connection error");
-        };
-        assert!(message.starts_with("Certificado inválido:"));
+    fn kind_of(error: DriverError) -> ConnectionErrorKind {
+        match error {
+            DriverError::Connection { kind, .. } => kind,
+            other => panic!("expected a connection error, got {other}"),
+        }
     }
 
     #[test]
-    fn server_without_tls_gets_its_own_message() {
-        let DriverError::Connection(message) = connection_error(
-            sqlx::Error::Tls("server does not support TLS".into()),
-            TlsMode::Required,
-        ) else {
-            panic!("expected a connection error");
-        };
-        assert!(message.starts_with("El servidor no tiene TLS habilitado"));
+    fn certificate_errors_are_labelled() {
+        assert_eq!(
+            kind_of(connection_error(
+                sqlx::Error::Tls("invalid peer certificate: UnknownIssuer".into()),
+                TlsMode::VerifyIdentity,
+            )),
+            ConnectionErrorKind::TlsCertificate
+        );
+    }
+
+    #[test]
+    fn server_without_tls_gets_its_own_cause() {
+        assert_eq!(
+            kind_of(connection_error(
+                sqlx::Error::Tls("server does not support TLS".into()),
+                TlsMode::Required,
+            )),
+            ConnectionErrorKind::TlsUnavailable
+        );
+    }
+
+    #[test]
+    fn network_errors_keep_their_cause() {
+        assert_eq!(
+            kind_of(connection_error(
+                io_error(ErrorKind::ConnectionRefused),
+                TlsMode::Auto
+            )),
+            ConnectionErrorKind::Refused
+        );
+        assert_eq!(
+            kind_of(connection_error(sqlx::Error::PoolTimedOut, TlsMode::Auto)),
+            ConnectionErrorKind::Timeout
+        );
     }
 
     #[test]

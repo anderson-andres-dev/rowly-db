@@ -1,9 +1,12 @@
 pub mod assembly;
+mod connection_error;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+
+pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
 
 /// How a connection negotiates TLS. Chosen per connection profile.
 ///
@@ -264,8 +267,11 @@ impl SchemaObjects {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriverError {
-    #[error("connection failed: {0}")]
-    Connection(String),
+    #[error("connection failed: {detail}")]
+    Connection {
+        kind: ConnectionErrorKind,
+        detail: String,
+    },
     #[error("query failed: {0}")]
     Query(String),
 }

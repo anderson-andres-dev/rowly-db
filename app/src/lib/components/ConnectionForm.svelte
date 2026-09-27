@@ -31,7 +31,8 @@
     saveConnectionPassword,
     type PasswordPolicy,
   } from "$lib/credentials";
-  import type { TestConnectionReport, TlsMode } from "$lib/types";
+  import type { ConnectionFailure, TestConnectionReport, TlsMode } from "$lib/types";
+  import { explainConnectionFailure, toConnectionFailure } from "$lib/connectionErrors";
 
   let {
     driver,
@@ -42,7 +43,7 @@
   }: {
     driver: ConnectionDriver;
     profile?: ConnectionProfile | null;
-    initialError?: string | null;
+    initialError?: ConnectionFailure | null;
     // "edit": se abrio con el lapiz para cambiar algo; el boton solo guarda.
     // "connect": conexion nueva o un intento de conectar que necesita datos;
     // el boton guarda y conecta.
@@ -84,7 +85,7 @@
   // cambie de idioma sin volver a probar.
   let testResult = $state<
     | { kind: "report"; report: TestConnectionReport }
-    | { kind: "error"; message: string; endpoint: string }
+    | { kind: "error"; failure: ConnectionFailure; target: { host: string; port: number; database: string } }
     | null
   >(null);
   const testSummary = $derived<TestSummary | null>(
@@ -92,11 +93,11 @@
       ? null
       : testResult.kind === "report"
         ? summarizeReport(testResult.report, $t)
-        : summarizeError(testResult.message, testResult.endpoint, $t),
+        : summarizeError(testResult.failure, testResult.target, $t),
   );
   let testPopoverOpen = $state(false);
   let testArea = $state<HTMLElement>();
-  let copied = $state<"test" | "url" | null>(null);
+  let copied = $state<"test" | "url" | "detail" | null>(null);
   let errors = $state<{
     name?: MessageKey;
     host?: MessageKey;
@@ -248,7 +249,11 @@
     try {
       testResult = { kind: "report", report: await testConnection(driverDefinition.backendKind, config) };
     } catch (error) {
-      testResult = { kind: "error", message: String(error), endpoint: `${config.host}:${config.port}` };
+      testResult = {
+        kind: "error",
+        failure: toConnectionFailure(error),
+        target: { host: config.host, port: config.port, database: config.database },
+      };
     } finally {
       testing = false;
       testPopoverOpen = true;
@@ -327,7 +332,7 @@
     }
   }
 
-  async function copy(text: string, what: "test" | "url") {
+  async function copy(text: string, what: "test" | "url" | "detail") {
     if (!(await writeClipboard(text))) return;
     copied = what;
     setTimeout(() => {
@@ -617,14 +622,40 @@
       {/if}
 
       {#if attempted && $connection.error}
-        <div role="alert" class="feedback error">
-          <strong>
-            {$t("connections.form.error.connect", {
-              host: host.trim() || $t("connections.form.error.theServer"),
-              port,
-            })}
-          </strong>
-          <span>{$connection.error}</span>
+        <!-- Que paso y que revisar; el texto crudo del driver queda para
+             copiar (connectionErrors.ts). Sin causa reconocida, se muestra
+             tal cual. -->
+        {@const explained = explainConnectionFailure(
+          $connection.error,
+          { host: host.trim(), port, database: database.trim() },
+          $t,
+        )}
+        <div role="alert" class="feedback error with-action">
+          <div class="feedback-text">
+            <strong>
+              {explained.title ??
+                $t("connections.form.error.connect", {
+                  host: host.trim() || $t("connections.form.error.theServer"),
+                  port,
+                })}
+            </strong>
+            <span>{explained.hint ?? explained.detail}</span>
+          </div>
+          {#if explained.detail}
+            <button
+              type="button"
+              class="icon-action"
+              aria-label={$t("connections.form.copyDetail")}
+              use:tooltip={copied === "detail" ? $t("connections.form.detailCopied") : $t("connections.form.copyDetail")}
+              onclick={() => copy(explained.detail, "detail")}
+            >
+              {#if copied === "detail"}
+                <Check size={14} aria-hidden="true" />
+              {:else}
+                <Copy size={14} aria-hidden="true" />
+              {/if}
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -1090,6 +1121,24 @@
     background: color-mix(in srgb, var(--accent) 9%, transparent);
     font-size: 0.8125rem;
     line-height: 1.4;
+  }
+
+  .feedback.with-action {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .feedback-text {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .feedback.with-action .icon-action {
+    margin: -4px -4px 0 0;
   }
 
   .feedback.error {

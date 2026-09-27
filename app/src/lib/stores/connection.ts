@@ -1,7 +1,8 @@
 import { derived, get, writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { browser } from "$app/environment";
-import type { CatalogTable, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
+import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
+import { toConnectionFailure } from "$lib/connectionErrors";
 import { getDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
 import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
@@ -17,7 +18,7 @@ export interface ConnectionState {
   connecting: boolean;
   tableCount: number | null;
   profileId: string | null;
-  error: string | null;
+  error: ConnectionFailure | null;
 }
 
 const initialState: ConnectionState = {
@@ -127,7 +128,7 @@ export async function connect(
     connection.update((state) => ({
       ...state,
       connected: false,
-      error: String(e),
+      error: toConnectionFailure(e),
     }));
     return null;
   } finally {
@@ -173,7 +174,7 @@ function saveLastProfileId(profileId: string | null): void {
 type ConnectResult =
   | { ok: true }
   | { ok: false; reason: "no-password" }
-  | { ok: false; reason: "connect-failed"; error: string };
+  | { ok: false; reason: "connect-failed"; error: ConnectionFailure };
 
 // Orquesta el flujo completo de conectar a un perfil guardado (carga de
 // contrasena + connect() + completeConnection()) para que la tarjeta de la
@@ -198,7 +199,7 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
     caCertificatePath: profile.caCertificatePath,
   }, profile.environment === "production");
   if (tableCount === null) {
-    return { ok: false, reason: "connect-failed", error: get(connection).error ?? "" };
+    return { ok: false, reason: "connect-failed", error: get(connection).error ?? { kind: "other", detail: "" } };
   }
 
   completeConnection(tableCount, profile.id);
@@ -218,7 +219,7 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
 // pida a +page.svelte que abra el modal de edicion con contexto cuando un
 // cambio de conexion falla, sin acoplar el layout al estado local de la
 // pagina.
-export const pendingEdit = writable<{ profile: ConnectionProfile; error: string | null } | null>(
+export const pendingEdit = writable<{ profile: ConnectionProfile; error: ConnectionFailure | null } | null>(
   null,
 );
 
