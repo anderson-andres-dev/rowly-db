@@ -71,16 +71,32 @@ function isUsable(element: HTMLElement | undefined, zone: HTMLElement): element 
 }
 
 // Al llegar con el teclado, la zona destella y queda marcada con un
-// contorno tenue mientras se siga con el teclado: asi siempre se sabe donde
-// esta el foco. El primer clic quita la marca (con el mouse no hace falta).
-// Ambos van en una capa encima del contenido (controls.css), para que el
-// editor o los encabezados del grid no los tapen.
+// contorno tenue mientras se sigue moviendo (Ctrl apretado); un segundo
+// despues de dejar de moverse se desvanece solo, para no estorbar. Un clic
+// la quita al instante. Ambos van en una capa encima del contenido
+// (controls.css), para que el editor o los encabezados del grid no los
+// tapen.
 let marked: HTMLElement | null = null;
+let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+let stillMoving = () => false;
+
+const MARK_LINGER_MS = 1000;
+
+function scheduleFade() {
+  if (fadeTimer) clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    fadeTimer = null;
+    // Con Ctrl todavia apretado se sigue moviendo: la marca espera.
+    if (stillMoving()) return;
+    marked?.classList.add("zone-fading");
+  }, MARK_LINGER_MS);
+}
 
 function flash(element: HTMLElement) {
-  marked?.classList.remove("zone-current");
+  marked?.classList.remove("zone-current", "zone-fading");
   marked = element;
   element.classList.add("zone-current");
+  scheduleFade();
   element.classList.remove("zone-flash");
   // Reinicia la animacion aunque se vuelva a la misma zona enseguida.
   void element.offsetWidth;
@@ -89,7 +105,9 @@ function flash(element: HTMLElement) {
 }
 
 function clearMark() {
-  marked?.classList.remove("zone-current");
+  if (fadeTimer) clearTimeout(fadeTimer);
+  fadeTimer = null;
+  marked?.classList.remove("zone-current", "zone-fading");
   marked = null;
 }
 
@@ -165,9 +183,12 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   let deadline = 0;
 
   function stopMoving() {
+    const wasMoving = moving && moved;
     moving = false;
     moved = false;
+    if (wasMoving) scheduleFade();
   }
+  stillMoving = () => moving;
 
   function onKeydown(event: KeyboardEvent) {
     if (isBlocked()) return;

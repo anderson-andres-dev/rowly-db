@@ -410,6 +410,12 @@
   z-index: 50;
   border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
   pointer-events: none;
+  transition: opacity 450ms ease;
+}
+
+/* Un segundo despues de dejar de moverse, la marca se desvanece sola. */
+[data-focus-zone].zone-fading::after {
+  opacity: 0;
 }
 
 /* Al llegar: un destello mas marcado que se asienta en la marca tenue. */
