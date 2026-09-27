@@ -795,7 +795,7 @@
   // instante vacio ni contenido que salta al llegar.
   // Ancho de la vista previa (ver sqlPreviewFormat.ts): una clausula por
   // linea, sin lineas kilometricas ni un valor por linea.
-  const PREVIEW_LINE_WIDTH = 100;
+  const PREVIEW_LINE_WIDTH = 78;
 
   async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
     const current = currentChanges(consoleId);

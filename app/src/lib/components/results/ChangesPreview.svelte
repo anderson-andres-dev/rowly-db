@@ -3,7 +3,6 @@
   import { t, type MessageKey } from "$lib/i18n";
   import { highlightSql } from "$lib/sqlHighlight";
   import type { ChangeError, ResultChanges } from "$lib/resultEditing";
-  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
 
   // Vista previa de los cambios pendientes: el SQL exacto que se va a
   // ejecutar. Llega ya generado (el padre lo pide al backend ANTES de abrir
@@ -26,7 +25,8 @@
     // El padre pide cerrar (p.ej. se aplico todo): se anima la salida y
     // recien al terminar llega onclose.
     dismiss?: boolean;
-    // Conexion de produccion: el boton lo dice y toma el tono de peligro.
+    // Conexion de produccion: el boton lo dice y toma el tono de peligro
+    // (no hace falta repetirlo arriba).
     production?: boolean;
     onapply: () => void;
     onclose: () => void;
@@ -63,10 +63,23 @@
   // entre dos), para marcar la que fallo.
   const lines = $derived(
     statements.flatMap((statement, index) => [
-      ...(index > 0 ? [{ html: "", statement: null }] : []),
-      ...statement.split("\n").map((line) => ({ html: highlightSql(line), statement: index })),
+      ...(index > 0 ? [{ html: "", statement: null, kind: null }] : []),
+      ...statement.split("\n").map((line, lineIndex) => ({
+        html: highlightSql(line),
+        statement: index,
+        // Solo la primera linea de la sentencia lleva el punto de su tipo.
+        kind: lineIndex === 0 ? statementKind(statement) : null,
+      })),
     ]),
   );
+
+  function statementKind(statement: string): "delete" | "update" | "insert" | null {
+    const keyword = statement.trimStart().slice(0, 6).toUpperCase();
+    if (keyword === "DELETE") return "delete";
+    if (keyword === "UPDATE") return "update";
+    if (keyword === "INSERT") return "insert";
+    return null;
+  }
 
   // Cada intento fallido "golpea": el aviso de error se sacude y la
   // sentencia culpable destella y queda a la vista. Asi un reintento que
@@ -110,16 +123,16 @@
   }}
   onclose={onclose}
 >
+  <!-- Titulo y, debajo, el resumen en texto tenue. El mismo punto de color
+       marca en el margen donde empieza cada sentencia de ese tipo. -->
   <header>
     <h2>{$t("results.changes.title")}</h2>
-    {#if production}
-      <EnvironmentBadge environment="production" />
-    {/if}
-    <div class="summary">
-      {#each summary as item (item.tone)}
-        <span class={`chip ${item.tone}`}>{$t(item.count === 1 ? item.one : item.many, { count: item.count })}</span>
+    <p class="summary">
+      {#each summary as item, index (item.tone)}
+        {#if index > 0}<span class="sep" aria-hidden="true">·</span>{/if}
+        <span class={`kind ${item.tone}`}>{$t(item.count === 1 ? item.one : item.many, { count: item.count })}</span>
       {/each}
-    </div>
+    </p>
   </header>
 
   <!-- Una fila por linea: el numero en su propia columna (no seleccionable)
@@ -128,7 +141,10 @@
     {#key attempt}
       <ol>
         {#each lines as line, index (index)}
-          <li class:failed={error !== null && line.statement !== null && line.statement === error.statementIndex}>
+          <li
+            class={line.kind ? `start ${line.kind}` : undefined}
+            class:failed={error !== null && line.statement !== null && line.statement === error.statementIndex}
+          >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             <span class="line-code">{@html line.html || " "}</span>
           </li>
@@ -194,9 +210,8 @@
 
   header {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-3);
+    flex-direction: column;
+    gap: 2px;
   }
 
   h2 {
@@ -209,37 +224,42 @@
   .summary {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2);
+    align-items: center;
+    gap: 0 var(--space-2);
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
   }
 
-  .chip {
+  .sep {
+    opacity: 0.6;
+  }
+
+  .kind {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px var(--space-2);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--text-secondary) 12%, transparent);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
   }
 
-  .chip::before {
+  .kind::before,
+  li.start::after {
     content: "";
     width: 6px;
     height: 6px;
     border-radius: 50%;
+    background: var(--kind-color);
   }
 
-  .chip.delete::before {
-    background: var(--danger-solid);
+  .delete {
+    --kind-color: var(--danger-solid);
   }
 
-  .chip.update::before {
-    background: var(--accent);
+  .update {
+    --kind-color: var(--accent);
   }
 
-  .chip.insert::before {
-    background: var(--success);
+  .insert {
+    --kind-color: var(--success);
   }
 
   .code {
@@ -262,8 +282,15 @@
   }
 
   li {
+    position: relative;
     display: flex;
     counter-increment: line;
+  }
+
+  li.start::after {
+    position: absolute;
+    top: calc(0.8em - 3px);
+    left: 0.625rem;
   }
 
   li::before {

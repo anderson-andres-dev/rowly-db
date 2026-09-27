@@ -117,8 +117,27 @@ function wrap(line: string, width: number): string[] {
   return lines;
 }
 
+// Junta todo el espacio (saltos incluidos) fuera de comillas en un solo
+// espacio: el formato parte de una sentencia en una linea.
+function collapseWhitespace(sql: string): string {
+  const { code } = scan(sql);
+  let result = "";
+  let pendingSpace = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index];
+    if (code[index] && /\s/.test(char)) {
+      pendingSpace = result.length > 0;
+      continue;
+    }
+    if (pendingSpace) result += " ";
+    pendingSpace = false;
+    result += char;
+  }
+  return result;
+}
+
 export function formatPreviewSql(sql: string, width = 100): string {
-  const compact = sql.trim();
+  const compact = collapseWhitespace(sql.trim());
   if (!compact) return sql;
   return splitClauses(compact)
     .flatMap((clause) => wrap(clause, width))

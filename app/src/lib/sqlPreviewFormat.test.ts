@@ -33,6 +33,12 @@ describe("formatPreviewSql", () => {
     );
   });
 
+  it("junta los saltos de linea que ya traia la sentencia", () => {
+    expect(formatPreviewSql("DELETE\nFROM core.t\nWHERE id = 4;")).toBe(
+      ["DELETE FROM core.t", "WHERE id = 4;"].join("\n"),
+    );
+  });
+
   it("no confunde columnas que contienen la palabra clave", () => {
     expect(formatPreviewSql("UPDATE t SET offset_values = 1 WHERE id = 2;")).toBe(
       ["UPDATE t", "SET offset_values = 1", "WHERE id = 2;"].join("\n"),
