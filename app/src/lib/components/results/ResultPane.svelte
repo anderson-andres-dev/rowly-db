@@ -751,11 +751,13 @@
   /* Pestañas al estilo de las de consola (.console-tab): Salida (fija, sin
      cerrar) y el resultado (con ×). La activa lleva el acento; las otras
      son planas y se aclaran al pasar el mouse. */
+  /* Pestañas y barra forman una sola cabecera: sin linea entre ellas, una
+     sola al pie. Nada de cajas: el orden lo dan el espacio y el peso. */
   .result-tabs {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: var(--space-1);
+    gap: 2px;
     min-height: 2.25rem;
     padding: var(--space-1) var(--space-2);
     box-sizing: border-box;
@@ -763,11 +765,17 @@
     background: var(--surface);
   }
 
+  /* Con la barra debajo, la linea pasa al pie de la barra. */
+  .result-tabs:has(+ .result-toolbar) {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
   .result-toolbar {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-4);
     min-height: 2.5rem;
     padding: 0 var(--space-2);
     box-sizing: border-box;
@@ -877,26 +885,21 @@
   }
 
   /* Grupos por funcion (datos · editar · cambios · pestaña · copiar y
-     exportar): cada uno es un segmento con un fondo apenas perceptible y
-     esquinas redondeadas. Sin lineas: la forma y el espacio entre segmentos
-     son los que organizan. */
+     exportar): botones juntos dentro del grupo y aire entre grupos. Sin
+     fondos ni contornos: con cinco cajas seguidas la barra se sentia
+     amontonada. */
   .toolbar-group {
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 2px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--text-primary) 4.5%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 5%, transparent);
   }
 
   .toolbar-group.end {
     margin-left: auto;
   }
 
-  /* Mismo diseño que las pestañas de consola (.console-tab en
-     Workspace.svelte): borde, fondo elevado, acento en la activa y su
-     icono en color de acento. */
+  /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
+     con un relleno tenue y su icono en acento. Sin bordes. */
   .result-tab {
     display: inline-flex;
     flex-shrink: 0;
@@ -905,23 +908,25 @@
     min-height: 1.75rem;
     padding: 0 var(--space-3);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     font-size: 0.75rem;
     cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
   }
 
   .result-tab:hover {
-    background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary));
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     color: var(--text-primary);
   }
 
   .result-tab.active {
-    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated));
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
     color: var(--text-primary);
   }
 
