@@ -198,9 +198,9 @@
                     onclick={() => onconnect(profile)}
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={32} />
-                    <!-- Dos lineas: nombre y a donde apunta. El motor lo dice el
-                         logo de la esquina; de los entornos solo Produccion se
-                         marca aqui, el resto se ve en la vista de lista. -->
+                    <!-- Dos lineas: nombre, y motor · base@host. De los entornos
+                         solo Produccion se marca aqui; el resto se ve en la
+                         vista de lista. -->
                     <span class="card-text">
                       <span class="card-name">
                         <strong>{profile.name}</strong>
@@ -209,7 +209,7 @@
                         {/if}
                       </span>
                       <span class="meta" title={endpoint(profile)}>
-                        {profile.database}<span class="sep">·</span>{shortEndpoint(profile)}
+                        {driver.name}<span class="sep">·</span>{profile.database}@{shortEndpoint(profile)}
                       </span>
                     </span>
                   </button>
@@ -217,12 +217,7 @@
                     {#if connectingId === profile.id}
                       <LoaderCircle size={15} class="spin" aria-label={$t("connections.connecting")} />
                     {:else}
-                      <span class="card-driver" title={driver.name}>
-                        <DriverLogo driver={profile.driver} size={14} />
-                      </span>
-                      <span class="card-actions">
-                        {@render cornerActions(profile)}
-                      </span>
+                      {@render cornerActions(profile)}
                     {/if}
                   </div>
                 </div>
@@ -618,38 +613,16 @@
     opacity: 0.6;
   }
 
+  /* Las acciones aparecen al pasar el mouse o al llegar a ellas con Tab.
+     El foco en la tarjeta misma (la ultima conexion) no las muestra: la
+     tarjeta queda limpia. */
   .card-corner {
     position: absolute;
     top: 50%;
     right: var(--space-2);
-    display: grid;
-    align-items: center;
-    justify-items: end;
-    transform: translateY(-50%);
-  }
-
-  /* El logo del motor y las acciones ocupan el mismo lugar: al pasar el
-     mouse, o al llegar con Tab a una accion, el logo se apaga y aparecen las
-     acciones. El foco en la tarjeta misma (la ultima conexion) no las
-     muestra: la tarjeta queda limpia. */
-  .card-driver,
-  .card-actions {
-    grid-area: 1 / 1;
     display: flex;
-    align-items: center;
     gap: 2px;
-    transition: opacity var(--duration-fast);
-  }
-
-  .card-driver {
-    padding-right: var(--space-2);
-    opacity: 0.55;
-    pointer-events: none;
-  }
-
-  .card:hover .card-driver,
-  .card:has(.corner-button:focus-visible) .card-driver {
-    opacity: 0;
+    transform: translateY(-50%);
   }
 
   /* --- Lista compacta ---------------------------------------------------- */
