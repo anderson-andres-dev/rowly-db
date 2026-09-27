@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { engineFor } from "$lib/engines";
   import { tooltip } from "$lib/tooltip";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
   import { Check, ChevronDown, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
@@ -116,7 +117,7 @@
     ),
   );
   const connectionUrl = $derived.by(() => {
-    const scheme = driverDefinition.backendKind === "mysql" ? "mysql" : "postgresql";
+    const scheme = engineFor(driver).connectionUrl.scheme;
     const encodedUser = username.trim() ? `${encodeURIComponent(username.trim())}@` : "";
     const encodedDatabase = database.trim() ? `/${encodeURIComponent(database.trim())}` : "";
     // Mismo nombre de parametro y valores que usan los clientes oficiales de
@@ -144,26 +145,12 @@
     }
   }
 
+  // El nombre y los valores del parametro, los de los clientes oficiales de
+  // cada motor (perfil en lib/engines).
   function sslUrlParameter(mode: TlsMode): string {
-    if (driverDefinition.backendKind === "mysql") {
-      const values: Record<TlsMode, string> = {
-        auto: "PREFERRED",
-        required: "REQUIRED",
-        verifyCa: "VERIFY_CA",
-        verifyIdentity: "VERIFY_IDENTITY",
-        disabled: "DISABLED",
-      };
-      return `ssl-mode=${values[mode]}`;
-    }
-    const values: Record<TlsMode, string> = {
-      auto: "prefer",
-      required: "require",
-      verifyCa: "verify-ca",
-      verifyIdentity: "verify-full",
-      disabled: "disable",
-    };
-    return `sslmode=${values[mode]}`;
+    return engineFor(driver).connectionUrl.tlsParameter(mode);
   }
+
 
   $effect(() => {
     if (!initialized) {

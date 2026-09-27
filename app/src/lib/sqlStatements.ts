@@ -23,13 +23,41 @@ export interface ScannedStatement extends StatementRange {
   terminated: boolean;
 }
 
+// Como se escribe el SQL de un motor (su perfil en lib/engines). Vive aca,
+// en el modulo mas bajo, porque lo usan el escaner y el lexer del contexto.
+export interface SqlLexical {
+  // Comillas de identificadores que acepta ("nombre", `nombre`, [nombre]).
+  identifierQuotes: readonly ('"' | "`" | "[")[];
+  // En '...', la barra invertida escapa (MySQL) o es un caracter mas
+  // (Postgres, con standard_conforming_strings).
+  backslashEscapes: boolean;
+  // "#" abre un comentario de linea (MySQL).
+  hashComments: boolean;
+  // Bloques $tag$ ... $tag$ (Postgres).
+  dollarQuotes: boolean;
+  // E'...': un texto donde la barra invertida escapa aunque en el resto no
+  // (Postgres).
+  escapeStringPrefix: boolean;
+}
+
+// El SQL estandar: sin conexion no hay motor (engines/standard.ts).
+export const STANDARD_LEXICAL: SqlLexical = {
+  identifierQuotes: ['"'],
+  backslashEscapes: false,
+  hashComments: false,
+  dollarQuotes: false,
+  escapeStringPrefix: false,
+};
+
 // Donde quedo el escaner al cortar un trozo: el documento se escanea por
 // partes (sqlStatementIndex.ts) y cada una sigue donde la anterior quedo.
 export interface ScanState {
   mode: number;
-  // La comilla abierta (codigo de caracter) o el $tag$ abierto.
+  // La comilla que cierra lo abierto (codigo de caracter) o el $tag$ abierto.
   quote: number;
   tag: string;
+  // El texto abierto es un E'...' (la barra invertida escapa).
+  escaping: boolean;
   // Inicio de la sentencia en curso (absoluto); -1 sin codigo todavia.
   codeStart: number;
   // Fin del ultimo caracter que no es espacio desde el ultimo ";" (absoluto):
@@ -48,8 +76,6 @@ const DASH = 45;
 const SLASH = 47;
 const STAR = 42;
 const SINGLE_QUOTE = 39;
-const DOUBLE_QUOTE = 34;
-const BACKTICK = 96;
 const BACKSLASH = 92;
 const DOLLAR = 36;
 
@@ -57,12 +83,73 @@ const DOLLAR = 36;
 // "''" y los $tag$ se leen enteros aunque crucen el corte.
 export const SCAN_OVERLAP = 64;
 
+const HASH = 35;
+const CLOSE_BRACKET = 93;
+
 const DOLLAR_TAG = /\$[A-Za-z_]*\$/y;
-// Lo que puede abrir o cerrar algo en codigo.
-const SPECIAL = /[;\-\/'"`$]/g;
-const QUOTE_OR_ESCAPE = /['\\]/g;
-const DOUBLE = /"/g;
-const BACKTICKS = /`/g;
+
+// Las reglas de un motor, ya compiladas: lo que puede abrir o cerrar algo en
+// codigo (una regex para saltar rapido lo demas) y, por cada comilla, la
+// que la cierra y como buscarla.
+interface ScanRules {
+  special: RegExp;
+  closeOf: Map<number, number>;
+  closer: Map<number, RegExp>;
+  hash: boolean;
+  dollar: boolean;
+  escapePrefix: boolean;
+}
+
+// Dentro de un E'...': la comilla o la barra invertida.
+const ESCAPED_SINGLE = /['\\]/g;
+
+// "E" o "e" pegada a la comilla, y que no sea el final de otra palabra.
+function opensEscapeString(text: string, quoteAt: number): boolean {
+  const prefix = text.charCodeAt(quoteAt - 1);
+  if (prefix !== 69 && prefix !== 101) return false;
+  const before = text.charCodeAt(quoteAt - 2);
+  return !(
+    (before >= 48 && before <= 57) ||
+    (before >= 65 && before <= 90) ||
+    (before >= 97 && before <= 122) ||
+    before === 95 ||
+    before === DOLLAR
+  );
+}
+
+const compiled = new WeakMap<SqlLexical, ScanRules>();
+
+function escapeClass(char: string): string {
+  return char.replace(/[\\\]\[^-]/g, "\\$&");
+}
+
+function rulesFor(lexical: SqlLexical): ScanRules {
+  const cached = compiled.get(lexical);
+  if (cached) return cached;
+  const closeOf = new Map<number, number>([[SINGLE_QUOTE, SINGLE_QUOTE]]);
+  for (const quote of lexical.identifierQuotes) {
+    closeOf.set(quote.charCodeAt(0), quote === "[" ? CLOSE_BRACKET : quote.charCodeAt(0));
+  }
+  const closer = new Map<number, RegExp>();
+  for (const close of new Set(closeOf.values())) {
+    const char = escapeClass(String.fromCharCode(close));
+    // En '...', tambien la barra invertida si el motor la usa de escape.
+    const escape = close === SINGLE_QUOTE && lexical.backslashEscapes ? "\\\\" : "";
+    closer.set(close, new RegExp(`[${char}${escape}]`, "g"));
+  }
+  const opens = [...closeOf.keys()].map((code) => escapeClass(String.fromCharCode(code))).join("");
+  const special = new RegExp(`[;\\-/${opens}${lexical.dollarQuotes ? "$" : ""}${lexical.hashComments ? "#" : ""}]`, "g");
+  const rules = {
+    special,
+    closeOf,
+    closer,
+    hash: lexical.hashComments,
+    dollar: lexical.dollarQuotes,
+    escapePrefix: lexical.escapeStringPrefix,
+  };
+  compiled.set(lexical, rules);
+  return rules;
+}
 
 // Lo mismo que /\s/ (espacios de Unicode incluidos), sin regex por caracter.
 function isSpace(code: number): boolean {
@@ -82,7 +169,7 @@ function isSpace(code: number): boolean {
 }
 
 export function initialScanState(): ScanState {
-  return { mode: CODE, quote: 0, tag: "", codeStart: -1, lastNonSpace: -1 };
+  return { mode: CODE, quote: 0, tag: "", escaping: false, codeStart: -1, lastNonSpace: -1 };
 }
 
 // Ultimo caracter que no es espacio en text[from, to), absoluto; o `fallback`.
@@ -104,12 +191,18 @@ export function scanChunk(
   final: boolean,
   state: ScanState,
   out: ScannedStatement[],
+  lexical: SqlLexical,
+  // Donde empezar dentro de `text`: lo anterior es contexto (la "E" de un
+  // E'...' que quedo al final del trozo previo).
+  start = 0,
 ): number {
+  const rules = rulesFor(lexical);
+  const SPECIAL = rules.special;
   const length = text.length;
   // En variables locales: leer y escribir `state` en cada caracter es lo
   // que mas cuesta en un documento de 30 MB.
   let { mode, codeStart, lastNonSpace } = state;
-  let index = 0;
+  let index = start;
 
   scan: while (index < limit) {
     switch (mode) {
@@ -149,8 +242,8 @@ export function scanChunk(
       }
       case QUOTED: {
         const quote = state.quote;
-        // En '...' tambien cuenta la barra invertida (escape de MySQL).
-        const pattern = quote === SINGLE_QUOTE ? QUOTE_OR_ESCAPE : quote === DOUBLE_QUOTE ? DOUBLE : BACKTICKS;
+        // La comilla que cierra (y en '...' la barra invertida, si escapa).
+        const pattern = state.escaping ? ESCAPED_SINGLE : rules.closer.get(quote)!;
         for (;;) {
           if (index >= length) break scan;
           pattern.lastIndex = index;
@@ -179,6 +272,7 @@ export function scanChunk(
           index = at + 1;
           lastNonSpace = base + index;
           mode = CODE;
+          state.escaping = false;
           continue scan;
         }
       }
@@ -221,15 +315,22 @@ export function scanChunk(
         index += 2;
         continue scan;
       }
-      if (code === SINGLE_QUOTE || code === DOUBLE_QUOTE || code === BACKTICK) {
+      if (code === HASH && rules.hash) {
+        mode = LINE_COMMENT;
+        index += 1;
+        continue scan;
+      }
+      const close = rules.closeOf.get(code);
+      if (close !== undefined) {
         if (codeStart < 0) codeStart = base + index;
         mode = QUOTED;
-        state.quote = code;
+        state.quote = close;
+        state.escaping = rules.escapePrefix && code === SINGLE_QUOTE && opensEscapeString(text, index);
         index += 1;
         lastNonSpace = base + index;
         continue scan;
       }
-      if (code === DOLLAR) {
+      if (code === DOLLAR && rules.dollar) {
         DOLLAR_TAG.lastIndex = index;
         const tag = DOLLAR_TAG.exec(text)?.[0];
         if (tag) {
@@ -261,9 +362,11 @@ export function scanChunk(
   return index;
 }
 
-export function splitStatements(text: string): StatementRange[] {
+// Las sentencias de `text` con las reglas de un motor (`lexical`, de su
+// perfil).
+export function splitStatements(text: string, lexical: SqlLexical): StatementRange[] {
   const out: ScannedStatement[] = [];
-  scanChunk(text, 0, text.length, true, initialScanState(), out);
+  scanChunk(text, 0, text.length, true, initialScanState(), out, lexical);
   return out.map(({ from, to }) => ({ from, to }));
 }
 
@@ -309,6 +412,6 @@ export function chooseStatement<T extends StatementRange>(
   return distanceAfter < distanceBefore ? after : before;
 }
 
-export function statementAt(text: string, offset: number): StatementRange | null {
-  return chooseStatement(splitStatements(text), offset, (pos) => lineOf(text, pos));
+export function statementAt(text: string, offset: number, lexical: SqlLexical): StatementRange | null {
+  return chooseStatement(splitStatements(text, lexical), offset, (pos) => lineOf(text, pos));
 }

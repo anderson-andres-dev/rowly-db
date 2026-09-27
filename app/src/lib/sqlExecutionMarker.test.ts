@@ -61,23 +61,39 @@ describe("formatExecutionTime", () => {
 });
 
 describe("scripts enormes", () => {
-  it("marcar 100 000 sentencias en orden no es cuadratico y sigue a las ediciones", () => {
-    const line = "SELECT 1;\n";
-    const count = 100_000;
-    let state = EditorState.create({ doc: line.repeat(count), extensions: [executionMarkerField] });
+  const line = "SELECT 1;\n";
+
+  function scriptState(count: number) {
+    const state = EditorState.create({ doc: line.repeat(count), extensions: [executionMarkerField] });
     const parts = Array.from({ length: count }, (_, index) => ({
       from: index * line.length,
       to: index * line.length + 9,
       status: "pending" as const,
     }));
-    state = state.update({ effects: setExecutionMarker.of({ from: 0, to: state.doc.length, status: "running", parts }) }).state;
+    return state.update({ effects: setExecutionMarker.of({ from: 0, to: state.doc.length, status: "running", parts }) })
+      .state;
+  }
 
+  function markAll(count: number) {
+    let state = scriptState(count);
     const start = performance.now();
     for (let index = 0; index < count; index += 1) {
       state = state.update({ effects: setPartStatus.of({ index, part: { status: "success", executionTimeMs: 1 } }) }).state;
     }
-    expect(performance.now() - start).toBeLessThan(5000);
+    return { state, ms: performance.now() - start };
+  }
 
+  it("marcar las sentencias en orden crece lineal, no cuadratico", () => {
+    markAll(2_000); // calentar
+    const small = markAll(10_000).ms;
+    const big = markAll(40_000).ms;
+    // Cuatro veces mas sentencias: lineal ~4x; cuadratico, ~16x.
+    expect(big / small).toBeLessThan(8);
+  });
+
+  it("sigue a las ediciones despues de marcar", () => {
+    const count = 10_000;
+    let { state } = markAll(count);
     state = state.update({ changes: { from: 0, insert: "-- x\n" } }).state;
     expect(executionPart(state, 1)).toEqual({ from: 15, to: 24, status: "success", executionTimeMs: 1, message: undefined });
     expect(executionPart(state, count - 1)?.status).toBe("success");

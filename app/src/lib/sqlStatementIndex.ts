@@ -1,4 +1,5 @@
 import {
+  Facet,
   RangeSet,
   RangeValue,
   StateEffect,
@@ -11,11 +12,13 @@ import {
 import { ViewPlugin, type EditorView, type ViewUpdate } from "@codemirror/view";
 import {
   SCAN_OVERLAP,
+  STANDARD_LEXICAL,
   chooseStatement,
   initialScanState,
   scanChunk,
   type ScanState,
   type ScannedStatement,
+  type SqlLexical,
 } from "$lib/sqlStatements";
 
 // Las sentencias del documento, al dia en cada tecla sin recorrerlo entero
@@ -60,7 +63,16 @@ interface IndexValue {
   // (lo que se volvio a escanear, o hasta el final si no resincronizo):
   // lo que el analisis tiene que volver a mirar. null sin cambios.
   changed: { from: number; to: number } | null;
+  // Las reglas del motor con que se escaneo (sqlLexical).
+  lexical: SqlLexical;
 }
+
+// Como se escribe el SQL del motor de la conexion (su perfil en
+// lib/engines). Sin valor, el SQL estandar. Al cambiar (otra conexion), el
+// indice se vuelve a armar.
+export const sqlLexical = Facet.define<SqlLexical, SqlLexical>({
+  combine: (values) => values[0] ?? STANDARD_LEXICAL,
+});
 
 // Trozo que se lee de una vez; lo que puede escanear una tecla y cada paso
 // de fondo antes de ceder.
@@ -103,6 +115,7 @@ function scanForward(
   from: Resume,
   cleanTo: number,
   options: {
+    lexical: SqlLexical;
     budget: number;
     until?: number;
     old?: RangeSet<StatementMark>;
@@ -116,9 +129,13 @@ function scanForward(
   for (;;) {
     const end = Math.min(doc.length, pos + CHUNK + SCAN_OVERLAP);
     const final = end === doc.length;
-    const text = doc.sliceString(pos, end);
+    // Dos caracteres de contexto hacia atras: la "E" de un E'...' puede
+    // quedar al final del trozo anterior.
+    const back = Math.min(2, pos);
+    const text = doc.sliceString(pos - back, end);
     const found: ScannedStatement[] = [];
-    const stop = scanChunk(text, pos, final ? text.length : CHUNK, final, state, found);
+    const stop =
+      scanChunk(text, pos - back, final ? text.length : CHUNK + back, final, state, found, options.lexical, back) - back;
     for (const item of found) {
       added.push(item);
       if (!item.terminated) continue;
@@ -157,8 +174,9 @@ function safePointBefore(set: RangeSet<StatementMark>, pos: number): number {
   }
 }
 
-function build(doc: Text): IndexValue {
+function build(doc: Text, lexical: SqlLexical): IndexValue {
   const result = scanForward(doc, { pos: 0, state: initialScanState() }, 0, {
+    lexical,
     budget: TYPING_BUDGET,
   });
   return {
@@ -166,6 +184,7 @@ function build(doc: Text): IndexValue {
     cleanTo: result.cleanTo,
     resume: result.resume,
     changed: null,
+    lexical,
   };
 }
 
@@ -197,12 +216,13 @@ function applyChanges(value: IndexValue, changes: ChangeSet, doc: Text): IndexVa
   // a medias sigue valiendo si el cambio quedo despues de el.
   if (fromA >= value.cleanTo && value.cleanTo < changes.length) {
     const resume = value.resume && fromA >= value.resume.pos ? value.resume : null;
-    return { set: value.set, cleanTo: value.cleanTo, resume, changed: { from: fromB, to: doc.length } };
+    return { ...value, resume, changed: { from: fromB, to: doc.length } };
   }
 
   const set = value.set.map(changes);
   const start = safePointBefore(set, fromB);
   const result = scanForward(doc, { pos: start, state: initialScanState() }, start, {
+    lexical: value.lexical,
     budget: TYPING_BUDGET,
     old: set,
     mustPass: toB,
@@ -221,6 +241,7 @@ function applyChanges(value: IndexValue, changes: ChangeSet, doc: Text): IndexVa
       cleanTo: changes.mapPos(value.cleanTo, 1),
       resume: kept,
       changed: { from: start, to: resyncAt },
+      lexical: value.lexical,
     };
   }
   return {
@@ -233,6 +254,7 @@ function applyChanges(value: IndexValue, changes: ChangeSet, doc: Text): IndexVa
     cleanTo: result.cleanTo,
     resume: result.resume,
     changed: { from: start, to: doc.length },
+    lexical: value.lexical,
   };
 }
 
@@ -243,6 +265,7 @@ function advance(value: IndexValue, doc: Text): IndexValue {
     state: initialScanState(),
   };
   const result = scanForward(doc, from, value.cleanTo, {
+    lexical: value.lexical,
     budget: BACKGROUND_BUDGET,
   });
   return {
@@ -250,12 +273,18 @@ function advance(value: IndexValue, doc: Text): IndexValue {
     cleanTo: result.cleanTo,
     resume: result.resume,
     changed: null,
+    lexical: value.lexical,
   };
 }
 
 export const statementIndexField = StateField.define<IndexValue>({
-  create: (state) => build(state.doc),
+  create: (state) => build(state.doc, state.facet(sqlLexical)),
   update(value, transaction) {
+    // Otro motor: sus comillas y comentarios cambian todo; se vuelve a armar
+    // (lo que no alcanza, de fondo, como al abrir).
+    const lexical = transaction.state.facet(sqlLexical);
+    if (lexical !== value.lexical)
+      return { ...build(transaction.state.doc, lexical), changed: { from: 0, to: transaction.state.doc.length } };
     let next = value.changed ? { ...value, changed: null } : value;
     if (transaction.docChanged) next = applyChanges(next, transaction.changes, transaction.state.doc);
     if (transaction.effects.some((effect) => effect.is(indexMore))) next = advance(next, transaction.state.doc);
@@ -322,6 +351,7 @@ export function statementsIn(state: EditorState, from: number, to: number): Scan
       state: initialScanState(),
     };
     const result = scanForward(state.doc, resume, value.cleanTo, {
+      lexical: value.lexical,
       budget: Infinity,
       until: to,
     });
@@ -405,7 +435,7 @@ export function statementsFrom(state: EditorState, pos: number, count: number): 
     // Lo que falta, escaneado en el momento hasta juntar las que faltan.
     let until = start + 64 * 1024;
     for (;;) {
-      const result = scanForward(state.doc, resume, value.cleanTo, { budget: Infinity, until });
+      const result = scanForward(state.doc, resume, value.cleanTo, { lexical: value.lexical, budget: Infinity, until });
       const more = result.added.filter((item) => item.to >= pos);
       if (more.length >= count - list.length || until >= state.doc.length) {
         list.push(...more.slice(0, count - list.length));

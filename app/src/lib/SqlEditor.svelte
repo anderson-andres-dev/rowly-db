@@ -1,22 +1,31 @@
 <script lang="ts">
   import { splitStatements } from "$lib/sqlStatements";
-  import { statementIndex, statementNear, statementsChangedIn, statementTextAt } from "$lib/sqlStatementIndex";
+  import {
+    sqlLexical,
+    statementIndex,
+    statementNear,
+    statementsChangedIn,
+    statementTextAt,
+  } from "$lib/sqlStatementIndex";
   import { AnalysisRunner } from "$lib/sqlAnalysis";
+  import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
+  import { parameterHintConfig, parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
     applyQuickFix,
     clearDiagnosticsIn,
     diagnosticAt,
-    errorRange,
     jumpToDiagnostic,
     lineColumnToOffset,
     diagnosticUnder,
     sqlDiagnostics,
+    stopTyping,
     type QuickFix,
     type SqlDiagnostic,
   } from "$lib/sqlDiagnostics";
-  import { errorHelp, groupByFixes } from "$lib/sqlErrorHelp";
+  import { groupByFixes } from "$lib/sqlErrorHelp";
+  import { engineFor, standardSql, type SqlProfile } from "$lib/engines";
   import { backendText, invoke, type BackendMessage } from "$lib/backend";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
@@ -30,9 +39,8 @@
   import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
-  import { catalogTables, connection } from "$lib/stores/connection";
+  import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
-  import type { ConnectionDriver } from "$lib/connections";
   import {
     buildCompletionSource,
     buildSqlSchema,
@@ -111,6 +119,10 @@
   let view: EditorView | undefined;
   const themeCompartment = new Compartment();
   const sqlCompartment = new Compartment();
+  // Las comillas y comentarios del motor, para cortar en sentencias.
+  const lexicalCompartment = new Compartment();
+  // El motor y las rutinas de la conexion, para los hints de parametros.
+  const hintsCompartment = new Compartment();
   const completionCompartment = new Compartment();
   const definitionLinkCompartment = new Compartment();
   const behaviorCompartment = new Compartment();
@@ -120,9 +132,15 @@
   // Config vigente. schema/dialect/fkIndex cambian poco (catalogo o conexion
   // activa); defaultTable cambia con cada tecla, asi que se separan para no
   // reconstruir el SQLNamespace completo en cada keystroke.
-  let sqlSchema: ReturnType<typeof buildSqlSchema> = { schema: {}, fkIndex: new Map() };
-  let sqlDialect = dialectFor("mysql");
-  let driver: ConnectionDriver = "mysql";
+  let sqlSchema: ReturnType<typeof buildSqlSchema> = buildSqlSchema([]);
+  // Sin conexion, el SQL estandar: nunca el de otro motor.
+  let engine: SqlProfile = standardSql;
+  let routineIndex: RoutineIndex = buildRoutineIndex([]);
+
+  function hintConfig() {
+    return { engine, routines: routineIndex };
+  }
+  let sqlDialect = dialectFor(engine);
   let defaultTable: string | undefined;
   // Ejecucion lanzada desde este editor cuyo resultado todavia no llego:
   // `result` es el que habia al lanzarla, para reconocer cuando cambia (ver
@@ -228,7 +246,7 @@
     const originalDoc = view.state.doc;
     const source = view.state.sliceDoc(range.from, range.to);
     const originalCursor = view.state.selection.main.head;
-    void formatSqlBlock(source, driver, get(editorSettings).formatterLineWidth).then((formatted) => {
+    void formatSqlBlock(source, engine, get(editorSettings).formatterLineWidth).then((formatted) => {
       // La primera ejecución carga el formateador bajo demanda. Si el usuario
       // escribió durante esos milisegundos, no se reemplaza una versión vieja.
       if (!view || view.state.doc !== originalDoc) return;
@@ -277,7 +295,7 @@
     const from = range.from + (raw.length - raw.trimStart().length);
     // Varias sentencias: el Workspace las corre como script y va marcando
     // cada una (markStatement), con su icono y su tiempo.
-    const statements = splitStatements(raw);
+    const statements = splitStatements(raw, engine.lexical);
     const parts =
       statements.length > 1
         ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
@@ -341,11 +359,12 @@
             override: [
               buildCompletionSource({
                 dialect: sqlDialect,
-                driver,
+                engine,
                 schema: sqlSchema.schema,
                 defaultSchema: sqlSchema.defaultSchema,
                 defaultTable,
                 fkIndex: sqlSchema.fkIndex,
+                tableIndex: sqlSchema.tableIndex,
               }),
             ],
           }),
@@ -365,11 +384,14 @@
   function diagnosticFor(from: number, to: number, result: QueryExecutionResult): SqlDiagnostic[] {
     if (!view || result.type !== "error") return [];
     const statement = view.state.sliceDoc(from, to);
-    const located = errorRange(statement, result);
+    // Donde cayo y que ayuda corresponde: segun los mensajes y codigos del
+    // motor (lib/engines).
+    const located = engine.locateError(statement, result);
     const range = located ?? { from: 0, to: statement.length };
+    const help = result.code ? engine.errorHelp[result.code] : undefined;
     // Columna fuera del GROUP BY: sumarla o agregarla (solo si se sabe cual).
     const fixes =
-      located && errorHelp(result.code) === "groupBy"
+      located && help === "groupBy"
         ? groupByFixes(statement, range).map((fix) => ({
             label: $t(fix.kind === "aggregate" ? "editor.diagnostics.fix.aggregate" : "editor.diagnostics.fix.groupBy", {
               column: fix.column,
@@ -387,7 +409,8 @@
         code: result.code,
         source: "server",
         fixes,
-        unresolved: ["tableMissing", "columnMissing"].includes(errorHelp(result.code) ?? ""),
+        help,
+        unresolved: help === "tableMissing" || help === "columnMissing",
       },
     ];
   }
@@ -437,7 +460,20 @@
         to: at(suggestion.end),
         insert: suggestion.replacement,
       }));
-      return { from, to, message: message + hint, source: "analysis", fixes, unresolved: UNRESOLVED_KEYS.has(key) };
+      // Lo que solo dice que falta terminar: no se muestra mientras se
+      // escribe en esa sentencia (sqlDiagnostics.ts, typing).
+      const incomplete =
+        key === "diagnostic.unexpectedEnd" ||
+        (key === "diagnostic.trailingComma" && statement.slice(to - start).trim() === "");
+      return {
+        from,
+        to,
+        message: message + hint,
+        source: "analysis",
+        fixes,
+        unresolved: UNRESOLVED_KEYS.has(key),
+        incomplete,
+      };
     });
   }
 
@@ -448,7 +484,7 @@
   });
   analysis.markAllDirty();
   let analyzedTables: unknown = null;
-  let analyzedDriver: ConnectionDriver | null = null;
+  let analyzedEngine: SqlProfile | null = null;
 
   // --- Ventana de detalle ------------------------------------------------
   let popup = $state<{
@@ -521,7 +557,13 @@
     },
   });
 
+  // Mirar un error a proposito (detalle, correccion): se ven todos.
+  function stopTypingIn(current: EditorView) {
+    current.dispatch({ effects: stopTyping.of(null) });
+  }
+
   function showDetails(current: EditorView): boolean {
+    stopTypingIn(current);
     const diagnostic = diagnosticAt(current.state, current.state.selection.main.head);
     if (!diagnostic) return false;
     openPopup(diagnostic, true);
@@ -529,6 +571,7 @@
   }
 
   function applyFirstFix(current: EditorView): boolean {
+    stopTypingIn(current);
     const fix = diagnosticAt(current.state, current.state.selection.main.head)?.fixes?.[0];
     if (!fix) return false;
     applyFix(fix);
@@ -624,15 +667,21 @@
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        lexicalCompartment.of(sqlLexical.of(engine.lexical)),
         statementIndex,
+        hintsCompartment.of(parameterHintConfig.of(hintConfig())),
+        parameterHints,
         activeStatementHighlight,
         executionMarker,
         sqlDiagnostics,
         diagnosticHover,
         // Al salir del editor, el texto al dia (la pestaña marca cambios).
         EditorView.domEventHandlers({
-          blur() {
+          blur(_event, current) {
             flushText();
+            // Al salir del editor se ven tambien los errores de lo que se
+            // estaba escribiendo.
+            stopTypingIn(current);
             return false;
           },
         }),
@@ -744,16 +793,27 @@
   $effect(() => {
     const tables = $catalogTables;
     const profile = $connectionProfiles.find((candidate) => candidate.id === $connection.profileId);
+    // El schema de la conexion (search_path en Postgres, la base elegida en
+    // MySQL): sus tablas van sin prefijo.
+    const defaultSchema = $databaseExplorer?.defaultSchema;
 
-    sqlSchema = buildSqlSchema(tables);
-    driver = profile?.driver ?? "mysql";
-    sqlDialect = dialectFor(driver);
+    const nextEngine = profile ? engineFor(profile.driver) : standardSql;
+    sqlSchema = buildSqlSchema(tables, { defaultSchema, engine: nextEngine });
+    // Otro motor: el indice de sentencias vuelve a cortar con sus reglas.
+    if (view && nextEngine.lexical !== engine.lexical) {
+      view.dispatch({ effects: lexicalCompartment.reconfigure(sqlLexical.of(nextEngine.lexical)) });
+    }
+    engine = nextEngine;
+    sqlDialect = dialectFor(engine);
+    // Las rutinas (y el motor) de los hints de parametros.
+    routineIndex = buildRoutineIndex($databaseExplorer?.schemas ?? [], defaultSchema);
+    view?.dispatch({ effects: hintsCompartment.reconfigure(parameterHintConfig.of(hintConfig())) });
     reconfigureCompletion();
     // Otro catalogo o dialecto: los nombres se vuelven a revisar (el efecto
     // tambien corre con otros cambios de la conexion; ahi no hace falta).
-    if (tables === analyzedTables && driver === analyzedDriver) return;
+    if (tables === analyzedTables && engine === analyzedEngine) return;
     analyzedTables = tables;
-    analyzedDriver = driver;
+    analyzedEngine = engine;
     analysis.clearCache();
     analysis.markAllDirty();
     analysis.schedule();

@@ -10,15 +10,20 @@ const typeOf = (column: string) => types[column] ?? "";
 
 describe("sqlLiteral", () => {
   it("numeros y booleanos sin comillas solo si la columna es de ese tipo", () => {
-    expect(sqlLiteral("42", "int")).toBe("42");
-    expect(sqlLiteral("-3.5", "decimal")).toBe("-3.5");
-    expect(sqlLiteral("42", "varchar")).toBe("'42'");
-    expect(sqlLiteral("true", "boolean")).toBe("TRUE");
-    expect(sqlLiteral("abc", "int")).toBe("'abc'");
+    expect(sqlLiteral("42", "int", "postgres")).toBe("42");
+    expect(sqlLiteral("-3.5", "decimal", "postgres")).toBe("-3.5");
+    expect(sqlLiteral("42", "varchar", "postgres")).toBe("'42'");
+    expect(sqlLiteral("true", "boolean", "postgres")).toBe("TRUE");
+    expect(sqlLiteral("abc", "int", "postgres")).toBe("'abc'");
   });
 
   it("escapa las comillas simples", () => {
-    expect(sqlLiteral("O'Brien", "varchar")).toBe("'O''Brien'");
+    expect(sqlLiteral("O'Brien", "varchar", "postgres")).toBe("'O''Brien'");
+  });
+
+  it("en MySQL tambien la barra invertida; en Postgres es un caracter mas", () => {
+    expect(sqlLiteral("C:\\", "varchar", "mysql")).toBe("'C:\\\\'");
+    expect(sqlLiteral("C:\\", "varchar", "postgres")).toBe("'C:\\'");
   });
 });
 

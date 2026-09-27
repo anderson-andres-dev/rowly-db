@@ -110,6 +110,7 @@ pub fn analyze_statement(
             Some(catalog) => {
                 let mut checker = Checker {
                     catalog,
+                    dialect,
                     diagnostics: Vec::new(),
                 };
                 for statement in &statements {
@@ -120,12 +121,75 @@ pub fn analyze_statement(
             None => Vec::new(),
         },
         Err(error) => {
+            // Una sentencia que el parser no conoce (DO, VACUUM…): sin
+            // diagnostico (ver STATEMENT_STARTERS).
+            if unknown_statement(&error.to_string()) {
+                return Vec::new();
+            }
             let tokens = Tokenizer::new(&*sqlparser_dialect, sql)
                 .tokenize_with_location()
                 .unwrap_or_default();
             vec![syntax_diagnostic(&error.to_string(), &tokens)]
         }
     }
+}
+
+/// Las sentencias que el parser conoce, por su primera palabra: un error de
+/// tipeo en ella (`SELEC`) se marca; cualquier otra palabra inicial que el
+/// parser rechace es una sentencia que no conoce (`DO`, `VACUUM`,
+/// `OPTIMIZE`… o la de un motor futuro) y no se marca: mejor no decir nada
+/// que marcar algo valido. Si de verdad no existe, el servidor lo dira al
+/// ejecutar.
+const STATEMENT_STARTERS: [&str; 34] = [
+    "SELECT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "WITH",
+    "VALUES",
+    "TABLE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "MERGE",
+    "EXPLAIN",
+    "DESCRIBE",
+    "SHOW",
+    "SET",
+    "USE",
+    "BEGIN",
+    "START",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "COPY",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "DECLARE",
+    "LOCK",
+    "UNLOCK",
+    "COMMENT",
+];
+
+/// El parser rechazo la sentencia en su primera palabra y esa palabra no es un
+/// error de tipeo de una sentencia que conoce.
+fn unknown_statement(error: &str) -> bool {
+    // El mismo texto que interpreta syntax_diagnostic: sin prefijo ni posicion.
+    let message = error.strip_prefix("sql parser error: ").unwrap_or(error);
+    let (text, _) = split_location(message);
+    let Some(("an SQL statement", found)) = expected_found(text) else {
+        return false;
+    };
+    let word = found.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '_');
+    !word.is_empty()
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && closest_keyword(word, &STATEMENT_STARTERS).is_none()
 }
 
 // --- Sintaxis ------------------------------------------------------------
@@ -384,10 +448,16 @@ fn closest_keyword(word: &str, keywords: &[&'static str]) -> Option<&'static str
 }
 
 /// Hasta tres nombres parecidos, el mas cercano primero.
-fn closest_names<'a>(word: &str, candidates: impl Iterator<Item = &'a str>) -> Vec<String> {
+/// `same_letters`: tambien lo que solo cambia en mayusculas (donde el motor las
+/// distingue, `Users` sin comillas no es `"Users"` y esa es la correccion).
+fn closest_names<'a>(
+    word: &str,
+    candidates: impl Iterator<Item = &'a str>,
+    same_letters: bool,
+) -> Vec<String> {
     let mut found: Vec<(usize, &str)> = candidates
         .map(|candidate| (distance(word, candidate), candidate))
-        .filter(|(value, _)| *value > 0 && *value <= max_distance(word))
+        .filter(|(value, _)| (*value > 0 || same_letters) && *value <= max_distance(word))
         .collect();
     found.sort();
     found.dedup_by(|a, b| a.1.eq_ignore_ascii_case(b.1));
@@ -426,10 +496,25 @@ struct Scope<'a> {
 
 struct Checker<'a, 'b> {
     catalog: &'b CatalogView<'a>,
+    dialect: Dialect,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Checker<'a, '_> {
+    /// El nombre escrito es el del catalogo, como lo resuelve el motor: donde
+    /// lo que no va entre comillas se lee en minusculas (Postgres), `Users`
+    /// es `users` y `"Users"` es exacto; en MySQL da igual.
+    fn same_name(&self, written: &Ident, catalog_name: &str) -> bool {
+        if !self.dialect.folds_unquoted_to_lowercase() {
+            return written.value.eq_ignore_ascii_case(catalog_name);
+        }
+        if written.quote_style.is_some() {
+            written.value == catalog_name
+        } else {
+            written.value.to_lowercase() == catalog_name
+        }
+    }
+
     fn statement(&mut self, statement: &Statement) {
         match statement {
             Statement::Query(query) => self.query(query),
@@ -592,14 +677,13 @@ impl<'a> Checker<'a, '_> {
                 .iter()
                 .filter(|candidate| candidate.schema.eq_ignore_ascii_case(&schema))
         };
-        if let Some(found) =
-            in_schema().find(|candidate| candidate.name.eq_ignore_ascii_case(&table.value))
-        {
+        if let Some(found) = in_schema().find(|candidate| self.same_name(table, &candidate.name)) {
             return Some(found);
         }
         let suggestions = closest_names(
             &table.value,
             in_schema().map(|candidate| candidate.name.as_str()),
+            self.dialect.folds_unquoted_to_lowercase(),
         );
         self.push_ident(
             table,
@@ -701,6 +785,7 @@ impl<'a> Checker<'a, '_> {
                     let suggestions = closest_names(
                         &qualifier.value,
                         scope.iter().map(|item| item.name.as_str()),
+                        false,
                     );
                     self.push_ident(
                         qualifier,
@@ -726,7 +811,7 @@ impl<'a> Checker<'a, '_> {
             item.table
                 .columns
                 .iter()
-                .any(|candidate| candidate.name.eq_ignore_ascii_case(&column.value))
+                .any(|candidate| self.same_name(column, &candidate.name))
         });
         if exists {
             return;
@@ -739,6 +824,7 @@ impl<'a> Checker<'a, '_> {
                     .iter()
                     .map(|candidate| candidate.name.as_str())
             }),
+            self.dialect.folds_unquoted_to_lowercase(),
         );
         let message = match tables.as_slice() {
             [single] => DiagnosticMessage::key("diagnostic.unknownColumn")
@@ -757,13 +843,15 @@ impl<'a> Checker<'a, '_> {
         if start.line == 0 {
             return;
         }
-        // Citado, la correccion tambien va citada igual.
+        // Citado, la correccion tambien va citada igual; sin citar, con
+        // comillas solo si el motor las necesita (`"Users"` en Postgres).
+        let dialect = self.dialect;
         let quote = |name: &str| match ident.quote_style {
             Some(open) => {
                 let close = if open == '[' { ']' } else { open };
                 format!("{open}{name}{close}")
             }
-            None => name.to_string(),
+            None => crate::editing::quote_ident(dialect, name),
         };
         self.diagnostics.push(Diagnostic {
             start,
@@ -933,5 +1021,78 @@ mod tests {
         assert_eq!(distance("SLECT", "SELECT"), 1);
         assert_eq!(distance("fecha", "fcha"), 1);
         assert_eq!(distance("ab", "ba"), 1);
+    }
+
+    #[test]
+    fn las_sentencias_propias_que_el_parser_no_entiende_no_se_marcan() {
+        for sql in [
+            "DO $$ BEGIN RAISE NOTICE 'hola'; END $$",
+            "VACUUM ANALYZE users",
+            "-- mantenimiento\nREINDEX TABLE users",
+        ] {
+            assert!(
+                analyze_statement(sql, Dialect::Postgres, None).is_empty(),
+                "{sql}"
+            );
+        }
+        assert!(analyze_statement("OPTIMIZE TABLE users", Dialect::MySql, None).is_empty());
+        // Sin lista que mantener: la sentencia de un motor futuro tampoco se
+        // marca.
+        assert!(
+            analyze_statement("REFRESH MATERIALIZED VIEW ventas", Dialect::Postgres, None)
+                .is_empty()
+        );
+        // Un error de tipeo en la palabra inicial se sigue marcando.
+        for typo in [
+            "SELEC 1",
+            "SLECT 1",
+            "UPDTE t SET a = 1",
+            "DELET FROM t",
+            "INSRT INTO t VALUES (1)",
+        ] {
+            assert!(
+                !analyze_statement(typo, Dialect::Postgres, None).is_empty(),
+                "{typo}"
+            );
+            assert!(
+                !analyze_statement(typo, Dialect::MySql, None).is_empty(),
+                "{typo}"
+            );
+        }
+    }
+
+    fn analyze_mixed_case(sql: &str, dialect: Dialect) -> Vec<Diagnostic> {
+        let tables = vec![CatalogTable {
+            schema: "public".to_string(),
+            name: "Users".to_string(),
+            columns: vec![column("Id"), column("nombre")],
+            foreign_keys: vec![],
+        }];
+        let catalog = CatalogView {
+            tables: &tables,
+            loaded_schemas: vec!["public"],
+            default_schema: "public",
+        };
+        analyze_statement(sql, dialect, Some(&catalog))
+    }
+
+    #[test]
+    fn postgres_distingue_mayusculas_como_el_servidor() {
+        let pg = |sql| analyze_mixed_case(sql, Dialect::Postgres);
+        // Sin comillas, Users es users: no existe. La correccion lleva comillas.
+        let found = pg("SELECT * FROM Users");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].suggestions[0].replacement, "\"Users\"");
+        assert!(pg("SELECT * FROM \"Users\"").is_empty());
+        assert!(pg("SELECT \"Id\", nombre FROM \"Users\"").is_empty());
+        let column = pg("SELECT Id FROM \"Users\"");
+        assert_eq!(column.len(), 1);
+        assert_eq!(column[0].suggestions[0].replacement, "\"Id\"");
+    }
+
+    #[test]
+    fn mysql_no_distingue_mayusculas() {
+        assert!(analyze_mixed_case("SELECT id FROM users", Dialect::MySql).is_empty());
+        assert!(analyze_mixed_case("SELECT `Id` FROM `Users`", Dialect::MySql).is_empty());
     }
 }

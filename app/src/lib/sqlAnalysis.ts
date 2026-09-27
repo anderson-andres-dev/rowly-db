@@ -50,7 +50,7 @@ export class AnalysisRunner<Raw> {
   private readonly delay: number;
 
   constructor(private readonly options: AnalysisRunnerOptions<Raw>) {
-    this.delay = options.delayMs ?? 700;
+    this.delay = options.delayMs ?? 500;
   }
 
   // Todo el documento por revisar (al abrir, o con otro catalogo o idioma).

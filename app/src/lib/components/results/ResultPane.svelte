@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
   import {
     ArrowUpFromLine,
     Eye,
@@ -467,6 +468,7 @@
       role="tablist"
       aria-label={$t("results.tabs")}
       use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
+      use:settleTransitions
     >
       <button
         type="button"
@@ -506,7 +508,7 @@
       <!-- Barra de herramientas del resultado: fila propia debajo de las
            pestañas. Una pestaña fijada es de solo lectura: solo copia y
            exporta. -->
-      <div class="result-toolbar" role="toolbar" aria-label={$t("results.toolbar")}>
+      <div class="result-toolbar" role="toolbar" aria-label={$t("results.toolbar")} use:settleTransitions>
         <!-- Misma barra para una pestaña fijada: lo que edita queda
              deshabilitado (es solo lectura) y el alfiler pasa a "Desfijar". -->
         <div class="toolbar-group">
@@ -887,6 +889,12 @@
     transition:
       background-color var(--duration-fast) ease,
       color var(--duration-fast) ease;
+  }
+
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts). */
+  .result-toolbar:not([data-settled]) .format-button,
+  .result-tabs:not([data-settled]) .result-tab {
+    transition: none;
   }
 
   .format-button:hover,

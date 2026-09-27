@@ -1,3 +1,4 @@
+import { ENGINES } from "./engines";
 import { describe, expect, it } from "vitest";
 import { EditorState, Text } from "@codemirror/state";
 import { MySQL } from "@codemirror/lang-sql";
@@ -42,7 +43,7 @@ describe("documentos de 1M lineas", () => {
 
   it("escanear los 30 MB de una vez (ejecutar todo) no pasa de 1,5 s", () => {
     const start = performance.now();
-    expect(splitStatements(text).length).toBe(250_000);
+    expect(splitStatements(text, ENGINES.mysql.lexical).length).toBe(250_000);
     expect(performance.now() - start).toBeLessThan(1500);
   });
 
@@ -63,7 +64,7 @@ describe("documentos de 1M lineas", () => {
   it("el autocompletado ve la clausula tambien al final del documento", () => {
     const pos = doc.length - "o.total > 100 AND u.name LIKE 'a%';\n".length;
     const current = statementTextAt(state, pos);
-    expect(classifyContext(current.text, current.offset).clause).toBe("where");
+    expect(classifyContext(current.text, current.offset, ENGINES.mysql.lexical).clause).toBe("where");
   });
 
   it("las mayusculas automaticas miran solo la linea", () => {

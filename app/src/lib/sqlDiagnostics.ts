@@ -1,3 +1,4 @@
+import type { ErrorHelp } from "$lib/sqlErrorHelp";
 import {
   EditorSelection,
   RangeSet,
@@ -7,6 +8,7 @@ import {
   type EditorState,
   type Extension,
 } from "@codemirror/state";
+import { statementContaining, statementIndexField } from "$lib/sqlStatementIndex";
 import {
   Decoration,
   EditorView,
@@ -46,6 +48,11 @@ export interface SqlDiagnostic {
   // Un nombre que no existe (tabla, columna, alias): se pinta el nombre en
   // rojo, como DataGrip con lo que no resuelve, en vez de subrayarlo.
   unresolved?: boolean;
+  // Solo dice que la sentencia no esta terminada ("termina antes de
+  // tiempo", una coma al final): no se muestra mientras se escribe en ella.
+  incomplete?: boolean;
+  // La ayuda de la app para el codigo del servidor (segun el motor).
+  help?: ErrorHelp;
 }
 
 // --- Offsets ---------------------------------------------------------------
@@ -98,47 +105,69 @@ function findWord(text: string, word: string): number {
   return match.index + (/^[`"]/.test(match[0]) ? 1 : 0);
 }
 
-// Rango de un error de ejecucion, relativo al inicio de `statement` (el texto
-// tal como se mando). null: no se sabe donde; se marca la sentencia entera.
-export function errorRange(
-  statement: string,
-  error: { message: string; position?: number },
-): { from: number; to: number } | null {
-  if (error.position !== undefined && error.position > 0) {
-    const at = charToUtf16(statement, error.position - 1);
-    if (at < statement.length) return tokenAt(statement, at);
-  }
+// Donde cayo un error de ejecucion, relativo al inicio de `statement` (el
+// texto tal como se mando). null: no se sabe donde; se marca la sentencia
+// entera. Cada motor compone las estrategias que valen para sus mensajes
+// (lib/engines, `locateError`).
+export interface ExecutionError {
+  message: string;
+  position?: number;
+}
+export type ErrorLocator = (statement: string, error: ExecutionError) => { from: number; to: number } | null;
 
-  // El analizador de la app (una sentencia que no se pudo analizar):
-  // "... at Line: 1, Column: 8".
+// La posicion que manda el servidor (Postgres, en caracteres desde 1).
+export const byServerPosition: ErrorLocator = (statement, error) => {
+  if (error.position === undefined || error.position <= 0) return null;
+  const at = charToUtf16(statement, error.position - 1);
+  return at < statement.length ? tokenAt(statement, at) : null;
+};
+
+// El analizador de la app (una sentencia que no se pudo analizar), de
+// cualquier motor: "... at Line: 1, Column: 8".
+export const byAnalyzerLocation: ErrorLocator = (statement, error) => {
   const located = /at Line: (\d+), Column: (\d+)/.exec(error.message);
-  if (located) {
-    const at = lineColumnToOffset(statement, Number(located[1]), Number(located[2]));
-    if (at < statement.length) return tokenAt(statement, at);
-  }
+  if (!located) return null;
+  const at = lineColumnToOffset(statement, Number(located[1]), Number(located[2]));
+  return at < statement.length ? tokenAt(statement, at) : null;
+};
 
-  // MySQL, error de sintaxis: "... near 'FROM usuarios' at line 2". El
-  // fragmento puede venir cortado; con '' el problema es el final.
+// MySQL, error de sintaxis: "... near 'FROM usuarios' at line 2". El
+// fragmento puede venir cortado; con '' el problema es el final.
+export const byNearFragment: ErrorLocator = (statement, error) => {
   const near = /near '([\s\S]*?)' at line (\d+)/.exec(error.message);
-  if (near) {
-    const start = lineStart(statement, Number(near[2]));
-    if (near[1].trim() === "") {
-      const end = statement.trimEnd().length;
-      return end > 0 ? { from: end - 1, to: end } : null;
-    }
-    const found = statement.indexOf(near[1].slice(0, 40), start);
-    if (found !== -1) return tokenAt(statement, found);
+  if (!near) return null;
+  const start = lineStart(statement, Number(near[2]));
+  if (near[1].trim() === "") {
+    const end = statement.trimEnd().length;
+    return end > 0 ? { from: end - 1, to: end } : null;
   }
+  const found = statement.indexOf(near[1].slice(0, 40), start);
+  return found !== -1 ? tokenAt(statement, found) : null;
+};
 
-  // MySQL, nombres: "Unknown column 'fcha' in 'field list'", "Table
-  // 'ventas.usarios' doesn't exist", "... column 'ventas.pedidos.total' ...".
-  const quoted = /'([^']+)'/.exec(error.message);
-  if (quoted) {
+// Un nombre citado en el mensaje, entre `quote` ("Unknown column 'fcha' in
+// 'field list'", "Table 'ventas.usarios' doesn't exist"; en Postgres,
+// 'relation "usarios" does not exist'): su ultima parte, en la sentencia.
+export function byQuotedName(quote: "'" | '"'): ErrorLocator {
+  const pattern = quote === "'" ? /'([^']+)'/ : /"([^"]+)"/;
+  return (statement, error) => {
+    const quoted = pattern.exec(error.message);
+    if (!quoted) return null;
     const name = quoted[1].split(".").pop() ?? "";
     const found = name ? findWord(statement, name) : -1;
-    if (found !== -1) return { from: found, to: found + name.length };
-  }
-  return null;
+    return found !== -1 ? { from: found, to: found + name.length } : null;
+  };
+}
+
+// La primera estrategia que ubica el error.
+export function firstLocated(...locators: ErrorLocator[]): ErrorLocator {
+  return (statement, error) => {
+    for (const locate of locators) {
+      const range = locate(statement, error);
+      if (range) return range;
+    }
+    return null;
+  };
 }
 
 // --- Estado en el editor --------------------------------------------------
@@ -225,6 +254,23 @@ function toDiagnostic(spanFrom: number, mark: DiagnosticMark): SqlDiagnostic {
 interface DiagnosticsState {
   set: RangeSet<DiagnosticMark>;
   navigated: Navigated | null;
+  // La sentencia en la que se esta escribiendo (ver `typingSpan`).
+  typing: { from: number; to: number } | null;
+}
+
+// Mientras se escribe, lo que todavia no esta terminado no es un error:
+// dentro de la sentencia que se edita no se muestra lo incompleto ni lo que
+// cae sobre la palabra del cursor. En cuanto el cursor sale de ella (o el
+// editor pierde el foco, stopTyping) se ve todo, al instante: ya estaba
+// calculado. El resto del documento no espera nada.
+export const stopTyping = StateEffect.define<null>();
+
+function typingSpan(state: EditorState): { from: number; to: number } {
+  const head = state.selection.main.head;
+  const statement = state.field(statementIndexField, false) ? statementContaining(state, head) : null;
+  if (statement) return { from: statement.from, to: Math.max(statement.to, head) };
+  const line = state.doc.lineAt(head);
+  return { from: line.from, to: line.to };
 }
 
 function byPosition(a: SqlDiagnostic, b: SqlDiagnostic): number {
@@ -250,9 +296,18 @@ function withinRanges(ranges: { from: number; to: number }[], pos: number): bool
 }
 
 export const diagnosticsField = StateField.define<DiagnosticsState>({
-  create: () => ({ set: RangeSet.empty, navigated: null }),
+  create: () => ({ set: RangeSet.empty, navigated: null, typing: null }),
   update(value, transaction) {
-    let { set, navigated } = value;
+    let { set, navigated, typing } = value;
+    if (typing && transaction.docChanged) {
+      typing = { from: transaction.changes.mapPos(typing.from, -1), to: transaction.changes.mapPos(typing.to, 1) };
+    }
+    if (transaction.isUserEvent("input") || transaction.isUserEvent("delete")) {
+      typing = typingSpan(transaction.state);
+    } else if (typing && transaction.selection) {
+      const head = transaction.state.selection.main.head;
+      if (head < typing.from || head > typing.to) typing = null;
+    }
     if (transaction.docChanged && set.size > 0) {
       set = set.map(transaction.changes);
       const length = transaction.state.doc.length;
@@ -293,10 +348,14 @@ export const diagnosticsField = StateField.define<DiagnosticsState>({
       } else if (effect.is(setNavigated)) {
         navigated = effect.value;
         navigatedNow = true;
+      } else if (effect.is(stopTyping)) {
+        typing = null;
       }
     }
     if (!navigatedNow && (transaction.selection || transaction.docChanged)) navigated = null;
-    return set === value.set && navigated === value.navigated ? value : { set, navigated };
+    return set === value.set && navigated === value.navigated && typing === value.typing
+      ? value
+      : { set, navigated, typing };
   },
 });
 
@@ -311,7 +370,17 @@ export function diagnosticsIn(state: EditorState, from: number, to: number): Sql
     if (item.to >= from && item.from <= to && item.to <= length) found.push(item);
   });
   const analyzed = new Set(found.filter((item) => item.source === "analysis").map((item) => item.from));
-  return found.filter((item) => !(item.source === "server" && analyzed.has(item.from))).sort(byPosition);
+  const { typing } = state.field(diagnosticsField);
+  const head = state.selection.main.head;
+  return found
+    .filter((item) => !(item.source === "server" && analyzed.has(item.from)) && !whileTyping(item, typing, head))
+    .sort(byPosition);
+}
+
+// Lo que no se muestra mientras se escribe en `typing` (ver typingSpan).
+function whileTyping(item: SqlDiagnostic, typing: DiagnosticsState["typing"], head: number): boolean {
+  if (!typing || item.source !== "analysis" || item.to < typing.from || item.from > typing.to) return false;
+  return !!item.incomplete || (item.from <= head && head <= item.to);
 }
 
 // Lo marcado de un punto: un error en espacios o en un simbolo suelto se
@@ -369,7 +438,7 @@ class LensMessage extends WidgetType {
     element.className = "cm-lensMessage";
     const icon = document.createElement("span");
     icon.className = "cm-lensIcon";
-    icon.textContent = "✕";
+    icon.setAttribute("aria-hidden", "true");
     const text = document.createElement("span");
     text.textContent = this.item.message;
     element.append(icon, text);
@@ -435,6 +504,7 @@ const diagnosticPainter = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
+        update.selectionSet ||
         update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField)
       ) {
         this.decorations = diagnosticDecorations(update.view);
@@ -455,6 +525,7 @@ const lensBands = layer({
     update.docChanged ||
     update.viewportChanged ||
     update.geometryChanged ||
+    update.selectionSet ||
     update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField),
   markers(view) {
     const { from, to } = view.viewport;
@@ -481,6 +552,9 @@ const lensBands = layer({
 // F2 / Shift+F2: al siguiente o anterior error, dando la vuelta. false sin
 // errores.
 export function jumpToDiagnostic(view: EditorView, direction: 1 | -1): boolean {
+  // Buscar errores a proposito: se ven todos, tambien los de la sentencia que
+  // se estaba escribiendo.
+  if (view.state.field(diagnosticsField).typing) view.dispatch({ effects: stopTyping.of(null) });
   // Una vez por pulsacion se recorre la lista entera (para el contador n/m).
   const list = diagnosticsIn(view.state, 0, view.state.doc.length);
   if (list.length === 0) return false;
@@ -507,6 +581,9 @@ export function applyQuickFix(view: EditorView, fix: QuickFix): void {
 
 const WAVE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='4' viewBox='0 0 6 4'%3E%3Cpath d='M0 3 Q1.5 0.5 3 2 T6 1' fill='none' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E\")";
+
+const CIRCLE_X =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m15 9-6 6'/%3E%3Cpath d='m9 9 6 6'/%3E%3C/svg%3E\")";
 
 const diagnosticsTheme = EditorView.baseTheme({
   // La onda: una mascara SVG pintada con el color del tema, fina y regular
@@ -540,7 +617,22 @@ const diagnosticsTheme = EditorView.baseTheme({
     whiteSpace: "pre",
     animation: "cm-lens-in 120ms ease-out",
   },
-  ".cm-lensIcon": { marginRight: "0.6ch", fontStyle: "normal" },
+  // circle-x de lucide (el mismo del margen al fallar una ejecucion), en el
+  // color del mensaje.
+  ".cm-lensIcon": {
+    display: "inline-block",
+    width: "0.95em",
+    height: "0.95em",
+    marginRight: "0.6ch",
+    verticalAlign: "-0.12em",
+    backgroundColor: "currentColor",
+    maskImage: CIRCLE_X,
+    WebkitMaskImage: CIRCLE_X,
+    maskSize: "contain",
+    WebkitMaskSize: "contain",
+    maskRepeat: "no-repeat",
+    WebkitMaskRepeat: "no-repeat",
+  },
   ".cm-lensNote": { marginLeft: "1ch", color: "var(--text-secondary)", fontStyle: "normal", fontSize: "0.9em" },
   "@keyframes cm-lens-in": { from: { opacity: "0" } },
   "@media (prefers-reduced-motion: reduce)": { ".cm-lensMessage": { animation: "none" } },

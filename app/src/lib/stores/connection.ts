@@ -1,4 +1,5 @@
 import { derived, get, writable } from "svelte/store";
+import { engineFor } from "$lib/engines";
 import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
@@ -38,6 +39,10 @@ export const activeProfile = derived(
   ([$connection, $profiles]) =>
     ($connection.connected && $profiles.find((profile) => profile.id === $connection.profileId)) || null,
 );
+
+// El perfil del motor de la conexion activa (lib/engines); null sin
+// conexion.
+export const activeEngine = derived(activeProfile, ($profile) => ($profile ? engineFor($profile.driver) : null));
 
 // La conexion activa es de produccion: el backend ya pide confirmar cada
 // escritura; la interfaz lo hace visible y confirma tambien los cambios del

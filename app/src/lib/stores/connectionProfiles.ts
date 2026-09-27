@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
 import type { ConnectionDriver } from "$lib/connections";
+import { ENGINES } from "$lib/engines";
 import type { PasswordPolicy } from "$lib/credentials";
 import type { TlsMode } from "$lib/types";
 
@@ -45,8 +46,9 @@ function parseEnvironment(value: unknown): ConnectionEnvironment | undefined {
     : undefined;
 }
 
+// Un motor que la app conoce: el que tiene perfil (lib/engines).
 function isDriver(value: unknown): value is ConnectionDriver {
-  return value === "mysql" || value === "mariadb" || value === "postgres";
+  return typeof value === "string" && Object.hasOwn(ENGINES, value);
 }
 
 const TLS_MODES: readonly TlsMode[] = ["auto", "required", "verifyCa", "verifyIdentity", "disabled"];

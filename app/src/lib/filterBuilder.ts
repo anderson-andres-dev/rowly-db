@@ -1,3 +1,5 @@
+import type { ConnectionDriver } from "$lib/connections";
+import { engineFor } from "$lib/engines";
 // Constructor visual de filtros de una pestaña de tabla: condiciones
 // (columna · operador · valor) unidas con Y / O, convertidas a la clausula
 // WHERE que se ejecuta. Los operadores se muestran tal cual en SQL, asi se
@@ -63,11 +65,10 @@ export function newCondition(column = "", join: FilterJoin = "and"): FilterCondi
   return { id: crypto.randomUUID(), join, column, operator: "=", value: "", value2: "" };
 }
 
-export type SqlDriverKind = "mysql" | "mariadb" | "postgres";
-
-export function quoteIdentifier(name: string, driver: SqlDriverKind): string {
+// Un nombre simple va tal cual; el resto, con las comillas del motor.
+export function quoteIdentifier(name: string, driver: ConnectionDriver): string {
   if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(name)) return name;
-  return driver === "postgres" ? `"${name.replace(/"/g, '""')}"` : `\`${name.replace(/`/g, "``")}\``;
+  return engineFor(driver).quoteIdentifier(name);
 }
 
 const NUMERIC_TYPE = /int|serial|decimal|numeric|float|double|real|money|number|bit/i;
@@ -75,12 +76,12 @@ const BOOLEAN_TYPE = /bool/i;
 
 // Literal SQL para un valor escrito por el usuario: numeros y booleanos
 // tal cual si el tipo de la columna lo es y el texto encaja; todo lo demas,
-// entre comillas simples con las comillas internas duplicadas.
-export function sqlLiteral(raw: string, dataType = ""): string {
+// como texto del motor (comillas duplicadas y, en MySQL, la barra invertida).
+export function sqlLiteral(raw: string, dataType: string, driver: ConnectionDriver): string {
   const value = raw.trim();
   if (NUMERIC_TYPE.test(dataType) && /^-?\d+(\.\d+)?$/.test(value)) return value;
   if (BOOLEAN_TYPE.test(dataType) && /^(true|false)$/i.test(value)) return value.toUpperCase();
-  return `'${value.replace(/'/g, "''")}'`;
+  return engineFor(driver).quoteString(value);
 }
 
 function listValues(raw: string): string[] {
@@ -94,7 +95,7 @@ function listValues(raw: string): string[] {
 // valor que su operador pide): una condicion a medias no filtra.
 export function conditionSql(
   condition: FilterCondition,
-  driver: SqlDriverKind,
+  driver: ConnectionDriver,
   typeOf: (column: string) => string = () => "",
 ): string | null {
   if (!condition.column) return null;
@@ -105,14 +106,14 @@ export function conditionSql(
       return `${column} ${condition.operator}`;
     case "one":
       if (condition.value.trim() === "") return null;
-      return `${column} ${condition.operator} ${sqlLiteral(condition.value, type)}`;
+      return `${column} ${condition.operator} ${sqlLiteral(condition.value, type, driver)}`;
     case "two":
       if (condition.value.trim() === "" || condition.value2.trim() === "") return null;
-      return `${column} BETWEEN ${sqlLiteral(condition.value, type)} AND ${sqlLiteral(condition.value2, type)}`;
+      return `${column} BETWEEN ${sqlLiteral(condition.value, type, driver)} AND ${sqlLiteral(condition.value2, type, driver)}`;
     case "list": {
       const values = listValues(condition.value);
       if (values.length === 0) return null;
-      return `${column} ${condition.operator} (${values.map((value) => sqlLiteral(value, type)).join(", ")})`;
+      return `${column} ${condition.operator} (${values.map((value) => sqlLiteral(value, type, driver)).join(", ")})`;
     }
   }
 }
@@ -122,7 +123,7 @@ export function conditionSql(
 // ((a Y b) O c) en vez de dejarlo a la precedencia de SQL.
 export function buildWhere(
   conditions: FilterCondition[],
-  driver: SqlDriverKind,
+  driver: ConnectionDriver,
   typeOf?: (column: string) => string,
 ): string {
   const parts = conditions

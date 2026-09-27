@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ConnectionDriver } from "$lib/connections";
   import { tooltip } from "$lib/tooltip";
   import { Filter, Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
@@ -11,7 +12,6 @@
     type FilterCondition,
     type FilterJoin,
     type FilterOperator,
-    type SqlDriverKind,
   } from "$lib/filterBuilder";
   import type { TableTab } from "$lib/stores/queryConsoles";
 
@@ -34,7 +34,7 @@
     // Lo aplicado ahora (lo que se ve en el grid).
     filters: Filters;
     columns: { name: string; dataType: string }[];
-    driver: SqlDriverKind;
+    driver: ConnectionDriver;
     error?: string | null;
     busy?: boolean;
     onapply: (filters: Filters) => void;

@@ -15,8 +15,8 @@
 use crate::version::{Capabilities, CheckConstraints};
 use khipu_driver_core::assembly::{IndexColumnRow, KeyColumnRow, TableSet, TriggerEventRow};
 use khipu_driver_core::{
-    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, Message, RelationKind,
-    RoutineInfo, RoutineKind, SchemaObjects, SequenceInfo,
+    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, Message, ParameterMode,
+    RelationKind, RoutineInfo, RoutineKind, RoutineParameter, SchemaObjects, SequenceInfo,
 };
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySqlPool, Row};
@@ -329,15 +329,23 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
     .await?;
 
     let mut arguments: HashMap<String, Vec<String>> = HashMap::new();
+    let mut parameters: HashMap<String, Vec<RoutineParameter>> = HashMap::new();
     for row in &parameter_rows {
+        let id = text(row, 0)?;
+        let mode = opt_text(row, 1)?;
+        let name = text(row, 2)?;
+        let data_type = text(row, 3)?;
         arguments
-            .entry(text(row, 0)?)
+            .entry(id.clone())
             .or_default()
-            .push(format_parameter(
-                opt_text(row, 1)?.as_deref(),
-                &text(row, 2)?,
-                &text(row, 3)?,
-            ));
+            .push(format_parameter(mode.as_deref(), &name, &data_type));
+        parameters.entry(id).or_default().push(RoutineParameter {
+            name: Some(name),
+            mode: parameter_mode(mode.as_deref()),
+            data_type,
+            // MySQL/MariaDB parameters have no default values.
+            has_default: false,
+        });
     }
 
     routine_rows
@@ -353,6 +361,7 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
                 name: text(row, 1)?,
                 kind,
                 arguments: arguments.remove(&id).unwrap_or_default().join(", "),
+                parameters: parameters.remove(&id).unwrap_or_default(),
                 return_type: match kind {
                     RoutineKind::Function => opt_text(row, 3)?,
                     RoutineKind::Procedure => None,
@@ -364,6 +373,15 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
 
 /// `"p_id int"`, or `"OUT p_total decimal(10,2)"` — IN is the default mode
 /// (and the only one a function argument can have), so it isn't repeated.
+/// A function's parameters come without a mode: they are all IN.
+fn parameter_mode(mode: Option<&str>) -> ParameterMode {
+    match mode {
+        Some("OUT") => ParameterMode::Out,
+        Some("INOUT") => ParameterMode::InOut,
+        _ => ParameterMode::In,
+    }
+}
+
 fn format_parameter(mode: Option<&str>, name: &str, data_type: &str) -> String {
     match mode {
         Some(mode) if mode != "IN" => format!("{mode} {name} {data_type}"),

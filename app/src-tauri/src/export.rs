@@ -7,6 +7,7 @@
 //! se serializan igual: TSV, CSV, JSON, Markdown y SQL INSERT.
 
 use khipu_driver_core::{Message, QueryColumn, QueryValue, RowSink};
+use khipu_engine::Dialect;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -90,6 +91,8 @@ pub struct FileSink {
     format: ExportFormat,
     headers: bool,
     table_name: String,
+    // Los textos del INSERT, como literales del motor de la conexion.
+    dialect: Dialect,
     columns: Vec<QueryColumn>,
     rows: u64,
 }
@@ -100,6 +103,7 @@ impl FileSink {
         format: ExportFormat,
         headers: bool,
         table_name: String,
+        dialect: Dialect,
     ) -> Result<Self, Message> {
         let file = File::create(path).map_err(|error| {
             Message::key("files.createFailed")
@@ -111,6 +115,7 @@ impl FileSink {
             format,
             headers,
             table_name,
+            dialect,
             columns: Vec::new(),
             rows: 0,
         })
@@ -136,11 +141,11 @@ impl FileSink {
         }
     }
 
-    fn sql_value(value: &QueryValue, column: &QueryColumn) -> String {
+    fn sql_value(&self, value: &QueryValue, column: &QueryColumn) -> String {
         match value {
             None => "NULL".to_string(),
             Some(text) if is_numeric(&column.data_type) && is_plain_number(text) => text.clone(),
-            Some(text) => format!("'{}'", text.replace('\'', "''")),
+            Some(text) => self.dialect.string_literal(text),
         }
     }
 }
@@ -224,7 +229,7 @@ impl RowSink for FileSink {
                 let values: Vec<String> = row
                     .iter()
                     .zip(&self.columns)
-                    .map(|(value, column)| Self::sql_value(value, column))
+                    .map(|(value, column)| self.sql_value(value, column))
                     .collect();
                 format!(
                     "INSERT INTO {} ({}) VALUES ({});\n",
@@ -274,15 +279,20 @@ mod tests {
     }
 
     fn export(format: ExportFormat, headers: bool) -> String {
+        export_as(format, headers, Dialect::Postgres, "o'h, \"x\"")
+    }
+
+    fn export_as(format: ExportFormat, headers: bool, dialect: Dialect, name: &str) -> String {
         let dir = std::env::temp_dir().join(format!("khipu-export-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("{format:?}.txt"));
-        let mut sink = FileSink::create(&path, format, headers, "core.t".to_string()).unwrap();
+        let path = dir.join(format!("{format:?}-{dialect:?}.txt"));
+        let mut sink =
+            FileSink::create(&path, format, headers, "core.t".to_string(), dialect).unwrap();
         sink.begin(&columns()).unwrap();
         sink.row(&[
             Some("1".into()),
             Some("{\"a\": 1}".into()),
-            Some("o'h, \"x\"".into()),
+            Some(name.into()),
         ])
         .unwrap();
         sink.row(&[Some("2".into()), None, None]).unwrap();
@@ -318,6 +328,17 @@ mod tests {
             export(ExportFormat::Sql, false),
             "INSERT INTO core.t (id, ctx, name) VALUES (1, '{\"a\": 1}', 'o''h, \"x\"');\n\
              INSERT INTO core.t (id, ctx, name) VALUES (2, NULL, NULL);\n"
+        );
+    }
+
+    #[test]
+    fn sql_con_los_literales_de_cada_motor() {
+        // En MySQL la barra invertida escapa: se duplica; en Postgres no.
+        assert!(
+            export_as(ExportFormat::Sql, false, Dialect::MySql, "C:\\tmp").contains("'C:\\\\tmp'")
+        );
+        assert!(
+            export_as(ExportFormat::Sql, false, Dialect::Postgres, "C:\\tmp").contains("'C:\\tmp'")
         );
     }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
   import { opticalIconSize, TOOLBAR_ICON_STROKE } from "$lib/iconOptics";
 
   // Boton de icono de las barras del resultado, con el tooltip de la app
@@ -46,6 +47,7 @@
   aria-label={label}
   {disabled}
   use:tooltip={{ label, shortcut }}
+  use:settleTransitions
   {onclick}
 >
   <Icon
@@ -81,6 +83,11 @@
       background-color var(--duration-fast) ease,
       color var(--duration-fast) ease,
       opacity var(--duration-fast) ease;
+  }
+
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts). */
+  .toolbar-button:not([data-settled]) {
+    transition: none;
   }
 
   .toolbar-button:hover:not(:disabled) {

@@ -904,6 +904,19 @@ mod tests {
         // MariaDB and MySQL 5.7 keep the display width ("int(11)").
         let arguments = purge.arguments.replace("(11)", "");
         assert_eq!(arguments, "p_before int, OUT p_count int");
+        use khipu_driver_core::ParameterMode;
+        let described: Vec<(Option<&str>, ParameterMode)> = purge
+            .parameters
+            .iter()
+            .map(|p| (p.name.as_deref(), p.mode))
+            .collect();
+        assert_eq!(
+            described,
+            vec![
+                (Some("p_before"), ParameterMode::In),
+                (Some("p_count"), ParameterMode::Out),
+            ]
+        );
         let twice = objects
             .routines
             .iter()
@@ -914,6 +927,9 @@ mod tests {
             twice.return_type.as_deref().map(|t| t.replace("(11)", "")),
             Some("int".to_string())
         );
+        // El valor de retorno (ordinal 0) no es un parametro.
+        assert_eq!(twice.parameters.len(), 1);
+        assert_eq!(twice.parameters[0].mode, ParameterMode::In);
 
         assert_eq!(objects.events[0].name, "nightly");
         assert_eq!(objects.events[0].schedule, "EVERY 1 DAY");

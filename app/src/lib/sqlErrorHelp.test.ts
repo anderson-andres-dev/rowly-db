@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { errorHelp, groupByFixes } from "./sqlErrorHelp";
+import { groupByFixes } from "./sqlErrorHelp";
+import { ENGINES } from "./engines";
 import { lineColumnToOffset } from "./sqlDiagnostics";
 
 describe("errorHelp", () => {
-  it("reconoce el mismo problema en Postgres y en MySQL", () => {
-    expect(errorHelp("42P01")).toBe("tableMissing");
-    expect(errorHelp("1146")).toBe("tableMissing");
-    expect(errorHelp("99999")).toBeNull();
-    expect(errorHelp(undefined)).toBeNull();
+  it("cada motor reconoce el mismo problema por su propio codigo", () => {
+    expect(ENGINES.postgres.errorHelp["42P01"]).toBe("tableMissing");
+    expect(ENGINES.mysql.errorHelp["1146"]).toBe("tableMissing");
+    expect(ENGINES.mariadb.errorHelp["1146"]).toBe("tableMissing");
+    // El codigo de un motor no significa nada en el otro.
+    expect(ENGINES.postgres.errorHelp["1146"]).toBeUndefined();
+    expect(ENGINES.mysql.errorHelp["42P01"]).toBeUndefined();
   });
 });
 

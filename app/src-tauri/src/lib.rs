@@ -842,7 +842,7 @@ async fn export_query_to_file(
     } = request;
     let sql = sql.trim().to_string();
     let path = export::validated_path(&path)?;
-    let (connector, export_sql) = with_active_connection(&window, &state, |active| {
+    let (connector, export_sql, dialect) = with_active_connection(&window, &state, |active| {
         if !khipu_engine::pagination::is_read_only_query(&sql, active.dialect) {
             return Err(Message::key("export.readOnly"));
         }
@@ -852,10 +852,11 @@ async fn export_query_to_file(
         Ok((
             Arc::clone(&active.connector),
             sorted.unwrap_or_else(|| sql.clone()),
+            active.dialect,
         ))
     })?;
     let start = std::time::Instant::now();
-    let mut sink = export::FileSink::create(&path, format, headers, table_name)?;
+    let mut sink = export::FileSink::create(&path, format, headers, table_name, dialect)?;
     let rows = connector.stream_query(&export_sql, &mut sink).await?;
     Ok(ExportSummary {
         rows,

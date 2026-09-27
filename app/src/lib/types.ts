@@ -95,6 +95,18 @@ export interface ExplorerRoutine {
   kind: "procedure" | "function";
   arguments: string;
   returnType?: string | null;
+  // Uno por uno, para los hints de parametros (sqlCallHints.ts). Puede faltar
+  // con un backend viejo.
+  parameters?: RoutineParameter[];
+}
+
+export interface RoutineParameter {
+  // Postgres permite parametros sin nombre.
+  name: string | null;
+  mode: "in" | "out" | "inOut" | "variadic";
+  dataType: string;
+  // Se puede omitir en la llamada (DEFAULT en Postgres).
+  hasDefault: boolean;
 }
 
 export interface ExplorerSequence {

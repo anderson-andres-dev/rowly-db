@@ -162,7 +162,7 @@ pub fn analyze_editable_query(sql: &str, dialect: Dialect) -> Result<EditableQue
 /// no van entre comillas (`FROM Users` es la tabla `users`); MySQL los deja
 /// como estan.
 fn ident_name(ident: &Ident, dialect: Dialect) -> String {
-    if dialect == Dialect::Postgres && ident.quote_style.is_none() {
+    if dialect.folds_unquoted_to_lowercase() && ident.quote_style.is_none() {
         ident.value.to_lowercase()
     } else {
         ident.value.clone()
@@ -302,10 +302,7 @@ pub fn build_change_statements(
             .filter(|item| item.value != CellValue::Default)
             .collect();
         if explicit.is_empty() {
-            statements.push(match dialect {
-                Dialect::MySql => format!("INSERT INTO {target} () VALUES ();"),
-                Dialect::Postgres => format!("INSERT INTO {target} DEFAULT VALUES;"),
-            });
+            statements.push(dialect.insert_defaults(&target));
             continue;
         }
         let names = explicit
@@ -347,26 +344,8 @@ fn literal(dialect: Dialect, item: &ColumnValue) -> String {
         CellValue::Text(text) if is_numeric_type(&item.data_type) && is_plain_number(text) => {
             text.clone()
         }
-        CellValue::Text(text) => string_literal(dialect, text),
+        CellValue::Text(text) => dialect.string_literal(text),
     }
-}
-
-fn string_literal(dialect: Dialect, text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('\'');
-    for character in text.chars() {
-        match character {
-            '\'' => out.push_str("''"),
-            // MySQL interpreta la barra invertida como escape dentro de
-            // strings (salvo NO_BACKSLASH_ESCAPES); Postgres, con
-            // standard_conforming_strings (el default), no.
-            '\\' if dialect == Dialect::MySql => out.push_str("\\\\"),
-            '\0' if dialect == Dialect::MySql => out.push_str("\\0"),
-            _ => out.push(character),
-        }
-    }
-    out.push('\'');
-    out
 }
 
 fn is_numeric_type(data_type: &str) -> bool {
@@ -502,7 +481,7 @@ pub fn quote_ident(dialect: Dialect, ident: &str) -> String {
         && ident
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        && !(dialect == Dialect::Postgres
+        && !(dialect.folds_unquoted_to_lowercase()
             && ident
                 .chars()
                 .any(|character| character.is_ascii_uppercase()))
@@ -510,10 +489,7 @@ pub fn quote_ident(dialect: Dialect, ident: &str) -> String {
     if simple {
         return ident.to_string();
     }
-    match dialect {
-        Dialect::MySql => format!("`{}`", ident.replace('`', "``")),
-        Dialect::Postgres => format!("\"{}\"", ident.replace('"', "\"\"")),
-    }
+    dialect.quote_identifier(ident)
 }
 
 #[cfg(test)]

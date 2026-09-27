@@ -8,6 +8,7 @@ import {
   diagnosticsField,
   diagnosticsIn,
   setAnalysisIn,
+  stopTyping,
   type SqlDiagnostic,
 } from "./sqlDiagnostics";
 import { statementIndexField, statementsChangedIn } from "./sqlStatementIndex";
@@ -163,5 +164,77 @@ describe("AnalysisRunner", () => {
     expect(view.state.sliceDoc(item.from, item.to)).toBe("SELECT bad1;");
     // Lo pedido quedo guardado: no se volvio a preguntar.
     expect(analyze).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mientras se escribe", () => {
+  function typed(doc: string, insert: string) {
+    let state = create(doc);
+    state = state.update({
+      changes: { from: doc.length, insert },
+      selection: { anchor: doc.length + insert.length },
+      userEvent: "input.type",
+    }).state;
+    return state;
+  }
+
+  it("lo incompleto de la sentencia que se escribe no se ve; al salir de ella, al instante", () => {
+    let state = typed("SELECT 1;\nSELECT * FROM t ", "join");
+    const end = state.doc.length;
+    state = state.update({
+      effects: setAnalysisIn.of({
+        ranges: [{ from: 10, to: end }],
+        list: [{ from: end - 4, to: end, message: "termina antes de tiempo", source: "analysis", incomplete: true }],
+      }),
+    }).state;
+    expect(diagnosticsIn(state, 0, end)).toEqual([]);
+
+    // El cursor se va a la otra sentencia: se ve.
+    state = state.update({ selection: { anchor: 3 } }).state;
+    expect(diagnosticsIn(state, 0, end).map((item) => item.message)).toEqual(["termina antes de tiempo"]);
+  });
+
+  it("la palabra del cursor no se marca; el resto de la sentencia si", () => {
+    let state = typed("SELECT fcha FROM tec_", "ab");
+    const end = state.doc.length;
+    state = state.update({
+      effects: setAnalysisIn.of({
+        ranges: [{ from: 0, to: end }],
+        list: [
+          { from: 7, to: 11, message: "fcha no existe", source: "analysis" },
+          { from: 17, to: end, message: "tec_ab no existe", source: "analysis" },
+        ],
+      }),
+    }).state;
+    expect(diagnosticsIn(state, 0, end).map((item) => item.message)).toEqual(["fcha no existe"]);
+  });
+
+  it("los errores de otras sentencias y los de ejecucion se ven siempre", () => {
+    let state = typed("SELECT fcha FROM t;\nSELECT ", "x");
+    const end = state.doc.length;
+    state = state.update({
+      effects: [
+        setAnalysisIn.of({
+          ranges: [{ from: 0, to: 19 }],
+          list: [{ from: 7, to: 11, message: "otra", source: "analysis", incomplete: true }],
+        }),
+        addDiagnostics.of([{ from: end - 1, to: end, message: "servidor", source: "server" }]),
+      ],
+    }).state;
+    expect(diagnosticsIn(state, 0, end).map((item) => item.message)).toEqual(["otra", "servidor"]);
+  });
+
+  it("stopTyping (al salir del editor, F2, el detalle) muestra todo", () => {
+    let state = typed("SELECT * FROM t ", "jo");
+    const end = state.doc.length;
+    state = state.update({
+      effects: setAnalysisIn.of({
+        ranges: [{ from: 0, to: end }],
+        list: [{ from: end - 2, to: end, message: "fin", source: "analysis", incomplete: true }],
+      }),
+    }).state;
+    expect(diagnosticsIn(state, 0, end)).toEqual([]);
+    state = state.update({ effects: stopTyping.of(null) }).state;
+    expect(diagnosticsIn(state, 0, end).length).toBe(1);
   });
 });

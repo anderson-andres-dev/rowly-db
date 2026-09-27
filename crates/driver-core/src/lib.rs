@@ -218,6 +218,31 @@ pub struct RoutineInfo {
     pub arguments: String,
     /// `None` for procedures.
     pub return_type: Option<String>,
+    /// The same parameters, one by one, for what needs to match them against
+    /// the arguments of a call (the editor's parameter hints).
+    #[serde(default)]
+    pub parameters: Vec<RoutineParameter>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+    /// PostgreSQL's `VARIADIC`: takes any number of trailing arguments.
+    Variadic,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineParameter {
+    /// PostgreSQL allows unnamed parameters.
+    pub name: Option<String>,
+    pub mode: ParameterMode,
+    pub data_type: String,
+    /// It can be left out of a call (PostgreSQL `DEFAULT`).
+    pub has_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

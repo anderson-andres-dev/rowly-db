@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { splitStatements, statementAt } from "./sqlStatements";
+import { ENGINES } from "./engines";
+
+const mysql = ENGINES.mysql.lexical;
+const postgres = ENGINES.postgres.lexical;
 
 const doc = [
   "SELECT * FROM portal_payment_incidents;", // linea 0
@@ -15,7 +19,7 @@ const doc = [
 ].join("\n");
 
 function textAt(text: string, offset: number): string | null {
-  const range = statementAt(text, offset);
+  const range = statementAt(text, offset, mysql);
   return range ? text.slice(range.from, range.to) : null;
 }
 
@@ -46,7 +50,7 @@ describe("statementAt", () => {
   });
 
   it("sin sentencias no devuelve nada", () => {
-    expect(statementAt("   \n  -- solo un comentario\n", 3)).toBeNull();
+    expect(statementAt("   \n  -- solo un comentario\n", 3, mysql)).toBeNull();
   });
 
   it("una sentencia sin punto y coma final", () => {
@@ -55,23 +59,27 @@ describe("statementAt", () => {
 });
 
 describe("splitStatements", () => {
-  it("no corta en ; dentro de comillas, comentarios ni bloques $$", () => {
-    const text = [
-      "SELECT 'a;b', \"c;d\", `e;f`; -- nota; aqui",
-      "/* bloque; */ SELECT 2;",
+  const parts = (text: string, lexical = mysql) => splitStatements(text, lexical).map((range) => text.slice(range.from, range.to));
+
+  it("MySQL: no corta en ; dentro de comillas, backticks ni comentarios (tambien #)", () => {
+    const text = ["SELECT 'a;b', \"c;d\", `e;f`; -- nota; aqui", "/* bloque; */ SELECT 2; # otra; nota", "SELECT 3;"].join("\n");
+    expect(parts(text)).toEqual(["SELECT 'a;b', \"c;d\", `e;f`;", "SELECT 2;", "SELECT 3;"]);
+  });
+
+  it("MySQL: respeta las comillas escapadas, con '' y con barra invertida", () => {
+    expect(parts("SELECT 'it''s; ok';\nSELECT 'a\\';b';")).toEqual(["SELECT 'it''s; ok';", "SELECT 'a\\';b';"]);
+  });
+
+  it("Postgres: bloques $$ y la barra invertida es un caracter mas", () => {
+    const text = "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql;\nSELECT 'C:\\';SELECT 2;";
+    expect(parts(text, postgres)).toEqual([
       "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql;",
-    ].join("\n");
-    const parts = splitStatements(text).map((range) => text.slice(range.from, range.to));
-    expect(parts).toEqual([
-      "SELECT 'a;b', \"c;d\", `e;f`;",
+      "SELECT 'C:\\';",
       "SELECT 2;",
-      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql;",
     ]);
   });
 
-  it("respeta comillas escapadas", () => {
-    const text = "SELECT 'it''s; ok';\nSELECT 'a\\';b';";
-    const parts = splitStatements(text).map((range) => text.slice(range.from, range.to));
-    expect(parts).toEqual(["SELECT 'it''s; ok';", "SELECT 'a\\';b';"]);
+  it("Postgres: # no es un comentario (es un operador)", () => {
+    expect(parts("SELECT 1 # 2; SELECT 3;", postgres)).toEqual(["SELECT 1 # 2;", "SELECT 3;"]);
   });
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { activeEngine } from "$lib/stores/connection";
   import Checkbox from "$lib/components/Checkbox.svelte";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
@@ -93,7 +94,7 @@
           columns.map((column) => ({ name: column.name, type: column.type })),
           toValues(rows.slice(0, PREVIEW_ROWS)),
           // La vista previa nunca cae en "una sola celda => valor puro".
-          { format, headers, tableName },
+          { format, headers, tableName, quoteString: $activeEngine?.quoteString },
         ),
   );
 
@@ -138,7 +139,7 @@
     const text = serializeSelection(
       columns.map((column) => ({ name: column.name, type: column.type })),
       toValues(rows),
-      { format, headers, tableName },
+      { format, headers, tableName, quoteString: $activeEngine?.quoteString },
     );
     if (await writeClipboardText(text)) {
       oncopied(rows.length);

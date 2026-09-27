@@ -842,6 +842,12 @@ mod tests {
         ))
         .await;
         run(format!(
+            "CREATE FUNCTION {SCHEMA}.calc(p_id integer, INOUT p_total numeric, \
+             p_note text DEFAULT 'x', VARIADIC p_tags text[] DEFAULT '{{}}') \
+             LANGUAGE sql AS 'SELECT p_total'"
+        ))
+        .await;
+        run(format!(
             "CREATE TRIGGER orders_audit AFTER INSERT OR UPDATE ON {SCHEMA}.orders \
              FOR EACH ROW EXECUTE PROCEDURE {SCHEMA}.touch()"
         ))
@@ -922,6 +928,38 @@ mod tests {
         assert_eq!(twice.kind, RoutineKind::Function);
         assert_eq!(twice.arguments, "p integer");
         assert_eq!(twice.return_type.as_deref(), Some("integer"));
+        let only = &twice.parameters[..];
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].name.as_deref(), Some("p"));
+        assert_eq!(only[0].data_type, "integer");
+
+        use khipu_driver_core::ParameterMode;
+        let calc = objects
+            .routines
+            .iter()
+            .find(|r| r.name == "calc")
+            .expect("calc");
+        let described: Vec<(Option<&str>, ParameterMode, &str, bool)> = calc
+            .parameters
+            .iter()
+            .map(|p| {
+                (
+                    p.name.as_deref(),
+                    p.mode,
+                    p.data_type.as_str(),
+                    p.has_default,
+                )
+            })
+            .collect();
+        assert_eq!(
+            described,
+            vec![
+                (Some("p_id"), ParameterMode::In, "integer", false),
+                (Some("p_total"), ParameterMode::InOut, "numeric", false),
+                (Some("p_note"), ParameterMode::In, "text", true),
+                (Some("p_tags"), ParameterMode::Variadic, "text[]", true),
+            ]
+        );
         if has_procedures {
             let purge = objects
                 .routines
@@ -930,6 +968,7 @@ mod tests {
                 .expect("purge");
             assert_eq!(purge.kind, RoutineKind::Procedure);
             assert_eq!(purge.return_type, None);
+            assert_eq!(purge.parameters[0].name.as_deref(), Some("p_before"));
         }
     }
 

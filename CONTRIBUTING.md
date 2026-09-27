@@ -24,22 +24,34 @@ cd app && npm install && npm run tauri dev
 
 ## Agregar soporte para un nuevo motor de base de datos
 
-Si el motor usa un dialecto SQL ya soportado por `sqlparser` (por ejemplo otro
-compatible con MySQL o Postgres), es la forma más directa de contribuir sin
-pisar el trabajo de nadie más:
+Todo lo que cambia de un motor a otro vive en dos lugares: el enum `Dialect`
+en Rust (`crates/engine/src/lib.rs`) y su perfil en el frontend
+(`app/src/lib/engines/`). Ninguno cae a otro motor: si falta algo, **no
+compila**. El diseño completo está en `docs/specs/v0.2-perfiles-de-motor.md`.
 
-1. `cargo new --lib crates/drivers/<motor>`
-2. Implementar el trait `DbConnector` de `khipu-driver-core`, incluido
-   `introspect_schema` (ver `docs/design/explorador-base-de-datos.md`)
-3. Agregarlo a `[workspace] members` en el `Cargo.toml` raíz
-4. Agregar la rama correspondiente en la fábrica de drivers de
-   `app/src-tauri/src/drivers.rs` — hoy sí hace falta tocar `app` para que el
-   motor nuevo sea seleccionable, aunque no haga falta tocar `engine`
-5. Abrir el PR
+1. **Driver**: `cargo new --lib crates/drivers/<motor>` e implementar el
+   trait `DbConnector` de `khipu-driver-core`, incluido `introspect_schema`
+   (ver `docs/design/explorador-base-de-datos.md`). Agregarlo a
+   `[workspace] members` en el `Cargo.toml` raíz.
+2. **Rust**: la variante en `DatabaseKind` (`app/src-tauri/src/drivers.rs`) y
+   en `Dialect`. El compilador marca cada decisión a completar: su parser de
+   `sqlparser`, comillas, literales, mayúsculas, la fila por defecto. Sumarla
+   a `ALL` en el contrato de `crates/engine/src/lib.rs`.
+3. **Frontend**: el motor en `ConnectionDriver` y `connectionDrivers`
+   (`app/src/lib/connections.ts`: nombre, logo, puerto), y su perfil en
+   `app/src/lib/engines/<motor>.ts`, con su entrada en `ENGINES`: comillas y
+   comentarios (`lexical`), dialecto del editor y del formateador, palabras
+   que abren sentencia, reservadas, códigos de error, cómo ubicar un error en
+   sus mensajes y la URL de conexión.
+4. **Contrato**: sus datos en `FIXTURES` de
+   `app/src/lib/engines/contract.test.ts` (el tipo lo exige) y correr
+   `npm test` y `cargo test --workspace`. Con eso, el autocompletado, los
+   alias, el JOIN por FK, Error Lens y el rendimiento con documentos enormes
+   ya funcionan con el motor nuevo.
+5. Abrir el PR.
 
-Si el motor necesita un dialecto SQL distinto de los que ya soporta
-`sqlparser`/`crates/engine/src/lib.rs` (enum `Dialect`), sí hay que extender
-ese enum — discútelo en un issue antes de mandar el PR.
+Si `sqlparser` no trae el dialecto del motor, discútelo en un issue antes de
+mandar el PR.
 
 ## Pruebas de contrato de drivers
 

@@ -23,7 +23,8 @@
   import { extractFromContext } from "$lib/sqlSchema";
   import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
-  import { splitStatements } from "$lib/sqlStatements";
+  import { splitStatements, STANDARD_LEXICAL } from "$lib/sqlStatements";
+  import { engineFor } from "$lib/engines";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
@@ -556,7 +557,8 @@
   const tableLoadAttempted = new Set<string>();
 
   function quoteIdentifier(name: string): string {
-    return quoteSqlIdentifier(name, activeProfile?.driver ?? "mysql");
+    // Sin perfil no hay conexion ni pestaña de tabla que armar.
+    return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
   }
 
   function tableSql(item: QueryConsole): string {
@@ -1175,7 +1177,10 @@
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
-    const statements = splitStatements(sql).map((range) => sql.slice(range.from, range.to));
+    // Con las reglas del motor: las mismas con que el editor marca cada
+    // sentencia del script.
+    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
+    const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
     if (statements.length > 1) {
       await startScript(consoleId, sql, statements);
       return;
@@ -1555,13 +1560,13 @@
         filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
       />
       {#snippet tableFiltersBar()}
-        {#if activeConsole?.table}
+        {#if activeConsole?.table && activeProfile}
           {@const consoleId = activeConsole.id}
           {@const table = activeConsole.table}
           <TableFilters
             filters={table}
             columns={tableFilterColumns}
-            driver={activeProfile?.driver ?? "mysql"}
+            driver={activeProfile.driver}
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
             onapply={(filters) => applyTableFilters(consoleId, filters)}

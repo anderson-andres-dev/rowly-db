@@ -1,3 +1,4 @@
+import { ENGINES } from "./engines";
 import { describe, expect, it } from "vitest";
 import { classifyContext } from "./sqlContext";
 
@@ -7,7 +8,7 @@ function classify(withCursor: string) {
   const pos = withCursor.indexOf("|");
   if (pos === -1) throw new Error("test input must contain a | cursor marker");
   const doc = withCursor.slice(0, pos) + withCursor.slice(pos + 1);
-  return classifyContext(doc, pos);
+  return classifyContext(doc, pos, ENGINES.mysql.lexical);
 }
 
 describe("classifyContext - los tres casos reportados", () => {

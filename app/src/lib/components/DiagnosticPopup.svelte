@@ -3,7 +3,6 @@
   import { t, type MessageKey } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { writeClipboard } from "$lib/clipboard";
-  import { errorHelp } from "$lib/sqlErrorHelp";
   import type { QuickFix, SqlDiagnostic } from "$lib/sqlDiagnostics";
 
   // Ventana de detalle de un diagnostico (Ctrl+. o el mouse encima del
@@ -29,7 +28,7 @@
     onpointerleave?: () => void;
   } = $props();
 
-  const help = $derived(diagnostic.source === "server" ? errorHelp(diagnostic.code) : null);
+  const help = $derived(diagnostic.source === "server" ? (diagnostic.help ?? null) : null);
   const fixes = $derived(diagnostic.fixes ?? []);
   let active = $state(0);
   let copied = $state(false);

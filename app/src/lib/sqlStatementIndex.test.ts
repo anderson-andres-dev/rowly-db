@@ -1,18 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
-import { splitStatements, statementAt } from "./sqlStatements";
+import { splitStatements, statementAt, type SqlLexical } from "./sqlStatements";
+import { ENGINES, standardSql } from "./engines";
 import {
   statementIndexComplete,
   statementIndexField,
   statementIndexStep,
+  sqlLexical,
   statementNear,
   statementsIn,
   statementTextAt,
 } from "./sqlStatementIndex";
 
+// Las pruebas del indice corren con las reglas de cada motor (y las del SQL
+// estandar, sin conexion): el mecanismo incremental tiene que coincidir con
+// el escaneo completo en todos.
+const LEXICALS: [string, SqlLexical][] = [
+  ...Object.entries(ENGINES).map(([name, engine]) => [name, engine.lexical] as [string, SqlLexical]),
+  ["standard", standardSql.lexical],
+];
+let lexical: SqlLexical = ENGINES.mysql.lexical;
+
 function create(doc: string) {
-  return EditorState.create({ doc, extensions: statementIndexField });
+  return EditorState.create({ doc, extensions: [statementIndexField, sqlLexical.of(lexical)] });
 }
+
+const split = (text: string) => splitStatements(text, lexical);
 
 function indexed(state: EditorState) {
   return statementsIn(state, 0, state.doc.length).map(({ from, to }) => ({
@@ -40,6 +53,13 @@ const PIECES = [
   "`",
   "--",
   "-- nota; aqui\n",
+  "#",
+  "# nota; aqui\n",
+  "E'",
+  "e'a\\';b'",
+  "E",
+  "[",
+  "]",
   "/*",
   "*/",
   "/* x; y */",
@@ -51,7 +71,8 @@ const PIECES = [
 ];
 
 describe("indice de sentencias", () => {
-  it("coincide con el escaneo completo tras ediciones al azar", () => {
+  it.each(LEXICALS)("coincide con el escaneo completo tras ediciones al azar (%s)", (_name, rules) => {
+    lexical = rules;
     const next = random(7);
     let state = create("SELECT 1;\nSELECT 'a;b' FROM t; -- fin\n/* c */ SELECT 2");
     for (let step = 0; step < 3000; step += 1) {
@@ -60,11 +81,12 @@ describe("indice de sentencias", () => {
       const to = next() < 0.3 ? Math.min(length, from + Math.floor(next() * 12)) : from;
       const insert = next() < 0.8 ? PIECES[Math.floor(next() * PIECES.length)] : "";
       state = state.update({ changes: { from, to, insert } }).state;
-      expect(indexed(state)).toEqual(splitStatements(state.doc.toString()));
+      expect(indexed(state)).toEqual(split(state.doc.toString()));
     }
   });
 
-  it("con documentos grandes termina en segundo plano y sigue exacto", () => {
+  it.each(LEXICALS)("con documentos grandes termina en segundo plano y sigue exacto (%s)", (_name, rules) => {
+    lexical = rules;
     const next = random(11);
     const line = "SELECT a, b FROM tabla WHERE c = 'x;y'; -- c;\n";
     let state = create(line.repeat(40_000));
@@ -77,13 +99,13 @@ describe("indice de sentencias", () => {
       const insert = PIECES[Math.floor(next() * PIECES.length)];
       state = state.update({ changes: { from, insert } }).state;
       if (next() < 0.5) state = state.update({ effects: statementIndexStep() }).state;
-      expect(indexed(state)).toEqual(splitStatements(state.doc.toString()));
+      expect(indexed(state)).toEqual(split(state.doc.toString()));
     }
     for (let guard = 0; guard < 100 && !statementIndexComplete(state); guard += 1) {
       state = state.update({ effects: statementIndexStep() }).state;
     }
     expect(statementIndexComplete(state)).toBe(true);
-    expect(indexed(state)).toEqual(splitStatements(state.doc.toString()));
+    expect(indexed(state)).toEqual(split(state.doc.toString()));
   });
 
   it("elige la misma sentencia que statementAt", () => {
@@ -93,7 +115,7 @@ describe("indice de sentencias", () => {
     const state = create(text);
     for (let offset = 0; offset <= text.length; offset += 1) {
       expect(statementNear(state, offset)).toEqual(
-        statementAt(text, offset) && expect.objectContaining(statementAt(text, offset)),
+        statementAt(text, offset, lexical) && expect.objectContaining(statementAt(text, offset, lexical)),
       );
     }
   });
@@ -106,5 +128,22 @@ describe("indice de sentencias", () => {
     // Justo despues de un ";": ya es la siguiente, todavia vacia.
     expect(statementTextAt(state, 9)).toEqual({ text: "\n", offset: 0 });
     expect(statementTextAt(state, text.length)).toEqual({ text: "SELECT 3", offset: 8 });
+  });
+});
+
+describe("E'...' en el borde de un trozo", () => {
+  it("la E al final de un trozo de 64 KB y la comilla al principio del siguiente", () => {
+    lexical = ENGINES.postgres.lexical;
+    const head = "SELECT ";
+    // La E en la posicion 65535 y la comilla en la 65536 (el corte).
+    const text = head + "x".repeat(65536 - head.length - 1) + " E'a\\';b'; SELECT 2;";
+    const at = text.indexOf("E'");
+    expect(at).toBe(65536);
+    const shifted = text.slice(1);
+    for (const doc of [text, shifted]) {
+      const state = create(doc);
+      expect(indexed(state)).toEqual(split(doc));
+      expect(indexed(state).length).toBe(2);
+    }
   });
 });

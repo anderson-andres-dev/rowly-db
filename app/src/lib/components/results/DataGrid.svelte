@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { activeEngine } from "$lib/stores/connection";
   import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
   import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
   import type { ColumnCatalogInfo, QueryColumn, QueryRow, SortKey } from "$lib/types";
@@ -459,6 +461,7 @@
       format: copyFormat,
       headers: copyHeaders,
       tableName: copyTableName || $t("grid.defaultTableName"),
+      quoteString: $activeEngine?.quoteString,
     });
     rememberCopy(text, values);
     if (await writeClipboardText(text)) for (const range of ranges) addEffect(range, "copy");
@@ -1494,6 +1497,7 @@
   aria-label={$t("grid.label")}
   tabindex="-1"
   bind:this={gridEl}
+  use:settleTransitions
   onselectstart={preventNativeSelection}
   onkeydown={onGridKeydown}
 >
@@ -2039,6 +2043,12 @@
       opacity var(--duration-fast) ease,
       background-color var(--duration-fast) ease,
       color var(--duration-fast) ease;
+  }
+
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts): si
+     no, los botones de orden se ven un instante antes de ocultarse. */
+  .data-grid:not([data-settled]) .sort-button {
+    transition: none;
   }
 
   .column-header:hover .sort-button,
