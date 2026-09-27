@@ -1,0 +1,147 @@
+/*
+ * Lenguaje unico de los modales de aviso (confirmar, descartar, mover a la
+ * papelera...). Mismo idioma visual que los modales de configuracion
+ * (formulario de conexion, vista previa de cambios): alineados a la
+ * izquierda, titulo con peso, texto secundario y botones a la derecha con
+ * las mismas medidas que Button.svelte.
+ *
+ *   <dialog class="alert-dialog danger|warning">
+ *     <div class="alert-body">
+ *       <span class="alert-icon"><Icono /></span>
+ *       <div class="alert-text"><h2>…</h2><p>…</p></div>
+ *     </div>
+ *     <div class="alert-actions">
+ *       [<button class="alert-button subtle-danger alert-aside">] (opcional, a la izquierda)
+ *       <button class="alert-button secondary">Cancelar</button>
+ *       <button class="alert-button primary|danger">Accion</button>
+ *     </div>
+ *   </dialog>
+ *
+ * La entrada y la salida animadas son las de cualquier <dialog> (tokens.css
+ * y dialogMotion.ts).
+ */
+
+.alert-dialog {
+  --alert-tone: var(--warning);
+  width: min(26rem, calc(100vw - 2rem));
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.alert-dialog.danger {
+  --alert-tone: var(--danger);
+}
+
+.alert-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-3);
+}
+
+.alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--alert-tone) 14%, transparent);
+  color: var(--alert-tone);
+}
+
+.alert-text {
+  min-width: 0;
+  padding-top: 0.3125rem;
+}
+
+.alert-text h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.alert-text p {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.alert-button {
+  min-height: 2.125rem;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.alert-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.alert-button.secondary {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+.alert-button.secondary:hover {
+  border-color: var(--control-border);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, var(--accent));
+}
+
+.alert-button.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.alert-button.primary:hover {
+  background: var(--accent-hover);
+}
+
+.alert-button.danger {
+  background: var(--danger-solid);
+  color: #fff;
+}
+
+.alert-button.danger:hover {
+  background: var(--danger-solid-hover);
+}
+
+/* Accion alternativa y destructiva (p. ej. "Descartar" al cerrar una
+   consola sin guardar): texto rojo sin relleno, apartada a la izquierda. */
+.alert-button.subtle-danger {
+  background: transparent;
+  color: var(--danger);
+}
+
+.alert-button.subtle-danger:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.alert-aside {
+  margin-right: auto;
+}

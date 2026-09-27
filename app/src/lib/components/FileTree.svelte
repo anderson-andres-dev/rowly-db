@@ -2,6 +2,7 @@
   import { tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { ChevronRight, FileCode, FilePlus, Folder, FolderOpen, RefreshCw, TriangleAlert, X } from "@lucide/svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { t } from "$lib/i18n";
@@ -138,19 +139,17 @@
   }
 
   // --- Mover a la papelera ------------------------------------------------
-  let trashDialog = $state<HTMLDialogElement>();
   let pendingTrash = $state<string | null>(null);
 
-  async function requestTrash(path: string) {
+  function requestTrash(path: string) {
     menu = null;
     pendingTrash = path;
-    await tick();
-    trashDialog?.showModal();
   }
 
+  // Llega cuando el aviso (ConfirmDialog) termino de cerrarse.
   async function confirmTrash() {
     const path = pendingTrash;
-    trashDialog?.close();
+    pendingTrash = null;
     if (!path) return;
     try {
       await trashSqlFile(path);
@@ -337,30 +336,17 @@
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => (menu = null)} />
 {/if}
 
-<dialog
-  class="trash-dialog"
-  bind:this={trashDialog}
-  oncancel={(event) => {
-    event.preventDefault();
-    trashDialog?.close();
-  }}
-  onclose={() => (pendingTrash = null)}
->
-  <h2>
-    {pendingTrash
-      ? $t("workspace.files.trashTitle", { name: fileNameFromPath(pendingTrash) })
-      : $t("workspace.files.trashTitleFallback")}
-  </h2>
-  <p>{$t("workspace.files.trashMessage")}</p>
-  <div class="dialog-actions">
-    <button
-      type="button"
-      class="secondary-action"
-      onclick={() => trashDialog?.close()}>{$t("common.cancel")}</button
-    >
-    <button type="button" class="primary-action" onclick={() => void confirmTrash()}>{$t("workspace.files.trash")}</button>
-  </div>
-</dialog>
+{#if pendingTrash}
+  {@const path = pendingTrash}
+  <ConfirmDialog
+    tone="warning"
+    title={$t("workspace.files.trashTitle", { name: fileNameFromPath(path) })}
+    message={$t("workspace.files.trashMessage")}
+    confirmLabel={$t("workspace.files.trash")}
+    onconfirm={() => void confirmTrash()}
+    oncancel={() => (pendingTrash = null)}
+  />
+{/if}
 
 <style>
   .file-tree {
@@ -571,68 +557,4 @@
     font: inherit;
   }
 
-  .trash-dialog {
-    width: min(22rem, calc(100vw - 2rem));
-    padding: var(--space-5);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-  }
-
-  .trash-dialog h2 {
-    margin: 0;
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    overflow-wrap: anywhere;
-  }
-
-  .trash-dialog p {
-    margin: var(--space-2) 0 var(--space-5);
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-  }
-
-  .dialog-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-
-  .dialog-actions button {
-    min-height: 2rem;
-    padding: var(--space-1) var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-  }
-
-  .secondary-action {
-    background: var(--surface);
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover {
-    background: var(--surface-hover);
-  }
-
-  .primary-action {
-    border-color: transparent !important;
-    background: var(--accent);
-    color: var(--text-on-accent);
-    font-weight: 500;
-  }
-
-  .primary-action:hover {
-    background: var(--accent-hover);
-  }
-
-  .dialog-actions button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
 </style>

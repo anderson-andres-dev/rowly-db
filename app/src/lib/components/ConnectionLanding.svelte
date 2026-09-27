@@ -208,7 +208,7 @@
                           <EnvironmentBadge environment="production" />
                         {/if}
                       </span>
-                      <span class="meta" title={endpoint(profile)}>
+                      <span class="meta">
                         {driver.name}<span class="sep">·</span>{profile.database}@{shortEndpoint(profile)}
                       </span>
                     </span>
@@ -583,14 +583,11 @@
     gap: 2px;
   }
 
-  /* El espacio de las acciones se reserva solo en la linea del nombre: la
-     de base@host usa todo el ancho de la tarjeta. */
   .card-name {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: var(--space-2);
-    padding-right: 3.5rem;
   }
 
   .card-text strong {
@@ -614,15 +611,34 @@
     opacity: 0.6;
   }
 
-  /* Las acciones aparecen al pasar el mouse o al llegar a ellas con Tab.
-     El foco en la tarjeta misma (la ultima conexion) no las muestra: la
-     tarjeta queda limpia. */
+  /* Las acciones aparecen al pasar el mouse o al llegar a ellas con Tab,
+     centradas a la derecha sobre un velo del fondo de la tarjeta que tapa el
+     final del texto. El foco en la tarjeta misma (la ultima conexion) no las
+     muestra: la tarjeta queda limpia. */
   .card-corner {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-3) 0 var(--space-6);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background: linear-gradient(90deg, transparent, var(--surface-elevated) var(--space-5));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--duration-fast);
+  }
+
+  .card:hover .card-corner,
+  .card.connecting .card-corner,
+  .card:has(.corner-button:focus-visible) .card-corner {
+    opacity: 1;
+  }
+
+  .card-corner > :global(*) {
+    pointer-events: auto;
   }
 
   /* --- Lista compacta ---------------------------------------------------- */

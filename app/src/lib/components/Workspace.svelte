@@ -272,7 +272,6 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
   let renameInput = $state<HTMLInputElement>();
-  let closeDialog = $state<HTMLDialogElement>();
   let pendingCloseId = $state<string | null>(null);
   // Titulo congelado al abrir: si la consola se cierra (Descartar) mientras
   // el modal se desvanece, el titulo no debe cambiar a mitad de animacion.
@@ -454,30 +453,24 @@
       forgetConsoleResults(id);
       return;
     }
-    pendingCloseId = id;
     closeDialogTitle = item ? consoleDisplayTitle(item.title, $t) : $t("workspace.consoleFallback");
-    await tick();
-    closeDialog?.showModal();
-    // El foco va al dialogo y no a un boton: asi ninguno aparece con el
-    // anillo de foco al abrir y un Enter accidental no dispara nada. Esc
-    // sigue cancelando y Tab entra a los botones.
-    closeDialog?.focus();
+    pendingCloseId = id;
   }
 
-  // pendingCloseId se limpia en el onclose del dialogo (al terminar su
-  // animacion de salida), no aca.
+  // Las tres respuestas llegan cuando el aviso (ConfirmDialog) termino de
+  // cerrarse.
   function cancelClose() {
-    closeDialog?.close();
+    pendingCloseId = null;
   }
 
   function discardAndClose() {
-    if (pendingCloseId) {
-      closeQueryConsole(profileId, pendingCloseId);
-      forgetResultEdits(pendingCloseId);
-      forgetLog(pendingCloseId);
-      forgetConsoleResults(pendingCloseId);
-    }
-    closeDialog?.close();
+    const id = pendingCloseId;
+    pendingCloseId = null;
+    if (!id) return;
+    closeQueryConsole(profileId, id);
+    forgetResultEdits(id);
+    forgetLog(id);
+    forgetConsoleResults(id);
   }
 
   // Guarda (con el dialogo de "Guardar como" si es una consola) y recien
@@ -485,9 +478,9 @@
   // pestaña queda abierta.
   async function saveAndClose() {
     const id = pendingCloseId;
+    pendingCloseId = null;
     const item = id ? currentConsole(id) : undefined;
     if (!id || !item) return;
-    closeDialog?.close();
     if (await runFileAction(() => saveConsole(item))) {
       closeQueryConsole(profileId, id);
       forgetResultEdits(id);
@@ -497,7 +490,7 @@
   }
 
   function handleConsoleShortcut(event: KeyboardEvent) {
-    if (event.defaultPrevented || closeDialog?.open) return;
+    if (event.defaultPrevented || pendingCloseId !== null) return;
     if (event.target instanceof Element && event.target.closest("dialog")) return;
 
     const newConsoleKeys = shortcutKeys("new-query-console");
@@ -1413,27 +1406,18 @@
   </div>
 {/if}
 
-<dialog
-  class="close-console-dialog"
-  tabindex="-1"
-  bind:this={closeDialog}
-  oncancel={(event) => {
-    event.preventDefault();
-    cancelClose();
-  }}
-  onclose={() => (pendingCloseId = null)}
->
-  <div class="dialog-icon" aria-hidden="true">
-    <TriangleAlert size={24} strokeWidth={2} />
-  </div>
-  <h2>{$t("workspace.close.title", { title: closeDialogTitle })}</h2>
-  <p class="dialog-message">{$t("workspace.close.message")}</p>
-  <div class="dialog-actions">
-    <button type="button" class="secondary-action" onclick={cancelClose}>{$t("common.cancel")}</button>
-    <button type="button" class="danger-action" onclick={discardAndClose}>{$t("common.discard")}</button>
-    <button type="button" class="primary-action" onclick={() => void saveAndClose()}>{$t("common.save")}</button>
-  </div>
-</dialog>
+{#if pendingCloseId}
+  <ConfirmDialog
+    tone="warning"
+    title={$t("workspace.close.title", { title: closeDialogTitle })}
+    message={$t("workspace.close.message")}
+    confirmLabel={$t("common.save")}
+    alternateLabel={$t("common.discard")}
+    onconfirm={() => void saveAndClose()}
+    onalternate={discardAndClose}
+    oncancel={cancelClose}
+  />
+{/if}
 
 <style>
   .workspace {
@@ -1761,118 +1745,6 @@
     overflow: hidden;
   }
 
-  /* Todo centrado: icono, titulo y mensaje apilados, y los tres botones
-     del mismo ancho en una fila. Colores planos, sin degradados. */
-  .close-console-dialog {
-    width: min(25rem, calc(100vw - 2rem));
-    padding: 2rem 1.75rem 1.75rem;
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    text-align: center;
-    outline: none;
-  }
-
-  .close-console-dialog[open] {
-    animation: dialog-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  @keyframes dialog-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px) scale(0.97);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .close-console-dialog[open] {
-      animation: none;
-    }
-  }
-
-  .dialog-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.5rem;
-    height: 3.5rem;
-    margin: 0 auto 1.25rem;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--warning) 14%, transparent);
-    color: var(--warning);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    letter-spacing: var(--tracking-heading);
-    overflow-wrap: anywhere;
-  }
-
-  .dialog-message {
-    margin: var(--space-2) 0 1.75rem;
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    line-height: 1.5;
-  }
-
-  .dialog-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.625rem;
-  }
-
-  .dialog-actions button {
-    /* Sin borde en ninguno: con borde, el relleno de un boton "neutro"
-       arranca 1px mas adentro que el de los de color y se ve mas bajo
-       aunque midan lo mismo. */
-    height: 2.5rem;
-    padding: 0 var(--space-3);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      border-color 120ms ease;
-  }
-
-  .close-console-dialog .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .close-console-dialog .secondary-action:hover {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  /* Rojo saturado propio: --danger en los temas oscuros es un rosado
-     pensado para texto y como relleno se ve lavado. */
-  .danger-action {
-    background: var(--danger-solid);
-    color: #fff;
-  }
-
-  .danger-action:hover {
-    background: var(--danger-solid-hover);
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover {
-    background: var(--accent-hover);
-  }
-
   .notice {
     position: fixed;
     right: var(--space-4);
@@ -1926,10 +1798,5 @@
   .notice-close:hover {
     background: var(--surface);
     color: var(--text-primary);
-  }
-
-  .dialog-actions button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
   }
 </style>

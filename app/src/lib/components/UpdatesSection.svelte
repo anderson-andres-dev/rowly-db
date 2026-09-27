@@ -266,6 +266,7 @@
 {#if pendingRollback}
   {@const target = pendingRollback}
   <ConfirmDialog
+    tone="warning"
     title={$t("updates.rollback.title", { version: `v${target.version}` })}
     message={$t("updates.rollback.message", {
       version: `v${target.version}`,
