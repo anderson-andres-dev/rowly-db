@@ -46,6 +46,9 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "cancel-query", zone: "global", group: "editor", defaultKeys: "Escape" },
   { id: "query-history", zone: "global", group: "editor", defaultKeys: "Ctrl+E" },
   { id: "format-sql", zone: "editor", group: "editor", defaultKeys: "Ctrl+L" },
+  // Como en DataGrip; solo errores (docs/specs/v0.2-diagnosticos.md).
+  { id: "next-diagnostic", zone: "editor", group: "editor", defaultKeys: "F2" },
+  { id: "previous-diagnostic", zone: "editor", group: "editor", defaultKeys: "Shift+F2" },
   { id: "select-all", zone: "editor", group: "editor", defaultKeys: "Ctrl+A" },
   { id: "add-result-row", zone: "results", group: "results", defaultKeys: "Alt+Insert" },
   { id: "delete-result-rows", zone: "results", group: "results", defaultKeys: "Ctrl+Y" },

@@ -448,6 +448,20 @@ async fn execute_query(
         None => connector.execute_query(final_sql, options).await,
     };
 
+    // La posicion del error, referida al SQL del usuario y no al reescrito
+    // para ordenar o paginar (error_position.rs).
+    let result = match result {
+        QueryExecutionResult::Error {
+            message,
+            code,
+            position: Some(position),
+        } => QueryExecutionResult::Error {
+            message,
+            code,
+            position: khipu_engine::error_position::map_error_position(sql, final_sql, position),
+        },
+        other => other,
+    };
     let page = matches!(result, QueryExecutionResult::ResultSet { .. }).then_some(PageInfo {
         offset: if pageable { offset } else { 0 },
         page_size,

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { splitStatements, statementAt } from "$lib/sqlStatements";
+  import { addDiagnostics, clearDiagnosticsIn, errorRange, jumpToDiagnostic, sqlDiagnostics } from "$lib/sqlDiagnostics";
   import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
@@ -258,7 +259,13 @@
       statements.length > 1
         ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
         : undefined;
-    view.dispatch({ effects: setExecutionMarker.of({ from, to: from + sql.length, status: "pending", parts }) });
+    view.dispatch({
+      effects: [
+        setExecutionMarker.of({ from, to: from + sql.length, status: "pending", parts }),
+        // Volver a ejecutar la sentencia quita sus errores anteriores.
+        clearDiagnosticsIn.of({ from, to: from + sql.length }),
+      ],
+    });
     awaitingResult = { result };
     onexecute?.(sql);
     return true;
@@ -277,6 +284,8 @@
     "format-sql": whenFocused(formatCurrentSql),
     "execute-query": whenFocused(executeCurrentSql),
     "execute-script": whenFocused(executeAllSql),
+    "next-diagnostic": whenFocused((current) => jumpToDiagnostic(current, 1)),
+    "previous-diagnostic": whenFocused((current) => jumpToDiagnostic(current, -1)),
   });
 
   // moveCompletionSelection() es un no-op (devuelve false) si el tooltip de
@@ -326,6 +335,15 @@
     if (view) toggleSearchPanel(view);
   }
 
+  // Un error de la base, ubicado en la sentencia [from, to) que lo produjo
+  // (sqlDiagnostics.ts). Sin pista de donde, la sentencia entera.
+  function diagnosticFor(from: number, to: number, result: QueryExecutionResult) {
+    if (!view || result.type !== "error") return [];
+    const statement = view.state.sliceDoc(from, to);
+    const range = errorRange(statement, result) ?? { from: 0, to: statement.length };
+    return [{ from: from + range.from, to: from + range.to, message: result.message, code: result.code }];
+  }
+
   // Script en curso lanzado desde este editor: la sentencia `index` empieza
   // a correr o termina. Sin script pendiente (p. ej. se ejecuto desde el
   // historial), no hace nada.
@@ -336,7 +354,12 @@
     if (!marker?.parts || !part) return;
     const next = outcome === "running" ? { ...part, status: "running" as const } : markerFromResult(part.from, part.to, outcome);
     const parts = marker.parts.map((item, position) => (position === index ? next : item));
-    view.dispatch({ effects: setExecutionMarker.of({ ...marker, parts }) });
+    view.dispatch({
+      effects: [
+        setExecutionMarker.of({ ...marker, parts }),
+        addDiagnostics.of(outcome === "running" ? [] : diagnosticFor(part.from, part.to, outcome)),
+      ],
+    });
   }
 
   // Vuelve al editor con el cursor donde estaba (CodeMirror conserva la
@@ -373,6 +396,7 @@
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
         activeStatementHighlight,
         executionMarker,
+        sqlDiagnostics,
         behaviorCompartment.of(get(editorSettings).autoUppercaseKeywords ? autoUppercaseSqlKeywords : []),
         themeCompartment.of(buildCmTheme(get(editorPalette), get(effectiveScheme))),
         phrasesCompartment.of(buildPhrases()),
@@ -420,7 +444,11 @@
     if (!isExecuting && current && current !== awaitingResult.result) {
       awaitingResult = null;
       view.dispatch({
-        effects: setExecutionMarker.of({ ...markerFromResult(marker.from, marker.to, current), parts: marker.parts }),
+        effects: [
+          setExecutionMarker.of({ ...markerFromResult(marker.from, marker.to, current), parts: marker.parts }),
+          // En un script, el error ya lo puso markStatement en su sentencia.
+          addDiagnostics.of(!marker.parts ? diagnosticFor(marker.from, marker.to, current) : []),
+        ],
       });
       return;
     }
