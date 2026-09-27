@@ -517,7 +517,7 @@
     align-items: center;
     gap: var(--space-3);
     overflow: hidden;
-    padding: var(--space-3) 3.75rem var(--space-3) var(--space-3);
+    padding: var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-elevated);
@@ -583,11 +583,14 @@
     gap: 2px;
   }
 
+  /* El espacio de las acciones se reserva solo en la linea del nombre: la
+     de base@host usa todo el ancho de la tarjeta. */
   .card-name {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: var(--space-2);
+    padding-right: 3.5rem;
   }
 
   .card-text strong {
@@ -599,17 +602,15 @@
   }
 
   .meta {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 5px;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 0.8rem;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .sep {
+    margin: 0 5px;
     opacity: 0.6;
   }
 
@@ -618,11 +619,10 @@
      tarjeta queda limpia. */
   .card-corner {
     position: absolute;
-    top: 50%;
+    top: var(--space-2);
     right: var(--space-2);
     display: flex;
     gap: 2px;
-    transform: translateY(-50%);
   }
 
   /* --- Lista compacta ---------------------------------------------------- */
