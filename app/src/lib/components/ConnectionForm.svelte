@@ -1,6 +1,7 @@
 <script lang="ts">
   import DriverLogo from "$lib/components/DriverLogo.svelte";
-  import { Check, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
+  import { Check, ChevronDown, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
+  import { slide } from "svelte/transition";
   import Field from "$lib/components/Field.svelte";
   import Button from "$lib/components/Button.svelte";
   import ColorPicker from "$lib/components/ColorPicker.svelte";
@@ -121,13 +122,20 @@
     { value: "restart", label: $t("connections.form.policy.restart") },
     { value: "forever", label: $t("connections.form.policy.forever") },
   ]);
-  const tlsModeOptions: { value: TlsMode; label: string }[] = $derived([
-    { value: "auto", label: $t("connections.form.tls.auto") },
-    { value: "required", label: $t("connections.form.tls.required") },
-    { value: "verifyCa", label: $t("connections.form.tls.verifyCa") },
-    { value: "verifyIdentity", label: $t("connections.form.tls.verifyIdentity") },
-    { value: "disabled", label: $t("connections.form.tls.disabled") },
-  ]);
+  // SSL es un interruptor: encendido queda en Automatico (lo recomendado) y
+  // solo quien despliega las opciones elige un modo mas estricto.
+  const SSL_MODES = ["auto", "required", "verifyCa", "verifyIdentity"] as const satisfies TlsMode[];
+  const sslEnabled = $derived(tlsMode !== "disabled");
+  let sslExpanded = $state(false);
+
+  function toggleSsl() {
+    if (sslEnabled) {
+      tlsMode = "disabled";
+      sslExpanded = false;
+    } else {
+      tlsMode = "auto";
+    }
+  }
 
   function sslUrlParameter(mode: TlsMode): string {
     if (driverDefinition.backendKind === "mysql") {
@@ -461,16 +469,61 @@
       </section>
 
       <section class="section">
-        <Field
-          label={$t("connections.form.ssl")}
-          id="tls-mode"
-          name="tls-mode"
-          type="select"
-          bind:value={tlsMode}
-          options={tlsModeOptions}
-          orientation="horizontal"
-          disabled={busy}
-        />
+        <div class="ssl-row">
+          <span class="row-label" id="ssl-label">{$t("connections.form.ssl")}</span>
+          <div class="ssl-controls">
+            <button
+              class="switch"
+              class:enabled={sslEnabled}
+              type="button"
+              role="switch"
+              aria-checked={sslEnabled}
+              aria-labelledby="ssl-label"
+              disabled={busy}
+              onclick={toggleSsl}
+            >
+              <span></span>
+            </button>
+            {#if sslEnabled}
+              <button
+                class="ssl-summary"
+                type="button"
+                aria-expanded={sslExpanded}
+                aria-controls="ssl-modes"
+                aria-label={$t("connections.form.ssl.options")}
+                disabled={busy}
+                onclick={() => (sslExpanded = !sslExpanded)}
+              >
+                {$t(`connections.form.tls.${tlsMode}`)}
+                <ChevronDown size={13} class="ssl-chevron" aria-hidden="true" />
+              </button>
+            {:else}
+              <span class="ssl-off">{$t("connections.form.tls.disabled")}</span>
+            {/if}
+          </div>
+
+          {#if sslEnabled && sslExpanded}
+            <div id="ssl-modes" class="ssl-modes" role="radiogroup" aria-labelledby="ssl-label" transition:slide={{ duration: 140 }}>
+              {#each SSL_MODES as mode (mode)}
+                <button
+                  class="ssl-mode"
+                  class:selected={tlsMode === mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={tlsMode === mode}
+                  disabled={busy}
+                  onclick={() => (tlsMode = mode)}
+                >
+                  <span class="radio" aria-hidden="true"></span>
+                  <span class="ssl-mode-text">
+                    <strong>{$t(`connections.form.tls.${mode}`)}</strong>
+                    <span>{$t(`connections.form.tls.${mode}.description`)}</span>
+                  </span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
 
         {#if verifiesCertificate}
           <Field
@@ -781,6 +834,168 @@
   .environment-hint {
     grid-column: 2;
     margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .ssl-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+
+  .ssl-controls {
+    display: flex;
+    min-height: 2.125rem;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .switch {
+    position: relative;
+    width: 2.25rem;
+    height: 1.25rem;
+    flex: 0 0 auto;
+    padding: 2px;
+    border: 1px solid var(--control-border);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    transition:
+      border-color var(--duration-fast),
+      background-color var(--duration-fast);
+  }
+
+  .switch span {
+    display: block;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition:
+      transform var(--duration-fast),
+      background-color var(--duration-fast);
+  }
+
+  .switch.enabled {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  }
+
+  .switch.enabled span {
+    transform: translateX(0.95rem);
+    background: var(--accent);
+  }
+
+  .switch:focus-visible,
+  .ssl-summary:focus-visible,
+  .ssl-mode:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .switch:disabled,
+  .ssl-summary:disabled,
+  .ssl-mode:disabled {
+    cursor: default;
+  }
+
+  .ssl-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: color var(--duration-fast);
+  }
+
+  .ssl-summary:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+
+  .ssl-summary :global(.ssl-chevron) {
+    transition: transform var(--duration-fast);
+  }
+
+  .ssl-summary[aria-expanded="true"] :global(.ssl-chevron) {
+    transform: rotate(180deg);
+  }
+
+  .ssl-off {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .ssl-modes {
+    display: flex;
+    grid-column: 2;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+  }
+
+  .ssl-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--duration-fast);
+  }
+
+  .ssl-mode:hover:not(:disabled, .selected) {
+    background: color-mix(in srgb, var(--surface) 50%, transparent);
+  }
+
+  .ssl-mode.selected {
+    background: var(--surface);
+  }
+
+  .radio {
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: 2px;
+    box-sizing: border-box;
+    border: 1px solid var(--control-border);
+    border-radius: 50%;
+    transition:
+      border-color var(--duration-fast),
+      border-width var(--duration-fast);
+  }
+
+  .ssl-mode.selected .radio {
+    border: 4px solid var(--accent);
+  }
+
+  .ssl-mode-text {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ssl-mode-text strong {
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .ssl-mode-text span {
     color: var(--text-secondary);
     font-size: 0.75rem;
   }

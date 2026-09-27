@@ -1,12 +1,13 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { fly } from "svelte/transition";
   import { Check, ChevronDown, FolderMinus, Plus } from "@lucide/svelte";
   import { t } from "$lib/i18n";
 
   // Pastilla para elegir el grupo de una conexion: sin grupo muestra
-  // "+ Añadir grupo"; con grupo, su nombre. Al abrirla se escribe en la
-  // misma pastilla y abajo se listan los grupos existentes filtrados, con
-  // "Crear «x»" cuando lo escrito no existe todavia.
+  // "+ Añadir grupo"; con grupo, su nombre. La pastilla no cambia de forma al
+  // abrirse: debajo aparece un menu con un filtro arriba y los grupos
+  // existentes, con "Crear «x»" cuando lo escrito no existe todavia.
   let {
     value = $bindable<string | undefined>(undefined),
     groups,
@@ -22,6 +23,7 @@
   let query = $state("");
   let active = $state(0);
   let input = $state<HTMLInputElement>();
+  let trigger = $state<HTMLButtonElement>();
   let root = $state<HTMLElement>();
 
   const trimmed = $derived(query.trim());
@@ -74,6 +76,7 @@
       event.preventDefault();
       event.stopPropagation();
       close();
+      trigger?.focus();
     }
   }
 
@@ -89,64 +92,75 @@
 </script>
 
 <div class="group-picker" bind:this={root} onfocusout={handleFocusOut}>
-  {#if open}
-    <div class="pill editing">
+  <button
+    bind:this={trigger}
+    type="button"
+    class="pill"
+    class:add={!value}
+    class:open
+    {disabled}
+    title={value ? $t("connections.group.change") : undefined}
+    aria-haspopup="listbox"
+    aria-expanded={open}
+    onclick={() => (open ? close() : openPicker())}
+  >
+    {#if value}
+      <span class="pill-label">{value}</span>
+      <ChevronDown size={13} class="pill-chevron" aria-hidden="true" />
+    {:else}
       <Plus size={13} aria-hidden="true" />
+      <span>{$t("connections.group.add")}</span>
+    {/if}
+  </button>
+
+  {#if open}
+    <div class="menu" transition:fly={{ y: -4, duration: 120 }}>
       <input
         bind:this={input}
         bind:value={query}
-        placeholder={value ? value : $t("connections.group.add")}
+        class="filter"
+        placeholder={$t("connections.group.search")}
         aria-label={$t("connections.group.search")}
         aria-autocomplete="list"
-        aria-controls="group-picker-menu"
+        aria-controls="group-picker-list"
         aria-activedescendant={options[active] ? `group-option-${active}` : undefined}
         role="combobox"
         aria-expanded="true"
         onkeydown={handleKeydown}
       />
-    </div>
 
-    {#if options.length > 0}
-      <div id="group-picker-menu" class="menu" role="listbox" aria-label={$t("connections.group.list")}>
-        {#each options as option, index (option.kind + option.group)}
-          <button
-            id={`group-option-${index}`}
-            type="button"
-            role="option"
-            aria-selected={index === active}
-            class:active={index === active}
-            class:remove={option.kind === "remove"}
-            tabindex="-1"
-            onmousedown={(event) => event.preventDefault()}
-            onmouseenter={() => (active = index)}
-            onclick={() => choose(option)}
-          >
-            {#if option.kind === "create"}
-              <Plus size={13} aria-hidden="true" />
-              <span>{$t("connections.group.create", { name: option.group })}</span>
-            {:else if option.kind === "remove"}
-              <FolderMinus size={13} aria-hidden="true" />
-              <span>{$t("connections.group.remove")}</span>
-            {:else}
-              <span class="check">
-                {#if option.group === value}<Check size={13} aria-hidden="true" />{/if}
-              </span>
-              <span>{option.group}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-    {/if}
-  {:else if value}
-    <button type="button" class="pill selected" {disabled} title={$t("connections.group.change")} onclick={openPicker}>
-      <span class="pill-label">{value}</span>
-      <ChevronDown size={13} aria-hidden="true" />
-    </button>
-  {:else}
-    <button type="button" class="pill add" {disabled} onclick={openPicker}>
-      <Plus size={13} aria-hidden="true" />
-      <span>{$t("connections.group.add")}</span>
-    </button>
+      {#if options.length > 0}
+        <div id="group-picker-list" class="options" role="listbox" aria-label={$t("connections.group.list")}>
+          {#each options as option, index (option.kind + option.group)}
+            <button
+              id={`group-option-${index}`}
+              type="button"
+              role="option"
+              aria-selected={index === active}
+              class:active={index === active}
+              class:remove={option.kind === "remove"}
+              tabindex="-1"
+              onmousedown={(event) => event.preventDefault()}
+              onmouseenter={() => (active = index)}
+              onclick={() => choose(option)}
+            >
+              {#if option.kind === "create"}
+                <Plus size={13} aria-hidden="true" />
+                <span>{$t("connections.group.create", { name: option.group })}</span>
+              {:else if option.kind === "remove"}
+                <FolderMinus size={13} aria-hidden="true" />
+                <span>{$t("connections.group.remove")}</span>
+              {:else}
+                <span class="check">
+                  {#if option.group === value}<Check size={13} aria-hidden="true" />{/if}
+                </span>
+                <span>{option.group}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -207,40 +221,59 @@
     text-overflow: ellipsis;
   }
 
-  .pill.editing {
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 1px var(--focus-ring);
-    color: var(--accent);
-    cursor: text;
+  .pill.open {
+    background: color-mix(in srgb, var(--surface-elevated) 80%, var(--text-primary));
   }
 
-  .pill.editing input {
-    width: 9rem;
-    padding: 0;
-    border: 0;
-    outline: none;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
+  :global(:root[data-scheme="light"]) .pill.open {
+    background: var(--surface-hover);
   }
 
-  .pill.editing input::placeholder {
-    color: var(--text-secondary);
+  .pill :global(.pill-chevron) {
+    flex-shrink: 0;
+    transition: transform var(--duration-fast);
   }
 
+  .pill.open :global(.pill-chevron) {
+    transform: rotate(180deg);
+  }
+
+  /* Alineado a la derecha: la pastilla vive en el borde derecho del
+     formulario y el menu no debe salirse del modal. */
   .menu {
     position: absolute;
     z-index: 30;
     top: calc(100% + 4px);
-    left: 0;
-    min-width: 12rem;
-    max-height: 14rem;
-    overflow-y: auto;
+    right: 0;
+    width: 13rem;
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-elevated);
+  }
+
+  .filter {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px var(--space-2);
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.8125rem;
+  }
+
+  .filter::placeholder {
+    color: var(--text-secondary);
+  }
+
+  .options {
+    max-height: 12rem;
+    overflow-y: auto;
+    padding-top: 4px;
   }
 
   .menu button {
