@@ -13,7 +13,7 @@ use khipu_driver_core::{
 use khipu_engine::Dialect;
 use khipu_engine::catalog::CatalogTable;
 use khipu_engine::execution_guard::{
-    DestructiveClassification, DestructiveStatement, classify_destructive_sql,
+    DestructiveClassification, DestructiveStatement, classify_sql,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -60,6 +60,9 @@ struct PageInfo {
 struct ActiveConnection {
     connector: Arc<dyn DbConnector>,
     dialect: Dialect,
+    /// The profile is marked as production: every write asks for
+    /// confirmation (`DestructiveStatement::WriteInProduction`).
+    production: bool,
     server_version: String,
     tls: TlsStatus,
     default_schema: String,
@@ -239,6 +242,7 @@ async fn set_visible_schemas(
 async fn connect(
     kind: drivers::DatabaseKind,
     config: ConnectionConfig,
+    production: Option<bool>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<usize, String> {
@@ -258,6 +262,7 @@ async fn connect(
             ActiveConnection {
                 connector: connected.connector,
                 dialect: kind.dialect(),
+                production: production.unwrap_or(false),
                 server_version: connected.server_version,
                 tls: connected.tls,
                 default_schema: connected.default_schema,
@@ -298,13 +303,17 @@ async fn execute_query(
         });
     }
 
-    let (connector, dialect) = {
+    let (connector, dialect, production) = {
         let guard = state
             .connections
             .lock()
             .expect("connections mutex poisoned");
         match guard.get(window.label()) {
-            Some(active) => (Arc::clone(&active.connector), active.dialect),
+            Some(active) => (
+                Arc::clone(&active.connector),
+                active.dialect,
+                active.production,
+            ),
             None => {
                 return Ok(ExecuteQueryResponse::Completed {
                     page: None,
@@ -318,7 +327,7 @@ async fn execute_query(
         }
     };
 
-    let classification = match classify_destructive_sql(sql, dialect) {
+    let classification = match classify_sql(sql, dialect, production) {
         Ok(classification) => classification,
         Err(error) => {
             return Ok(ExecuteQueryResponse::Completed {

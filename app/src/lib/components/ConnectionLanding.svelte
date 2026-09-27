@@ -1,5 +1,6 @@
 <script lang="ts">
   import DriverLogo from "$lib/components/DriverLogo.svelte";
+  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
   import { browser } from "$app/environment";
   import { LayoutGrid, List, LoaderCircle, Pencil, Plus, Trash2 } from "@lucide/svelte";
   import Button from "$lib/components/Button.svelte";
@@ -193,7 +194,12 @@
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={40} />
                     <span class="card-text">
-                      <strong>{profile.name}</strong>
+                      <span class="card-name">
+                        <strong>{profile.name}</strong>
+                        {#if profile.environment}
+                          <EnvironmentBadge environment={profile.environment} />
+                        {/if}
+                      </span>
                       <span class="meta">{driver.name}<span class="sep">·</span>{profile.database}</span>
                       <code class="endpoint">{endpoint(profile)}</code>
                     </span>
@@ -229,7 +235,12 @@
                     onclick={() => onconnect(profile)}
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={24} />
-                    <strong class="row-name">{profile.name}</strong>
+                    <span class="row-name">
+                      <strong>{profile.name}</strong>
+                      {#if profile.environment}
+                        <EnvironmentBadge environment={profile.environment} />
+                      {/if}
+                    </span>
                     <span class="row-driver">
                       <DriverLogo driver={profile.driver} size={13} />
                       {driver.name}
@@ -563,6 +574,13 @@
     gap: 2px;
   }
 
+  .card-name {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
   .card-text strong {
     overflow: hidden;
     font-size: 0.875rem;
@@ -670,7 +688,15 @@
   }
 
   .row-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     font-weight: 600;
+  }
+
+  .row-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .row-driver {

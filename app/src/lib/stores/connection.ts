@@ -1,10 +1,10 @@
-import { get, writable } from "svelte/store";
+import { derived, get, writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { browser } from "$app/environment";
 import type { CatalogTable, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
 import { getDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
-import { removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
+import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
 import { forgetProfileConsoles } from "./queryConsoles";
 import { closeSqlFolder } from "./sqlFolders";
 
@@ -28,6 +28,18 @@ const initialState: ConnectionState = {
 };
 
 export const connection = writable<ConnectionState>(initialState);
+
+// Perfil de la conexion activa de esta ventana (null sin conexion).
+export const activeProfile = derived(
+  [connection, connectionProfiles],
+  ([$connection, $profiles]) =>
+    ($connection.connected && $profiles.find((profile) => profile.id === $connection.profileId)) || null,
+);
+
+// La conexion activa es de produccion: el backend ya pide confirmar cada
+// escritura; la interfaz lo hace visible y confirma tambien los cambios del
+// grid antes de aplicarlos.
+export const isProduction = derived(activeProfile, ($profile) => $profile?.environment === "production");
 
 // Tablas del catalogo cargado por el ultimo connect() exitoso. Se usa tanto
 // para el arbol de tablas del sidebar (SchemaTree.svelte) como para el
@@ -101,11 +113,12 @@ export interface ConnectionConfig {
 export async function connect(
   kind: "mysql" | "postgres",
   config: ConnectionConfig,
+  production = false,
 ): Promise<number | null> {
   connection.update((state) => ({ ...state, connecting: true, error: null }));
 
   try {
-    const tableCount = await invoke<number>("connect", { kind, config });
+    const tableCount = await invoke<number>("connect", { kind, config, production });
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
     databaseExplorer.set(await invoke<DatabaseExplorer | null>("database_explorer"));
     return tableCount;
@@ -182,7 +195,7 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
     password,
     tlsMode: profile.tlsMode,
     caCertificatePath: profile.caCertificatePath,
-  });
+  }, profile.environment === "production");
   if (tableCount === null) {
     return { ok: false, reason: "connect-failed", error: get(connection).error ?? "" };
   }

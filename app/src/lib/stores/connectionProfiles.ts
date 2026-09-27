@@ -20,8 +20,25 @@ export interface ConnectionProfile {
   caCertificatePath?: string;
   // Grupo para ordenar la pantalla de conexiones ("Produccion", "Clientes").
   group?: string;
-  // Color de identidad de la conexion, "#rrggbb". Por ahora solo se guarda.
+  // Color de identidad de la conexion, "#rrggbb": tiñe el topbar y su tarjeta.
   color?: string;
+  // Para que es la base. A diferencia del grupo y el color, cambia el
+  // comportamiento: en "production" toda escritura pide confirmacion.
+  // Sin valor = sin especificar.
+  environment?: ConnectionEnvironment;
+}
+
+export type ConnectionEnvironment = "local" | "development" | "testing" | "production";
+
+export const CONNECTION_ENVIRONMENTS: readonly ConnectionEnvironment[] = [
+  "local",
+  "development",
+  "testing",
+  "production",
+];
+
+function isEnvironment(value: unknown): value is ConnectionEnvironment {
+  return CONNECTION_ENVIRONMENTS.includes(value as ConnectionEnvironment);
 }
 
 function isDriver(value: unknown): value is ConnectionDriver {
@@ -77,6 +94,7 @@ export function parseProfile(value: unknown): ConnectionProfile | null {
     caCertificatePath: optionalText(profile.caCertificatePath),
     group: optionalText(profile.group),
     color: isHexColor(profile.color) ? profile.color.toLowerCase() : undefined,
+    environment: isEnvironment(profile.environment) ? profile.environment : undefined,
   };
 }
 

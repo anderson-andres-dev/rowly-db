@@ -3,6 +3,7 @@
   import { t, type MessageKey } from "$lib/i18n";
   import { highlightSql } from "$lib/sqlHighlight";
   import type { ChangeError, ResultChanges } from "$lib/resultEditing";
+  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
 
   // Vista previa de los cambios pendientes: el SQL exacto que se va a
   // ejecutar. Llega ya generado (el padre lo pide al backend ANTES de abrir
@@ -14,6 +15,7 @@
     applying = false,
     error = null,
     dismiss = false,
+    production = false,
     onapply,
     onclose,
   }: {
@@ -24,6 +26,8 @@
     // El padre pide cerrar (p.ej. se aplico todo): se anima la salida y
     // recien al terminar llega onclose.
     dismiss?: boolean;
+    // Conexion de produccion: el boton lo dice y toma el tono de peligro.
+    production?: boolean;
     onapply: () => void;
     onclose: () => void;
   } = $props();
@@ -71,6 +75,9 @@
 >
   <header>
     <h2>{$t("results.changes.title")}</h2>
+    {#if production}
+      <EnvironmentBadge environment="production" />
+    {/if}
     <div class="summary">
       {#each summary as item (item.tone)}
         <span class={`chip ${item.tone}`}>{$t(item.count === 1 ? item.one : item.many, { count: item.count })}</span>
@@ -101,8 +108,12 @@
 
   <footer>
     <button type="button" class="secondary-action" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="primary-action" disabled={applying} onclick={onapply}>
-      {applying ? $t("results.changes.applying") : $t("results.applyChanges")}
+    <button type="button" class="primary-action" class:production disabled={applying} onclick={onapply}>
+      {applying
+        ? $t("results.changes.applying")
+        : production
+          ? $t("results.changes.applyInProduction")
+          : $t("results.applyChanges")}
     </button>
   </footer>
 </dialog>
@@ -308,6 +319,14 @@
 
   .primary-action:hover:not(:disabled) {
     background: var(--accent-hover);
+  }
+
+  .primary-action.production {
+    background: var(--danger-solid);
+  }
+
+  .primary-action.production:hover:not(:disabled) {
+    background: var(--danger-solid-hover);
   }
 
   footer button:focus-visible {

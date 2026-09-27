@@ -17,9 +17,11 @@
     type ConnectionConfig,
   } from "$lib/stores/connection";
   import {
+    CONNECTION_ENVIRONMENTS,
     connectionProfiles,
     createConnectionProfileId,
     saveConnectionProfile,
+    type ConnectionEnvironment,
     type ConnectionProfile,
   } from "$lib/stores/connectionProfiles";
   import {
@@ -48,6 +50,7 @@
   let name = $state("");
   let group = $state<string | undefined>(undefined);
   let color = $state<string | undefined>(undefined);
+  let environment = $state<ConnectionEnvironment | undefined>(undefined);
   let host = $state("localhost");
   let port = $state(0);
   let username = $state("");
@@ -153,6 +156,7 @@
       name = profile?.name ?? "";
       group = profile?.group;
       color = profile?.color;
+      environment = profile?.environment;
       host = profile?.host ?? "localhost";
       port = profile?.port ?? driverDefinition.defaultPort;
       username = profile?.username ?? "";
@@ -239,7 +243,7 @@
     attempted = true;
     persistenceError = null;
     testPopoverOpen = false;
-    const tableCount = await connect(driverDefinition.backendKind, config);
+    const tableCount = await connect(driverDefinition.backendKind, config, environment === "production");
     if (tableCount === null) return;
 
     saving = true;
@@ -250,6 +254,7 @@
         name: name.trim(),
         group,
         color,
+        environment,
         driver,
         host: config.host,
         port: config.port,
@@ -327,23 +332,48 @@
     }}
   >
     <div class="form-body">
-      <div class="name-row">
-        <Field
-          label={$t("connections.form.name")}
-          id="connection-name"
-          name="connection-name"
-          bind:value={name}
-          error={errors.name && $t(errors.name)}
-          autocomplete="off"
-          orientation="horizontal"
-          required
-          disabled={busy}
-        >
-          {#snippet trailing()}
-            <ColorPicker bind:value={color} disabled={busy} />
-          {/snippet}
-        </Field>
-        <GroupPicker bind:value={group} groups={existingGroups} disabled={busy} />
+      <div class="identity">
+        <div class="name-row">
+          <Field
+            label={$t("connections.form.name")}
+            id="connection-name"
+            name="connection-name"
+            bind:value={name}
+            error={errors.name && $t(errors.name)}
+            autocomplete="off"
+            orientation="horizontal"
+            required
+            disabled={busy}
+          >
+            {#snippet trailing()}
+              <ColorPicker bind:value={color} disabled={busy} />
+            {/snippet}
+          </Field>
+          <GroupPicker bind:value={group} groups={existingGroups} disabled={busy} />
+        </div>
+
+        <!-- Un clic elige el entorno; otro clic sobre el elegido lo quita. -->
+        <div class="environment-row">
+          <span class="row-label" id="environment-label">{$t("connections.environment.label")}</span>
+          <div class="environment-options" role="radiogroup" aria-labelledby="environment-label">
+            {#each CONNECTION_ENVIRONMENTS as option (option)}
+              <button
+                class="environment-option {option}"
+                class:selected={environment === option}
+                type="button"
+                role="radio"
+                aria-checked={environment === option}
+                disabled={busy}
+                onclick={() => (environment = environment === option ? undefined : option)}
+              >
+                {$t(`connections.environment.${option}`)}
+              </button>
+            {/each}
+          </div>
+          {#if environment === "production"}
+            <p class="environment-hint">{$t("connections.environment.productionHint")}</p>
+          {/if}
+        </div>
       </div>
 
       <section class="section">
@@ -684,6 +714,75 @@
      sin depender de align-items, que se correria si Nombre muestra error. */
   .name-row :global(.group-picker) {
     margin-top: 2px;
+  }
+
+  .identity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .environment-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+
+  .environment-options {
+    display: inline-flex;
+    justify-self: start;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+  }
+
+  .environment-option {
+    height: 1.75rem;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition:
+      background 120ms ease,
+      color 120ms ease;
+  }
+
+  .environment-option:hover:not(:disabled, .selected) {
+    color: var(--text-primary);
+  }
+
+  .environment-option.selected {
+    background: var(--surface);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .environment-option.production.selected {
+    background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+    color: var(--danger);
+  }
+
+  .environment-option:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .environment-option:disabled {
+    cursor: default;
+  }
+
+  .environment-hint {
+    grid-column: 2;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
   }
 
   .row-label {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Check, ChevronDown, SquareArrowOutUpRight } from "@lucide/svelte";
   import ConnectionAvatar from "$lib/components/ConnectionAvatar.svelte";
+  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
   import { getDriver } from "$lib/connections";
   import { NEUTRAL_IDENTITY_COLOR } from "$lib/connectionColors";
@@ -144,6 +145,9 @@
     {#if activeProfile}
       <DriverLogo driver={activeProfile.driver} size={16} />
       <span class="switcher-name">{activeProfile.name}</span>
+      {#if activeProfile.environment}
+        <EnvironmentBadge environment={activeProfile.environment} />
+      {/if}
     {:else}
       <span class="switcher-name">{$t("connections.switcher.none")}</span>
     {/if}
@@ -208,7 +212,7 @@
 
   .switcher-trigger {
     display: flex;
-    max-width: 14rem;
+    max-width: 18rem;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-1) var(--space-2);

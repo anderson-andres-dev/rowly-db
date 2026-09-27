@@ -187,7 +187,9 @@ export type DestructiveStatement =
   | "dropTable"
   | "dropSchema"
   | "dropDatabase"
-  | "dropColumn";
+  | "dropColumn"
+  // Cualquier escritura en una conexion marcada como Produccion.
+  | "writeInProduction";
 
 // Como se ubican las filas devueltas dentro del resultado completo.
 // pageable: false -> la sentencia no se pudo paginar (SHOW, FOR UPDATE...),

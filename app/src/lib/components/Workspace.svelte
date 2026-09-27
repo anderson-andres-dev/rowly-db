@@ -10,7 +10,7 @@
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
-  import { catalogTables, connection } from "$lib/stores/connection";
+  import { catalogTables, connection, isProduction } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
   import { extractFromContext } from "$lib/sqlSchema";
@@ -821,7 +821,13 @@
 
   // Aplica todo en una transaccion. Si falla no queda nada aplicado: los
   // cambios siguen pendientes y el error se muestra en la vista previa.
-  async function submitChanges(key: string) {
+  // En produccion nada se aplica sin ver antes el SQL: el atajo o el boton
+  // del grid abren la vista previa, y aplicar desde ella confirma.
+  async function submitChanges(key: string, confirmed = false) {
+    if ($isProduction && !confirmed) {
+      void openChangesPreview(key);
+      return;
+    }
     const consoleId = consoleOfKey(key);
     const current = currentChanges(key);
     if (!current || applyingChanges) return;
@@ -1244,6 +1250,7 @@
     {#if liveExecution.pendingConfirmation && activeConsole}
       <ExecutionGuard
         statement={liveExecution.pendingConfirmation.statement}
+        production={$isProduction}
         oncancel={() => cancelPendingExecution(activeConsole.id)}
         onconfirm={() => confirmPendingExecution(activeConsole.id)}
       />
@@ -1382,7 +1389,8 @@
     applying={applyingChanges}
     error={applyError}
     dismiss={current.dismiss}
-    onapply={() => void submitChanges(current.consoleId)}
+    production={$isProduction}
+    onapply={() => void submitChanges(current.consoleId, true)}
     onclose={() => {
       preview = null;
       applyError = null;
