@@ -307,13 +307,13 @@ describe("queryConsoles: pestañas de tabla", () => {
     expect(item.table?.mode).toBe("sql");
   });
 
-  it("una pestaña guardada antes del constructor con WHERE escrito sigue en SQL; sin WHERE, en el constructor", async () => {
+  it("una pestaña guardada antes del constructor abre en el constructor, sin el filtro viejo", async () => {
     const legacy = (where: string) =>
       JSON.stringify({
         consoles: [{ id: "t1", profileId: "p1", title: "t", sql: "", filePath: null, savedSql: "", table: { schema: "s", name: "t", where, orderBy: "" } }],
         activeByProfile: { p1: "t1" },
       });
-    for (const [where, mode] of [["id > 1", "sql"], ["", "builder"]] as const) {
+    for (const where of ["id > 1", ""]) {
       vi.resetModules();
       const storage = new Map([["khipu:query-consoles:v1", legacy(where)]]);
       vi.stubGlobal("localStorage", {
@@ -323,7 +323,8 @@ describe("queryConsoles: pestañas de tabla", () => {
       });
       const reloaded = await import("./queryConsoles");
       const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === "t1");
-      expect(item?.table?.mode).toBe(mode);
+      expect(item?.table?.mode).toBe("builder");
+      expect(item?.table?.where).toBe("");
     }
   });
 });

@@ -38,6 +38,10 @@ export interface TableTab {
   conditions: FilterCondition[];
 }
 
+function isFilterMode(value: unknown): value is TableTab["mode"] {
+  return value === "builder" || value === "sql";
+}
+
 function parseCondition(value: unknown): FilterCondition | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<FilterCondition>;
@@ -118,15 +122,12 @@ function parseTableTab(value: unknown): TableTab | null {
   return {
     schema: candidate.schema,
     name: candidate.name,
-    where: typeof candidate.where === "string" ? candidate.where : "",
-    orderBy: typeof candidate.orderBy === "string" ? candidate.orderBy : "",
-    // Pestañas guardadas antes del constructor: si ya tenian un WHERE escrito
-    // a mano, siguen en SQL para no perderlo.
-    mode: candidate.mode === "sql" || candidate.mode === "builder"
-      ? candidate.mode
-      : typeof candidate.where === "string" && candidate.where.trim() !== ""
-        ? "sql"
-        : "builder",
+    // Pestañas guardadas antes del constructor visual: abren en el
+    // constructor, sin el filtro viejo (un WHERE escrito a mano no se puede
+    // mostrar como condiciones, y aplicarlo oculto confundiria).
+    where: isFilterMode(candidate.mode) && typeof candidate.where === "string" ? candidate.where : "",
+    orderBy: isFilterMode(candidate.mode) && typeof candidate.orderBy === "string" ? candidate.orderBy : "",
+    mode: isFilterMode(candidate.mode) ? candidate.mode : "builder",
     conditions: Array.isArray(candidate.conditions)
       ? candidate.conditions.map(parseCondition).filter((item): item is FilterCondition => item !== null)
       : [],

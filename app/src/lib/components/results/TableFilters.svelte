@@ -389,14 +389,16 @@
     width: 1.75rem;
   }
 
+  /* El WHERE es lo que se escribe: se lleva el ancho. El ORDER BY es corto. */
   .filter {
     min-width: 0;
-    flex: 2 1 14rem;
+    flex: 1 1 auto;
     cursor: text;
   }
 
   .filter.order {
-    flex: 1 1 10rem;
+    width: 16rem;
+    flex: 0 1 16rem;
   }
 
   .filter.pending:not(:focus-within) {
