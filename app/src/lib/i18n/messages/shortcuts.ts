@@ -5,6 +5,8 @@ export default defineMessages({
   es: {
     "toggle-sidebar.label": "Ocultar panel de tablas",
     "toggle-sidebar.description": "Muestra u oculta el árbol de tablas del sidebar.",
+    "focus-zone-prefix.label": "Mover el foco",
+    "focus-zone-prefix.description": "Después, una flecha indica la zona: explorador, editor, resultados o archivos.",
     "select-all.label": "Seleccionar todo",
     "select-all.description": "Selecciona todo el texto del editor SQL.",
     "new-query-console.label": "Nueva consola SQL",
@@ -39,6 +41,8 @@ export default defineMessages({
   en: {
     "toggle-sidebar.label": "Hide tables panel",
     "toggle-sidebar.description": "Shows or hides the table tree in the sidebar.",
+    "focus-zone-prefix.label": "Move focus",
+    "focus-zone-prefix.description": "Then an arrow picks the area: explorer, editor, results or files.",
     "select-all.label": "Select all",
     "select-all.description": "Selects all the text in the SQL editor.",
     "new-query-console.label": "New SQL console",
@@ -73,6 +77,8 @@ export default defineMessages({
   "pt-BR": {
     "toggle-sidebar.label": "Ocultar painel de tabelas",
     "toggle-sidebar.description": "Mostra ou oculta a árvore de tabelas da barra lateral.",
+    "focus-zone-prefix.label": "Mover o foco",
+    "focus-zone-prefix.description": "Depois, uma seta indica a área: explorador, editor, resultados ou arquivos.",
     "select-all.label": "Selecionar tudo",
     "select-all.description": "Seleciona todo o texto do editor SQL.",
     "new-query-console.label": "Novo console SQL",
@@ -107,6 +113,8 @@ export default defineMessages({
   fr: {
     "toggle-sidebar.label": "Masquer le panneau des tables",
     "toggle-sidebar.description": "Affiche ou masque l’arborescence des tables dans la barre latérale.",
+    "focus-zone-prefix.label": "Déplacer le focus",
+    "focus-zone-prefix.description": "Puis une flèche choisit la zone : explorateur, éditeur, résultats ou fichiers.",
     "select-all.label": "Tout sélectionner",
     "select-all.description": "Sélectionne tout le texte de l’éditeur SQL.",
     "new-query-console.label": "Nouvelle console SQL",
@@ -141,6 +149,8 @@ export default defineMessages({
   de: {
     "toggle-sidebar.label": "Tabellenbereich ausblenden",
     "toggle-sidebar.description": "Blendet den Tabellenbaum in der Seitenleiste ein oder aus.",
+    "focus-zone-prefix.label": "Fokus verschieben",
+    "focus-zone-prefix.description": "Danach wählt ein Pfeil den Bereich: Explorer, Editor, Ergebnisse oder Dateien.",
     "select-all.label": "Alles auswählen",
     "select-all.description": "Wählt den gesamten Text im SQL-Editor aus.",
     "new-query-console.label": "Neue SQL-Konsole",

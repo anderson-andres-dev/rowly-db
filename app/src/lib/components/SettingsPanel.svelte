@@ -104,6 +104,7 @@
     {
       id: "general",
       ids: [
+        "focus-zone-prefix",
         "toggle-sidebar",
         "new-query-console",
         "rename-query-console",
@@ -130,6 +131,7 @@
   // El nombre basta; solo lleva una segunda linea el atajo que la necesita
   // para no confundirse.
   const SHORTCUT_HINTS: Record<string, MessageKey> = {
+    "focus-zone-prefix": "settings.shortcuts.hint.focus",
     "execute-query": "settings.shortcuts.hint.execute",
     "submit-result-changes": "settings.shortcuts.hint.submit",
   };

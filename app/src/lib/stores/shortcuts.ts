@@ -18,6 +18,12 @@ export const shortcutDefinitions: ShortcutDefinition[] = [
     defaultKeys: "Alt+1",
   },
   {
+    // Prefijo: despues, una flecha mueve el foco a la zona vecina
+    // (focusZones.ts).
+    id: "focus-zone-prefix",
+    defaultKeys: "Ctrl+W",
+  },
+  {
     id: "select-all",
     defaultKeys: "Ctrl+A",
   },

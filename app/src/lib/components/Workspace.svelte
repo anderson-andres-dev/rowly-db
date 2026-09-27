@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { get } from "svelte/store";
+  import { activeZone, focusZoneAction } from "$lib/focusZones";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
@@ -624,14 +626,19 @@
     void runTableQuery(item.id);
   });
 
-  // --- Ctrl+F segun el mouse -----------------------------------------------
-  // La busqueda sale segun la zona que tiene el MOUSE encima (sin hacer
-  // clic): editor -> su barra de buscar/reemplazar; resultado -> la barra del
-  // grid. En captura, antes de que CodeMirror vea la tecla (si el foco esta
-  // en el editor pero el mouse sobre el grid, gana el grid). Con el mouse
-  // sobre el sidebar no se toca: lo resuelve +layout.svelte. En cualquier
-  // otro lado, cada zona sigue respondiendo por foco.
+  // --- Ctrl+F segun la zona activa ------------------------------------------
+  // La busqueda sale en la zona activa (foco o ultimo clic, focusZones.ts),
+  // nunca en la que tiene el mouse encima: editor -> su barra de
+  // buscar/reemplazar; resultado -> la barra del grid. En captura, antes de
+  // que CodeMirror vea la tecla. El sidebar lo resuelve +layout.svelte.
   let sqlEditor = $state<ReturnType<typeof SqlEditor>>();
+
+  // Primer foco de una zona a la que se llega con el teclado (focusZones.ts).
+  function focusIn(zone: HTMLElement, selector: string): boolean {
+    const target = zone.querySelector<HTMLElement>(selector);
+    target?.focus({ preventScroll: true });
+    return !!target;
+  }
   let resultPane = $state<ReturnType<typeof ResultPane>>();
   let editorPane = $state<HTMLElement>();
   let resultRegion = $state<HTMLElement>();
@@ -641,12 +648,12 @@
       const mod = event.ctrlKey || event.metaKey;
       if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f") return;
       if (document.querySelector("dialog[open]")) return;
-      if (document.querySelector(".sidebar:hover")) return;
-      if (editorPane?.matches(":hover") && sqlEditor) {
+      const zone = get(activeZone);
+      if (zone === "editor" && sqlEditor) {
         event.preventDefault();
         event.stopImmediatePropagation();
         sqlEditor.toggleSearch();
-      } else if (resultRegion?.matches(":hover")) {
+      } else if (zone === "results") {
         event.preventDefault();
         event.stopImmediatePropagation();
         resultPane?.toggleFind();
@@ -1235,7 +1242,12 @@
   {:else}
   <section class="workspace-body" bind:this={workspaceBody}>
     {#if !activeConsole?.table}
-    <div class="editor-pane" bind:this={editorPane} style={`flex-basis: ${editorFraction * 100}%`}>
+    <div
+      class="editor-pane"
+      bind:this={editorPane}
+      use:focusZoneAction={{ zone: "editor", focusDefault: (zone) => focusIn(zone, ".cm-content") }}
+      style={`flex-basis: ${editorFraction * 100}%`}
+    >
       {#if activeConsole}
         {#key activeConsole.id}
           <SqlEditor
@@ -1272,7 +1284,11 @@
       onkeydown={onSplitterKeydown}
     ></div>
     {/if}
-    <div class="result-region" bind:this={resultRegion}>
+    <div
+      class="result-region"
+      bind:this={resultRegion}
+      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') }}
+    >
       <ResultPane
         bind:this={resultPane}
         isExecuting={execution.isExecuting}

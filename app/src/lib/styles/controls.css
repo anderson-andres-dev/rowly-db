@@ -397,3 +397,29 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* --- Zona de foco -------------------------------------------------------------- */
+
+/* Al llegar con el teclado a una zona (focusZones.ts): un contorno fino del
+   acento que se desvanece. Ninguna marca queda fija. */
+.zone-flash {
+  animation: zone-flash 560ms ease-out;
+}
+
+@keyframes zone-flash {
+  0%,
+  25% {
+    outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
+    outline-offset: -1px;
+  }
+  100% {
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zone-flash {
+    animation: none;
+  }
+}

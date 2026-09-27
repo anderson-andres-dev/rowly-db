@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
+  import { activeZone, focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
   import type { Snippet } from "svelte";
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
@@ -147,28 +148,15 @@
   // Atajos globales resueltos desde Ajustes > Atajos (shortcuts.ts). Se
   // desactivan mientras el modal de Ajustes esta abierto, porque ahi mismo
   // se pueden estar capturando nuevas combinaciones.
-  // Ultima zona donde el usuario hizo clic. WebKit no enfoca los botones al
-  // hacer clic (y las filas del arbol del sidebar son botones), asi que
-  // "el foco esta en el sidebar" no se puede saber solo por activeElement.
-  let lastPointerInSidebar = false;
-
-  function trackPointerRegion(event: PointerEvent) {
-    lastPointerInSidebar = event.target instanceof Element && !!event.target.closest(".sidebar");
-  }
-
-  // Ctrl+F con el sidebar activo: lleva al filtro del explorador; si ya se
+  // Ctrl+F con el sidebar como zona activa (foco o ultimo clic, nunca el
+  // mouse encima; focusZones.ts): lleva al filtro del explorador; si ya se
   // esta en el filtro, lo deja (toggle). En el editor y en el grid, Ctrl+F lo
   // resuelve cada uno (su propia barra de busqueda).
   function handleSidebarFind(event: KeyboardEvent): boolean {
     const mod = event.ctrlKey || event.metaKey;
     if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f" || !sidebar) return false;
     const active = document.activeElement;
-    // Manda el mouse: con el puntero sobre el sidebar, alcanza. Si no, el
-    // foco (o el ultimo clic, que WebKit no enfoca botones).
-    const inSidebar =
-      sidebar.matches(":hover") ||
-      (active && active !== document.body ? sidebar.contains(active) : lastPointerInSidebar);
-    if (!inSidebar) return false;
+    if ($activeZone !== "explorer" && $activeZone !== "files") return false;
     const filterInput = sidebar.querySelector<HTMLInputElement>(".filter input");
     if (!filterInput) return false;
     event.preventDefault();
@@ -185,6 +173,14 @@
 
   function onSidebarFindKeydown(event: KeyboardEvent) {
     if (!settingsOpen) handleSidebarFind(event);
+  }
+
+  // Al llegar con el teclado a una zona del sidebar sin foco previo: la
+  // primera fila del arbol, no los botones de la cabecera.
+  function focusFirstTreeRow(zone: HTMLElement): boolean {
+    const row = zone.querySelector<HTMLElement>('[role="tree"] .row');
+    row?.focus({ preventScroll: true });
+    return !!row;
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {
@@ -254,6 +250,8 @@
     event.preventDefault();
   }
 
+  let cleanupFocusZones: (() => void) | undefined;
+
   onMount(() => {
     installDialogMotion();
     window.addEventListener("contextmenu", blockNativeContextMenu);
@@ -263,7 +261,13 @@
     // no repiten la consulta a GitHub.
     if (getCurrentWindow().label === "main") void checkOnStartup();
     document.addEventListener("keydown", handleGlobalKeydown);
-    window.addEventListener("pointerdown", trackPointerRegion, true);
+    cleanupFocusZones = installFocusZones(() => settingsOpen || !!document.querySelector("dialog[open]"));
+    // Ir al sidebar con el teclado lo abre si estaba plegado.
+    setSidebarRevealer(async () => {
+      if (!$connection.connected) return;
+      sidebarCollapsed = false;
+      await tick();
+    });
     // En captura: tiene que llegar antes que el keymap de CodeMirror.
     window.addEventListener("keydown", onSidebarFindKeydown, true);
   });
@@ -272,7 +276,8 @@
     cleanupThemeEffects?.();
     cleanupLocaleEffects?.();
     document.removeEventListener("keydown", handleGlobalKeydown);
-    window.removeEventListener("pointerdown", trackPointerRegion, true);
+    cleanupFocusZones?.();
+    setSidebarRevealer(null);
     window.removeEventListener("keydown", onSidebarFindKeydown, true);
     window.removeEventListener("contextmenu", blockNativeContextMenu);
   });
@@ -384,7 +389,7 @@
         bind:this={sidebarContent}
         style:width={`${Math.max(liveSidebarWidth, MIN_SIDEBAR_WIDTH)}px`}
       >
-        <div class="schema-pane">
+        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTreeRow }}>
         <SchemaTree
           explorer={$databaseExplorer}
           {connectionLabel}
@@ -416,6 +421,7 @@
                (nunca auto) para que la transicion pueda interpolarlo. -->
           <div
             class="files-pane"
+            use:focusZoneAction={{ zone: "files", focusDefault: focusFirstTreeRow }}
             class:collapsed={$sqlFolders.collapsed}
             style:height={$sqlFolders.collapsed
               ? undefined
