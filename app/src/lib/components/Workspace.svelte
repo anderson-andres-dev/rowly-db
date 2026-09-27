@@ -1232,6 +1232,11 @@
     for (let index = 0; index < statements.length; index += 1) {
       const statement = statements[index].trim();
       const statementStarted = performance.now();
+      // Cada sentencia con su marca en el editor (si sigue a la vista).
+      const markStatement = (outcome: "running" | QueryExecutionResult) => {
+        if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
+      };
+      markStatement("running");
       appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: Date.now() });
       const { response, cancelled } = await executeCancellable(
         consoleId,
@@ -1246,6 +1251,7 @@
           ? response.result
           : { type: "error", message: $t(`workspace.guard.${response.statement}`) };
       const page = response.type === "completed" ? (response.page ?? null) : null;
+      markStatement(result);
       appendLog(consoleId, {
         kind: result.type === "error" && !cancelled ? "error" : "info",
         text: cancelled

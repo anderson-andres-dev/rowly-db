@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { statementAt } from "$lib/sqlStatements";
+  import { splitStatements, statementAt } from "$lib/sqlStatements";
   import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
@@ -251,7 +251,14 @@
     if (!sql) return true;
 
     const from = range.from + (raw.length - raw.trimStart().length);
-    view.dispatch({ effects: setExecutionMarker.of({ from, to: from + sql.length, status: "pending" }) });
+    // Varias sentencias: el Workspace las corre como script y va marcando
+    // cada una (markStatement), con su icono y su tiempo.
+    const statements = splitStatements(raw);
+    const parts =
+      statements.length > 1
+        ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
+        : undefined;
+    view.dispatch({ effects: setExecutionMarker.of({ from, to: from + sql.length, status: "pending", parts }) });
     awaitingResult = { result };
     onexecute?.(sql);
     return true;
@@ -317,6 +324,19 @@
   // Para el comando find con el editor como zona activa (Workspace).
   export function toggleSearch() {
     if (view) toggleSearchPanel(view);
+  }
+
+  // Script en curso lanzado desde este editor: la sentencia `index` empieza
+  // a correr o termina. Sin script pendiente (p. ej. se ejecuto desde el
+  // historial), no hace nada.
+  export function markStatement(index: number, outcome: "running" | QueryExecutionResult) {
+    if (!view || !awaitingResult) return;
+    const marker = view.state.field(executionMarkerField);
+    const part = marker?.parts?.[index];
+    if (!marker?.parts || !part) return;
+    const next = outcome === "running" ? { ...part, status: "running" as const } : markerFromResult(part.from, part.to, outcome);
+    const parts = marker.parts.map((item, position) => (position === index ? next : item));
+    view.dispatch({ effects: setExecutionMarker.of({ ...marker, parts }) });
   }
 
   // Vuelve al editor con el cursor donde estaba (CodeMirror conserva la
@@ -399,7 +419,9 @@
 
     if (!isExecuting && current && current !== awaitingResult.result) {
       awaitingResult = null;
-      view.dispatch({ effects: setExecutionMarker.of(markerFromResult(marker.from, marker.to, current)) });
+      view.dispatch({
+        effects: setExecutionMarker.of({ ...markerFromResult(marker.from, marker.to, current), parts: marker.parts }),
+      });
       return;
     }
 

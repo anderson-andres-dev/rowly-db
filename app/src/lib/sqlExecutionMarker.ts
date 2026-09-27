@@ -14,12 +14,19 @@ import type { QueryExecutionResult } from "$lib/types";
 // esta misma sentencia) pero no se pinta nada, porque todavia no corre.
 export type ExecutionMarkerStatus = "pending" | "running" | "success" | "error";
 
-export interface ExecutionMarker {
+export interface ExecutionPart {
   from: number;
   to: number;
   status: ExecutionMarkerStatus;
   executionTimeMs?: number;
   message?: string;
+}
+
+// Un script lleva ademas una marca por sentencia (`parts`): cada una con su
+// icono y su tiempo, y se pintan esas en vez de la del rango entero. Las que
+// no llegaron a correr quedan en "pending" (sin marca).
+export interface ExecutionMarker extends ExecutionPart {
+  parts?: ExecutionPart[];
 }
 
 export const setExecutionMarker = StateEffect.define<ExecutionMarker | null>();
@@ -35,13 +42,27 @@ export const executionMarkerField = StateField.define<ExecutionMarker | null>({
     const from = transaction.changes.mapPos(marker.from, 1);
     const to = transaction.changes.mapPos(marker.to, -1);
     // La sentencia se borro por completo: no queda a que atar el marcador.
-    return to > from ? { ...marker, from, to } : null;
+    if (to <= from) return null;
+    const parts = marker.parts
+      ?.map((part) => ({
+        ...part,
+        from: transaction.changes.mapPos(part.from, 1),
+        to: transaction.changes.mapPos(part.to, -1),
+      }))
+      .filter((part) => part.to > part.from);
+    return { ...marker, from, to, parts };
   },
 });
 
-export function markerFromResult(from: number, to: number, result: QueryExecutionResult): ExecutionMarker {
+export function markerFromResult(from: number, to: number, result: QueryExecutionResult): ExecutionPart {
   if (result.type === "error") return { from, to, status: "error", message: result.message };
   return { from, to, status: "success", executionTimeMs: result.executionTimeMs };
+}
+
+// Lo que se pinta: las sentencias del script o, si no es un script, el rango.
+function visibleParts(marker: ExecutionMarker | null, length: number): ExecutionPart[] {
+  if (!marker) return [];
+  return (marker.parts ?? [marker]).filter((part) => part.status !== "pending" && part.to <= length);
 }
 
 export function formatExecutionTime(ms: number): string {
@@ -105,10 +126,17 @@ class ExecutionTimeWidget extends WidgetType {
 }
 
 function executionTimeDecorations(state: EditorState): DecorationSet {
-  const marker = state.field(executionMarkerField);
-  if (!marker || marker.executionTimeMs === undefined || marker.to > state.doc.length) return Decoration.none;
-  const widget = new ExecutionTimeWidget(formatExecutionTime(marker.executionTimeMs));
-  return Decoration.set([Decoration.widget({ widget, side: 1 }).range(marker.to)]);
+  const parts = visibleParts(state.field(executionMarkerField), state.doc.length);
+  return Decoration.set(
+    parts
+      .filter((part) => part.executionTimeMs !== undefined)
+      .map((part) =>
+        Decoration.widget({ widget: new ExecutionTimeWidget(formatExecutionTime(part.executionTimeMs!)), side: 1 }).range(
+          part.to,
+        ),
+      ),
+    true,
+  );
 }
 
 export const executionMarker: Extension = [
@@ -117,10 +145,11 @@ export const executionMarker: Extension = [
   gutter({
     class: "cm-executionGutter",
     markers(view) {
-      const marker = view.state.field(executionMarkerField);
-      if (!marker || marker.status === "pending" || marker.from > view.state.doc.length) return RangeSet.empty;
-      const line = view.state.doc.lineAt(marker.from);
-      return RangeSet.of([new StatusGutterMarker(marker.status, marker.message).range(line.from)]);
+      const parts = visibleParts(view.state.field(executionMarkerField), view.state.doc.length);
+      return RangeSet.of(
+        parts.map((part) => new StatusGutterMarker(part.status, part.message).range(view.state.doc.lineAt(part.from).from)),
+        true,
+      );
     },
     initialSpacer: () => new StatusGutterMarker("success", undefined),
   }),
