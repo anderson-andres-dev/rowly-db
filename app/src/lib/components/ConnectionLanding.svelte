@@ -135,7 +135,6 @@
     <div class="saved">
       <header class="landing-header">
         <div class="landing-title">
-          <RowlyMark />
           <div>
             <h1 id="connection-state-title">{$t("connections.landing.title")}</h1>
             <p>{$t("connections.landing.subtitle")}</p>

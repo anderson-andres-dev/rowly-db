@@ -297,7 +297,7 @@
          del tema elegido; con una conexion abierta, el color de la
          conexion. -->
     {#if !$connection.connected}
-      <span class="topbar-mark"><RowlyMark size="1.125rem" /></span>
+      <span class="topbar-mark"><RowlyMark size="1.5rem" mono /></span>
     {/if}
     {#if $connection.connected}
       <!-- Con el panel visible, ocultarlo vive en su propia barra
@@ -525,7 +525,7 @@
     display: inline-flex;
     margin-left: var(--space-1);
     color: var(--text-primary);
-    opacity: 0.8;
+    opacity: 0.9;
   }
 
   .topbar::before {
