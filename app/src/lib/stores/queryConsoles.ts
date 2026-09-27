@@ -2,6 +2,8 @@ import { isFilterOperator, type FilterCondition } from "$lib/filterBuilder";
 import { browser } from "$app/environment";
 import { get, writable } from "svelte/store";
 import { translate, type Translate } from "$lib/i18n";
+import { invoke } from "$lib/backend";
+import { notifyError } from "$lib/stores/notifications";
 import type { DestructiveStatement, QueryExecutionResult, ResultPage, SortKey } from "$lib/types";
 
 const STORAGE_KEY = "khipu:query-consoles:v1";
@@ -16,10 +18,13 @@ export interface QueryConsole {
   // igual contra la conexion activa.
   filePath: string | null;
   // Contenido del archivo tal como esta en disco (ultimo abierto/guardado).
-  // El texto en edicion (sql) se persiste igual en cada tecla para no
-  // perder nada al recargar; la pestaña marca cambios mientras difieren.
-  // En una consola no se usa.
+  // El texto en edicion (sql) se persiste igual para no perder nada al
+  // recargar; la pestaña marca cambios mientras difieren. En una consola no
+  // se usa.
   savedSql: string;
+  // Al arrancar, el texto de una consola grande todavia se esta leyendo del
+  // disco (ver hydrateLargeTexts): no se monta el editor hasta tenerlo.
+  textPending?: boolean;
   // Pestaña de TABLA (doble clic en el explorador): muestra los datos de la
   // tabla a pantalla completa, sin editor, con filtros WHERE / ORDER BY. En
   // una consola o un archivo es null.
@@ -142,15 +147,32 @@ export function consoleDisplayTitle(title: string, t: Translate = translate): st
   return ordinal ? t("workspace.defaultConsoleName", { n: ordinal }) : title;
 }
 
+// Como se guarda una consola: los textos grandes van aparte (ver
+// LARGE_TEXT) y un archivo sin cambios no repite su texto.
+interface PersistedConsole extends Omit<QueryConsole, "sql" | "savedSql" | "textPending"> {
+  sql?: string;
+  savedSql?: string;
+  sqlOnDisk?: boolean;
+  savedOnDisk?: boolean;
+  savedSame?: boolean;
+}
+
+// Consolas cuyo texto quedo en disco, tal como se leyeron: mientras se
+// cargan se vuelven a guardar igual, sin pisar nada.
+const pendingPersisted = new Map<string, PersistedConsole>();
+
 function parseConsole(value: unknown): QueryConsole | null {
   if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<QueryConsole>;
+  const candidate = value as PersistedConsole;
   if (
     typeof candidate.id !== "string" ||
     typeof candidate.profileId !== "string" ||
     typeof candidate.title !== "string" ||
-    typeof candidate.sql !== "string"
+    (typeof candidate.sql !== "string" && candidate.sqlOnDisk !== true)
   ) return null;
+  const sql = typeof candidate.sql === "string" ? candidate.sql : "";
+  const pending = candidate.sqlOnDisk === true || candidate.savedOnDisk === true;
+  if (pending) pendingPersisted.set(candidate.id, candidate);
   // Consolas de antes del nombre "consola_N" pasan al formato nuevo; las
   // renombradas a mano se respetan.
   const legacyOrdinal = /^Consola (\d+)$/.exec(candidate.title)?.[1];
@@ -158,10 +180,11 @@ function parseConsole(value: unknown): QueryConsole | null {
     id: candidate.id,
     profileId: candidate.profileId,
     title: legacyOrdinal ? consoleTitle(Number(legacyOrdinal)) : candidate.title,
-    sql: candidate.sql,
+    sql,
     filePath: typeof candidate.filePath === "string" ? candidate.filePath : null,
     table: parseTableTab(candidate.table),
-    savedSql: typeof candidate.savedSql === "string" ? candidate.savedSql : candidate.sql,
+    savedSql: typeof candidate.savedSql === "string" && !candidate.savedSame ? candidate.savedSql : sql,
+    ...(pending ? { textPending: true } : {}),
   };
 }
 
@@ -245,17 +268,155 @@ function appendConsole(state: QueryConsoleState, profileId: string): { state: Qu
 
 export const queryConsoles = writable<QueryConsoleState>(loadState());
 
+// --- Guardado ---------------------------------------------------------------
+//
+// localStorage admite unos 5–10 MB: un texto de mas de LARGE_TEXT va a un
+// archivo en los datos de la app (console_texts.rs), escrito con un retraso,
+// y en localStorage queda solo la marca. Diseño en
+// docs/specs/v0.2-documentos-grandes.md (15b).
+export const LARGE_TEXT = 256 * 1024;
+const DISK_DELAY_MS = 1000;
+
+// Lo ultimo escrito (o leido) por clave; el mismo string no se reescribe.
+const diskTexts = new Map<string, string>();
+const pendingDisk = new Map<string, string>();
+let diskTimer: ReturnType<typeof setTimeout> | null = null;
+let persistFailureShown = false;
+
+function textKey(id: string, kind: "sql" | "saved"): string {
+  return kind === "sql" ? id : `${id}-saved`;
+}
+
+function reportPersistFailure() {
+  if (persistFailureShown) return;
+  persistFailureShown = true;
+  notifyError(translate("workspace.persistFailed"));
+}
+
+function writeDiskTexts() {
+  diskTimer = null;
+  const batch = [...pendingDisk];
+  pendingDisk.clear();
+  for (const [key, contents] of batch) {
+    void invoke("write_console_text", { key, contents }).then(
+      () => diskTexts.set(key, contents),
+      () => reportPersistFailure(),
+    );
+  }
+}
+
+function queueDiskText(key: string, contents: string) {
+  if (diskTexts.get(key) === contents || pendingDisk.get(key) === contents) return;
+  pendingDisk.set(key, contents);
+  // Tras la pausa: mandar 30 MB al backend mientras se escribe se notaria.
+  if (diskTimer !== null) clearTimeout(diskTimer);
+  diskTimer = setTimeout(writeDiskTexts, DISK_DELAY_MS);
+}
+
+function persistedConsole(item: QueryConsole): PersistedConsole {
+  const pending = item.textPending ? pendingPersisted.get(item.id) : undefined;
+  if (pending) return pending;
+  const { sql, savedSql, textPending: _textPending, ...rest } = item;
+  const persisted: PersistedConsole = { ...rest };
+  if (sql.length > LARGE_TEXT) {
+    persisted.sqlOnDisk = true;
+    queueDiskText(textKey(item.id, "sql"), sql);
+  } else {
+    persisted.sql = sql;
+  }
+  if (savedSql === sql) {
+    persisted.savedSame = true;
+  } else if (savedSql.length > LARGE_TEXT) {
+    persisted.savedOnDisk = true;
+    queueDiskText(textKey(item.id, "saved"), savedSql);
+  } else {
+    persisted.savedSql = savedSql;
+  }
+  return persisted;
+}
+
+// Al arrancar: los textos que quedaron en disco. Hasta tenerlos, esas
+// consolas no montan el editor (textPending). Despues se borran los
+// archivos de consolas que ya no existen.
+async function hydrateLargeTexts() {
+  const read = async (key: string): Promise<string> => {
+    try {
+      const text = (await invoke<string | null>("read_console_text", { key })) ?? "";
+      diskTexts.set(key, text);
+      return text;
+    } catch (error) {
+      notifyError(error);
+      return "";
+    }
+  };
+  await Promise.all(
+    [...pendingPersisted.values()].map(async (persisted) => {
+      const sql = persisted.sqlOnDisk ? await read(textKey(persisted.id, "sql")) : (persisted.sql ?? "");
+      const savedSql = persisted.savedOnDisk
+        ? await read(textKey(persisted.id, "saved"))
+        : persisted.savedSame || typeof persisted.savedSql !== "string"
+          ? sql
+          : persisted.savedSql;
+      pendingPersisted.delete(persisted.id);
+      queryConsoles.update((state) => ({
+        ...state,
+        consoles: state.consoles.map((item) =>
+          item.id === persisted.id ? { ...item, sql, savedSql, textPending: undefined } : item,
+        ),
+      }));
+    }),
+  );
+  const keep = get(queryConsoles).consoles.flatMap((item) => [textKey(item.id, "sql"), textKey(item.id, "saved")]);
+  void invoke("prune_console_texts", { keep }).catch(() => {});
+}
+
 if (browser) {
   queryConsoles.subscribe((state) => {
     try {
       // executionByConsole (resultados, "ejecutando", confirmaciones
       // pendientes) es intencionalmente transitorio: nunca se guarda.
       const { consoles, activeByProfile, nextOrdinal } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ consoles, activeByProfile, nextOrdinal }));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ consoles: consoles.map(persistedConsole), activeByProfile, nextOrdinal }),
+      );
     } catch {
-      // Una cuota llena no debe impedir seguir editando durante esta sesion.
+      // Una cuota llena no impide seguir editando durante esta sesion.
+      reportPersistFailure();
     }
   });
+  if (pendingPersisted.size > 0) void hydrateLargeTexts();
+  // Al cerrar, lo que esperaba su retraso sale ya.
+  globalThis.addEventListener?.("pagehide", () => {
+    flushConsoleTexts();
+    if (diskTimer !== null) {
+      clearTimeout(diskTimer);
+      writeDiskTexts();
+    }
+  });
+}
+
+// --- Texto en edicion -------------------------------------------------------
+//
+// El editor no manda su texto en cada tecla (convertir un documento de 30 MB
+// a string cuesta ~100 ms): lo manda con un retraso. Antes de leer `sql` para
+// algo que importa (guardar, cerrar), flushConsoleTexts() hace que los
+// editores abiertos lo manden ya.
+const textFlushers = new Set<() => void>();
+
+export function registerConsoleTextFlush(flush: () => void): () => void {
+  textFlushers.add(flush);
+  return () => textFlushers.delete(flush);
+}
+
+export function flushConsoleTexts(): void {
+  for (const flush of textFlushers) flush();
+}
+
+// La consola tal como esta ahora, con el texto de los editores al dia.
+export function currentQueryConsole(id: string): QueryConsole | undefined {
+  flushConsoleTexts();
+  return get(queryConsoles).consoles.find((item) => item.id === id);
 }
 
 // Estado de ejecucion vigente de una consola dentro de un snapshot del store

@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import { translate } from "$lib/i18n";
 import {
   consoleDisplayTitle,
+  currentQueryConsole,
   detachQueryConsoleFile,
   fileNameFromPath,
   markQueryConsoleSaved,
@@ -33,7 +34,8 @@ function withSqlExtension(path: string): string {
 async function writeFile(item: QueryConsole, path: string): Promise<void> {
   // Se guarda el texto tal como estaba al empezar: si el usuario sigue
   // escribiendo mientras tanto, esos cambios quedan como pendientes.
-  const contents = item.sql;
+  // El editor manda su texto con un retraso: se pide el de ahora.
+  const contents = currentQueryConsole(item.id)?.sql ?? item.sql;
   await invoke("write_sql_file", { path, contents });
   markQueryConsoleSaved(item.id, path, contents);
 }

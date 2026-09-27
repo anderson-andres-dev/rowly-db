@@ -1,5 +1,22 @@
-import { EditorSelection, StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
-import { Decoration, EditorView, RectangleMarker, WidgetType, layer, type DecorationSet } from "@codemirror/view";
+import {
+  EditorSelection,
+  RangeSet,
+  RangeValue,
+  StateEffect,
+  StateField,
+  type EditorState,
+  type Extension,
+} from "@codemirror/state";
+import {
+  Decoration,
+  EditorView,
+  RectangleMarker,
+  ViewPlugin,
+  WidgetType,
+  layer,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
 
 // Diagnosticos de SQL en el editor, al estilo de Error Lens (diseño en
 // docs/specs/v0.2-diagnosticos.md): la linea con error queda con un fondo
@@ -125,80 +142,180 @@ export function errorRange(
 }
 
 // --- Estado en el editor --------------------------------------------------
+//
+// Los diagnosticos viven en un RangeSet (docs/specs/v0.2-documentos-grandes.md,
+// 15d): mapearlo en cada tecla no recorre la lista, y lo que se pinta se
+// busca solo en lo visible. Cada uno ocupa su "tramo": el rango marcado mas
+// el de sus correcciones, con estas guardadas relativas al inicio del tramo.
+// Editar dentro del tramo lo deja viejo y se descarta (el analisis vuelve a
+// mirar en cuanto se deja de escribir); fuera de el, las posiciones
+// relativas siguen valiendo.
 
 // Errores de ejecucion nuevos, o quitar los de un rango (se vuelve a
 // ejecutar esa sentencia).
 export const addDiagnostics = StateEffect.define<SqlDiagnostic[]>();
 export const clearDiagnosticsIn = StateEffect.define<{ from: number; to: number }>();
-// El resultado completo del analisis: reemplaza al anterior.
-export const setAnalysis = StateEffect.define<SqlDiagnostic[]>();
+// El analisis de unas sentencias (`ranges`, en orden): reemplaza lo que el
+// analisis habia dicho dentro de ellas; el resto del documento no se toca.
+export const setAnalysisIn = StateEffect.define<{ ranges: { from: number; to: number }[]; list: SqlDiagnostic[] }>();
+
+interface Navigated {
+  item: SqlDiagnostic;
+  index: number;
+  total: number;
+}
 // Navegacion con F2: cual se eligio (muestra el contador n/m).
-const setNavigated = StateEffect.define<number | null>();
+const setNavigated = StateEffect.define<Navigated | null>();
+
+interface StoredFix {
+  label: string;
+  from: number;
+  to: number;
+  insert: string;
+}
+
+class DiagnosticMark extends RangeValue {
+  constructor(
+    readonly base: Omit<SqlDiagnostic, "from" | "to" | "fixes">,
+    // El rango marcado, relativo al inicio del tramo.
+    readonly offset: number,
+    readonly length: number,
+    readonly fixes: StoredFix[],
+  ) {
+    super();
+  }
+
+  eq(other: RangeValue): boolean {
+    return other === this;
+  }
+}
+
+function toMark(item: SqlDiagnostic) {
+  const fixes = item.fixes ?? [];
+  const from = Math.min(item.from, ...fixes.map((fix) => fix.from));
+  const to = Math.max(item.to, ...fixes.map((fix) => fix.to));
+  const { from: _from, to: _to, fixes: _fixes, ...base } = item;
+  const mark = new DiagnosticMark(
+    base,
+    item.from - from,
+    item.to - item.from,
+    fixes.map((fix) => ({ ...fix, from: fix.from - from, to: fix.to - from })),
+  );
+  return mark.range(from, to);
+}
+
+// El mismo objeto mientras el tramo no se mueva: la ventana de detalle y
+// F2 los comparan por identidad.
+const materialized = new WeakMap<DiagnosticMark, { at: number; item: SqlDiagnostic }>();
+
+function toDiagnostic(spanFrom: number, mark: DiagnosticMark): SqlDiagnostic {
+  const cached = materialized.get(mark);
+  if (cached && cached.at === spanFrom) return cached.item;
+  const from = spanFrom + mark.offset;
+  const item: SqlDiagnostic = {
+    ...mark.base,
+    from,
+    to: from + mark.length,
+    fixes: mark.fixes.map((fix) => ({ ...fix, from: spanFrom + fix.from, to: spanFrom + fix.to })),
+  };
+  materialized.set(mark, { at: spanFrom, item });
+  return item;
+}
 
 interface DiagnosticsState {
-  list: SqlDiagnostic[];
-  navigated: number | null;
+  set: RangeSet<DiagnosticMark>;
+  navigated: Navigated | null;
 }
 
 function byPosition(a: SqlDiagnostic, b: SqlDiagnostic): number {
   return a.from - b.from || a.to - b.to;
 }
 
+function marksOf(list: SqlDiagnostic[]) {
+  return list.filter((item) => item.from < item.to).map(toMark);
+}
+
+// Si `pos` cae dentro de alguno de `ranges` (ordenados).
+function withinRanges(ranges: { from: number; to: number }[], pos: number): boolean {
+  let low = 0;
+  let high = ranges.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const range = ranges[middle];
+    if (pos < range.from) high = middle - 1;
+    else if (pos > range.to) low = middle + 1;
+    else return true;
+  }
+  return false;
+}
+
 export const diagnosticsField = StateField.define<DiagnosticsState>({
-  create: () => ({ list: [], navigated: null }),
+  create: () => ({ set: RangeSet.empty, navigated: null }),
   update(value, transaction) {
-    let { list, navigated } = value;
-    if (transaction.docChanged && list.length > 0) {
-      // Editar sobre un error lo deja viejo: se descarta (el analisis vuelve
-      // a mirar en cuanto se deja de escribir).
-      list = list.flatMap((item) => {
-        let touched = false;
-        transaction.changes.iterChangedRanges((fromA, toA) => {
-          if (fromA <= item.to && toA >= item.from) touched = true;
+    let { set, navigated } = value;
+    if (transaction.docChanged && set.size > 0) {
+      set = set.map(transaction.changes);
+      const length = transaction.state.doc.length;
+      // Editar sobre un tramo (o justo en su borde) lo deja viejo.
+      transaction.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+        set = set.update({
+          filterFrom: Math.max(0, fromB - 1),
+          filterTo: Math.min(length, toB + 1),
+          filter: (from, to) => !(from <= toB && to >= fromB),
         });
-        if (touched) return [];
-        const from = transaction.changes.mapPos(item.from, 1);
-        const to = transaction.changes.mapPos(item.to, -1);
-        const fixes = item.fixes?.map((fix) => ({
-          ...fix,
-          from: transaction.changes.mapPos(fix.from, 1),
-          to: transaction.changes.mapPos(fix.to, -1),
-        }));
-        return [{ ...item, from, to, fixes }];
       });
     }
     let navigatedNow = false;
     for (const effect of transaction.effects) {
       if (effect.is(clearDiagnosticsIn)) {
         const range = effect.value;
-        list = list.filter((item) => item.source !== "server" || item.to < range.from || item.from > range.to);
+        set = set.update({
+          filterFrom: range.from,
+          filterTo: range.to,
+          filter: (from, _to, mark) => {
+            if (mark.base.source !== "server") return true;
+            const itemFrom = from + mark.offset;
+            return itemFrom + mark.length < range.from || itemFrom > range.to;
+          },
+        });
       } else if (effect.is(addDiagnostics)) {
-        list = [...list, ...effect.value].sort(byPosition);
-      } else if (effect.is(setAnalysis)) {
-        list = [...list.filter((item) => item.source === "server"), ...effect.value].sort(byPosition);
+        set = set.update({ add: marksOf(effect.value), sort: true });
+      } else if (effect.is(setAnalysisIn)) {
+        const { ranges, list } = effect.value;
+        if (ranges.length > 0) {
+          set = set.update({
+            filterFrom: ranges[0].from,
+            filterTo: ranges[ranges.length - 1].to,
+            filter: (from, _to, mark) => mark.base.source !== "analysis" || !withinRanges(ranges, from),
+          });
+        }
+        set = set.update({ add: marksOf(list), sort: true });
       } else if (effect.is(setNavigated)) {
         navigated = effect.value;
         navigatedNow = true;
       }
     }
     if (!navigatedNow && (transaction.selection || transaction.docChanged)) navigated = null;
-    return list === value.list && navigated === value.navigated ? value : { list, navigated };
+    return set === value.set && navigated === value.navigated ? value : { set, navigated };
   },
 });
 
-// Lo que se muestra: sin el error de ejecucion que el analisis ya explica en
-// el mismo lugar.
-export function visibleDiagnostics(state: EditorState): SqlDiagnostic[] {
-  const { list } = state.field(diagnosticsField);
-  const analyzed = new Set(list.filter((item) => item.source === "analysis").map((item) => item.from));
+// Lo que se muestra en [from, to], en orden: sin el error de ejecucion que
+// el analisis ya explica en el mismo lugar.
+export function diagnosticsIn(state: EditorState, from: number, to: number): SqlDiagnostic[] {
+  const { set } = state.field(diagnosticsField);
   const length = state.doc.length;
-  return list.filter(
-    (item) => item.to <= length && item.from < item.to && !(item.source === "server" && analyzed.has(item.from)),
-  );
+  const found: SqlDiagnostic[] = [];
+  set.between(from, to, (spanFrom, _spanTo, mark) => {
+    const item = toDiagnostic(spanFrom, mark);
+    if (item.to >= from && item.from <= to && item.to <= length) found.push(item);
+  });
+  const analyzed = new Set(found.filter((item) => item.source === "analysis").map((item) => item.from));
+  return found.filter((item) => !(item.source === "server" && analyzed.has(item.from))).sort(byPosition);
 }
 
-// Lo que se marca: un error en espacios o en un simbolo suelto se estira
-// hasta el token siguiente, para que la onda nunca quede como un "^".
+// Lo marcado de un punto: un error en espacios o en un simbolo suelto se
+// estira hasta el token siguiente, para que la onda nunca quede como un "^".
 function visibleRange(state: EditorState, item: SqlDiagnostic): { from: number; to: number } {
   const text = state.sliceDoc(item.from, item.to);
   if (text.trim() !== "" && (item.to - item.from > 1 || !/\s/.test(state.sliceDoc(item.to, item.to + 1)))) {
@@ -214,11 +331,15 @@ function visibleRange(state: EditorState, item: SqlDiagnostic): { from: number; 
 
 // El diagnostico bajo el cursor (o, si no hay, el primero de su linea).
 export function diagnosticAt(state: EditorState, pos: number): SqlDiagnostic | null {
-  const list = visibleDiagnostics(state);
-  const inside = list.find((item) => item.from <= pos && pos <= item.to);
+  const inside = diagnosticsIn(state, pos, pos).find((item) => item.from <= pos && pos <= item.to);
   if (inside) return inside;
   const line = state.doc.lineAt(pos);
-  return list.find((item) => item.from >= line.from && item.from <= line.to) ?? null;
+  return diagnosticsIn(state, line.from, line.to).find((item) => item.from >= line.from && item.from <= line.to) ?? null;
+}
+
+// Bajo el mouse (sin incluir el borde final).
+export function diagnosticUnder(state: EditorState, pos: number): SqlDiagnostic | null {
+  return diagnosticsIn(state, pos, pos).find((item) => item.from <= pos && pos < item.to) ?? null;
 }
 
 // --- Pintado --------------------------------------------------------------
@@ -268,34 +389,65 @@ class LensMessage extends WidgetType {
   }
 }
 
-function diagnosticDecorations(state: EditorState): DecorationSet {
-  const list = visibleDiagnostics(state);
-  if (list.length === 0) return Decoration.none;
+// Solo lo visible: con decenas de miles de errores en el documento, cada
+// tecla pinta las lineas que se ven y nada mas.
+function diagnosticDecorations(view: EditorView): DecorationSet {
+  const { state } = view;
   const { navigated } = state.field(diagnosticsField);
-  const ranges = list.map((item) => {
-    const range = visibleRange(state, item);
-    return Decoration.mark({ class: item.unresolved ? "cm-unresolved" : "cm-diagnostic-error" }).range(range.from, range.to);
-  });
-  // Por linea: el mensaje del primer error (o del elegido con F2). El fondo
-  // lo pinta lensBands.
+  const seen = new Set<SqlDiagnostic>();
+  const ranges = [];
   const byLine = new Map<number, SqlDiagnostic[]>();
-  for (const item of list) {
-    const line = state.doc.lineAt(item.from).number;
-    byLine.set(line, [...(byLine.get(line) ?? []), item]);
+  for (const visible of view.visibleRanges) {
+    const from = state.doc.lineAt(visible.from).from;
+    const to = state.doc.lineAt(visible.to).to;
+    for (const item of diagnosticsIn(state, from, to)) {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      const range = visibleRange(state, item);
+      ranges.push(
+        Decoration.mark({ class: item.unresolved ? "cm-unresolved" : "cm-diagnostic-error" }).range(range.from, range.to),
+      );
+      // Por linea: el mensaje del primer error (o del elegido con F2). El
+      // fondo lo pinta lensBands.
+      const line = state.doc.lineAt(item.from).number;
+      byLine.set(line, [...(byLine.get(line) ?? []), item]);
+    }
   }
   for (const [number, items] of byLine) {
     const line = state.doc.line(number);
-    const chosen = navigated !== null && items.includes(list[navigated]) ? list[navigated] : items[0];
-    const counter = navigated !== null && chosen === list[navigated] && list.length > 1 ? `${navigated + 1}/${list.length}` : null;
+    const chosen = navigated && items.includes(navigated.item) ? navigated.item : items[0];
+    const counter =
+      navigated && chosen === navigated.item && navigated.total > 1 ? `${navigated.index + 1}/${navigated.total}` : null;
     ranges.push(Decoration.widget({ widget: new LensMessage(chosen, items.length - 1, counter), side: 1 }).range(line.to));
   }
   return Decoration.set(ranges, true);
 }
 
+const diagnosticPainter = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = diagnosticDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField)
+      ) {
+        this.decorations = diagnosticDecorations(update.view);
+      }
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
 // El fondo rojo tenue de cada linea con error, de lado a lado. Va en una
 // capa (como la seleccion) y no en la linea misma: el recuadro de la
 // sentencia activa angosta la linea al ancho del texto, y el fondo no
-// llegaria hasta el mensaje.
+// llegaria hasta el mensaje. Solo las lineas del viewport.
 const lensBands = layer({
   above: false,
   class: "cm-lensLayer",
@@ -305,7 +457,12 @@ const lensBands = layer({
     update.geometryChanged ||
     update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField),
   markers(view) {
-    const lines = new Set(visibleDiagnostics(view.state).map((item) => view.state.doc.lineAt(item.from).from));
+    const { from, to } = view.viewport;
+    const lines = new Set(
+      diagnosticsIn(view.state, from, to)
+        .filter((item) => item.from >= from && item.from <= to)
+        .map((item) => view.state.doc.lineAt(item.from).from),
+    );
     if (lines.size === 0) return [];
     const scroller = view.scrollDOM.getBoundingClientRect();
     const baseLeft = scroller.left - view.scrollDOM.scrollLeft * view.scaleX;
@@ -313,8 +470,8 @@ const lensBands = layer({
     const content = view.contentDOM.getBoundingClientRect();
     const left = (content.left - baseLeft) / view.scaleX;
     const width = content.width / view.scaleX;
-    return [...lines].map((from) => {
-      const block = view.lineBlockAt(from);
+    return [...lines].map((lineFrom) => {
+      const block = view.lineBlockAt(lineFrom);
       const top = (view.documentTop - baseTop) / view.scaleY + block.top;
       return new RectangleMarker("cm-lensBand", left, top, width, block.height);
     });
@@ -324,15 +481,17 @@ const lensBands = layer({
 // F2 / Shift+F2: al siguiente o anterior error, dando la vuelta. false sin
 // errores.
 export function jumpToDiagnostic(view: EditorView, direction: 1 | -1): boolean {
-  const list = visibleDiagnostics(view.state);
+  // Una vez por pulsacion se recorre la lista entera (para el contador n/m).
+  const list = diagnosticsIn(view.state, 0, view.state.doc.length);
   if (list.length === 0) return false;
   const head = view.state.selection.main.head;
   let index =
     direction === 1 ? list.findIndex((item) => item.from > head) : list.findLastIndex((item) => item.from < head);
   if (index === -1) index = direction === 1 ? 0 : list.length - 1;
+  const item = list[index];
   view.dispatch({
-    selection: EditorSelection.cursor(list[index].from),
-    effects: [setNavigated.of(index), EditorView.scrollIntoView(list[index].from)],
+    selection: EditorSelection.cursor(item.from),
+    effects: [setNavigated.of({ item, index, total: list.length }), EditorView.scrollIntoView(item.from)],
   });
   return true;
 }
@@ -389,7 +548,7 @@ const diagnosticsTheme = EditorView.baseTheme({
 
 export const sqlDiagnostics: Extension = [
   diagnosticsField,
-  EditorView.decorations.compute([diagnosticsField], diagnosticDecorations),
+  diagnosticPainter,
   lensBands,
   diagnosticsTheme,
 ];

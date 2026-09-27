@@ -13,6 +13,7 @@ import type { ConnectionDriver } from "$lib/connections";
 import type { CatalogTable, ForeignKey } from "$lib/types";
 import { boostFor, recordUsage } from "$lib/usageStats";
 import { classifyContext } from "$lib/sqlContext";
+import { statementTextAt } from "$lib/sqlStatementIndex";
 import { translate, type MessageKey } from "$lib/i18n";
 import { completionPolicy, type CompletionPolicy } from "$lib/sqlCompletionPolicy";
 
@@ -253,7 +254,8 @@ function buildJoinCompletionSource(fkIndex: FkIndex): CompletionSource {
     const before = context.state.doc.sliceString(Math.max(0, word.from - 10), word.from);
     if (!/\bjoin\s+$/i.test(before)) return null;
 
-    const fromContext = extractFromContext(context.state.doc.toString(), word.from);
+    const current = statementTextAt(context.state, word.from);
+    const fromContext = extractFromContext(current.text, current.offset);
     if (!fromContext) return null;
 
     const related = fkIndex.get(fromContext.table);
@@ -347,7 +349,8 @@ function buildMultiTableCompletionSource(schema: SQLNamespace, defaultSchema: st
     if (!word) return null;
     if (word.from === word.to && !context.explicit) return null;
 
-    const relations = extractFromTables(context.state.doc.toString(), word.from);
+    const current = statementTextAt(context.state, word.from);
+    const relations = extractFromTables(current.text, current.offset);
     if (relations.length <= 1) return null;
 
     const seen = new Set<string>();
@@ -520,7 +523,10 @@ export function buildCompletionSource(options: {
   const multiTableSource = buildMultiTableCompletionSource(schema, defaultSchema);
 
   return async (context) => {
-    const clauseContext = classifyContext(context.state.doc.toString(), context.pos);
+    // Solo la sentencia actual: con documentos enormes, nunca el texto
+    // entero (ni el limite de classifyContext contado desde el inicio).
+    const current = statementTextAt(context.state, context.pos);
+    const clauseContext = classifyContext(current.text, current.offset);
     const policy = completionPolicy(clauseContext, driver);
 
     if (policy.allowFkJoin) {

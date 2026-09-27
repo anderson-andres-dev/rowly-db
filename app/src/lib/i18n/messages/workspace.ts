@@ -5,6 +5,7 @@ export default defineMessages({
   es: {
     result: "Resultado",
     consoleFallback: "consola",
+    persistFailed: "No se pudo guardar el texto de las consolas; se conserva mientras la app siga abierta.",
     defaultConsoleName: "consola_{n}",
     rename: "Cambiar nombre",
     saveAs: "Guardar como…",
@@ -87,6 +88,7 @@ export default defineMessages({
   en: {
     result: "Result",
     consoleFallback: "console",
+    persistFailed: "Couldn’t save the consoles’ text; it’s kept while the app stays open.",
     defaultConsoleName: "console_{n}",
     rename: "Rename",
     saveAs: "Save As…",
@@ -169,6 +171,7 @@ export default defineMessages({
   "pt-BR": {
     result: "Resultado",
     consoleFallback: "console",
+    persistFailed: "Não foi possível salvar o texto dos consoles; ele é mantido enquanto o app estiver aberto.",
     defaultConsoleName: "console_{n}",
     rename: "Renomear",
     saveAs: "Salvar como…",
@@ -251,6 +254,7 @@ export default defineMessages({
   fr: {
     result: "Résultat",
     consoleFallback: "console",
+    persistFailed: "Impossible d’enregistrer le texte des consoles ; il est conservé tant que l’application reste ouverte.",
     defaultConsoleName: "console_{n}",
     rename: "Renommer",
     saveAs: "Enregistrer sous…",
@@ -333,6 +337,7 @@ export default defineMessages({
   de: {
     result: "Ergebnis",
     consoleFallback: "Konsole",
+    persistFailed: "Der Text der Konsolen konnte nicht gespeichert werden; er bleibt erhalten, solange die App geöffnet ist.",
     defaultConsoleName: "konsole_{n}",
     rename: "Umbenennen",
     saveAs: "Speichern unter…",

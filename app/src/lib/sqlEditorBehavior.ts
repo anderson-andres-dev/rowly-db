@@ -1,6 +1,7 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { statementContaining } from "$lib/sqlStatementIndex";
 
 export interface UppercaseKeywordEdit {
   from: number;
@@ -20,7 +21,10 @@ export function uppercaseKeywordEdit(
 ): UppercaseKeywordEdit | null {
   if (from !== to || text.length !== 1 || /[A-Za-z0-9_$]/.test(text) || from === 0) return null;
 
-  const before = state.sliceDoc(0, from);
+  // Una palabra no cruza lineas: basta con la linea (y no mas de 256
+  // caracteres), nunca desde el inicio del documento.
+  const lineFrom = state.doc.lineAt(from).from;
+  const before = state.sliceDoc(Math.max(lineFrom, from - 256), from);
   const match = before.match(/[A-Za-z_][A-Za-z0-9_$]*$/);
   if (!match) return null;
 
@@ -48,49 +52,60 @@ export const autoUppercaseSqlKeywords: Extension = EditorView.inputHandler.of(
   },
 );
 
-function findStatement(state: EditorState) {
-  const head = state.selection.main.head;
-  for (const bias of [-1, 1] as const) {
-    let node = syntaxTree(state).resolveInner(head, bias);
-    while (node.parent && node.name !== "Statement") node = node.parent;
-    if (node.name === "Statement") return node;
+// Por encima de esto, el ancho del recuadro se mide solo con las lineas
+// visibles: medir un INSERT de 100 000 lineas en cada tecla pesa.
+const MEASURE_ALL_LINES = 2000;
+
+function lineColumns(text: string): number {
+  let columns = 0;
+  for (const char of text) {
+    columns = char === "\t" ? columns + (4 - (columns % 4)) : columns + 1;
   }
-  return null;
+  return columns;
 }
 
+// El recuadro de la sentencia bajo el cursor (la que ejecuta Ctrl+Enter
+// cuando el cursor esta dentro). Solo se decoran las lineas visibles.
 function statementDecorations(view: EditorView): DecorationSet {
-  const statement = findStatement(view.state);
-  if (!statement || statement.from === statement.to) return Decoration.none;
+  const { state } = view;
+  const statement = statementContaining(state, state.selection.main.head);
+  if (!statement) return Decoration.none;
 
-  const firstLine = view.state.doc.lineAt(statement.from);
-  const lastLine = view.state.doc.lineAt(Math.max(statement.from, statement.to - 1));
-  const decorations = [];
+  const firstLine = state.doc.lineAt(statement.from).number;
+  const lastLine = state.doc.lineAt(Math.max(statement.from, statement.to - 1)).number;
+  const visible = view.visibleRanges
+    .map((range) => ({
+      from: Math.max(firstLine, state.doc.lineAt(range.from).number),
+      to: Math.min(lastLine, state.doc.lineAt(range.to).number),
+    }))
+    .filter((range) => range.from <= range.to);
+  if (visible.length === 0) return Decoration.none;
+
+  const measured = lastLine - firstLine < MEASURE_ALL_LINES ? [{ from: firstLine, to: lastLine }] : visible;
   let statementColumns = 1;
-
-  for (let lineNumber = firstLine.number; lineNumber <= lastLine.number; lineNumber += 1) {
-    const line = view.state.doc.line(lineNumber);
-    const statementEnd = Math.min(line.to, statement.to);
-    const textToStatementEnd = view.state.sliceDoc(line.from, statementEnd).trimEnd();
-    let columns = 0;
-    for (const char of textToStatementEnd) {
-      columns = char === "\t" ? columns + (4 - (columns % 4)) : columns + 1;
+  for (const range of measured) {
+    for (let lineNumber = range.from; lineNumber <= range.to; lineNumber += 1) {
+      const line = state.doc.line(lineNumber);
+      const text = state.sliceDoc(line.from, Math.min(line.to, statement.to)).trimEnd();
+      statementColumns = Math.max(statementColumns, lineColumns(text));
     }
-    statementColumns = Math.max(statementColumns, columns);
   }
 
-  for (let lineNumber = firstLine.number; lineNumber <= lastLine.number; lineNumber += 1) {
-    const line = view.state.doc.line(lineNumber);
-    const classes = ["cm-activeStatement"];
-    if (lineNumber === firstLine.number) classes.push("cm-activeStatementStart");
-    if (lineNumber === lastLine.number) classes.push("cm-activeStatementEnd");
-    decorations.push(
-      Decoration.line({
-        class: classes.join(" "),
-        attributes: { style: `--cm-active-statement-width: ${statementColumns}ch` },
-      }).range(line.from),
-    );
+  const decorations = [];
+  const style = `--cm-active-statement-width: ${statementColumns}ch`;
+  for (const range of visible) {
+    for (let lineNumber = range.from; lineNumber <= range.to; lineNumber += 1) {
+      const classes = ["cm-activeStatement"];
+      if (lineNumber === firstLine) classes.push("cm-activeStatementStart");
+      if (lineNumber === lastLine) classes.push("cm-activeStatementEnd");
+      decorations.push(
+        Decoration.line({
+          class: classes.join(" "),
+          attributes: { style },
+        }).range(state.doc.line(lineNumber).from),
+      );
+    }
   }
-
   return Decoration.set(decorations, true);
 }
 
@@ -103,12 +118,7 @@ export const activeStatementHighlight: Extension = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (
-        update.docChanged ||
-        update.selectionSet ||
-        update.viewportChanged ||
-        syntaxTree(update.startState) !== syntaxTree(update.state)
-      ) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) {
         this.decorations = statementDecorations(update.view);
       }
     }

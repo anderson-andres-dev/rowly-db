@@ -1,4 +1,5 @@
 mod catalog_adapter;
+mod console_texts;
 mod credentials;
 mod drivers;
 mod export;
@@ -671,6 +672,25 @@ async fn delete_connection_password(profile_id: String) -> Result<(), Message> {
 }
 
 #[tauri::command]
+async fn write_console_text(
+    app: tauri::AppHandle,
+    key: String,
+    contents: String,
+) -> Result<(), Message> {
+    console_texts::write(&app, &key, contents).await
+}
+
+#[tauri::command]
+async fn read_console_text(app: tauri::AppHandle, key: String) -> Result<Option<String>, Message> {
+    console_texts::read(&app, &key).await
+}
+
+#[tauri::command]
+async fn prune_console_texts(app: tauri::AppHandle, keep: Vec<String>) -> Result<(), Message> {
+    console_texts::prune(&app, keep).await
+}
+
+#[tauri::command]
 async fn read_sql_file(path: String) -> Result<String, Message> {
     sql_files::read(path).await
 }
@@ -889,6 +909,9 @@ pub fn run() {
             delete_connection_password,
             read_sql_file,
             write_sql_file,
+            write_console_text,
+            read_console_text,
+            prune_console_texts,
             rename_sql_file,
             list_sql_dir,
             create_sql_file,

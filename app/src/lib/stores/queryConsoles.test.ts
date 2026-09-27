@@ -341,3 +341,77 @@ describe("queryConsoles: eliminar un perfil", () => {
     expect(Object.keys(state.executionByConsole)).toEqual([kept]);
   });
 });
+
+describe("queryConsoles: textos grandes fuera de localStorage", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.doUnmock("$lib/backend");
+    vi.useRealTimers();
+  });
+
+  it("un texto grande va a disco con retraso y en localStorage queda solo la marca", async () => {
+    vi.useFakeTimers();
+    const invoke = vi.fn(async () => null);
+    vi.doMock("$lib/backend", () => ({ invoke }));
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("p1");
+    const big = "SELECT 1;\n".repeat(mod.LARGE_TEXT / 5);
+    mod.updateQueryConsoleSql(id, big);
+
+    const persisted = JSON.parse(localStorage.getItem("khipu:query-consoles:v1") ?? "{}");
+    const item = persisted.consoles.find((candidate: { id: string }) => candidate.id === id);
+    expect(item.sql).toBeUndefined();
+    expect(item.sqlOnDisk).toBe(true);
+    expect(localStorage.getItem("khipu:query-consoles:v1")!.length).toBeLessThan(1000);
+
+    expect(invoke).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(invoke).toHaveBeenCalledWith("write_console_text", { key: id, contents: big });
+  });
+
+  it("al arrancar, la consola espera su texto del disco antes de mostrarse", async () => {
+    const big = "SELECT 2;\n".repeat(40_000);
+    let release: (text: string) => void = () => {};
+    const invoke = vi.fn((command: string) =>
+      command === "read_console_text" ? new Promise<string>((resolve) => (release = resolve)) : Promise.resolve(null),
+    );
+    vi.doMock("$lib/backend", () => ({ invoke }));
+    vi.resetModules();
+    const storage = new Map([
+      [
+        "khipu:query-consoles:v1",
+        JSON.stringify({
+          consoles: [{ id: "c1", profileId: "p1", title: "consola_1", sqlOnDisk: true, savedSame: true, filePath: null, table: null }],
+          activeByProfile: { p1: "c1" },
+          nextOrdinal: 2,
+        }),
+      ],
+    ]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    });
+    const mod = await import("./queryConsoles");
+    const pending = get(mod.queryConsoles).consoles[0];
+    expect(pending.textPending).toBe(true);
+    // Mientras tanto se vuelve a guardar igual: la marca no se pierde.
+    mod.renameQueryConsole("c1", "grande");
+    expect(JSON.parse(storage.get("khipu:query-consoles:v1")!).consoles[0].sqlOnDisk).toBe(true);
+
+    release(big);
+    await vi.waitFor(() => expect(get(mod.queryConsoles).consoles[0].textPending).toBeUndefined());
+    const loaded = get(mod.queryConsoles).consoles[0];
+    expect(loaded.sql).toBe(big);
+    expect(loaded.savedSql).toBe(big);
+    expect(invoke).toHaveBeenCalledWith("read_console_text", { key: "c1" });
+  });
+
+  it("flushConsoleTexts pide el texto a los editores abiertos", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("p1");
+    const unregister = mod.registerConsoleTextFlush(() => mod.updateQueryConsoleSql(id, "SELECT 3"));
+    expect(mod.currentQueryConsole(id)?.sql).toBe("SELECT 3");
+    unregister();
+  });
+});

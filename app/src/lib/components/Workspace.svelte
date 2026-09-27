@@ -81,6 +81,7 @@
     cancelQueryConfirmation,
     closeQueryConsole,
     createQueryConsole,
+    currentQueryConsole,
     ensureQueryConsole,
     executionForConsole,
     finishQueryExecution,
@@ -456,7 +457,8 @@
   async function requestClose(id: string) {
     tabMenu = null;
     if (!(await confirmDiscardPending(id))) return;
-    const item = consoles.find((candidate) => candidate.id === id);
+    // Con el texto del editor al dia (lo manda con un retraso).
+    const item = currentQueryConsole(id);
     // Solo se pregunta cuando cerrar perderia algo.
     if (item && !isQueryConsoleDirty(item)) {
       closeQueryConsole(profileId, id);
@@ -1452,7 +1454,9 @@
       use:focusZoneAction={{ zone: "editor", focusDefault: (zone) => focusIn(zone, ".cm-content") }}
       style={`flex-basis: ${editorFraction * 100}%`}
     >
-      {#if activeConsole}
+      <!-- Una consola grande cuyo texto todavia se lee del disco (al
+           arrancar) no monta el editor hasta tenerlo. -->
+      {#if activeConsole && !activeConsole.textPending}
         {#key activeConsole.id}
           <SqlEditor
             bind:this={sqlEditor}

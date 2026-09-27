@@ -2,9 +2,11 @@ import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
   executionMarkerField,
+  executionPart,
   formatExecutionTime,
   markerFromResult,
   setExecutionMarker,
+  setPartStatus,
 } from "$lib/sqlExecutionMarker";
 
 function stateWithMarker(doc: string, from: number, to: number) {
@@ -55,5 +57,29 @@ describe("formatExecutionTime", () => {
     expect(formatExecutionTime(411)).toBe("411 ms");
     expect(formatExecutionTime(1234)).toBe("1.23 s");
     expect(formatExecutionTime(12_345)).toBe("12.3 s");
+  });
+});
+
+describe("scripts enormes", () => {
+  it("marcar 100 000 sentencias en orden no es cuadratico y sigue a las ediciones", () => {
+    const line = "SELECT 1;\n";
+    const count = 100_000;
+    let state = EditorState.create({ doc: line.repeat(count), extensions: [executionMarkerField] });
+    const parts = Array.from({ length: count }, (_, index) => ({
+      from: index * line.length,
+      to: index * line.length + 9,
+      status: "pending" as const,
+    }));
+    state = state.update({ effects: setExecutionMarker.of({ from: 0, to: state.doc.length, status: "running", parts }) }).state;
+
+    const start = performance.now();
+    for (let index = 0; index < count; index += 1) {
+      state = state.update({ effects: setPartStatus.of({ index, part: { status: "success", executionTimeMs: 1 } }) }).state;
+    }
+    expect(performance.now() - start).toBeLessThan(5000);
+
+    state = state.update({ changes: { from: 0, insert: "-- x\n" } }).state;
+    expect(executionPart(state, 1)).toEqual({ from: 15, to: 24, status: "success", executionTimeMs: 1, message: undefined });
+    expect(executionPart(state, count - 1)?.status).toBe("success");
   });
 });
