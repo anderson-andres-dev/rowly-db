@@ -36,11 +36,16 @@
     driver,
     profile = null,
     initialError = null,
+    intent = "connect",
     onclose,
   }: {
     driver: ConnectionDriver;
     profile?: ConnectionProfile | null;
     initialError?: string | null;
+    // "edit": se abrio con el lapiz para cambiar algo; el boton solo guarda.
+    // "connect": conexion nueva o un intento de conectar que necesita datos;
+    // el boton guarda y conecta.
+    intent?: "connect" | "edit";
     onclose: () => void;
   } = $props();
 
@@ -247,6 +252,10 @@
   async function handleSubmit() {
     const config = validatedConfig();
     if (!config) return;
+    if (intent === "edit") {
+      await saveOnly(config);
+      return;
+    }
 
     attempted = true;
     persistenceError = null;
@@ -273,6 +282,38 @@
         caCertificatePath: config.caCertificatePath,
       });
       completeConnection(tableCount, profileId);
+    } catch (error) {
+      persistenceError = String(error);
+    } finally {
+      saving = false;
+    }
+  }
+
+  // Editar no conecta: guarda perfil y contraseña y vuelve a la pantalla
+  // de conexiones, donde un clic en la tarjeta conecta cuando haga falta.
+  async function saveOnly(config: ConnectionConfig) {
+    attempted = true;
+    persistenceError = null;
+    testPopoverOpen = false;
+    saving = true;
+    try {
+      await saveConnectionPassword(profileId, config.password, passwordPolicy);
+      saveConnectionProfile({
+        id: profileId,
+        name: name.trim(),
+        group,
+        color,
+        environment,
+        driver,
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        username: config.username,
+        passwordPolicy,
+        tlsMode,
+        caCertificatePath: config.caCertificatePath,
+      });
+      dialogEl?.close();
     } catch (error) {
       persistenceError = String(error);
     } finally {
@@ -491,10 +532,13 @@
                 aria-expanded={sslExpanded}
                 aria-controls="ssl-modes"
                 aria-label={$t("connections.form.ssl.options")}
+                title={$t("connections.form.ssl.options")}
                 disabled={busy}
                 onclick={() => (sslExpanded = !sslExpanded)}
               >
-                {$t(`connections.form.tls.${tlsMode}`)}
+                <!-- Automatico es lo normal y no hace falta decirlo: solo se
+                     nombra un modo mas estricto. -->
+                {#if tlsMode !== "auto"}{$t(`connections.form.tls.${tlsMode}`)}{/if}
                 <ChevronDown size={13} class="ssl-chevron" aria-hidden="true" />
               </button>
             {:else}
@@ -645,7 +689,9 @@
             ? $t("connections.form.connecting")
             : saving
               ? $t("connections.form.saving")
-              : $t("connections.form.saveAndConnect")}
+              : intent === "edit"
+                ? $t("connections.form.save")
+                : $t("connections.form.saveAndConnect")}
         </Button>
       </div>
     </footer>

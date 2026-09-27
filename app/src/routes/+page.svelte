@@ -20,6 +20,7 @@
   let selectedDriver = $state<ConnectionDriver | null>(null);
   let activeProfile = $state<ConnectionProfile | null>(null);
   let fallbackError = $state<string | null>(null);
+  let formIntent = $state<"connect" | "edit">("connect");
   let connectingId = $state<string | null>(null);
   let deletingProfile = $state<ConnectionProfile | null>(null);
   let deleteError = $state<string | null>(null);
@@ -35,13 +36,19 @@
     selectedDriver = driver;
     activeProfile = null;
     fallbackError = null;
+    formIntent = "connect";
   }
 
-  function openProfile(profile: ConnectionProfile, error: string | null = null) {
+  function openProfile(
+    profile: ConnectionProfile,
+    error: string | null = null,
+    intent: "connect" | "edit" = "connect",
+  ) {
     choosingDriver = false;
     activeProfile = profile;
     selectedDriver = profile.driver;
     fallbackError = error;
+    formIntent = intent;
   }
 
   async function handleConnect(profile: ConnectionProfile) {
@@ -110,7 +117,7 @@
       {connectingId}
       onnewconnection={startConnection}
       onconnect={handleConnect}
-      onedit={openProfile}
+      onedit={(profile) => openProfile(profile, null, "edit")}
       ondelete={(profile) => (deletingProfile = profile)}
       error={deleteError}
     />
@@ -136,6 +143,7 @@
       driver={selectedDriver}
       profile={activeProfile}
       initialError={fallbackError}
+      intent={formIntent}
       onclose={closeForm}
     />
   {/if}
