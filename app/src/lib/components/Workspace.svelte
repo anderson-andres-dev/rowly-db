@@ -21,7 +21,7 @@
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
-  import { countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { cancelQuery, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -527,6 +527,7 @@
       "open-sql-file": whenIdle(() => {
         void runFileAction(() => openSqlFileWithDialog(profileId));
       }),
+      "cancel-query": whenIdle(() => !!activeConsole && cancelExecution(activeConsole.id)),
       "close-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item) return false;
@@ -586,15 +587,17 @@
     const sql = tableSql(item);
     const startedAt = Date.now();
     const started = performance.now();
-    const response = await executeQuery(sql, null, firstPage(consoleId));
+    const { response, cancelled } = await executeCancellable(consoleId, sql, null, firstPage(consoleId));
     if (response.type !== "completed") {
       applyExecuteQueryResponse(consoleId, sql, response);
       return;
     }
     appendLog(consoleId, { kind: "query", schema: logSchema, text: sql, at: startedAt });
     appendLog(consoleId, {
-      kind: response.result.type === "error" ? "error" : "info",
-      text: describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
+      kind: response.result.type === "error" && !cancelled ? "error" : "info",
+      text: cancelled
+        ? $t("workspace.output.cancelled")
+        : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
     });
     const hadRows = executionForConsole($queryConsoles, consoleId).result?.type === "resultSet";
     if (response.result.type === "error") {
@@ -697,6 +700,42 @@
     return result.code ? `[${result.code}] ${result.message}` : result.message;
   }
 
+  // --- Cancelar ---------------------------------------------------------
+  // Cada ejecucion lleva un id; mientras corre, cancelExecution() le pide
+  // al servidor que la interrumpa (cancel_query). Termina con el error del
+  // servidor (o, en MySQL, a veces con un resultado parcial): en la Salida
+  // queda como "cancelada", no como error.
+  const runningExecutions = new Map<string, string>();
+  let cancelling = $state<Record<string, boolean>>({});
+
+  async function executeCancellable(
+    consoleId: string,
+    sql: string,
+    confirmed: DestructiveStatement | null,
+    page: PageRequest,
+  ): Promise<{ response: ExecuteQueryResponse; cancelled: boolean }> {
+    const executionId = crypto.randomUUID();
+    runningExecutions.set(consoleId, executionId);
+    try {
+      const response = await executeQuery(sql, confirmed, page, executionId);
+      return { response, cancelled: cancelling[consoleId] === true };
+    } finally {
+      if (runningExecutions.get(consoleId) === executionId) runningExecutions.delete(consoleId);
+      const { [consoleId]: _done, ...rest } = cancelling;
+      cancelling = rest;
+    }
+  }
+
+  function cancelExecution(consoleId: string): boolean {
+    const executionId = runningExecutions.get(consoleId);
+    if (!executionId) return false;
+    if (!cancelling[consoleId]) {
+      cancelling = { ...cancelling, [consoleId]: true };
+      void cancelQuery(executionId);
+    }
+    return true;
+  }
+
   // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
   // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
   // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
@@ -714,12 +753,14 @@
     const consoleId = consoleOfKey(key);
     const startedAt = Date.now();
     const started = performance.now();
-    const response = await executeQuery(sql, confirmed, page);
+    const { response, cancelled } = await executeCancellable(consoleId, sql, confirmed, page);
     if (response.type === "completed") {
       appendLog(consoleId, { kind: "query", schema: logSchema, text: sql.trim(), at: startedAt });
       appendLog(consoleId, {
-        kind: response.result.type === "error" ? "error" : "info",
-        text: describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
+        kind: response.result.type === "error" && !cancelled ? "error" : "info",
+        text: cancelled
+          ? $t("workspace.output.cancelled")
+          : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
       });
     }
     applyExecuteQueryResponse(key, sql, response, paging);
@@ -1320,6 +1361,8 @@
         onreload={() => void reloadResult(viewKey)}
         outputLog={activeConsole ? ($executionLog[activeConsole.id] ?? []) : []}
         consoleRunning={liveExecution.isExecuting}
+        oncancelquery={() => activeConsole && cancelExecution(activeConsole.id)}
+        cancellingQuery={!!activeConsole && cancelling[activeConsole.id] === true}
         tabs={resultTabs}
         activeTab={selectedTab}
         onselecttab={(tab) => activeConsole && selectTab(activeConsole.id, tab)}

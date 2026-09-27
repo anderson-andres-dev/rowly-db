@@ -5,7 +5,7 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryColumn,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryCancel, QueryColumn,
     QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects,
     TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
 };
@@ -361,22 +361,77 @@ impl DbConnector for PostgresConnector {
         sql: &'a str,
         options: QueryExecutionOptions,
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let mut conn = match self.pool.acquire().await {
-                Ok(conn) => conn,
-                Err(error) => return postgres_error_to_result(error),
-            };
+        Box::pin(self.run_query(sql, options, None))
+    }
 
-            let outcome = execute_on_connection(&mut conn, sql, options).await;
-            if !outcome.connection_reusable {
-                // Devolverla al pool haria que sqlx la "limpie" leyendo (y
-                // tirando) todo lo que el servidor todavia tenga para mandar
-                // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
-                // en seco; el pool abre otra conexion cuando haga falta.
-                drop(conn.detach());
+    fn execute_query_cancellable<'a>(
+        &'a self,
+        sql: &'a str,
+        options: QueryExecutionOptions,
+        cancel: &'a QueryCancel,
+    ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
+        Box::pin(self.run_query(sql, options, Some(cancel)))
+    }
+
+    async fn cancel_query(&self, cancel: &QueryCancel) -> Result<(), DriverError> {
+        let Some(id) = cancel.request() else {
+            return Ok(());
+        };
+        sqlx::query("SELECT pg_cancel_backend($1)")
+            .bind(id as i32)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(|error| DriverError::Query(error.to_string()))
+    }
+}
+
+impl PostgresConnector {
+    async fn run_query(
+        &self,
+        sql: &str,
+        options: QueryExecutionOptions,
+        cancel: Option<&QueryCancel>,
+    ) -> QueryExecutionResult {
+        let mut conn = match self.pool.acquire().await {
+            Ok(conn) => conn,
+            Err(error) => return postgres_error_to_result(error),
+        };
+
+        // Id de la conexion en el servidor: cancelar la interrumpe desde otra
+        // (ver QueryCancel). Si ya se cancelo mientras se esperaba una
+        // conexion, ni se empieza.
+        if let Some(cancel) = cancel {
+            match sqlx::query_scalar::<_, i32>("SELECT pg_backend_pid()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                Ok(id) if !cancel.begin(id as u64) => return cancelled_before_start(),
+                Ok(_) => {}
+                Err(error) => return postgres_error_to_result(error),
             }
-            outcome.result
-        })
+        }
+
+        let outcome = execute_on_connection(&mut conn, sql, options).await;
+        if let Some(cancel) = cancel {
+            cancel.end();
+        }
+        if !outcome.connection_reusable {
+            // Devolverla al pool haria que sqlx la "limpie" leyendo (y
+            // tirando) todo lo que el servidor todavia tenga para mandar
+            // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
+            // en seco; el pool abre otra conexion cuando haga falta.
+            drop(conn.detach());
+        }
+        outcome.result
+    }
+}
+
+fn cancelled_before_start() -> QueryExecutionResult {
+    QueryExecutionResult::Error {
+        message: "query cancelled before it started".to_string(),
+        code: None,
+        position: None,
     }
 }
 

@@ -7,8 +7,8 @@ mod sql_files;
 mod updates;
 
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryExecutionOptions,
-    QueryExecutionResult, SchemaObjects, TlsStatus,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, QueryCancel,
+    QueryExecutionOptions, QueryExecutionResult, SchemaObjects, TlsStatus,
 };
 use khipu_engine::Dialect;
 use khipu_engine::catalog::CatalogTable;
@@ -114,6 +114,26 @@ struct DatabaseExplorer {
 #[derive(Default)]
 struct AppState {
     connections: Mutex<HashMap<String, ActiveConnection>>,
+    /// Queries running now that `cancel_query` can interrupt, by the
+    /// execution id the frontend gave them.
+    running: Mutex<HashMap<String, Arc<QueryCancel>>>,
+}
+
+/// Removes a running query from `AppState::running` when it ends, however
+/// it ends.
+struct RunningQuery<'a> {
+    state: &'a AppState,
+    id: String,
+}
+
+impl Drop for RunningQuery<'_> {
+    fn drop(&mut self) {
+        self.state
+            .running
+            .lock()
+            .expect("running queries mutex poisoned")
+            .remove(&self.id);
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -308,6 +328,7 @@ async fn execute_query(
     sql: String,
     confirmed_statement: Option<DestructiveStatement>,
     page: Option<PageRequest>,
+    execution_id: Option<String>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<ExecuteQueryResponse, String> {
@@ -407,14 +428,25 @@ async fn execute_query(
     let paged_sql =
         khipu_engine::pagination::paginate_sql(base_sql, dialect, offset, page_size as u64 + 1);
     let pageable = paged_sql.is_some();
-    let result = connector
-        .execute_query(
-            paged_sql.as_deref().unwrap_or(base_sql),
-            QueryExecutionOptions {
-                max_rows: page_size,
-            },
-        )
-        .await;
+    let final_sql = paged_sql.as_deref().unwrap_or(base_sql);
+    let options = QueryExecutionOptions {
+        max_rows: page_size,
+    };
+    let result = match execution_id {
+        Some(id) => {
+            let cancel = Arc::new(QueryCancel::default());
+            state
+                .running
+                .lock()
+                .expect("running queries mutex poisoned")
+                .insert(id.clone(), Arc::clone(&cancel));
+            let _running = RunningQuery { state: &state, id };
+            connector
+                .execute_query_cancellable(final_sql, options, &cancel)
+                .await
+        }
+        None => connector.execute_query(final_sql, options).await,
+    };
 
     let page = matches!(result, QueryExecutionResult::ResultSet { .. }).then_some(PageInfo {
         offset: if pageable { offset } else { 0 },
@@ -423,6 +455,40 @@ async fn execute_query(
         sortable,
     });
     Ok(ExecuteQueryResponse::Completed { result, page })
+}
+
+/// Interrupts the query started with `execution_id` (see `execute_query`).
+/// It then ends with the server's own error, which the frontend shows as
+/// cancelled. Nothing to do if it already ended.
+#[tauri::command]
+async fn cancel_query(
+    execution_id: String,
+    window: tauri::Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let Some(cancel) = state
+        .running
+        .lock()
+        .expect("running queries mutex poisoned")
+        .get(&execution_id)
+        .cloned()
+    else {
+        return Ok(());
+    };
+    let connector = {
+        let guard = state
+            .connections
+            .lock()
+            .expect("connections mutex poisoned");
+        match guard.get(window.label()) {
+            Some(active) => Arc::clone(&active.connector),
+            None => return Ok(()),
+        }
+    };
+    connector
+        .cancel_query(&cancel)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Total rows `sql` would return, via `SELECT COUNT(*) FROM (...)`. Only
@@ -717,6 +783,7 @@ pub fn run() {
             connect,
             disconnect,
             execute_query,
+            cancel_query,
             table_definition,
             test_connection,
             save_connection_password,

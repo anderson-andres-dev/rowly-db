@@ -78,6 +78,8 @@
     onnotice = () => {},
     outputLog = [],
     consoleRunning = false,
+    oncancelquery,
+    cancellingQuery = false,
     tabs = [],
     activeTab = "output",
     onselecttab = () => {},
@@ -124,6 +126,10 @@
     outputLog?: LogEntry[];
     // Hay una ejecucion nueva en curso en la consola (indicador de la Salida).
     consoleRunning?: boolean;
+    // Interrumpe la ejecucion en curso; el boton sale junto a cada indicador
+    // de "ejecutando" (y Esc hace lo mismo, comando cancel-query).
+    oncancelquery?: () => void;
+    cancellingQuery?: boolean;
     // Pestañas de resultado (fijadas y la normal). Cada una tiene su estado
     // completo en Workspace; este panel muestra la elegida con TODAS sus
     // funciones: fijar es solo para que la proxima ejecucion no la
@@ -173,6 +179,8 @@
   function shortcutKeys(id: string): string {
     return $shortcuts.find((shortcut) => shortcut.id === id)?.keys ?? "";
   }
+
+  const cancelQueryKeys = $derived(shortcutKeys("cancel-query"));
 
   const lastCol = $derived(Math.max(0, (result?.type === "resultSet" ? result.columns.length : 1) - 1));
 
@@ -437,6 +445,20 @@
   }}
 />
 
+{#snippet cancelButton()}
+  {#if oncancelquery}
+    <button
+      type="button"
+      class="action-button secondary small"
+      disabled={cancellingQuery}
+      use:tooltip={$t("results.cancelQueryTitle", { keys: cancelQueryKeys })}
+      onclick={() => oncancelquery?.()}
+    >
+      {cancellingQuery ? $t("results.cancellingQuery") : $t("results.cancelQuery")}
+    </button>
+  {/if}
+{/snippet}
+
 <div class="result-pane">
   {#if consoleRunning || isExecuting || tabs.length > 0 || outputLog.length > 0}
     {#if !tableView}
@@ -643,8 +665,9 @@
     {/if}
   {/if}
   {#if (isExecuting || consoleRunning) && !hasResultTab && outputLog.length === 0}
-    <div class="centered">
+    <div class="centered running-state">
       <div class="spinner" role="status" aria-label={$t("results.executingQuery")}></div>
+      {@render cancelButton()}
     </div>
   {:else if result === null && outputLog.length === 0}
     <div class="centered empty-state">
@@ -656,14 +679,15 @@
     {#if tableView}
       <!-- Tabla cargando o con un filtro invalido (el error sale junto al
            filtro): sin registro de Salida. -->
-      <div class="centered">
+      <div class="centered running-state">
         {#if isExecuting || consoleRunning}
           <div class="spinner" role="status" aria-label={$t("results.executingQuery")}></div>
+          {@render cancelButton()}
         {/if}
       </div>
     {:else}
       <div class="output-region">
-        <OutputLog entries={outputLog} running={consoleRunning} />
+        <OutputLog entries={outputLog} running={consoleRunning} runningAction={cancelButton} />
       </div>
     {/if}
   {:else}
@@ -702,8 +726,9 @@
           />
         {/if}
         {#if isExecuting}
-          <div class="busy-overlay">
+          <div class="busy-overlay running-state">
             <div class="spinner" role="status" aria-label={$t("results.loadingPage")}></div>
+            {@render cancelButton()}
           </div>
         {/if}
       </div>
@@ -1042,6 +1067,11 @@
     min-height: 0;
     flex: 1;
     overflow: hidden;
+  }
+
+  .running-state {
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .busy-overlay {

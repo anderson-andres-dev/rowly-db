@@ -1,5 +1,6 @@
 pub mod assembly;
 mod connection_error;
+mod query_cancel;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
+pub use query_cancel::QueryCancel;
 
 /// How a connection negotiates TLS. Chosen per connection profile.
 ///
@@ -400,6 +402,27 @@ pub trait DbConnector: Send + Sync {
         sql: &'a str,
         options: QueryExecutionOptions,
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>>;
+
+    /// `execute_query` that `cancel_query` can interrupt: the driver records
+    /// in `cancel` which server connection runs it (see `QueryCancel`). A
+    /// driver without cancellation just runs it.
+    fn execute_query_cancellable<'a>(
+        &'a self,
+        sql: &'a str,
+        options: QueryExecutionOptions,
+        cancel: &'a QueryCancel,
+    ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
+        let _ = cancel;
+        self.execute_query(sql, options)
+    }
+
+    /// Asks the server to interrupt the query `cancel` tracks, from another
+    /// connection. The query then ends with the server's own error. Does
+    /// nothing if it already ended; if it hasn't started yet, it won't.
+    async fn cancel_query(&self, cancel: &QueryCancel) -> Result<(), DriverError> {
+        cancel.request();
+        Ok(())
+    }
 
     /// Runs every statement in ONE transaction, in order: either all of them
     /// are committed or none (rollback on the first failure). Returns the
