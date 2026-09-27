@@ -9,6 +9,7 @@
   import { NEUTRAL_IDENTITY_COLOR } from "$lib/connectionColors";
   import { t } from "$lib/i18n";
   import type { ConnectionProfile } from "$lib/stores/connectionProfiles";
+  import { loadLastProfileId } from "$lib/stores/connection";
 
   let {
     profiles,
@@ -68,6 +69,14 @@
   });
 
   const busy = $derived(connectingId !== null);
+
+  // La ultima conexion usada queda resaltada y con el foco: al abrir la app
+  // basta Enter para volver a ella.
+  const lastProfileId = loadLastProfileId();
+
+  function focusIfLast(node: HTMLButtonElement, profileId: string) {
+    if (profileId === lastProfileId) node.focus();
+  }
 
   function identityStyle(profile: ConnectionProfile): string {
     return `--identity: ${profile.color ?? NEUTRAL_IDENTITY_COLOR}`;
@@ -168,13 +177,18 @@
             <div class="card-grid">
               {#each section.profiles as profile (profile.id)}
                 {@const driver = getDriver(profile.driver)}
-                <div class="card" class:connecting={connectingId === profile.id} style={identityStyle(profile)}>
+                <div
+                  class="card"
+                  class:connecting={connectingId === profile.id}
+                  class:recent={profile.id === lastProfileId}
+                  style={identityStyle(profile)}>
                   <button
                     class="card-main"
                     type="button"
                     aria-label={$t("connections.landing.connectTo", { name: profile.name, driver: driver.name })}
                     aria-busy={connectingId === profile.id}
                     disabled={busy}
+                    use:focusIfLast={profile.id}
                     onclick={() => onconnect(profile)}
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={40} />
@@ -201,6 +215,7 @@
                 <div
                   class="row"
                   class:connecting={connectingId === profile.id}
+                  class:recent={profile.id === lastProfileId}
                   role="listitem"
                   style={identityStyle(profile)}
                 >
@@ -210,6 +225,7 @@
                     aria-label={$t("connections.landing.connectTo", { name: profile.name, driver: driver.name })}
                     aria-busy={connectingId === profile.id}
                     disabled={busy}
+                    use:focusIfLast={profile.id}
                     onclick={() => onconnect(profile)}
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={24} />
@@ -525,7 +541,8 @@
   }
 
   .card-main:hover:not(:disabled)::before,
-  .card.connecting .card-main::before {
+  .card.connecting .card-main::before,
+  .card.recent .card-main::before {
     opacity: 1;
   }
 
@@ -631,7 +648,8 @@
   }
 
   .row-main:hover:not(:disabled)::before,
-  .row.connecting .row-main::before {
+  .row.connecting .row-main::before,
+  .row.recent .row-main::before {
     opacity: 1;
   }
 

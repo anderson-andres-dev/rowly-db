@@ -15,13 +15,17 @@ use sqlx::mysql::{
 use sqlx::{Column, Executor, MySqlPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct MySqlConnector {
     pool: MySqlPool,
     version: version::ServerVersion,
     tls: TlsStatus,
 }
+
+/// How long the pool waits for a connection before giving up. sqlx's default
+/// (30 s) leaves the app hanging too long on a host that doesn't answer.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<MySqlPool, sqlx::Error> {
     let options = MySqlConnectOptions::new()
@@ -31,6 +35,7 @@ async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<MySqlPool
         .password(&config.password)
         .database(&config.database);
     MySqlPoolOptions::new()
+        .acquire_timeout(CONNECT_TIMEOUT)
         .connect_with(tls::apply(
             options,
             mode,

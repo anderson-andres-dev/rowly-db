@@ -1,17 +1,17 @@
-# Graph Report - khipu  (2026-09-25)
+# Graph Report - khipu  (2026-09-26)
 
 ## Corpus Check
-- 175 files · ~165,347 words
+- 175 files · ~165,639 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 11 file(s) not represented in the graph (top: (none) 7, .css 2, .icns 1)
 
 ## Summary
-- 1783 nodes · 3712 edges · 85 communities (76 shown, 9 thin omitted)
+- 1794 nodes · 3723 edges · 91 communities (79 shown, 12 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 74 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `652db346`
+- Built from commit: `f66f0cee`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -26,7 +26,7 @@
 - queryConsoles.ts
 - docs/ARCHITECTURE.md
 - theme.ts
-- lib/connections.ts
+- svelte
 - tauri.conf.json
 - sqlFiles.ts
 - sqlDefinitionLink.ts
@@ -39,7 +39,7 @@
 - i18n/index.ts
 - super
 - compilerOptions
-- drivers.rs
+- postgres/src/tls.rs
 - mysql/src/tls.rs
 - devDependencies
 - credentials.rs
@@ -60,7 +60,7 @@
 - vitest
 - gridFind.ts
 - ResultPager.svelte
-- TlsMode
+- Explorador de base de datos
 - resultEditing.ts
 - sqlCompletionPolicy.ts
 - types.ts
@@ -78,24 +78,27 @@
 - pagination.rs
 - result_editing.rs
 - extractFromContext
-- SqlEditor.svelte
+- Workspace.svelte
 - editorSettings.ts
 - connectionIdentity.ts
 - ref_app
-- Workspace.svelte
-- codemirrorTheme.ts
-- pinnedResults.ts
+- ExportDialog.svelte
+- sqlEditorBehavior.ts
+- svelte
 - reorder.ts
 - startFilePanelResize
 - stores/shortcuts.ts
+- SettingsPanel.svelte
 - notifications.ts
-- svelte
+- ResultPane.svelte
 - sqlFolders.ts
 - withExecution
 - DataGrid.svelte
 - add-to-manifest.py
 - parser.rs
-- .as_sqlparser_dialect
+- queryExecution.ts
+- credentials.ts
+- StatusGutterMarker
 - +layout.svelte
 
 ## God Nodes (most connected - your core abstractions)
@@ -113,10 +116,10 @@
 ## Surprising Connections (you probably didn't know these)
 - `Flujo de datos` --references--> `buildExplorerTree()`  [INFERRED]
   docs/design/explorador-base-de-datos.md → app/src/lib/explorerTree.ts
-- `Flujo de datos` --references--> `connect()`  [INFERRED]
-  docs/design/explorador-base-de-datos.md → app/src/lib/stores/connection.ts
 - `SSL/TLS por conexión` --references--> `TlsMode`  [INFERRED]
   docs/design/explorador-base-de-datos.md → app/src/lib/types.ts
+- `Flujo de datos` --references--> `connect()`  [INFERRED]
+  docs/design/explorador-base-de-datos.md → app/src/lib/stores/connection.ts
 - `SSL/TLS por conexión` --references--> `TlsStatus`  [INFERRED]
   docs/design/explorador-base-de-datos.md → app/src/lib/types.ts
 - `app/README.md (Tauri + SvelteKit + TypeScript template note)` --semantically_similar_to--> `README.md (English)`  [INFERRED] [semantically similar]
@@ -130,27 +133,27 @@
 - **Branch protection to tagged-release pipeline flow** — contributing_branch_flow, _github_workflows_quality_workflow, _github_workflows_release_workflow [EXTRACTED 1.00]
 - **TablePlus edit-review-commit UX pattern group** — docs_design_tableplus_ux_arquitectura_explore_inspect_modify_review_commit, docs_design_tableplus_ux_arquitectura_pending_changes_commit, docs_design_tableplus_ux_arquitectura_application_shell [INFERRED 0.85]
 
-## Communities (85 total, 9 thin omitted)
+## Communities (91 total, 12 thin omitted)
 
 ### Community 0 - "execution_guard.rs"
 Cohesion: 0.09
 Nodes (41): AlterTableOperation, add_column_insert_create_select_are_not_destructive(), classify(), classify_alter_table(), classify_destructive_sql(), classify_drop(), classify_query(), classify_selection() (+33 more)
 
 ### Community 1 - "mysql/src/lib.rs"
-Cohesion: 0.07
-Nodes (60): QueryExecutionOptions, config_from_env(), config_with_tls(), connects_and_lists_schemas_and_tables_against_real_mysql(), ER_UNSUPPORTED_PS, execute_on_connection(), execute_query_returns_command_for_ddl(), execute_query_returns_error_with_code_for_bad_sql() (+52 more)
+Cohesion: 0.06
+Nodes (61): QueryExecutionOptions, config_from_env(), config_with_tls(), CONNECT_TIMEOUT, connects_and_lists_schemas_and_tables_against_real_mysql(), ER_UNSUPPORTED_PS, execute_on_connection(), execute_query_returns_command_for_ddl() (+53 more)
 
 ### Community 2 - "resultEdits.ts"
 Cohesion: 0.20
 Nodes (14): PendingEdits, ResultEditInfo, RowRange, clearResultPendingEdits(), commitResultEdits(), editStateFor(), EditStep, EMPTY_STATE (+6 more)
 
 ### Community 3 - "postgres/src/lib.rs"
-Cohesion: 0.07
-Nodes (52): async_trait, config_from_env(), config_with_tls(), connects_and_lists_schemas_and_tables_against_real_postgres(), execute_on_connection(), execute_query_returns_command_for_ddl(), execute_query_returns_error_with_code_and_position_for_bad_sql(), execute_query_returns_result_set_with_null_and_types() (+44 more)
+Cohesion: 0.06
+Nodes (55): async_trait, config_from_env(), config_with_tls(), CONNECT_TIMEOUT, connects_and_lists_schemas_and_tables_against_real_postgres(), execute_on_connection(), execute_query_returns_command_for_ddl(), execute_query_returns_error_with_code_and_position_for_bad_sql() (+47 more)
 
 ### Community 4 - "src-tauri/src/lib.rs"
 Cohesion: 0.09
-Nodes (60): ActiveConnection, apply_result_changes(), AppState, connect(), count_query_rows(), create_sql_file(), database_explorer(), DatabaseExplorer (+52 more)
+Nodes (61): ActiveConnection, apply_result_changes(), AppState, connect(), count_query_rows(), create_sql_file(), database_explorer(), DatabaseExplorer (+53 more)
 
 ### Community 5 - "sqlSchema.ts"
 Cohesion: 0.15
@@ -169,40 +172,40 @@ Cohesion: 0.07
 Nodes (41): Node job (check, build), Rust job (fmt, clippy, test), Quality CI Workflow, Release job (multi-platform build & publish), tauri-apps/tauri-action, Release CI Workflow, app/README.md (Tauri + SvelteKit + TypeScript template note), CSS_VAR_NAMES field-to-CSS-variable mapping (+33 more)
 
 ### Community 9 - "theme.ts"
-Cohesion: 0.08
-Nodes (34): ColorScheme, EditorPalette, palettes, resolveScheme(), ShellPalette, contrast(), DARK_BEFORE, FAMILIES (+26 more)
+Cohesion: 0.06
+Nodes (42): BUILTIN_FUNCTIONS, builtinCallMark, TOKEN_CHROME, WORD_OPERATORS, wordClassHighlight, wordOperatorMark, ColorScheme, EditorPalette (+34 more)
 
-### Community 10 - "lib/connections.ts"
+### Community 10 - "svelte"
 Cohesion: 0.11
-Nodes (12): neutral, cornerActions(), indexOf(), $t(), tinted, CONNECTION_COLORS, NEUTRAL_IDENTITY_COLOR, BackendKind (+4 more)
+Nodes (13): neutral, cornerActions(), indexOf(), $t(), tinted, CONNECTION_COLORS, NEUTRAL_IDENTITY_COLOR, BackendKind (+5 more)
 
 ### Community 11 - "tauri.conf.json"
 Cohesion: 0.06
 Nodes (30): app, security, windows, build, beforeBuildCommand, beforeDevCommand, devUrl, frontendDist (+22 more)
 
 ### Community 12 - "sqlFiles.ts"
-Cohesion: 0.16
-Nodes (19): finishEdit(), onEditKeydown(), createSqlFile(), openSqlFileAtPath(), openSqlFileWithDialog(), renameConsoleFile(), renameSqlFile(), saveConsole() (+11 more)
+Cohesion: 0.15
+Nodes (20): finishEdit(), onEditKeydown(), createSqlFile(), openSqlFileAtPath(), openSqlFileWithDialog(), renameConsoleFile(), renameSqlFile(), saveConsole() (+12 more)
 
 ### Community 13 - "sqlDefinitionLink.ts"
 Cohesion: 0.18
 Nodes (7): CatalogTableRef, definitionLinkExtension(), DefinitionLinkOptions, DefinitionLinkPlugin, isModifierHeld(), linkRangeField, setLinkRange
 
 ### Community 14 - "connection.ts"
-Cohesion: 0.11
-Nodes (21): forgetConnectionPassword(), loadConnectionPassword(), runtimePasswords, catalogTables, completeConnection(), connection, ConnectionState, ConnectResult (+13 more)
+Cohesion: 0.13
+Nodes (21): loadConnectionPassword(), catalogTables, completeConnection(), connect(), connection, ConnectionState, ConnectResult, connectToProfile() (+13 more)
 
 ### Community 15 - "KhipuLanguageServer"
 Cohesion: 0.15
 Nodes (11): CompletionParams, CompletionResponse, KhipuLanguageServer, Client, Option, Result, InitializeParams, InitializeResult (+3 more)
 
 ### Community 16 - "explorerTree.ts"
-Cohesion: 0.17
-Nodes (17): buildExplorerTree(), columnList(), expandableKeys(), ExplorerIcon, ExplorerNode, folder(), matches(), schemaNode() (+9 more)
+Cohesion: 0.19
+Nodes (16): buildExplorerTree(), columnList(), expandableKeys(), ExplorerIcon, ExplorerNode, folder(), matches(), schemaNode() (+8 more)
 
 ### Community 17 - "connectionProfiles.ts"
-Cohesion: 0.17
-Nodes (13): ConnectionDriver, PasswordPolicy, ConnectionProfile, connectionProfiles, isDriver(), isHexColor(), isPasswordPolicy(), isTlsMode() (+5 more)
+Cohesion: 0.15
+Nodes (16): ConnectionDriver, PasswordPolicy, ConnectionConfig, ConnectionProfile, connectionProfiles, isDriver(), isHexColor(), isPasswordPolicy() (+8 more)
 
 ### Community 18 - "package.json"
 Cohesion: 0.09
@@ -217,16 +220,16 @@ Cohesion: 0.18
 Nodes (17): interpolate(), loadPreference(), locale, localePreference, lookup(), MessageParams, systemLocale(), translator() (+9 more)
 
 ### Community 21 - "super"
-Cohesion: 0.06
-Nodes (48): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, Item, tables_to_catalog(), absolute_dir(), create(), is_sql_file_name() (+40 more)
+Cohesion: 0.11
+Nodes (31): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, Item, tables_to_catalog(), absolute_dir(), create(), is_sql_file_name() (+23 more)
 
 ### Community 22 - "compilerOptions"
 Cohesion: 0.15
 Nodes (12): compilerOptions, allowJs, checkJs, esModuleInterop, forceConsistentCasingInFileNames, moduleResolution, resolveJsonModule, skipLibCheck (+4 more)
 
-### Community 23 - "drivers.rs"
-Cohesion: 0.17
-Nodes (19): connect(), ConnectedDatabase, DatabaseKind, open(), report(), Arc, ConnectionConfig, Option (+11 more)
+### Community 23 - "postgres/src/tls.rs"
+Cohesion: 0.08
+Nodes (36): connect(), ConnectedDatabase, DatabaseKind, open(), report(), Arc, ConnectionConfig, Option (+28 more)
 
 ### Community 24 - "mysql/src/tls.rs"
 Cohesion: 0.13
@@ -270,15 +273,15 @@ Nodes (13): classifyContext(), classifyFrame(), CLAUSE_KEYWORDS, ClauseKind, Fra
 
 ### Community 42 - "stores/updates.ts"
 Cohesion: 0.13
-Nodes (19): checkForUpdates(), checking, checkOnStartup(), DEFAULT_PREFS, errorCode(), InstallKind, installRelease(), installState (+11 more)
+Nodes (18): checkForUpdates(), checking, checkOnStartup(), DEFAULT_PREFS, errorCode(), InstallKind, installRelease(), installState (+10 more)
 
 ### Community 43 - "export.rs"
 Cohesion: 0.15
-Nodes (21): ALLOWED_EXTENSIONS, columns(), csv_field(), export(), ExportFormat, FileSink, is_json(), is_numeric() (+13 more)
+Nodes (22): ALLOWED_EXTENSIONS, columns(), csv_field(), export(), ExportFormat, FileSink, is_json(), is_numeric() (+14 more)
 
 ### Community 44 - "editorSearchPanel.ts"
 Cohesion: 0.07
-Nodes (32): addExclusion, clearExclusions, createSearchPanel(), applyTexts(), buildQuery(), commit(), excludeCurrent(), label() (+24 more)
+Nodes (31): addExclusion, clearExclusions, createSearchPanel(), applyTexts(), buildQuery(), commit(), excludeCurrent(), label() (+23 more)
 
 ### Community 45 - "vitest"
 Cohesion: 0.19
@@ -289,12 +292,12 @@ Cohesion: 0.20
 Nodes (12): buildMatcher(), cellText(), escapeRegex(), findInPage(), FindMatch, FindOptions, FindResult, MAX_MATCHES (+4 more)
 
 ### Community 47 - "ResultPager.svelte"
-Cohesion: 0.07
-Nodes (26): applyCustom(), changePageSize(), format(), goLast(), hideTooltip(), lastOffsetFor(), navButton(), prettyShortcut() (+18 more)
+Cohesion: 0.11
+Nodes (16): applyCustom(), changePageSize(), goLast(), hideTooltip(), lastOffsetFor(), navButton(), prettyShortcut(), showTooltip() (+8 more)
 
-### Community 48 - "TlsMode"
-Cohesion: 0.14
-Nodes (13): connect(), ConnectionConfig, TlsMode, TlsStatus, Compatibilidad entre versiones, Contrato del driver, Explorador de base de datos, Flujo de datos (+5 more)
+### Community 48 - "Explorador de base de datos"
+Cohesion: 0.20
+Nodes (9): TlsStatus, Compatibilidad entre versiones, Contrato del driver, Explorador de base de datos, Limitaciones conocidas, MySQL / MariaDB — `information_schema`, PostgreSQL — `pg_catalog`, Próximos pasos (+1 more)
 
 ### Community 49 - "resultEditing.ts"
 Cohesion: 0.14
@@ -305,8 +308,8 @@ Cohesion: 0.22
 Nodes (10): COMMON_STARTERS, completionPolicy, MYSQL_STARTERS, NO_BOOST(), POSTGRES_STARTERS, RELATION_TAIL_BASE, RELATION_TAIL_BOOST, relationTailKeywords() (+2 more)
 
 ### Community 51 - "types.ts"
-Cohesion: 0.10
-Nodes (18): nextSort(), PageRequest, CatalogColumn, ColumnCatalogInfo, ExecuteQueryResponse, ExplorerCheck, ExplorerColumn, ExplorerEvent (+10 more)
+Cohesion: 0.12
+Nodes (14): CatalogColumn, ColumnCatalogInfo, ExplorerCheck, ExplorerColumn, ExplorerEvent, ExplorerForeignKey, ExplorerIndex, ExplorerKey (+6 more)
 
 ### Community 52 - "Borrador: copiado de resultados de consulta"
 Cohesion: 0.11
@@ -317,8 +320,8 @@ Cohesion: 0.20
 Nodes (10): active, editValue, fileMenuItems(), folderMenuItems(), requestTrash(), startCreate(), startRename(), $t() (+2 more)
 
 ### Community 54 - "Dialect"
-Cohesion: 0.13
-Nodes (32): analyze_editable_query(), build_change_statements(), CellValue, ColumnValue, distingue_columnas_alias_y_expresiones(), EditableQuery, escapa_valores_e_identificadores_por_dialecto(), ident_name() (+24 more)
+Cohesion: 0.11
+Nodes (34): analyze_editable_query(), build_change_statements(), CellValue, ColumnValue, distingue_columnas_alias_y_expresiones(), EditableQuery, escapa_valores_e_identificadores_por_dialecto(), ident_name() (+26 more)
 
 ### Community 55 - "updates.rs"
 Cohesion: 0.10
@@ -329,8 +332,8 @@ Cohesion: 0.20
 Nodes (10): applyAndRecord(), buildFkIndex(), buildSqlSchema(), extractDefaultTable(), CATALOG, complete(), ORDERS, USERS (+2 more)
 
 ### Community 57 - "connectionTest.ts"
-Cohesion: 0.23
-Nodes (11): colorLabel(), describeTls(), summarizeError(), summarizeReport(), summaryText(), encrypted, TestOutcome, TestSummary (+3 more)
+Cohesion: 0.26
+Nodes (10): colorLabel(), describeTls(), summarizeError(), summarizeReport(), summaryText(), encrypted, TestOutcome, TestSummary (+2 more)
 
 ### Community 58 - "gridClipboard.test.ts"
 Cohesion: 0.22
@@ -354,7 +357,7 @@ Nodes (3): defineMessages(), OtherLocale, Namespaces
 
 ### Community 63 - "pagination.rs"
 Cohesion: 0.14
-Nodes (20): ast, count_sql(), is_read_only_query(), literal_limit(), literal_u64(), MYSQL, number(), ordena_por_posicion_reemplazando_el_order_by() (+12 more)
+Nodes (19): ast, count_sql(), is_read_only_query(), literal_limit(), literal_u64(), MYSQL, number(), ordena_por_posicion_reemplazando_el_order_by() (+11 more)
 
 ### Community 64 - "result_editing.rs"
 Cohesion: 0.30
@@ -364,9 +367,9 @@ Nodes (18): edit_info(), EditableColumn, EditTarget, find_table(), names(), Resu
 Cohesion: 0.67
 Nodes (4): currentStatement(), extractFromContext(), extractFromTables(), toRelation()
 
-### Community 66 - "SqlEditor.svelte"
-Cohesion: 0.17
-Nodes (3): ContextMenuItem, app_src_lib_sqleditoricons, app_src_lib_styles_editorsearch
+### Community 66 - "Workspace.svelte"
+Cohesion: 0.09
+Nodes (12): #each(), labelForKey(), onKeydown(), reorderResultTabs(), $t(), ContextMenuItem, table(), moveItem() (+4 more)
 
 ### Community 67 - "editorSettings.ts"
 Cohesion: 0.24
@@ -380,21 +383,21 @@ Nodes (3): initials(), luminance(), readableTextColor()
 Cohesion: 0.25
 Nodes (7): applyForwardJoin(), applyReverseJoin(), buildJoinCompletionSource(), boostFor(), recordUsage(), usage, ref_app
 
-### Community 70 - "Workspace.svelte"
-Cohesion: 0.15
-Nodes (6): #each(), labelForKey(), onKeydown(), $t(), tabExists(), isQueryConsoleDirty()
+### Community 70 - "ExportDialog.svelte"
+Cohesion: 0.17
+Nodes (11): format(), detectJsonColumns(), escapeHtml(), highlightJson(), HTML_ESCAPES, isJsonColumnType(), looksLikeJsonDocument(), MAX_HIGHLIGHTED_CHARS (+3 more)
 
-### Community 71 - "codemirrorTheme.ts"
-Cohesion: 0.11
-Nodes (16): activeStatementHighlight, autoUppercaseSqlKeywords, findStatement(), statementDecorations(), editFor(), uppercaseKeywordEdit, BUILTIN_FUNCTIONS, builtinCallMark (+8 more)
+### Community 71 - "sqlEditorBehavior.ts"
+Cohesion: 0.24
+Nodes (9): activeStatementHighlight, autoUppercaseSqlKeywords, findStatement(), statementDecorations(), editFor(), uppercaseKeywordEdit, @codemirror/lang-sql, @codemirror/language (+1 more)
 
-### Community 72 - "pinnedResults.ts"
-Cohesion: 0.31
-Nodes (8): addPinnedTab(), consoleOfKey(), pinnedResults, PinnedTab, removePinnedTab(), resultKey(), setResultPinned(), unpinnedTabs()
+### Community 72 - "svelte"
+Cohesion: 0.29
+Nodes (9): addPinnedTab(), consoleOfKey(), pinnedResults, PinnedTab, removePinnedTab(), resultKey(), setResultPinned(), unpinnedTabs() (+1 more)
 
 ### Community 73 - "reorder.ts"
-Cohesion: 0.21
-Nodes (13): reorderResultTabs(), moveItem(), prefersReducedMotion(), reorderable(), onPointerDown(), cleanup(), onMove(), onUp() (+5 more)
+Cohesion: 0.26
+Nodes (11): prefersReducedMotion(), reorderable(), onPointerDown(), cleanup(), onMove(), onUp(), resetStyles(), settle() (+3 more)
 
 ### Community 74 - "startFilePanelResize"
 Cohesion: 0.39
@@ -404,21 +407,25 @@ Nodes (9): setFilePanelHeight(), clampFilePanelHeight(), onFilePanelHandleKeydow
 Cohesion: 0.16
 Nodes (9): eventMatchesShortcut(), formatShortcutEvent(), MODIFIER_KEYS, ResolvedShortcut, ShortcutDefinition, shortcutDefinitions, shortcutOverrides, shortcuts (+1 more)
 
+### Community 76 - "SettingsPanel.svelte"
+Cohesion: 0.22
+Nodes (3): option(), $t(), release()
+
 ### Community 77 - "notifications.ts"
 Cohesion: 0.31
 Nodes (8): confirmTrash(), trashSqlFile(), dismissNotice(), notice, notifyError(), notifySuccess(), show(), detachQueryConsoleFile()
 
-### Community 78 - "svelte"
-Cohesion: 0.11
-Nodes (7): option(), $t(), executionLog, LogEntry, LogKind, release(), svelte
+### Community 78 - "ResultPane.svelte"
+Cohesion: 0.20
+Nodes (3): executionLog, LogEntry, LogKind
 
 ### Community 79 - "sqlFolders.ts"
 Cohesion: 0.18
 Nodes (11): pickSqlFolder(), DEFAULT_FILE_PANEL_HEIGHT, EMPTY, listRecord(), load(), MIN_FILE_PANEL_HEIGHT, setSqlFolder(), sqlFolders (+3 more)
 
 ### Community 80 - "withExecution"
-Cohesion: 0.22
-Nodes (13): beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation(), setQueryCounting(), setQuerySort() (+5 more)
+Cohesion: 0.20
+Nodes (14): tabExists(), beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation(), setQueryCounting() (+6 more)
 
 ### Community 81 - "DataGrid.svelte"
 Cohesion: 0.50
@@ -432,9 +439,17 @@ Nodes (3): json, Agrega el paquete de Arch a latest.json del release. tauri-acti
 Cohesion: 0.25
 Nodes (3): ParserError, Result, validate()
 
+### Community 84 - "queryExecution.ts"
+Cohesion: 0.28
+Nodes (4): nextSort(), PageRequest, ExecuteQueryResponse, SortKey
+
+### Community 85 - "credentials.ts"
+Cohesion: 0.29
+Nodes (3): forgetConnectionPassword(), runtimePasswords, @tauri-apps/api
+
 ### Community 87 - "+layout.svelte"
-Cohesion: 0.18
-Nodes (8): installDialogMotion(), initLocaleEffects(), reset(), app_src_lib_styles_tokens, initThemeEffects(), handleSidebarFind(), onSidebarFindKeydown(), onSidebarHandleKeydown()
+Cohesion: 0.20
+Nodes (8): installDialogMotion(), initLocaleEffects(), reset(), app_src_lib_styles_tokens, handleSidebarFind(), onSidebarFindKeydown(), onSidebarHandleKeydown(), window
 
 ## Ambiguous Edges - Review These
 - `CSS_VAR_NAMES field-to-CSS-variable mapping` → `theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk)`  [AMBIGUOUS]
@@ -444,8 +459,8 @@ Nodes (8): installDialogMotion(), initLocaleEffects(), reset(), app_src_lib_styl
 
 ## Knowledge Gaps
 - **311 isolated node(s):** `name`, `version`, `description`, `license`, `type` (+306 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 610 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 616 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **12 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -454,13 +469,13 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
 - **What is the exact relationship between `SHELL_PALETTES literal (datagrip/vscode x dark/light)` and `palettes.ts palette definitions (external reference, file not read in this chunk)`?**
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **Why does `svelte` connect `stores/updates.ts` to `resultEdits.ts`, `queryConsoles.ts`, `theme.ts`, `sqlFiles.ts`, `connection.ts`, `connectionProfiles.ts`, `package.json`, `i18n/index.ts`, `editorSearchPanel.ts`, `ResultPager.svelte`, `sidebarLayout.ts`, `gridClipboard.ts`, `editorSettings.ts`, `ref_app`, `pinnedResults.ts`, `reorder.ts`, `stores/shortcuts.ts`, `notifications.ts`, `svelte`, `sqlFolders.ts`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **Why does `svelte` connect `svelte` to `resultEdits.ts`, `queryConsoles.ts`, `theme.ts`, `sqlFiles.ts`, `connection.ts`, `connectionProfiles.ts`, `package.json`, `i18n/index.ts`, `stores/updates.ts`, `editorSearchPanel.ts`, `ResultPager.svelte`, `sidebarLayout.ts`, `gridClipboard.ts`, `editorSettings.ts`, `ref_app`, `reorder.ts`, `stores/shortcuts.ts`, `notifications.ts`, `ResultPane.svelte`, `sqlFolders.ts`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+- **Why does `Explorador de base de datos` connect `Explorador de base de datos` to `connection.ts`?**
+  _High betweenness centrality (0.043) - this node is a cross-community bridge._
+- **Why does `SSL/TLS por conexión` connect `Explorador de base de datos` to `connectionProfiles.ts`?**
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
   _311 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `execution_guard.rs` be split into smaller, more focused modules?**
   _Cohesion score 0.08585858585858586 - nodes in this community are weakly interconnected._
-- **Should `mysql/src/lib.rs` be split into smaller, more focused modules?**
-  _Cohesion score 0.06526315789473684 - nodes in this community are weakly interconnected._
-- **Should `postgres/src/lib.rs` be split into smaller, more focused modules?**
-  _Cohesion score 0.06935908691834942 - nodes in this community are weakly interconnected._

@@ -129,6 +129,31 @@ export function completeConnection(tableCount: number, profileId: string): void 
     profileId,
     error: null,
   }));
+  saveLastProfileId(profileId);
+}
+
+// Ultimo perfil al que se conecto con exito. La pantalla de conexiones lo
+// resalta y le da el foco (Enter conecta); nunca se conecta solo, para no
+// abrir sin querer una base de produccion al iniciar la app.
+const LAST_PROFILE_KEY = "khipu:last-connection:v1";
+
+export function loadLastProfileId(): string | null {
+  if (!browser) return null;
+  try {
+    return localStorage.getItem(LAST_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLastProfileId(profileId: string | null): void {
+  if (!browser) return;
+  try {
+    if (profileId) localStorage.setItem(LAST_PROFILE_KEY, profileId);
+    else localStorage.removeItem(LAST_PROFILE_KEY);
+  } catch {
+    // Sin almacenamiento, simplemente no se resalta ninguna.
+  }
 }
 
 type ConnectResult =
@@ -209,6 +234,7 @@ export function reset(): void {
 export async function deleteConnectionProfile(profileId: string): Promise<void> {
   await forgetConnectionPassword(profileId);
   saveVisibleSchemas(profileId, []);
+  if (loadLastProfileId() === profileId) saveLastProfileId(null);
   closeSqlFolder(profileId);
   forgetProfileConsoles(profileId);
   removeConnectionProfile(profileId);

@@ -15,13 +15,17 @@ use sqlx::postgres::{
 use sqlx::{Column, Executor, PgPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct PostgresConnector {
     pool: PgPool,
     version: version::ServerVersion,
     tls: TlsStatus,
 }
+
+/// How long the pool waits for a connection before giving up. sqlx's default
+/// (30 s) leaves the app hanging too long on a host that doesn't answer.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, sqlx::Error> {
     let options = PgConnectOptions::new()
@@ -31,6 +35,7 @@ async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, s
         .password(&config.password)
         .database(&config.database);
     PgPoolOptions::new()
+        .acquire_timeout(CONNECT_TIMEOUT)
         .connect_with(tls::apply(
             options,
             mode,

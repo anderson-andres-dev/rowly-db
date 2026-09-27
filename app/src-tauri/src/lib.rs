@@ -19,6 +19,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tauri_plugin_window_state::StateFlags;
 
 /// Page size when the frontend doesn't ask for one.
 const DEFAULT_QUERY_ROW_LIMIT: usize = 500;
@@ -661,6 +662,15 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        // Remembers size, position and maximized state of the main window.
+        // Connection windows get a random label (connectionWindow.ts), so
+        // tracking them would only pile up entries that are never reused.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .manage(AppState::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

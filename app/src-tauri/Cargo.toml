@@ -39,3 +39,4 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 semver = "1"
 url = "2"
+tauri-plugin-window-state = "~2.4.1"
