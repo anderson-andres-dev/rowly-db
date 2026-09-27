@@ -165,7 +165,8 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     if (pendingUntil > Date.now()) {
       if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
       pendingUntil = 0;
-      const direction = !event.ctrlKey && !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
+      // Ctrl puede seguir apretado (Ctrl+W, Ctrl+flecha): es lo natural.
+      const direction = !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
       event.preventDefault();
       event.stopImmediatePropagation();
       if (direction) moveFocus(direction);

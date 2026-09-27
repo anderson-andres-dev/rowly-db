@@ -641,13 +641,14 @@
   }
 
   .row-wrap.relation > .row {
-    padding-right: 1.5rem;
+    padding-right: 2.25rem;
   }
 
+  /* Aire a la derecha: pegado al borde, el clic caia en la barra de scroll. */
   .pin-toggle {
     position: absolute;
     top: 50%;
-    right: var(--space-1);
+    right: var(--space-3);
     display: inline-flex;
     align-items: center;
     justify-content: center;
