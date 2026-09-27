@@ -436,3 +436,18 @@
     animation: none;
   }
 }
+
+/* --- Bordes que se desvanecen al hacer scroll ---------------------------------- */
+
+/* Registradas para que el desvanecido entre y salga con transicion. */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}

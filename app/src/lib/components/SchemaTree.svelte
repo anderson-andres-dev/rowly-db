@@ -109,6 +109,27 @@
 
   const CONNECTION_KEY = "connection";
 
+  // Bordes que se desvanecen al hacer scroll (como las pestañas de consola):
+  // arriba solo si hay contenido oculto arriba, abajo si queda mas por ver.
+  function scrollFade(node: HTMLElement) {
+    const update = () => {
+      node.classList.toggle("fade-top", node.scrollTop > 1);
+      node.classList.toggle("fade-bottom", node.scrollTop + node.clientHeight < node.scrollHeight - 1);
+    };
+    // El contenido cambia de alto al abrir o cerrar ramas del arbol.
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    for (const child of node.children) observer.observe(child);
+    node.addEventListener("scroll", update, { passive: true });
+    update();
+    return {
+      destroy() {
+        observer.disconnect();
+        node.removeEventListener("scroll", update);
+      },
+    };
+  }
+
   let filter = $state("");
   // Estado explicito de cada nodo que el usuario abrio o cerro; lo que no
   // esta aca usa el default del nodo (defaultOpen, u openOnFilter con un
@@ -364,7 +385,7 @@
     {/if}
   </div>
 
-  <nav class="tree-scroll" aria-label={$t("explorer.tree.label")}>
+  <nav class="tree-scroll" aria-label={$t("explorer.tree.label")} use:scrollFade>
     <ul class="tree" role="tree">
       <li role="treeitem" aria-expanded={isConnectionOpen()} aria-selected="false">
         <div class="connection-row">
@@ -596,10 +617,30 @@
   }
 
   .tree-scroll {
+    --fade-top: 0px;
+    --fade-bottom: 0px;
     overflow-y: auto;
     min-height: 0;
     padding: 0 var(--space-1) var(--space-2);
     box-sizing: border-box;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--fade-top),
+      #000 calc(100% - var(--fade-bottom)),
+      transparent
+    );
+    transition:
+      --fade-top 180ms ease,
+      --fade-bottom 180ms ease;
+  }
+
+  .tree-scroll:global(.fade-top) {
+    --fade-top: 1.5rem;
+  }
+
+  .tree-scroll:global(.fade-bottom) {
+    --fade-bottom: 1.5rem;
   }
 
   ul {
