@@ -17,6 +17,7 @@
     Pin,
     PinOff,
     Search,
+    Filter,
   } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
@@ -87,6 +88,8 @@
     onrepin = () => {},
     filters,
     tableView = false,
+    filterCount = 0,
+    filterError = false,
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -144,6 +147,10 @@
     // errores del filtro salen junto al filtro) y con los filtros en
     // su propia fila bajo la barra de herramientas.
     tableView?: boolean;
+    // Vista de tabla: condiciones aplicadas (burbuja del boton de filtro) y
+    // si el ultimo filtro fallo (el boton se marca y la barra se abre).
+    filterCount?: number;
+    filterError?: boolean;
   } = $props();
 
   // --- Pestañas ----------------------------------------------------------
@@ -358,6 +365,24 @@
   let formatMenuPosition = $state({ right: 0, top: 0 });
   const formatLabel = $derived(COPY_FORMATS.find((item) => item.id === $copySettings.format)?.label ?? "TSV");
 
+  // --- Barra de filtros (vista de tabla) --------------------------------
+  // Como la barra de buscar: el boton la abre y la cierra, Esc la cierra y
+  // devuelve el foco al grid. Si un filtro falla, se abre para mostrarlo.
+  let filtersOpen = $state(false);
+
+  function toggleFilters() {
+    filtersOpen = !filtersOpen;
+  }
+
+  export function closeFilters() {
+    filtersOpen = false;
+    grid?.focusCell();
+  }
+
+  $effect(() => {
+    if (filterError && tableView) filtersOpen = true;
+  });
+
   function toggleFormatMenu() {
     if (formatMenuOpen) {
       formatMenuOpen = false;
@@ -512,6 +537,15 @@
           {:else}
             <ToolbarButton icon={Pin} label={$t("results.pin")} disabled={isExecuting} onclick={onpin} />
           {/if}
+          {#if tableView && filters}
+            <ToolbarButton
+              icon={Filter}
+              label={$t("results.filters.toggle")}
+              badge={filterCount}
+              tone={filterError ? "danger" : filterCount > 0 || filtersOpen ? "active" : "default"}
+              onclick={toggleFilters}
+            />
+          {/if}
           <ToolbarButton
             icon={Search}
             label={$t("results.find.label")}
@@ -543,7 +577,7 @@
           />
         </div>
       </div>
-      {#if filters}{@render filters()}{/if}
+      {#if filters && (!tableView || filtersOpen)}{@render filters()}{/if}
       {#if findOpen}
         <FindBar
           bind:this={findBar}
@@ -873,6 +907,7 @@
   .toolbar-group.end {
     margin-left: auto;
   }
+
 
 
   /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta

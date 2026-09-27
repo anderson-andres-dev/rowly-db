@@ -25,7 +25,9 @@
     shortcut?: string;
     disabled?: boolean;
     // "submit": el verde de "aplicar" cuando esta habilitado.
-    tone?: "default" | "submit";
+    // "active": algo encendido (p. ej. un filtro aplicado), en acento.
+    // "danger": algo que fallo (p. ej. un filtro invalido), en rojo.
+    tone?: "default" | "submit" | "active" | "danger";
     // Contador tipo notificacion en la esquina superior derecha (0 = oculto).
     badge?: number;
     // Sin valor usa la correccion optica de iconOptics.ts: cada glifo a su
@@ -39,6 +41,8 @@
   type="button"
   class="toolbar-button"
   class:submit={tone === "submit"}
+  class:active={tone === "active"}
+  class:danger={tone === "danger"}
   aria-label={label}
   {disabled}
   use:tooltip={{ label, shortcut }}
@@ -86,6 +90,16 @@
 
   .toolbar-button.submit:not(:disabled) {
     color: var(--success);
+  }
+
+  .toolbar-button.active {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+  }
+
+  .toolbar-button.danger {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
   }
 
   /* Burbuja de notificacion: el anillo del color de la barra la despega del

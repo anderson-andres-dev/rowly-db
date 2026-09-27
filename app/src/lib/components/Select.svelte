@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ChevronDown, Check } from "@lucide/svelte";
+  import { tick } from "svelte";
+  import { ChevronDown, Check, Search } from "@lucide/svelte";
 
   // El unico select de la app. El disparador tiene el aspecto de un campo
   // (styles/controls.css .ui-field) y la lista es el menu compartido
@@ -19,6 +20,8 @@
     wide = false,
     compact = false,
     placeholder = "",
+    searchable = false,
+    searchPlaceholder = "",
     disabled = false,
     onchange,
   }: {
@@ -33,14 +36,36 @@
     compact?: boolean;
     // Texto tenue mientras ningun valor de la lista esta elegido.
     placeholder?: string;
+    // Lista larga (p. ej. columnas): un campo arriba filtra mientras se
+    // escribe; escribir con el select cerrado lo abre ya filtrando.
+    searchable?: boolean;
+    searchPlaceholder?: string;
     disabled?: boolean;
     onchange?: (value: string) => void;
   } = $props();
 
   let open = $state(false);
   let up = $state(false);
+  // Se abre alineado a la izquierda del disparador; a la derecha solo si
+  // por la izquierda se saldria de la ventana.
+  let alignRight = $state(false);
   let active = $state(0);
+  let query = $state("");
   let root = $state<HTMLElement>();
+  let trigger = $state<HTMLButtonElement>();
+  let searchInput = $state<HTMLInputElement>();
+  let list = $state<HTMLElement>();
+
+  const visible = $derived.by(() => {
+    const needle = query.trim().toLowerCase();
+    return searchable && needle ? options.filter((option) => option.label.toLowerCase().includes(needle)) : options;
+  });
+
+  // La opcion activa siempre a la vista al moverse con el teclado.
+  $effect(() => {
+    void active;
+    if (open) list?.querySelector(".ui-menu-item.active")?.scrollIntoView({ block: "nearest" });
+  });
   const selected = $derived(options.find((option) => option.value === value) ?? (placeholder ? null : options[0]));
 
   function opensUp(): boolean {
@@ -56,42 +81,64 @@
         break;
       }
     }
-    const menuHeight = options.length * 30 + 10;
+    const menuHeight = Math.min(options.length * 30, 256) + (searchable ? 40 : 10);
     return bottom - trigger.bottom < menuHeight && trigger.top - top > bottom - trigger.bottom;
   }
 
-  function openMenu() {
+  async function openMenu(initialQuery = "") {
     if (disabled) return;
-    active = Math.max(0, options.findIndex((option) => option.value === value));
+    query = initialQuery;
+    active = initialQuery ? 0 : Math.max(0, options.findIndex((option) => option.value === value));
     up = opensUp();
+    const rect = root?.getBoundingClientRect();
+    alignRight = !!rect && rect.left + 256 > window.innerWidth;
     open = true;
+    if (searchable) {
+      await tick();
+      searchInput?.focus();
+    }
   }
 
-  function choose(option: Option) {
+  function close() {
+    open = false;
+    query = "";
+  }
+
+  function choose(option: Option | undefined) {
+    if (!option) return;
     value = option.value;
     onchange?.(option.value);
-    open = false;
+    close();
+    trigger?.focus();
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    // Con el select cerrado, escribir una letra lo abre ya buscando.
+    if (searchable && !open && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      void openMenu(event.key);
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (!open) return openMenu();
+      if (!open) return void openMenu();
       const step = event.key === "ArrowDown" ? 1 : -1;
-      active = Math.min(options.length - 1, Math.max(0, active + step));
+      active = Math.min(visible.length - 1, Math.max(0, active + step));
     } else if (event.key === "Home" && open) {
       event.preventDefault();
       active = 0;
     } else if (event.key === "End" && open) {
       event.preventDefault();
-      active = options.length - 1;
-    } else if ((event.key === "Enter" || event.key === " ") && open) {
+      active = visible.length - 1;
+    } else if ((event.key === "Enter" || (event.key === " " && !searchable)) && open) {
       event.preventDefault();
-      choose(options[active]);
+      event.stopPropagation();
+      choose(visible[active]);
     } else if (event.key === "Escape" && open) {
       event.preventDefault();
       event.stopPropagation();
-      open = false;
+      close();
+      trigger?.focus();
     }
   }
 </script>
@@ -101,11 +148,12 @@
   class:wide
   bind:this={root}
   onfocusout={(event) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) open = false;
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
   }}
 >
   <button
     {id}
+    bind:this={trigger}
     type="button"
     class="ui-field trigger"
     class:compact
@@ -114,15 +162,31 @@
     aria-expanded={open}
     aria-label={label}
     {disabled}
-    onclick={() => (open ? (open = false) : openMenu())}
+    onclick={() => (open ? close() : void openMenu())}
     onkeydown={handleKeydown}
   >
     <span class="value" class:placeholder={!selected} lang={selected?.lang}>{selected?.label ?? placeholder}</span>
     <ChevronDown size={14} aria-hidden="true" />
   </button>
   {#if open}
-    <div class="ui-menu menu" class:up role="listbox" aria-label={label}>
-      {#each options as option, index (option.value)}
+    <div class="ui-menu menu" class:up class:align-right={alignRight}>
+      {#if searchable}
+        <label class="search">
+          <Search size={13} aria-hidden="true" />
+          <input
+            bind:this={searchInput}
+            bind:value={query}
+            placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder || label}
+            spellcheck="false"
+            autocomplete="off"
+            oninput={() => (active = 0)}
+            onkeydown={handleKeydown}
+          />
+        </label>
+      {/if}
+      <div class="list" role="listbox" aria-label={label} bind:this={list}>
+      {#each visible as option, index (option.value)}
         <button
           type="button"
           role="option"
@@ -139,6 +203,7 @@
           {option.label}
         </button>
       {/each}
+      </div>
     </div>
   {/if}
 </div>
@@ -203,12 +268,49 @@
     position: absolute;
     z-index: 30;
     top: calc(100% + 4px);
-    right: 0;
+    left: 0;
     min-width: 100%;
+    max-width: min(24rem, calc(100vw - 1rem));
+  }
+
+  .menu.align-right {
+    right: 0;
+    left: auto;
   }
 
   .menu.up {
     top: auto;
     bottom: calc(100% + 4px);
+  }
+
+  /* Lista larga: alto maximo y scroll; el buscador queda fijo arriba. */
+  .list {
+    display: flex;
+    max-height: 16rem;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+    padding: 0 var(--space-2);
+    height: 1.875rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  .search input {
+    min-width: 0;
+    flex: 1;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.8125rem;
   }
 </style>

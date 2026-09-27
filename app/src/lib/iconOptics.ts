@@ -3,6 +3,7 @@ import {
   ArrowUpFromLine,
   Eye,
   FileOutput,
+  Filter,
   Minus,
   Pin,
   PinOff,
@@ -36,6 +37,7 @@ import {
 //   search               20.0 x 20.0   20.0   14.25
 //   file-output          20.0 x 21.9   20.9   14
 //   pin-off              21.9 x 21.9   21.9   13.75
+//   funnel (Filter)      21.9 x 20.9   21.4   13.75
 //
 // El trazo va fijo en px (absoluteStrokeWidth en ToolbarButton): si no,
 // achicar un icono tambien afinaria sus lineas.
@@ -59,6 +61,7 @@ const OPTICAL_SIZES = new Map<Component<never>, number>([
   [Search, 14.25],
   [FileOutput, 14],
   [PinOff, 13.75],
+  [Filter, 13.75],
 ] as [Component<never>, number][]);
 
 export function opticalIconSize(icon: Component<never>): number {

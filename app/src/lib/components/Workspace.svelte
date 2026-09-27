@@ -580,8 +580,28 @@
 
   // Un filtro con error no borra lo que se estaba viendo: el error queda al
   // lado de los filtros y en la Salida.
+  // Los filtros se ejecutan mientras se arman: nunca dos consultas a la vez
+  // por pestaña. Si llega un cambio mientras una corre, al terminar se
+  // ejecuta una sola vez mas con lo ultimo (lee los filtros del store).
+  const tableRunning = new Set<string>();
+  const tableRerun = new Set<string>();
+
   async function runTableQuery(consoleId: string) {
-    const item = consoles.find((candidate) => candidate.id === consoleId);
+    if (tableRunning.has(consoleId)) {
+      tableRerun.add(consoleId);
+      return;
+    }
+    tableRunning.add(consoleId);
+    try {
+      await runTableQueryOnce(consoleId);
+    } finally {
+      tableRunning.delete(consoleId);
+    }
+    if (tableRerun.delete(consoleId)) void runTableQuery(consoleId);
+  }
+
+  async function runTableQueryOnce(consoleId: string) {
+    const item = get(queryConsoles).consoles.find((candidate) => candidate.id === consoleId);
     if (!item?.table) return;
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
@@ -1345,6 +1365,8 @@
         onnotice={notifyError}
         filters={activeConsole?.table ? tableFiltersBar : undefined}
         tableView={!!activeConsole?.table}
+        filterCount={activeConsole?.table?.where ? activeConsole.table.conditions.filter((condition) => condition.column).length : 0}
+        filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
       />
       {#snippet tableFiltersBar()}
         {#if activeConsole?.table}
@@ -1357,6 +1379,7 @@
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
             onapply={(filters) => applyTableFilters(consoleId, filters)}
+            onclose={() => resultPane?.closeFilters()}
           />
         {/if}
       {/snippet}

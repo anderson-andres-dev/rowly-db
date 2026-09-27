@@ -29,6 +29,7 @@
     error = null,
     busy = false,
     onapply,
+    onclose,
   }: {
     // Lo aplicado ahora (lo que se ve en el grid).
     filters: Filters;
@@ -37,6 +38,8 @@
     error?: string | null;
     busy?: boolean;
     onapply: (filters: Filters) => void;
+    // Esc: quien contiene la barra la cierra.
+    onclose: () => void;
   } = $props();
 
   const typeOf = (column: string) => columns.find((item) => item.name === column)?.dataType ?? "";
@@ -49,13 +52,27 @@
   let conditions = $state<FilterCondition[]>(draftConditions(filters.conditions));
 
   // Si lo aplicado cambia desde afuera (otra pestaña, restaurar), los
-  // campos lo siguen.
+  // campos lo siguen. Lo que esta barra misma aplico no se vuelve a copiar:
+  // mientras la consulta corria se pudo seguir escribiendo.
+  let lastAppliedConditions = "";
   $effect(() => {
-    conditions = draftConditions(filters.conditions);
+    const incoming = JSON.stringify(filters.conditions);
+    if (incoming !== lastAppliedConditions) conditions = draftConditions(filters.conditions);
   });
 
   const builtWhere = $derived(buildWhere(conditions, driver, typeOf));
-  const dirty = $derived(builtWhere !== filters.where.trim());
+
+  // Se ejecuta sola mientras se arma: cuando se deja de escribir un momento
+  // y solo si el WHERE cambio (una condicion a medias no cambia nada).
+  // Workspace nunca lanza dos consultas a la vez: si una corre, al terminar
+  // ejecuta solo la ultima version.
+  const LIVE_DELAY_MS = 450;
+  $effect(() => {
+    const where = builtWhere;
+    if (where === filters.where.trim()) return;
+    const timer = setTimeout(apply, LIVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  });
 
   const columnOptions = $derived(columns.map((column) => ({ value: column.name, label: column.name })));
   const operatorOptions = FILTER_OPERATORS.map((operator) => ({ value: operator.value, label: operator.value }));
@@ -65,13 +82,13 @@
   ]);
 
   function apply() {
-    onapply({ where: builtWhere, conditions: $state.snapshot(conditions) });
+    if (builtWhere === filters.where.trim()) return;
+    const snapshot = $state.snapshot(conditions);
+    lastAppliedConditions = JSON.stringify(snapshot);
+    onapply({ where: builtWhere, conditions: snapshot });
   }
 
-  function revert() {
-    conditions = draftConditions(filters.conditions);
-  }
-
+  // Enter ejecuta ya, sin esperar. Esc cierra la barra.
   function onKeydown(event: KeyboardEvent) {
     event.stopPropagation();
     if (event.key === "Enter") {
@@ -79,7 +96,7 @@
       apply();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      revert();
+      onclose();
     }
   }
 
@@ -106,10 +123,6 @@
 {#snippet status()}
   {#if error}
     <span class="error" role="alert" use:tooltip={error}>{error}</span>
-  {:else if dirty}
-    <button class="action-button primary small" type="button" disabled={busy} onclick={apply}>
-      {$t("results.filters.apply")}
-    </button>
   {/if}
 {/snippet}
 
@@ -142,6 +155,8 @@
             options={columnOptions}
             placeholder={$t("results.filters.column")}
             label={$t("results.filters.column")}
+            searchable
+            searchPlaceholder={$t("results.filters.searchColumn")}
             onchange={(value) => (condition.column = value)}
           />
         </div>
@@ -201,6 +216,7 @@
 
 
 <style>
+
   .table-filters {
     display: flex;
     flex-shrink: 0;
@@ -218,7 +234,7 @@
      el valor de lado a lado. Aplicar va justo despues de las acciones. */
   .builder {
     display: grid;
-    grid-template-columns: 1.75rem 11rem 7.5rem minmax(8rem, 20rem) 1.75rem 1.75rem 1fr;
+    grid-template-columns: 1.75rem minmax(7rem, 11rem) minmax(5.5rem, 7.5rem) minmax(6rem, 20rem) 1.75rem 1.75rem 1fr;
     align-items: center;
     gap: var(--space-1) var(--space-2);
   }
