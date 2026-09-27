@@ -8,6 +8,7 @@
   import { LOCALE_NAMES, LOCALES, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
   import { requestedScheme, themeChoice, type SchemePreference } from "$lib/theming/theme";
+  import { commandsCollide, type CommandGroup } from "$lib/commands";
   import { formatShortcutEvent, resetAllShortcuts, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import {
@@ -97,36 +98,11 @@
   const languageOptions = LOCALES.map((option) => ({ value: option, label: LOCALE_NAMES[option], lang: option }));
 
   // --- Atajos -------------------------------------------------------------
-  // Agrupados por donde actuan. Un choque solo cuenta dentro del mismo grupo:
+  // Agrupados como en el registro de comandos (lib/commands.ts). Dos
+  // atajos iguales chocan si actuan en la misma zona o uno es global:
   // Ejecutar (editor) y Aplicar cambios (resultado) comparten Ctrl+Enter a
   // proposito.
-  const SHORTCUT_GROUPS = [
-    {
-      id: "general",
-      ids: [
-        "focus-zone-prefix",
-        "toggle-sidebar",
-        "new-query-console",
-        "rename-query-console",
-        "save-query-console",
-        "save-query-console-as",
-        "open-sql-file",
-        "close-query-console",
-      ],
-    },
-    { id: "editor", ids: ["execute-query", "format-sql", "select-all"] },
-    {
-      id: "results",
-      ids: [
-        "add-result-row",
-        "delete-result-rows",
-        "revert-result-changes",
-        "submit-result-changes",
-        "next-result-page",
-        "previous-result-page",
-      ],
-    },
-  ] as const;
+  const SHORTCUT_GROUPS: CommandGroup[] = ["general", "editor", "results"];
 
   // El nombre basta; solo lleva una segunda linea el atajo que la necesita
   // para no confundirse.
@@ -148,11 +124,9 @@
   const shortcutGroups = $derived.by(() => {
     const query = shortcutQuery.trim().toLowerCase();
     return SHORTCUT_GROUPS.map((group) => {
-      const items = group.ids
-        .map((id) => $shortcuts.find((shortcut) => shortcut.id === id))
-        .filter((shortcut) => shortcut !== undefined);
+      const items = $shortcuts.filter((shortcut) => shortcut.group === group);
       return {
-        id: group.id,
+        id: group,
         items: items
           .filter(
             (shortcut) =>
@@ -162,8 +136,12 @@
           )
           .map((shortcut) => ({
             ...shortcut,
-            conflict: items.find(
-              (other) => other.id !== shortcut.id && other.keys !== "" && other.keys === shortcut.keys,
+            conflict: $shortcuts.find(
+              (other) =>
+                other.id !== shortcut.id &&
+                other.keys !== "" &&
+                other.keys === shortcut.keys &&
+                commandsCollide(other.zone, shortcut.zone),
             ),
           })),
       };

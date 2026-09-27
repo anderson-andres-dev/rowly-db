@@ -1,7 +1,8 @@
 <script lang="ts">
   import { quoteIdentifier as quoteSqlIdentifier } from "$lib/filterBuilder";
   import { get } from "svelte/store";
-  import { activeZone, focusZoneAction } from "$lib/focusZones";
+  import { focusZoneAction } from "$lib/focusZones";
+  import { registerCommand, registerCommands } from "$lib/commands";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
@@ -17,7 +18,8 @@
   import { catalogTables, connection, isProduction } from "$lib/stores/connection";
   import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
+
   import { extractFromContext } from "$lib/sqlSchema";
   import { countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { defaultPageSize } from "$lib/stores/resultPaging";
@@ -495,67 +497,43 @@
     }
   }
 
-  function handleConsoleShortcut(event: KeyboardEvent) {
-    if (event.defaultPrevented || pendingCloseId !== null) return;
-    if (event.target instanceof Element && event.target.closest("dialog")) return;
-
-    const newConsoleKeys = shortcutKeys("new-query-console");
-    if (newConsoleKeys && eventMatchesShortcut(event, newConsoleKeys)) {
-      event.preventDefault();
-      tabMenu = null;
-      renamingId = null;
-      createQueryConsole(profileId);
-      return;
-    }
-
-    const renameKeys = shortcutKeys("rename-query-console");
-    if (renameKeys && activeConsole && eventMatchesShortcut(event, renameKeys)) {
-      event.preventDefault();
-      void startRename(activeConsole.id, activeConsole.title);
-      return;
-    }
-
-    const saveAsKeys = shortcutKeys("save-query-console-as");
-    if (saveAsKeys && activeConsole && !activeConsole.table && eventMatchesShortcut(event, saveAsKeys)) {
-      event.preventDefault();
-      const item = activeConsole;
-      void runFileAction(() => saveConsoleAs(item));
-      return;
-    }
-
-    const saveKeys = shortcutKeys("save-query-console");
-    if (saveKeys && activeConsole && !activeConsole.table && eventMatchesShortcut(event, saveKeys)) {
-      event.preventDefault();
-      const item = activeConsole;
-      void runFileAction(() => saveConsole(item));
-      return;
-    }
-
-    const nextPageKeys = shortcutKeys("next-result-page");
-    if (nextPageKeys && eventMatchesShortcut(event, nextPageKeys)) {
-      if (stepPage(1)) event.preventDefault();
-      return;
-    }
-
-    const previousPageKeys = shortcutKeys("previous-result-page");
-    if (previousPageKeys && eventMatchesShortcut(event, previousPageKeys)) {
-      if (stepPage(-1)) event.preventDefault();
-      return;
-    }
-
-    const openKeys = shortcutKeys("open-sql-file");
-    if (openKeys && eventMatchesShortcut(event, openKeys)) {
-      event.preventDefault();
-      void runFileAction(() => openSqlFileWithDialog(profileId));
-      return;
-    }
-
-    const closeKeys = shortcutKeys("close-query-console");
-    if (closeKeys && activeConsole && eventMatchesShortcut(event, closeKeys)) {
-      event.preventDefault();
-      void requestClose(activeConsole.id);
-    }
-  }
+  // Comandos de las pestañas (lib/commands.ts); la tecla la pone
+  // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => pendingCloseId === null && run() !== false;
+    return registerCommands("global", {
+      "new-query-console": whenIdle(() => {
+        tabMenu = null;
+        renamingId = null;
+        createQueryConsole(profileId);
+      }),
+      "rename-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item) return false;
+        void startRename(item.id, item.title);
+      }),
+      "save-query-console-as": whenIdle(() => {
+        const item = activeConsole;
+        if (!item || item.table) return false;
+        void runFileAction(() => saveConsoleAs(item));
+      }),
+      "save-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item || item.table) return false;
+        void runFileAction(() => saveConsole(item));
+      }),
+      "next-result-page": whenIdle(() => stepPage(1)),
+      "previous-result-page": whenIdle(() => stepPage(-1)),
+      "open-sql-file": whenIdle(() => {
+        void runFileAction(() => openSqlFileWithDialog(profileId));
+      }),
+      "close-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item) return false;
+        void requestClose(item.id);
+      }),
+    });
+  });
 
   // --- Pestañas de tabla ----------------------------------------------------
   // Doble clic en una tabla del explorador: sus datos a pantalla completa
@@ -659,11 +637,11 @@
     void runTableQuery(item.id);
   });
 
-  // --- Ctrl+F segun la zona activa ------------------------------------------
-  // La busqueda sale en la zona activa (foco o ultimo clic, focusZones.ts),
-  // nunca en la que tiene el mouse encima: editor -> su barra de
-  // buscar/reemplazar; resultado -> la barra del grid. En captura, antes de
-  // que CodeMirror vea la tecla. El sidebar lo resuelve +layout.svelte.
+  // --- Buscar segun la zona activa ------------------------------------------
+  // El comando find sale en la zona activa (foco o ultimo clic,
+  // focusZones.ts), nunca en la que tiene el mouse encima: editor -> su
+  // barra de buscar/reemplazar; resultado -> la barra del grid. El sidebar
+  // lo resuelve +layout.svelte.
   let sqlEditor = $state<ReturnType<typeof SqlEditor>>();
 
   // Primer foco de una zona a la que se llega con el teclado (focusZones.ts).
@@ -677,23 +655,17 @@
   let resultRegion = $state<HTMLElement>();
 
   $effect(() => {
-    function onKeydown(event: KeyboardEvent) {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f") return;
-      if (document.querySelector("dialog[open]")) return;
-      const zone = get(activeZone);
-      if (zone === "editor" && sqlEditor) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        sqlEditor.toggleSearch();
-      } else if (zone === "results") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        resultPane?.toggleFind();
-      }
-    }
-    window.addEventListener("keydown", onKeydown, true);
-    return () => window.removeEventListener("keydown", onKeydown, true);
+    const cleanupEditor = registerCommand("find", "editor", () => {
+      if (!sqlEditor) return false;
+      sqlEditor.toggleSearch();
+    });
+    const cleanupResults = registerCommand("find", "results", () => {
+      resultPane?.toggleFind();
+    });
+    return () => {
+      cleanupEditor();
+      cleanupResults();
+    };
   });
 
   // --- Salida -----------------------------------------------------------
@@ -1171,7 +1143,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleConsoleShortcut} />
+
 
 <div class="workspace">
   <div class="console-tabs">

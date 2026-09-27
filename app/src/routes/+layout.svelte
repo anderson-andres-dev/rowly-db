@@ -1,7 +1,9 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
   import { onMount, onDestroy, tick } from "svelte";
-  import { activeZone, focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
+  import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
+  import { registerCommands } from "$lib/commands";
+  import { installKeybindings } from "$lib/keybindings";
   import type { Snippet } from "svelte";
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
@@ -18,7 +20,7 @@
     setVisibleSchemas,
   } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
   import {
     DEFAULT_SIDEBAR_WIDTH,
     MAX_SIDEBAR_WIDTH,
@@ -146,34 +148,20 @@
     }
   }
 
-  // Atajos globales resueltos desde Ajustes > Atajos (shortcuts.ts). Se
-  // desactivan mientras el modal de Ajustes esta abierto, porque ahi mismo
-  // se pueden estar capturando nuevas combinaciones.
-  // Ctrl+F con el sidebar como zona activa (foco o ultimo clic, nunca el
+  // Buscar con el sidebar como zona activa (foco o ultimo clic, nunca el
   // mouse encima; focusZones.ts): lleva al filtro del explorador; si ya se
-  // esta en el filtro, lo deja (toggle). En el editor y en el grid, Ctrl+F lo
-  // resuelve cada uno (su propia barra de busqueda).
-  function handleSidebarFind(event: KeyboardEvent): boolean {
-    const mod = event.ctrlKey || event.metaKey;
-    if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f" || !sidebar) return false;
-    const active = document.activeElement;
-    if ($activeZone !== "explorer" && $activeZone !== "files") return false;
-    const filterInput = sidebar.querySelector<HTMLInputElement>(".filter input");
+  // esta en el filtro, lo deja (toggle). En el editor y en el grid lo
+  // resuelve el Workspace (su propia barra de busqueda).
+  function findInSidebar(): boolean {
+    const filterInput = sidebar?.querySelector<HTMLInputElement>(".filter input");
     if (!filterInput) return false;
-    event.preventDefault();
-    // Que CodeMirror no la vea si el foco estaba en el editor.
-    event.stopImmediatePropagation();
-    if (active === filterInput) {
+    if (document.activeElement === filterInput) {
       filterInput.blur();
     } else {
       filterInput.focus();
       filterInput.select();
     }
     return true;
-  }
-
-  function onSidebarFindKeydown(event: KeyboardEvent) {
-    if (!settingsOpen) handleSidebarFind(event);
   }
 
   // Al llegar con el teclado a una zona del sidebar sin foco previo: la
@@ -184,15 +172,10 @@
     return !!row;
   }
 
-  function handleGlobalKeydown(event: KeyboardEvent) {
-    if (settingsOpen) return;
-
-    const toggleSidebar = $shortcuts.find((shortcut) => shortcut.id === "toggle-sidebar");
-    if (toggleSidebar && eventMatchesShortcut(event, toggleSidebar.keys)) {
-      if (!$connection.connected) return;
-      event.preventDefault();
-      sidebarCollapsed = !sidebarCollapsed;
-    }
+  function toggleSidebar(): boolean {
+    if (!$connection.connected) return false;
+    sidebarCollapsed = !sidebarCollapsed;
+    return true;
   }
 
   // El colapso usa la misma transicion de width que Alt+1: al soltar por
@@ -252,6 +235,8 @@
   }
 
   let cleanupFocusZones: (() => void) | undefined;
+  let cleanupKeybindings: (() => void) | undefined;
+  let cleanupCommands: (() => void) | undefined;
 
   onMount(() => {
     installDialogMotion();
@@ -261,25 +246,36 @@
     // Solo la ventana principal busca versiones al arrancar: las de conexión
     // no repiten la consulta a GitHub.
     if (getCurrentWindow().label === "main") void checkOnStartup();
-    document.addEventListener("keydown", handleGlobalKeydown);
-    cleanupFocusZones = installFocusZones(() => settingsOpen || !!document.querySelector("dialog[open]"));
+    // Los atajos se apagan con cualquier modal abierto; en Ajustes, ademas,
+    // se pueden estar capturando combinaciones nuevas.
+    const shortcutsBlocked = () => settingsOpen || !!document.querySelector("dialog[open]");
+    // Primero las zonas: sus flechas del modo mover van antes que los atajos.
+    cleanupFocusZones = installFocusZones(shortcutsBlocked);
+    cleanupKeybindings = installKeybindings(shortcutsBlocked);
+    const cleanupSidebarCommands = registerCommands("global", { "toggle-sidebar": toggleSidebar });
+    const cleanupExplorerFind = registerCommands("explorer", { find: findInSidebar });
+    const cleanupFilesFind = registerCommands("files", { find: findInSidebar });
+    cleanupCommands = () => {
+      cleanupSidebarCommands();
+      cleanupExplorerFind();
+      cleanupFilesFind();
+    };
     // Ir al sidebar con el teclado lo abre si estaba plegado.
     setSidebarRevealer(async () => {
       if (!$connection.connected) return;
       sidebarCollapsed = false;
       await tick();
     });
-    // En captura: tiene que llegar antes que el keymap de CodeMirror.
-    window.addEventListener("keydown", onSidebarFindKeydown, true);
   });
 
   onDestroy(() => {
     cleanupThemeEffects?.();
     cleanupLocaleEffects?.();
-    document.removeEventListener("keydown", handleGlobalKeydown);
+    cleanupCommands?.();
+    cleanupKeybindings?.();
     cleanupFocusZones?.();
     setSidebarRevealer(null);
-    window.removeEventListener("keydown", onSidebarFindKeydown, true);
+
     window.removeEventListener("contextmenu", blockNativeContextMenu);
   });
 </script>

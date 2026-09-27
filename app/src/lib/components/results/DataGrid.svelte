@@ -42,7 +42,6 @@
     findMatches = [],
     findCurrent = -1,
     hiddenRows = null,
-    onfind = () => {},
     sort = [],
     sortable = false,
     onsort = () => {},
@@ -75,7 +74,6 @@
     findMatches?: FindMatch[];
     findCurrent?: number;
     hiddenRows?: ReadonlySet<number> | null;
-    onfind?: () => void;
     // Orden desde los encabezados (se aplica en la base, ver gridSort.ts):
     // criterios actuales, si la consulta lo admite, y el clic (Shift =
     // agregar criterio).
@@ -492,10 +490,8 @@
     const mod = event.ctrlKey || event.metaKey;
     if (!mod || event.altKey || event.shiftKey || editing) return;
     const key = event.key.toLowerCase();
-    if (key === "f") {
-      event.preventDefault();
-      onfind();
-    } else if (key === "c") {
+    if (key === "c") {
+
       event.preventDefault();
       void copySelection();
     } else if (key === "v") {

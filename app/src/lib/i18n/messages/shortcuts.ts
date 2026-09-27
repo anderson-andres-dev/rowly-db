@@ -5,6 +5,8 @@ export default defineMessages({
   es: {
     "toggle-sidebar.label": "Ocultar panel de tablas",
     "toggle-sidebar.description": "Muestra u oculta el árbol de tablas del sidebar.",
+    "find.label": "Buscar",
+    "find.description": "Busca en la zona activa: filtro del explorador, editor o resultado.",
     "focus-zone-prefix.label": "Mover el foco",
     "focus-zone-prefix.description": "Después, una flecha indica la zona: explorador, editor, resultados o archivos.",
     "select-all.label": "Seleccionar todo",
@@ -41,6 +43,8 @@ export default defineMessages({
   en: {
     "toggle-sidebar.label": "Hide tables panel",
     "toggle-sidebar.description": "Shows or hides the table tree in the sidebar.",
+    "find.label": "Find",
+    "find.description": "Searches the active area: explorer filter, editor or result.",
     "focus-zone-prefix.label": "Move focus",
     "focus-zone-prefix.description": "Then an arrow picks the area: explorer, editor, results or files.",
     "select-all.label": "Select all",
@@ -77,6 +81,8 @@ export default defineMessages({
   "pt-BR": {
     "toggle-sidebar.label": "Ocultar painel de tabelas",
     "toggle-sidebar.description": "Mostra ou oculta a árvore de tabelas da barra lateral.",
+    "find.label": "Buscar",
+    "find.description": "Busca na área ativa: filtro do explorador, editor ou resultado.",
     "focus-zone-prefix.label": "Mover o foco",
     "focus-zone-prefix.description": "Depois, uma seta indica a área: explorador, editor, resultados ou arquivos.",
     "select-all.label": "Selecionar tudo",
@@ -113,6 +119,8 @@ export default defineMessages({
   fr: {
     "toggle-sidebar.label": "Masquer le panneau des tables",
     "toggle-sidebar.description": "Affiche ou masque l’arborescence des tables dans la barre latérale.",
+    "find.label": "Rechercher",
+    "find.description": "Recherche dans la zone active : filtre de l’explorateur, éditeur ou résultat.",
     "focus-zone-prefix.label": "Déplacer le focus",
     "focus-zone-prefix.description": "Puis une flèche choisit la zone : explorateur, éditeur, résultats ou fichiers.",
     "select-all.label": "Tout sélectionner",
@@ -149,6 +157,8 @@ export default defineMessages({
   de: {
     "toggle-sidebar.label": "Tabellenbereich ausblenden",
     "toggle-sidebar.description": "Blendet den Tabellenbaum in der Seitenleiste ein oder aus.",
+    "find.label": "Suchen",
+    "find.description": "Sucht im aktiven Bereich: Explorer-Filter, Editor oder Ergebnis.",
     "focus-zone-prefix.label": "Fokus verschieben",
     "focus-zone-prefix.description": "Danach wählt ein Pfeil den Bereich: Explorer, Editor, Ergebnisse oder Dateien.",
     "select-all.label": "Alles auswählen",

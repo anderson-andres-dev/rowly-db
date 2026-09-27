@@ -45,7 +45,8 @@
     type ResultEditInfo,
     type RowRange,
   } from "$lib/resultEditing";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
+  import { registerCommands } from "$lib/commands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, type Snippet } from "svelte";
 
@@ -286,8 +287,9 @@
   let findResult = $state<FindResult>({ matches: [], error: null, capped: false });
   let findBar = $state<ReturnType<typeof FindBar>>();
 
-  // Para el Workspace (Ctrl+F con el mouse sobre el resultado).
+  // Para el comando find con el resultado como zona activa (Workspace).
   export function toggleFind() {
+
     if (showingResult) openFind();
   }
 
@@ -400,24 +402,31 @@
     formatMenuOpen = false;
   }
 
-  function onGridKeydown(event: KeyboardEvent) {
-    const matches = (id: string) => {
-      const keys = shortcutKeys(id);
-      return keys !== "" && eventMatchesShortcut(event, keys);
+  // Comandos del grid (lib/commands.ts): solo con el foco en el grid y no
+  // mientras se edita una celda (su input tiene sus propias teclas), asi un
+  // atajo no actua sobre las filas desde la barra de filtros o de busqueda.
+  let gridScroll = $state<HTMLElement>();
+
+  function inGrid(run: () => void) {
+    return () => {
+      const active = document.activeElement;
+      if (!gridScroll || !active || !gridScroll.contains(active) || active.closest("input, textarea")) return false;
+      run();
     };
-    let handled = true;
-    if (matches("add-result-row")) addNewRow();
-    else if (matches("delete-result-rows")) deleteSelectedRows();
-    else if (matches("revert-result-changes")) {
-      if (canRevert) void revertChanges();
-    } else if (matches("submit-result-changes")) {
-      if (pending > 0) onsubmit();
-    } else handled = false;
-    if (handled) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
   }
+
+  $effect(() =>
+    registerCommands("results", {
+      "add-result-row": inGrid(addNewRow),
+      "delete-result-rows": inGrid(deleteSelectedRows),
+      "revert-result-changes": inGrid(() => {
+        if (canRevert) void revertChanges();
+      }),
+      "submit-result-changes": inGrid(() => {
+        if (pending > 0) onsubmit();
+      }),
+    }),
+  );
 
 </script>
 
@@ -659,8 +668,8 @@
     {/if}
   {:else}
     <div class="grid-region">
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="grid-scroll" onkeydown={onGridKeydown}>
+      <div class="grid-scroll" bind:this={gridScroll}>
+
         <!-- Siempre montado (aunque no haya filas): asi un filtro sin
              resultados no desarma el grid y el siguiente no vuelve a medir
              ni a mover las columnas. -->
@@ -687,7 +696,6 @@
             findMatches={findOpen ? findResult.matches : []}
             findCurrent={findOpen ? findCurrent : -1}
             {hiddenRows}
-            onfind={openFind}
             {sort}
             sortable={page?.sortable === true && !isExecuting}
             {onsort}

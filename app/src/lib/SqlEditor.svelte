@@ -21,7 +21,8 @@
     resolveCatalogTable,
   } from "$lib/sqlSchema";
   import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
-  import { shortcuts, toCodeMirrorKey } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
+  import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
   import { formatSqlBlock } from "$lib/sqlFormatter";
   import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
@@ -88,7 +89,6 @@
   const sqlCompartment = new Compartment();
   const completionCompartment = new Compartment();
   const definitionLinkCompartment = new Compartment();
-  const keymapCompartment = new Compartment();
   const behaviorCompartment = new Compartment();
   const tabCompletionCompartment = new Compartment();
   const phrasesCompartment = new Compartment();
@@ -247,27 +247,19 @@
     return true;
   }
 
-  // El keymap por defecto de basicSetup ya deberia traer Mod-a -> selectAll,
-  // pero en este webview no estaba disparando de forma confiable; se arma
-  // explicito con Prec.highest para que gane sobre cualquier otro keymap, y
-  // se reconfigura si el atajo se reasigna en Ajustes > Atajos.
-  function buildEditorKeymap() {
-    const selectAllShortcut = get(shortcuts).find((shortcut) => shortcut.id === "select-all");
-    const formatShortcut = get(shortcuts).find((shortcut) => shortcut.id === "format-sql");
-    const executeShortcut = get(shortcuts).find((shortcut) => shortcut.id === "execute-query");
-    const bindings = [];
-    if (selectAllShortcut) {
-      bindings.push({ key: toCodeMirrorKey(selectAllShortcut.keys), run: selectAll, preventDefault: true });
-    }
-    if (formatShortcut) {
-      bindings.push({ key: toCodeMirrorKey(formatShortcut.keys), run: formatCurrentSql, preventDefault: true });
-    }
-    if (executeShortcut) {
-      bindings.push({ key: toCodeMirrorKey(executeShortcut.keys), run: executeCurrentSql, preventDefault: true });
-    }
-
-    return Prec.highest(keymap.of(bindings));
+  // Comandos del editor (lib/commands.ts); la tecla la pone keybindings.ts,
+  // en captura, antes que los keymaps de CodeMirror (el Mod-a de basicSetup
+  // no disparaba de forma confiable en este webview). Solo con el foco en el
+  // texto: en la barra de busqueda, Ctrl+A o Ctrl+Enter son de ella.
+  function whenFocused(run: (view: EditorView) => boolean) {
+    return () => !!view?.hasFocus && run(view);
   }
+
+  const unregisterCommands = registerCommands("editor", {
+    "select-all": whenFocused(selectAll),
+    "format-sql": whenFocused(formatCurrentSql),
+    "execute-query": whenFocused(executeCurrentSql),
+  });
 
   // moveCompletionSelection() es un no-op (devuelve false) si el tooltip de
   // autocompletado no esta abierto, asi que Tab/Shift-Tab caen al
@@ -311,8 +303,8 @@
     });
   }
 
-  // Ctrl+F pedido desde afuera: el Workspace lo enruta por la zona que tiene
-  // el mouse encima, aunque el foco este en otra parte.
+  // Para el comando find con el editor como zona activa (Workspace).
+
   export function toggleSearch() {
     if (view) toggleSearchPanel(view);
   }
@@ -329,7 +321,6 @@
         sqlCompartment.of(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
-        keymapCompartment.of(buildEditorKeymap()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
         activeStatementHighlight,
         executionMarker,
@@ -405,12 +396,6 @@
   });
 
   $effect(() => {
-    $shortcuts;
-    if (!view) return;
-    view.dispatch({ effects: keymapCompartment.reconfigure(buildEditorKeymap()) });
-  });
-
-  $effect(() => {
     const autoUppercase = $editorSettings.autoUppercaseKeywords;
     if (!view) return;
     view.dispatch({
@@ -438,7 +423,10 @@
     reconfigureCompletion();
   });
 
-  onDestroy(() => view?.destroy());
+  onDestroy(() => {
+    unregisterCommands();
+    view?.destroy();
+  });
 </script>
 
 <div

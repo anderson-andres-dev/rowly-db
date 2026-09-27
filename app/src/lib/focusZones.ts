@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+import { registerCommand } from "$lib/commands";
 
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.
 //
@@ -169,15 +169,17 @@ const CHORD_TIMEOUT_MS = 1500;
 
 let installed = false;
 
-// Se instala una vez desde el layout. En captura: tiene que llegar antes que
-// el editor (CodeMirror) y el grid.
+// Se instala una vez desde el layout, antes que keybindings.ts: en captura,
+// las flechas del modo mover tienen que llegar antes que el despachador, el
+// editor (CodeMirror) y el grid.
 export function installFocusZones(isBlocked: () => boolean): () => void {
   if (installed) return () => {};
   installed = true;
-  // Modo mover: empieza con el prefijo. Con Ctrl apretado cada flecha
-  // mueve y el modo sigue hasta soltar Ctrl; con Ctrl suelto, la primera
-  // flecha (dentro del plazo) mueve una vez y termina. Cualquier otra tecla
-  // lo termina y sigue su camino normal.
+  // Modo mover: empieza con el comando focus-zone-prefix. Con Ctrl apretado
+  // cada flecha mueve y el modo sigue hasta soltar Ctrl; con Ctrl suelto, la
+  // primera flecha (dentro del plazo) mueve una vez y termina. Cualquier
+  // otra tecla lo termina y sigue su camino normal.
+
   let moving = false;
   let moved = false;
   let deadline = 0;
@@ -190,20 +192,14 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   }
   stillMoving = () => moving;
 
+  const unregisterPrefix = registerCommand("focus-zone-prefix", "global", () => {
+    moving = true;
+    moved = false;
+    deadline = Date.now() + CHORD_TIMEOUT_MS;
+  });
+
   function onKeydown(event: KeyboardEvent) {
-    if (isBlocked()) return;
-    const prefix = get(shortcuts).find((shortcut) => shortcut.id === "focus-zone-prefix")?.keys ?? "";
-
-    if (prefix && eventMatchesShortcut(event, prefix)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      moving = true;
-      moved = false;
-      deadline = Date.now() + CHORD_TIMEOUT_MS;
-      return;
-    }
-
-    if (!moving) return;
+    if (isBlocked() || !moving) return;
     if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
     const direction = !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
     if (!direction || (!event.ctrlKey && Date.now() > deadline)) {
@@ -257,7 +253,9 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   document.addEventListener("pointerdown", onPointerDown, true);
   return () => {
     installed = false;
+    unregisterPrefix();
     window.removeEventListener("keydown", onKeydown, true);
+
     window.removeEventListener("keyup", onKeyup, true);
     window.removeEventListener("keydown", onEscape);
     document.removeEventListener("focusin", onFocusIn);
