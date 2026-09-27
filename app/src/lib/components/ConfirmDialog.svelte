@@ -9,8 +9,8 @@
   //
   // tone "danger": la accion no tiene vuelta atras (boton rojo).
   // tone "warning": pide atencion pero se puede deshacer (boton normal).
-  // alternateLabel: una segunda salida destructiva, apartada a la izquierda
-  // (p. ej. "Descartar" junto a "Guardar" al cerrar una consola).
+  // alternateLabel: una segunda salida destructiva, junto a las demas pero
+  // en rojo suave (p. ej. "Descartar" junto a "Guardar" al cerrar una consola).
   let {
     title,
     message,
@@ -80,14 +80,14 @@
   </div>
   <div class="alert-actions">
     {#if alternateLabel}
-      <button type="button" class="alert-button subtle-danger alert-aside" onclick={() => respond("alternate")}>
+      <button type="button" class="action-button danger-soft" onclick={() => respond("alternate")}>
         {alternateLabel}
       </button>
     {/if}
-    <button type="button" class="alert-button secondary" onclick={() => respond("cancel")}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button secondary" onclick={() => respond("cancel")}>{$t("common.cancel")}</button>
     <button
       type="button"
-      class="alert-button {tone === 'danger' && !alternateLabel ? 'danger' : 'primary'}"
+      class="action-button {tone === 'danger' && !alternateLabel ? 'danger' : 'primary'}"
       onclick={() => respond("confirm")}
     >
       {confirmLabel}

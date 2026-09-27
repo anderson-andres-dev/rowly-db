@@ -221,12 +221,12 @@
   </div>
 
   <footer>
-    <button type="button" class="secondary-action" disabled={exporting} onclick={() => void copyPage()}>
+    <button type="button" class="action-button secondary" disabled={exporting} onclick={() => void copyPage()}>
       {$t("results.export.copyPage")}
     </button>
     <span class="spacer"></span>
-    <button type="button" class="secondary-action" disabled={exporting} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="primary-action" disabled={exporting} onclick={() => void exportToFile()}>
+    <button type="button" class="action-button secondary" disabled={exporting} onclick={close}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button primary" disabled={exporting} onclick={() => void exportToFile()}>
       {exporting ? $t("results.export.exporting") : $t("results.export.toFile")}
     </button>
   </footer>
@@ -236,7 +236,7 @@
   .export-dialog {
     width: min(58rem, calc(100vw - 2rem));
     max-height: calc(100vh - 4rem);
-    padding: 1.5rem 1.75rem;
+    padding: var(--space-5);
     box-sizing: border-box;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -478,49 +478,13 @@
   footer {
     display: flex;
     align-items: center;
-    gap: 0.625rem;
+    gap: var(--space-2);
   }
 
   .spacer {
     flex: 1;
   }
 
-  footer button {
-    height: 2.5rem;
-    padding: 0 var(--space-4);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-
-  footer button:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  footer button:focus-visible,
   .format:focus-visible,
   .icon-button:focus-visible {
     outline: 2px solid var(--focus-ring);

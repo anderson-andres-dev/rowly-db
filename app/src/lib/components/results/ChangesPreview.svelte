@@ -165,8 +165,8 @@
   {/if}
 
   <footer>
-    <button type="button" class="secondary-action" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="primary-action" class:production disabled={applying} onclick={onapply}>
+    <button type="button" class="action-button secondary" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button {production ? 'danger' : 'primary'}" disabled={applying} onclick={onapply}>
       <!-- El texto no cambia mientras aplica: un reintento rapido no hace
            saltar el boton; basta con que quede deshabilitado. -->
       {production ? $t("results.changes.applyInProduction") : $t("results.applyChanges")}
@@ -178,7 +178,7 @@
   .changes-dialog {
     width: min(46rem, calc(100vw - 2rem));
     max-height: calc(100vh - 4rem);
-    padding: 1.5rem 1.75rem;
+    padding: var(--space-5);
     box-sizing: border-box;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -191,7 +191,7 @@
   .changes-dialog[open] {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: var(--space-4);
     animation: dialog-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
   }
 
@@ -393,54 +393,6 @@
   footer {
     display: flex;
     justify-content: flex-end;
-    gap: 0.625rem;
-  }
-
-  footer button {
-    height: 2.5rem;
-    padding: 0 var(--space-4);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-
-  footer button:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .primary-action.production {
-    background: var(--danger-solid);
-  }
-
-  .primary-action.production:hover:not(:disabled) {
-    background: var(--danger-solid-hover);
-  }
-
-  footer button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
+    gap: var(--space-2);
   }
 </style>
