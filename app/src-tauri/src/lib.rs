@@ -457,6 +457,58 @@ async fn execute_query(
     Ok(ExecuteQueryResponse::Completed { result, page })
 }
 
+/// What a script needs to know before running anything: for each
+/// statement, whether it needs confirmation (same rules as `execute_query`)
+/// or can't be analyzed at all. The frontend confirms them all at once and
+/// then runs them one by one with `execute_query`, which checks each again.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StatementCheck {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    confirmation: Option<DestructiveStatement>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn classify_statements(
+    statements: Vec<String>,
+    window: tauri::Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<StatementCheck>, String> {
+    let (dialect, production) = {
+        let guard = state
+            .connections
+            .lock()
+            .expect("connections mutex poisoned");
+        let active = guard
+            .get(window.label())
+            .ok_or_else(|| "No hay ninguna conexión activa.".to_string())?;
+        (active.dialect, active.production)
+    };
+    Ok(statements
+        .iter()
+        .map(|statement| check_statement(statement, dialect, production))
+        .collect())
+}
+
+fn check_statement(statement: &str, dialect: Dialect, production: bool) -> StatementCheck {
+    match classify_sql(statement.trim(), dialect, production) {
+        Ok(DestructiveClassification::NotDestructive) => StatementCheck {
+            confirmation: None,
+            error: None,
+        },
+        Ok(DestructiveClassification::RequiresConfirmation(kind)) => StatementCheck {
+            confirmation: Some(kind),
+            error: None,
+        },
+        Err(error) => StatementCheck {
+            confirmation: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
 /// Interrupts the query started with `execution_id` (see `execute_query`).
 /// It then ends with the server's own error, which the frontend shows as
 /// cancelled. Nothing to do if it already ended.
@@ -784,6 +836,7 @@ pub fn run() {
             disconnect,
             execute_query,
             cancel_query,
+            classify_statements,
             table_definition,
             test_connection,
             save_connection_password,
@@ -807,4 +860,34 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_script_is_checked_statement_by_statement() {
+        let checks: Vec<StatementCheck> = ["SELECT 1;", "DELETE FROM t;", "SELEC nada"]
+            .iter()
+            .map(|sql| check_statement(sql, Dialect::MySql, false))
+            .collect();
+        assert!(checks[0].confirmation.is_none() && checks[0].error.is_none());
+        assert_eq!(
+            checks[1].confirmation,
+            Some(DestructiveStatement::DeleteWithoutWhere)
+        );
+        assert!(checks[2].error.is_some());
+    }
+
+    #[test]
+    fn in_production_every_write_needs_confirmation() {
+        let insert = check_statement("INSERT INTO t VALUES (1)", Dialect::Postgres, true);
+        assert_eq!(
+            insert.confirmation,
+            Some(DestructiveStatement::WriteInProduction)
+        );
+        let select = check_statement("SELECT 1", Dialect::Postgres, true);
+        assert!(select.confirmation.is_none());
+    }
 }

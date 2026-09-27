@@ -46,6 +46,21 @@ export async function cancelQuery(executionId: string): Promise<void> {
   }
 }
 
+// Antes de un script: por cada sentencia, si pide confirmacion (las mismas
+// reglas que execute_query) o si no se puede analizar.
+export interface StatementCheck {
+  confirmation?: DestructiveStatement;
+  error?: string;
+}
+
+export async function classifyStatements(statements: string[]): Promise<StatementCheck[]> {
+  try {
+    return await invoke<StatementCheck[]>("classify_statements", { statements });
+  } catch (e) {
+    return statements.map(() => ({ error: String(e) }));
+  }
+}
+
 // Total de filas de la consulta (SELECT COUNT(*) FROM (...)). Lanza un
 // Error con el mensaje del servidor si falla.
 export async function countQueryRows(sql: string): Promise<number> {

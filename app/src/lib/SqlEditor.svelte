@@ -234,8 +234,18 @@
   function executeCurrentSql(): boolean {
     if (!view || executing) return true;
     const range = currentSqlRange();
-    if (!range) return true;
+    return range ? executeRange(range) : true;
+  }
 
+  // "Ejecutar todo": el documento entero, como script (Workspace lo divide
+  // en sentencias).
+  function executeAllSql(): boolean {
+    if (!view || executing) return true;
+    return executeRange({ from: 0, to: view.state.doc.length });
+  }
+
+  function executeRange(range: { from: number; to: number }): boolean {
+    if (!view) return true;
     const raw = view.state.sliceDoc(range.from, range.to);
     const sql = raw.trim();
     if (!sql) return true;
@@ -259,6 +269,7 @@
     "select-all": whenFocused(selectAll),
     "format-sql": whenFocused(formatCurrentSql),
     "execute-query": whenFocused(executeCurrentSql),
+    "execute-script": whenFocused(executeAllSql),
   });
 
   // moveCompletionSelection() es un no-op (devuelve false) si el tooltip de

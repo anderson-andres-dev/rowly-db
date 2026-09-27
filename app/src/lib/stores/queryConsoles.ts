@@ -52,6 +52,9 @@ function parseCondition(value: unknown): FilterCondition | null {
 export interface PendingQueryConfirmation {
   sql: string;
   statement: DestructiveStatement;
+  // Un script: se confirma una sola vez antes de ejecutar nada. Cada
+  // sentencia lleva su confirmacion (null = no la necesita).
+  script?: { statements: string[]; confirmations: (DestructiveStatement | null)[] };
 }
 
 // Estado transitorio de ejecucion por consola. Vive en el mismo store que

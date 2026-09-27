@@ -28,8 +28,14 @@ export function consoleOfKey(key: string): string {
 }
 
 export function addPinnedTab(consoleId: string): number {
+  return addResultTab(consoleId, true);
+}
+
+// Una pestaña mas de la consola. Desfijada (p. ej. los resultados de un
+// script), la proxima ejecucion la reemplaza igual que a la normal.
+export function addResultTab(consoleId: string, pinned: boolean): number {
   const id = nextId++;
-  pinnedResults.update((state) => ({ ...state, [consoleId]: [...(state[consoleId] ?? []), { id, pinned: true }] }));
+  pinnedResults.update((state) => ({ ...state, [consoleId]: [...(state[consoleId] ?? []), { id, pinned }] }));
   return id;
 }
 

@@ -21,8 +21,9 @@
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
-  import { cancelQuery, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
-  import { queryHistory, recordQuery } from "$lib/stores/queryHistory";
+  import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
+  import { splitStatements } from "$lib/sqlStatements";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
@@ -34,6 +35,7 @@
   import { numberFormat, t } from "$lib/i18n";
   import {
     addPinnedTab,
+    addResultTab,
     consoleOfKey,
     forgetPinnedResults,
     pinnedResults,
@@ -1171,8 +1173,114 @@
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
+    const statements = splitStatements(sql).map((range) => sql.slice(range.from, range.to));
+    if (statements.length > 1) {
+      await startScript(consoleId, sql, statements);
+      return;
+    }
     await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
+  }
+
+  // --- Scripts -------------------------------------------------------------
+  // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
+  // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
+  // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
+  // script entero (el guard las lista). Despues corren en orden, cada una
+  // con autocommit, y el script se detiene en la primera que falle o al
+  // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
+  // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
+  const MAX_SCRIPT_RESULT_TABS = 10;
+
+  async function startScript(consoleId: string, sql: string, statements: string[]) {
+    const checks = await classifyStatements(statements);
+    const invalid = checks.findIndex((check) => check.error !== undefined);
+    if (invalid !== -1) {
+      appendLog(consoleId, { kind: "query", schema: logSchema, text: statements[invalid].trim(), at: Date.now() });
+      const message = $t("workspace.output.scriptInvalid", { index: invalid + 1, error: checks[invalid].error ?? "" });
+      appendLog(consoleId, { kind: "error", text: message });
+      finishQueryExecution(consoleId, sql, { type: "error", message });
+      selectTab(consoleId, "output");
+      return;
+    }
+    const confirmations = checks.map((check) => check.confirmation ?? null);
+    const first = confirmations.find((item) => item !== null);
+    if (first) {
+      requireQueryConfirmation(consoleId, { sql, statement: first, script: { statements, confirmations } });
+      return;
+    }
+    await runScript(consoleId, sql, statements, confirmations);
+  }
+
+  async function runScript(
+    consoleId: string,
+    sql: string,
+    statements: string[],
+    confirmations: (DestructiveStatement | null)[],
+  ) {
+    // Lo de la ejecucion anterior se va de entrada: los resultados nuevos
+    // aparecen a medida que llegan.
+    dropUnpinnedResults(consoleId);
+    clearQueryResult(consoleId);
+    forgetResultEdits(consoleId);
+    const startedAt = Date.now();
+    const started = performance.now();
+    let outcome: HistoryOutcome = "ok";
+    let lastResultTab: string | null = null;
+    let resultTabs = 0;
+
+    for (let index = 0; index < statements.length; index += 1) {
+      const statement = statements[index].trim();
+      const statementStarted = performance.now();
+      appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: Date.now() });
+      const { response, cancelled } = await executeCancellable(
+        consoleId,
+        statement,
+        confirmations[index],
+        firstPage(consoleId),
+      );
+      // execute_query vuelve a clasificar cada sentencia: si ahora pide una
+      // confirmacion distinta, no se ejecuto y el script se detiene.
+      const result: QueryExecutionResult =
+        response.type === "completed"
+          ? response.result
+          : { type: "error", message: $t(`workspace.guard.${response.statement}`) };
+      const page = response.type === "completed" ? (response.page ?? null) : null;
+      appendLog(consoleId, {
+        kind: result.type === "error" && !cancelled ? "error" : "info",
+        text: cancelled
+          ? $t("workspace.output.cancelled")
+          : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
+      });
+
+      const stopped = result.type === "error" || cancelled;
+      if (stopped || index === statements.length - 1) {
+        finishQueryExecution(consoleId, statement, result, page);
+        prepareResultEditing(consoleId, statement, result);
+        if (result.type === "resultSet") lastResultTab = consoleId;
+        if (stopped) {
+          outcome = cancelled ? "cancelled" : "error";
+          const remaining = statements.length - index - 1;
+          if (remaining > 0) {
+            appendLog(consoleId, {
+              kind: "info",
+              text: $t("workspace.output.scriptStopped", { count: $numberFormat.format(remaining) }),
+            });
+          }
+        }
+        break;
+      }
+      if (result.type === "resultSet" && resultTabs < MAX_SCRIPT_RESULT_TABS) {
+        const key = resultKey(consoleId, addResultTab(consoleId, false));
+        finishQueryExecution(key, statement, result, page);
+        prepareResultEditing(key, statement, result);
+        lastResultTab = key;
+        resultTabs += 1;
+      }
+    }
+
+    recordQuery(profileId, { sql, at: startedAt, durationMs: performance.now() - started, outcome });
+    selectTab(consoleId, outcome === "error" || !lastResultTab ? "output" : lastResultTab);
   }
 
   // Unica via de confirmacion: el click explicito en "Ejecutar de todos
@@ -1183,6 +1291,10 @@
     const pending = takeQueryConfirmation(consoleId);
     if (!pending || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
+    if (pending.script) {
+      await runScript(consoleId, pending.sql, pending.script.statements, pending.script.confirmations);
+      return;
+    }
     await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
@@ -1359,6 +1471,7 @@
     {#if liveExecution.pendingConfirmation && activeConsole}
       <ExecutionGuard
         statement={liveExecution.pendingConfirmation.statement}
+        script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
         production={$isProduction}
         oncancel={() => cancelPendingExecution(activeConsole.id)}
         onconfirm={() => confirmPendingExecution(activeConsole.id)}
