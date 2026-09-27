@@ -523,6 +523,36 @@ fn check_statement(statement: &str, dialect: Dialect, production: bool) -> State
     }
 }
 
+/// Diagnostics while typing (khipu_engine::diagnostics): syntax, and names
+/// checked against the loaded catalog. Never touches the database. One list
+/// per statement, positions relative to it.
+#[tauri::command]
+fn analyze_sql(
+    statements: Vec<String>,
+    window: tauri::Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
+    with_active_connection(&window, &state, |active| {
+        let catalog = catalog_adapter::tables_to_catalog(
+            active
+                .schemas
+                .values()
+                .flat_map(|objects| objects.tables.iter().cloned()),
+        );
+        let view = khipu_engine::diagnostics::CatalogView {
+            tables: &catalog.tables,
+            loaded_schemas: active.schemas.keys().map(String::as_str).collect(),
+            default_schema: &active.default_schema,
+        };
+        Ok(statements
+            .iter()
+            .map(|statement| {
+                khipu_engine::diagnostics::analyze_statement(statement, active.dialect, Some(&view))
+            })
+            .collect())
+    })
+}
+
 /// Interrupts the query started with `execution_id` (see `execute_query`).
 /// It then ends with the server's own error, which the frontend shows as
 /// cancelled. Nothing to do if it already ended.
@@ -851,6 +881,7 @@ pub fn run() {
             execute_query,
             cancel_query,
             classify_statements,
+            analyze_sql,
             table_definition,
             test_connection,
             save_connection_password,

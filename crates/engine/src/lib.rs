@@ -1,4 +1,5 @@
 pub mod catalog;
+pub mod diagnostics;
 pub mod editing;
 pub mod error_position;
 pub mod execution_guard;

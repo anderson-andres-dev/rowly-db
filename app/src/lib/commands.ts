@@ -49,6 +49,9 @@ export const commandDefinitions: CommandDefinition[] = [
   // Como en DataGrip; solo errores (docs/specs/v0.2-diagnosticos.md).
   { id: "next-diagnostic", zone: "editor", group: "editor", defaultKeys: "F2" },
   { id: "previous-diagnostic", zone: "editor", group: "editor", defaultKeys: "Shift+F2" },
+  { id: "diagnostic-details", zone: "editor", group: "editor", defaultKeys: "Ctrl+." },
+  // Como en JetBrains.
+  { id: "apply-quick-fix", zone: "editor", group: "editor", defaultKeys: "Alt+Enter" },
   { id: "select-all", zone: "editor", group: "editor", defaultKeys: "Ctrl+A" },
   { id: "add-result-row", zone: "results", group: "results", defaultKeys: "Alt+Insert" },
   { id: "delete-result-rows", zone: "results", group: "results", defaultKeys: "Ctrl+Y" },

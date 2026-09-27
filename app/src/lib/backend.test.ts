@@ -27,7 +27,7 @@ describe("mensajes del backend", () => {
     expect(sources.length).toBeGreaterThan(10);
     const keys = new Set<string>();
     for (const source of sources) {
-      for (const match of source.matchAll(/Message::key\("([^"]+)"\)/g)) keys.add(match[1]);
+      for (const match of source.matchAll(/(?:Diagnostic)?Message::key\("([^"]+)"\)/g)) keys.add(match[1]);
       // soft(..., "categoria", warnings) -> introspect.<categoria>
       for (const match of source.matchAll(/soft\([\s\S]*?"(\w+)",\s*warnings,?\s*\)/g)) keys.add(`introspect.${match[1]}`);
       // NotEditable::as_key -> notEditable.<motivo>

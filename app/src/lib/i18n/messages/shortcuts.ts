@@ -3,6 +3,10 @@ import { defineMessages } from "../define";
 // Nombre y descripción de cada atajo, por su id en shortcutDefinitions.
 export default defineMessages({
   es: {
+    "diagnostic-details.label": "Detalle del error",
+    "diagnostic-details.description": "Abre el detalle del error bajo el cursor, con sus correcciones.",
+    "apply-quick-fix.label": "Aplicar corrección",
+    "apply-quick-fix.description": "Aplica la primera corrección propuesta para el error bajo el cursor.",
     "toggle-sidebar.label": "Ocultar panel de tablas",
     "toggle-sidebar.description": "Muestra u oculta el árbol de tablas del sidebar.",
     "find.label": "Buscar",
@@ -53,6 +57,10 @@ export default defineMessages({
     "query-history.description": "Abre las consultas ejecutadas en esta conexión para insertarlas o volver a ejecutarlas.",
   },
   en: {
+    "diagnostic-details.label": "Error details",
+    "diagnostic-details.description": "Opens the details of the error at the cursor, with its fixes.",
+    "apply-quick-fix.label": "Apply fix",
+    "apply-quick-fix.description": "Applies the first suggested fix for the error at the cursor.",
     "toggle-sidebar.label": "Hide tables panel",
     "toggle-sidebar.description": "Shows or hides the table tree in the sidebar.",
     "find.label": "Find",
@@ -103,6 +111,10 @@ export default defineMessages({
     "query-history.description": "Opens the queries run on this connection to insert or run them again.",
   },
   "pt-BR": {
+    "diagnostic-details.label": "Detalhe do erro",
+    "diagnostic-details.description": "Abre o detalhe do erro sob o cursor, com suas correções.",
+    "apply-quick-fix.label": "Aplicar correção",
+    "apply-quick-fix.description": "Aplica a primeira correção sugerida para o erro sob o cursor.",
     "toggle-sidebar.label": "Ocultar painel de tabelas",
     "toggle-sidebar.description": "Mostra ou oculta a árvore de tabelas da barra lateral.",
     "find.label": "Buscar",
@@ -153,6 +165,10 @@ export default defineMessages({
     "query-history.description": "Abre as consultas executadas nesta conexão para inseri-las ou executá-las de novo.",
   },
   fr: {
+    "diagnostic-details.label": "Détail de l’erreur",
+    "diagnostic-details.description": "Ouvre le détail de l’erreur sous le curseur, avec ses corrections.",
+    "apply-quick-fix.label": "Appliquer la correction",
+    "apply-quick-fix.description": "Applique la première correction proposée pour l’erreur sous le curseur.",
     "toggle-sidebar.label": "Masquer le panneau des tables",
     "toggle-sidebar.description": "Affiche ou masque l’arborescence des tables dans la barre latérale.",
     "find.label": "Rechercher",
@@ -203,6 +219,10 @@ export default defineMessages({
     "query-history.description": "Ouvre les requêtes exécutées sur cette connexion pour les insérer ou les relancer.",
   },
   de: {
+    "diagnostic-details.label": "Fehlerdetails",
+    "diagnostic-details.description": "Öffnet die Details des Fehlers am Cursor, mit seinen Korrekturen.",
+    "apply-quick-fix.label": "Korrektur anwenden",
+    "apply-quick-fix.description": "Wendet die erste vorgeschlagene Korrektur für den Fehler am Cursor an.",
     "toggle-sidebar.label": "Tabellenbereich ausblenden",
     "toggle-sidebar.description": "Blendet den Tabellenbaum in der Seitenleiste ein oder aus.",
     "find.label": "Suchen",

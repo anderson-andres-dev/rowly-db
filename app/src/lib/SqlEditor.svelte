@@ -1,6 +1,23 @@
 <script lang="ts">
   import { splitStatements, statementAt } from "$lib/sqlStatements";
-  import { addDiagnostics, clearDiagnosticsIn, errorRange, jumpToDiagnostic, sqlDiagnostics } from "$lib/sqlDiagnostics";
+  import {
+    addDiagnostics,
+    applyQuickFix,
+    clearDiagnosticsIn,
+    diagnosticAt,
+    errorRange,
+    jumpToDiagnostic,
+    lineColumnToOffset,
+    setAnalysis,
+    sqlDiagnostics,
+    visibleDiagnostics,
+    type QuickFix,
+    type SqlDiagnostic,
+  } from "$lib/sqlDiagnostics";
+  import { errorHelp, groupByFixes } from "$lib/sqlErrorHelp";
+  import { backendText, invoke, type BackendMessage } from "$lib/backend";
+  import { notifySuccess } from "$lib/stores/notifications";
+  import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
   import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
@@ -284,8 +301,10 @@
     "format-sql": whenFocused(formatCurrentSql),
     "execute-query": whenFocused(executeCurrentSql),
     "execute-script": whenFocused(executeAllSql),
-    "next-diagnostic": whenFocused((current) => jumpToDiagnostic(current, 1)),
-    "previous-diagnostic": whenFocused((current) => jumpToDiagnostic(current, -1)),
+    "next-diagnostic": whenFocused((current) => jump(current, 1)),
+    "previous-diagnostic": whenFocused((current) => jump(current, -1)),
+    "diagnostic-details": whenFocused(showDetails),
+    "apply-quick-fix": whenFocused(applyFirstFix),
   });
 
   // moveCompletionSelection() es un no-op (devuelve false) si el tooltip de
@@ -337,11 +356,211 @@
 
   // Un error de la base, ubicado en la sentencia [from, to) que lo produjo
   // (sqlDiagnostics.ts). Sin pista de donde, la sentencia entera.
-  function diagnosticFor(from: number, to: number, result: QueryExecutionResult) {
+  function diagnosticFor(from: number, to: number, result: QueryExecutionResult): SqlDiagnostic[] {
     if (!view || result.type !== "error") return [];
     const statement = view.state.sliceDoc(from, to);
-    const range = errorRange(statement, result) ?? { from: 0, to: statement.length };
-    return [{ from: from + range.from, to: from + range.to, message: result.message, code: result.code }];
+    const located = errorRange(statement, result);
+    const range = located ?? { from: 0, to: statement.length };
+    // Columna fuera del GROUP BY: sumarla o agregarla (solo si se sabe cual).
+    const fixes =
+      located && errorHelp(result.code) === "groupBy"
+        ? groupByFixes(statement, range).map((fix) => ({
+            label: $t(fix.kind === "aggregate" ? "editor.diagnostics.fix.aggregate" : "editor.diagnostics.fix.groupBy", {
+              column: fix.column,
+            }),
+            from: from + fix.from,
+            to: from + fix.to,
+            insert: fix.insert,
+          }))
+        : [];
+    return [
+      {
+        from: from + range.from,
+        to: from + range.to,
+        message: result.message,
+        code: result.code,
+        source: "server",
+        fixes,
+      },
+    ];
+  }
+
+  // --- Analisis mientras se escribe (analyze_sql) ---------------------------
+  // 700 ms despues de la ultima tecla: se divide en sentencias y el backend
+  // revisa sintaxis y nombres contra el catalogo, sin tocar la base. Si el
+  // texto cambio mientras tanto, la respuesta se descarta.
+  interface AnalysisPosition {
+    line: number;
+    column: number;
+  }
+  interface AnalysisDiagnostic {
+    start: AnalysisPosition;
+    end: AnalysisPosition;
+    message: BackendMessage;
+    suggestions?: { start: AnalysisPosition; end: AnalysisPosition; replacement: string }[];
+  }
+
+  const ANALYSIS_DELAY_MS = 700;
+  // Con documentos enormes, solo las sentencias alrededor del cursor.
+  const MAX_ANALYZED_STATEMENTS = 300;
+  let analysisTimer: ReturnType<typeof setTimeout> | null = null;
+  let analysisRun = 0;
+
+  function scheduleAnalysis() {
+    if (analysisTimer) clearTimeout(analysisTimer);
+    analysisTimer = setTimeout(() => void runAnalysis(), ANALYSIS_DELAY_MS);
+  }
+
+  async function runAnalysis() {
+    analysisTimer = null;
+    if (!view) return;
+    const doc = view.state.doc;
+    const text = doc.toString();
+    let ranges = splitStatements(text);
+    if (ranges.length > MAX_ANALYZED_STATEMENTS) {
+      const head = view.state.selection.main.head;
+      const around = Math.max(0, ranges.findIndex((range) => range.to >= head));
+      const start = Math.max(0, around - MAX_ANALYZED_STATEMENTS / 2);
+      ranges = ranges.slice(start, start + MAX_ANALYZED_STATEMENTS);
+    }
+    const run = ++analysisRun;
+    let found: AnalysisDiagnostic[][];
+    try {
+      found = await invoke<AnalysisDiagnostic[][]>("analyze_sql", {
+        statements: ranges.map((range) => text.slice(range.from, range.to)),
+      });
+    } catch {
+      return;
+    }
+    if (!view || run !== analysisRun || view.state.doc !== doc || !Array.isArray(found)) return;
+
+    const list: SqlDiagnostic[] = [];
+    ranges.forEach((range, index) => {
+      const statement = text.slice(range.from, range.to);
+      const at = (position: AnalysisPosition) =>
+        range.from + lineColumnToOffset(statement, position.line, position.column);
+      for (const item of found[index] ?? []) {
+        const from = at(item.start);
+        const to = Math.max(from + 1, at(item.end));
+        const message = backendText(item.message);
+        const suggestions = item.suggestions ?? [];
+        const key = typeof item.message === "object" ? item.message.key : "";
+        // "¿Quisiste decir…?" al final, salvo que el mensaje ya lo diga.
+        const hint =
+          suggestions[0] && suggestions[0].replacement && !["diagnostic.didYouMean", "diagnostic.trailingComma"].includes(key)
+            ? ` ${$t("editor.diagnostics.didYouMean", { name: suggestions[0].replacement })}`
+            : "";
+        const fixes: QuickFix[] = suggestions.map((suggestion) => ({
+          label: suggestion.replacement
+            ? $t("editor.diagnostics.fix.replace", { text: suggestion.replacement })
+            : $t("editor.diagnostics.fix.delete"),
+          from: at(suggestion.start),
+          to: at(suggestion.end),
+          insert: suggestion.replacement,
+        }));
+        list.push({ from, to, message: message + hint, source: "analysis", fixes });
+      }
+    });
+    view.dispatch({ effects: setAnalysis.of(list) });
+  }
+
+  // --- Ventana de detalle ------------------------------------------------
+  let popup = $state<{
+    diagnostic: SqlDiagnostic;
+    anchor: { left: number; top: number; bottom: number };
+    focused: boolean;
+  } | null>(null);
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  let hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function openPopup(diagnostic: SqlDiagnostic, focused: boolean) {
+    if (!view) return;
+    const coords = view.coordsAtPos(diagnostic.from);
+    if (!coords) return;
+    // Debajo de las filas con la flecha, si estan abiertas: no las tapa.
+    let bottom = coords.bottom;
+    for (const block of view.dom.querySelectorAll(".cm-diagnosticBlock")) {
+      const rect = block.getBoundingClientRect();
+      if (rect.top >= coords.bottom - 2 && rect.top <= coords.bottom + 4) bottom = rect.bottom;
+    }
+    popup = { diagnostic, anchor: { left: coords.left, top: coords.top, bottom }, focused };
+  }
+
+  function closePopup(refocusEditor: boolean) {
+    popup = null;
+    if (refocusEditor) view?.focus();
+  }
+
+  function applyFix(fix: QuickFix) {
+    if (!view) return;
+    closePopup(false);
+    applyQuickFix(view, fix);
+  }
+
+  function cancelHoverClose() {
+    if (hoverCloseTimer) clearTimeout(hoverCloseTimer);
+    hoverCloseTimer = null;
+  }
+
+  // Abierta con el mouse: se cierra al salir (con un margen para llegar a
+  // la ventana).
+  function scheduleHoverClose() {
+    cancelHoverClose();
+    if (popup && !popup.focused) hoverCloseTimer = setTimeout(() => closePopup(false), 250);
+  }
+
+  // Mouse quieto 400 ms sobre un subrayado: su detalle, sin quitarle el foco
+  // al editor.
+  const diagnosticHover = EditorView.domEventHandlers({
+    mousemove(event, current) {
+      const pos = current.posAtCoords({ x: event.clientX, y: event.clientY });
+      const under =
+        pos === null ? null : (visibleDiagnostics(current.state).find((item) => item.from <= pos && pos < item.to) ?? null);
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer = null;
+      if (!under) {
+        scheduleHoverClose();
+        return false;
+      }
+      cancelHoverClose();
+      if (popup?.diagnostic === under) return false;
+      hoverTimer = setTimeout(() => {
+        if (!popup?.focused) openPopup(under, false);
+      }, 400);
+      return false;
+    },
+    mouseleave() {
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer = null;
+      scheduleHoverClose();
+      return false;
+    },
+    keydown() {
+      // Cualquier tecla en el editor cierra la que abrio el mouse.
+      if (popup && !popup.focused) closePopup(false);
+      return false;
+    },
+  });
+
+  function showDetails(current: EditorView): boolean {
+    const diagnostic = diagnosticAt(current.state, current.state.selection.main.head);
+    if (!diagnostic) return false;
+    openPopup(diagnostic, true);
+    return true;
+  }
+
+  function applyFirstFix(current: EditorView): boolean {
+    const fix = diagnosticAt(current.state, current.state.selection.main.head)?.fixes?.[0];
+    if (!fix) return false;
+    applyFix(fix);
+    return true;
+  }
+
+  // F2 sin errores: un aviso breve en vez de no hacer nada.
+  function jump(current: EditorView, direction: 1 | -1): boolean {
+    if (jumpToDiagnostic(current, direction)) return true;
+    notifySuccess($t("editor.diagnostics.noErrors"));
+    return true;
   }
 
   // Script en curso lanzado desde este editor: la sentencia `index` empieza
@@ -397,11 +616,14 @@
         activeStatementHighlight,
         executionMarker,
         sqlDiagnostics,
+        diagnosticHover,
         behaviorCompartment.of(get(editorSettings).autoUppercaseKeywords ? autoUppercaseSqlKeywords : []),
         themeCompartment.of(buildCmTheme(get(editorPalette), get(effectiveScheme))),
         phrasesCompartment.of(buildPhrases()),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
+          scheduleAnalysis();
+          if (popup) closePopup(false);
 
           value = update.state.doc.toString();
           onchange?.(value);
@@ -500,10 +722,15 @@
     driver = profile?.driver ?? "mysql";
     sqlDialect = dialectFor(driver);
     reconfigureCompletion();
+    // Otro catalogo: los nombres se vuelven a revisar.
+    scheduleAnalysis();
   });
 
   onDestroy(() => {
     unregisterCommands();
+    if (analysisTimer) clearTimeout(analysisTimer);
+    if (hoverTimer) clearTimeout(hoverTimer);
+    cancelHoverClose();
     view?.destroy();
   });
 </script>
@@ -515,6 +742,18 @@
   bind:this={container}
   oncontextmenu={openContextMenu}
 ></div>
+
+{#if popup}
+  <DiagnosticPopup
+    diagnostic={popup.diagnostic}
+    anchor={popup.anchor}
+    focused={popup.focused}
+    onapply={applyFix}
+    onclose={closePopup}
+    onpointerenter={cancelHoverClose}
+    onpointerleave={scheduleHoverClose}
+  />
+{/if}
 
 {#if contextMenu}
   <ContextMenu
