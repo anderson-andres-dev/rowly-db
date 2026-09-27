@@ -268,17 +268,10 @@ describe("queryConsoles: pestañas de tabla", () => {
     expect(again).toBe(first);
     expect(get(mod.queryConsoles).activeByProfile.p1).toBe(first);
 
-    mod.setTableFilters(first, { where: "estado = 'activo'", orderBy: "id DESC", mode: "sql", conditions: [] });
+    mod.setTableFilters(first, { where: "estado = 'activo'", conditions: [] });
     const item = get(mod.queryConsoles).consoles.find((candidate) => candidate.id === first)!;
     expect(item.title).toBe("api_core_smoke_test");
-    expect(item.table).toEqual({
-      schema: "core",
-      name: "api_core_smoke_test",
-      where: "estado = 'activo'",
-      orderBy: "id DESC",
-      mode: "sql",
-      conditions: [],
-    });
+    expect(item.table).toEqual({ schema: "core", name: "api_core_smoke_test", where: "estado = 'activo'", conditions: [] });
     // Nunca queda "sin guardar": no tiene texto propio.
     expect(mod.isQueryConsoleDirty(item)).toBe(false);
 
@@ -291,7 +284,7 @@ describe("queryConsoles: pestañas de tabla", () => {
   it("al recargar la app se restaura la pestaña de tabla con sus filtros", async () => {
     const mod = await freshQueryConsoles();
     const id = mod.openTableConsole("p1", "core", "t");
-    mod.setTableFilters(id, { where: "a = 1", orderBy: "", mode: "sql", conditions: [] });
+    mod.setTableFilters(id, { where: "a = 1", conditions: [] });
     const stored = localStorage.getItem("khipu:query-consoles:v1");
 
     vi.resetModules();
@@ -303,9 +296,8 @@ describe("queryConsoles: pestañas de tabla", () => {
     });
     const reloaded = await import("./queryConsoles");
     const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
-    // Lo escrito en modo SQL no se restaura: la pestaña vuelve al constructor.
+    // Un WHERE que no salio del constructor no se restaura.
     expect(item.table?.where).toBe("");
-    expect(item.table?.mode).toBe("builder");
   });
 
   it("una pestaña guardada antes del constructor abre en el constructor, sin el filtro viejo", async () => {
@@ -324,7 +316,6 @@ describe("queryConsoles: pestañas de tabla", () => {
       });
       const reloaded = await import("./queryConsoles");
       const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === "t1");
-      expect(item?.table?.mode).toBe("builder");
       expect(item?.table?.where).toBe("");
     }
   });

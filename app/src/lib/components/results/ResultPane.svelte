@@ -137,7 +137,7 @@
     onunpin?: () => void;
     onrepin?: () => void;
     // Barra extra entre la barra de herramientas y el grid (los filtros
-    // WHERE / ORDER BY de una pestaña de tabla).
+    // de una pestaña de tabla: el constructor visual).
     filters?: Snippet;
     // Pestaña de tabla (abierta desde el explorador): una sola vista, sin la
     // fila de pestañas del resultado (la pestaña de afuera ya la nombra y los

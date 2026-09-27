@@ -559,7 +559,7 @@
 
   // --- Pestañas de tabla ----------------------------------------------------
   // Doble clic en una tabla del explorador: sus datos a pantalla completa
-  // (sin editor), con filtros WHERE / ORDER BY. Por dentro es una consulta
+  // (sin editor), con el constructor visual de filtros. Por dentro es una consulta
   // "SELECT * FROM tabla ..." en la pestaña, asi que tiene TODO lo del
   // resultado: editar, paginar, ordenar, buscar, exportar, fijar.
   let tableFilterError = $state<Record<string, string | null>>({});
@@ -573,10 +573,8 @@
     const table = item.table;
     if (!table) return "";
     const parts = [`SELECT * FROM ${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`];
+    // El orden se hace con clic en los encabezados del grid.
     if (table.where.trim()) parts.push(`WHERE ${table.where.trim()}`);
-    // En el constructor visual el orden se hace con los encabezados: el
-    // ORDER BY escrito en modo SQL solo cuenta en ese modo.
-    if (table.mode === "sql" && table.orderBy.trim()) parts.push(`ORDER BY ${table.orderBy.trim()}`);
     return parts.join(" ");
   }
 
@@ -615,7 +613,7 @@
     dropUnpinnedResults(consoleId);
   }
 
-  function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "orderBy" | "mode" | "conditions">) {
+  function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "conditions">) {
     setTableFilters(consoleId, filters);
     void runTableQuery(consoleId);
   }
@@ -1359,7 +1357,6 @@
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
             onapply={(filters) => applyTableFilters(consoleId, filters)}
-            onmode={(mode) => setTableFilters(consoleId, { ...table, mode })}
           />
         {/if}
       {/snippet}

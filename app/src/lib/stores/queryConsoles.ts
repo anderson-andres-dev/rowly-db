@@ -29,12 +29,9 @@ export interface QueryConsole {
 export interface TableTab {
   schema: string;
   name: string;
-  // Lo aplicado (lo que se ejecuta), venga del constructor o del SQL.
+  // El WHERE aplicado (lo que se ejecuta), armado por el constructor.
   where: string;
-  orderBy: string;
-  // Como se filtra: con el constructor visual o escribiendo SQL.
-  mode: "builder" | "sql";
-  // Las condiciones del constructor (se recuerdan aunque se pase a SQL).
+  // Las condiciones del constructor visual.
   conditions: FilterCondition[];
 }
 
@@ -118,13 +115,11 @@ function parseTableTab(value: unknown): TableTab | null {
   return {
     schema: candidate.schema,
     name: candidate.name,
-    // Una pestaña siempre abre en el constructor visual: el modo SQL es un
-    // cambio del momento. Lo aplicado solo se conserva si salio del
-    // constructor (un WHERE escrito a mano no se puede mostrar como
-    // condiciones, y aplicarlo oculto confundiria).
-    where: candidate.mode === "builder" && typeof candidate.where === "string" ? candidate.where : "",
-    orderBy: "",
-    mode: "builder",
+    // Lo aplicado solo se conserva si salio del constructor: un WHERE escrito
+    // a mano (versiones anteriores) no se puede mostrar como condiciones, y
+    // aplicarlo oculto confundiria.
+    where:
+      (candidate as { mode?: unknown }).mode === "builder" && typeof candidate.where === "string" ? candidate.where : "",
     conditions: Array.isArray(candidate.conditions)
       ? candidate.conditions.map(parseCondition).filter((item): item is FilterCondition => item !== null)
       : [],
@@ -473,7 +468,7 @@ export function openTableConsole(profileId: string, schema: string, name: string
     sql: "",
     filePath: null,
     savedSql: "",
-    table: { schema, name, where: "", orderBy: "", mode: "builder", conditions: [] },
+    table: { schema, name, where: "", conditions: [] },
   };
   queryConsoles.set({
     ...state,
@@ -485,7 +480,7 @@ export function openTableConsole(profileId: string, schema: string, name: string
 
 export function setTableFilters(
   id: string,
-  filters: Pick<TableTab, "where" | "orderBy" | "mode" | "conditions">,
+  filters: Pick<TableTab, "where" | "conditions">,
 ): void {
   queryConsoles.update((state) => ({
     ...state,
