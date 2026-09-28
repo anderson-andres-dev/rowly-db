@@ -2,24 +2,25 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/rowly-logo-dark.svg">
-  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="400">
+  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
 </picture>
 
-<br>
+<h3>A fast, focused SQL client for MySQL, MariaDB and PostgreSQL.</h3>
+
+<p>Free and open source. No account, no Pro edition.</p>
 
 <p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/releases"><strong>Download Rowly DB</strong></a>
+  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><strong>Download</strong></a>
   &nbsp;·&nbsp;
-  <a href="#installation">Installation</a>
+  <a href="#install">Install</a>
   &nbsp;·&nbsp;
   <a href="README.es.md">Español</a>
 </p>
 
 <p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=STARS&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=ISSUES&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/pulls"><img alt="Open pull requests" src="https://img.shields.io/github/issues-pr/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=PULL%20REQUESTS&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="docs/assets/rowly-db.webp"><img alt="View screenshot" src="https://img.shields.io/badge/SHOWCASE-SCREENSHOT-283640?style=for-the-badge&amp;labelColor=283640"></a>
+  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=flat-square&amp;label=release&amp;labelColor=283640&amp;color=00AFAF"></a>
+  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=flat-square">
+  <a href="#license"><img alt="MIT or Apache 2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache%202.0-283640?style=flat-square&amp;labelColor=283640&amp;color=00AFAF"></a>
 </p>
 
 </div>
@@ -27,84 +28,78 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/rowly-db.webp" alt="Rowly DB desktop interface in light and dark themes" width="900">
+  <img src="docs/assets/rowly-db.webp" alt="Rowly DB in light and dark themes" width="900">
 </p>
 
-## Features
+<br>
 
 <table>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/assets/features/inline-edit.webp" alt="Result grid with edited cells highlighted">
-      <br><strong>Inline editing</strong>
-      <br><sub>Double-click a cell to edit it. Changes stay highlighted until you apply them.</sub>
+      <p><strong>Edit in place</strong><br>Change any cell. Nothing is written until you apply.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/add-rows.webp" alt="Pending changes dialog with DELETE, UPDATE and INSERT statements">
-      <br><strong>Add and delete rows</strong>
-      <br><sub>Review the exact SQL before it runs. Production connections always ask first.</sub>
+      <img src="docs/assets/features/add-rows.webp" alt="Pending changes with DELETE, UPDATE and INSERT statements">
+      <p><strong>Review before it runs</strong><br>Added, edited and deleted rows become the exact SQL you approve.</p>
     </td>
   </tr>
   <tr>
-    <td width="50%" valign="top">
-      <img src="docs/assets/features/export.webp" alt="Export dialog with JSON preview">
-      <br><strong>Export data</strong>
-      <br><sub>TSV, CSV, JSON, Markdown or SQL INSERT, with a live preview.</sub>
-    </td>
     <td width="50%" valign="top">
       <img src="docs/assets/features/autocomplete.webp" alt="Autocomplete suggesting a JOIN with its ON condition">
-      <br><strong>Smart autocomplete</strong>
-      <br><sub>Suggests tables, columns and full JOINs built from foreign keys.</sub>
+      <p><strong>Autocomplete that knows your schema</strong><br>Tables, columns and whole JOINs, built from foreign keys.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/diagnostics.webp" alt="Editor flagging a misspelled table and column">
+      <p><strong>Mistakes caught as you type</strong><br>Unknown tables and columns, with the name you meant.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/diagnostics.webp" alt="Editor showing inline errors with suggestions">
-      <br><strong>Inline diagnostics</strong>
-      <br><sub>Unknown tables and columns are flagged as you type, with a suggested fix.</sub>
+      <img src="docs/assets/features/export.webp" alt="Export dialog with a JSON preview">
+      <p><strong>Export</strong><br>TSV, CSV, JSON, Markdown or SQL INSERT.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/themes.webp" alt="Settings panel with the theme gallery">
-      <br><strong>Themes</strong>
-      <br><sub>Rowly, DataGrip, VS Code, Gruvbox, Solarized, One Dark, Dracula and Nord.</sub>
+      <img src="docs/assets/features/history.webp" alt="Query history">
+      <p><strong>History</strong><br>Every query you ran, one <kbd>Ctrl</kbd>+<kbd>E</kbd> away.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/assets/features/files.webp" alt="SQL files panel next to the editor">
-      <br><strong>SQL file explorer</strong>
-      <br><sub>Open a folder of .sql files and edit them next to your connection.</sub>
+      <p><strong>Your SQL files</strong><br>Open a folder and keep your scripts next to the connection.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/history.webp" alt="Query history popup">
-      <br><strong>Query history</strong>
-      <br><sub>Ctrl+E finds and reruns any query you ran on this connection.</sub>
+      <img src="docs/assets/features/themes.webp" alt="Theme gallery in Settings">
+      <p><strong>Themes</strong><br>Eight themes, light and dark.</p>
     </td>
   </tr>
 </table>
 
-Also: MySQL, MariaDB and PostgreSQL · Passwords in the system keyring · Signed updates you confirm
+<p align="center">
+  <sub>Keyboard first &nbsp;·&nbsp; Production connections confirm every write &nbsp;·&nbsp; Passwords stay in the system keyring &nbsp;·&nbsp; Updates install when you choose</sub>
+</p>
 
-## Installation
+## Install
 
-Download your package from [Releases](https://github.com/anderson-andres-dev/rowly-db/releases).
-Run the command in the download folder. Linux packages target **x86_64**.
+Download the package for your system from the [latest release](https://github.com/anderson-andres-dev/rowly-db/releases/latest).
 
-| Linux | Install |
-| :--- | :--- |
-| Debian based `.deb` | `sudo apt install ./Rowly*.deb` |
-| Fedora based `.rpm` | `sudo dnf install ./Rowly*.rpm` |
-| Arch based `.pkg.tar.zst` | `sudo pacman -U ./rowly-db_*.pkg.tar.zst` |
-| AppImage | `chmod +x ./Rowly*.AppImage`<br>`./Rowly*.AppImage` |
+| System | Package | Install |
+| :--- | :--- | :--- |
+| Windows | `.msi` or `.exe` | Run the installer |
+| macOS | `.dmg` | Open it and drag Rowly DB to Applications |
+| Debian, Ubuntu | `.deb` | `sudo apt install ./Rowly*.deb` |
+| Fedora | `.rpm` | `sudo dnf install ./Rowly*.rpm` |
+| Arch | `.pkg.tar.zst` | `sudo pacman -U ./rowly-db_*.pkg.tar.zst` |
+| Any Linux | `.AppImage` | `chmod +x Rowly*.AppImage && ./Rowly*.AppImage` |
 
-For **Windows**, run the `.msi` or `.exe`. For **macOS**, open the `.dmg` for
-your processor and drag Rowly DB to Applications.
+Linux packages are x86_64. New versions show up in **Settings → Updates**.
 
-Updates are available in **Settings → Updates**.
+<details>
+<summary><strong>Build from source</strong></summary>
+<br>
 
-## Build from source
-
-Requires Rust 1.85+, Node.js 20.19+, and the [Tauri dependencies](https://tauri.app/start/prerequisites/).
+Requires Rust 1.85+, Node.js 20.19+ and the [Tauri prerequisites](https://tauri.app/start/prerequisites/).
 
 ```bash
 git clone https://github.com/anderson-andres-dev/rowly-db.git
@@ -115,10 +110,12 @@ npm run tauri build
 
 Packages are written to `target/release/bundle/`.
 
+</details>
+
 ## Contributing
 
-[Development guide](CONTRIBUTING.md) · [Report an issue](https://github.com/anderson-andres-dev/rowly-db/issues)
+Bug reports and pull requests are welcome. Start with the [development guide](CONTRIBUTING.md) or [open an issue](https://github.com/anderson-andres-dev/rowly-db/issues).
 
 ## License
 
-Dual licensed. Choose [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).
+Rowly DB is dual licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your choice.

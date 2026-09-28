@@ -2,13 +2,15 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/rowly-logo-dark.svg">
-  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="400">
+  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
 </picture>
 
-<br>
+<h3>Un cliente SQL rápido y enfocado para MySQL, MariaDB y PostgreSQL.</h3>
+
+<p>Libre y de código abierto. Sin cuentas, sin edición Pro.</p>
 
 <p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/releases"><strong>Descargar Rowly DB</strong></a>
+  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><strong>Descargar</strong></a>
   &nbsp;·&nbsp;
   <a href="#instalación">Instalación</a>
   &nbsp;·&nbsp;
@@ -16,10 +18,9 @@
 </p>
 
 <p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/stargazers"><img alt="Estrellas" src="https://img.shields.io/github/stars/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=STARS&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/issues"><img alt="Incidencias abiertas" src="https://img.shields.io/github/issues/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=ISSUES&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/pulls"><img alt="Solicitudes de cambio abiertas" src="https://img.shields.io/github/issues-pr/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=PULL%20REQUESTS&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <a href="docs/assets/rowly-db.webp"><img alt="Ver captura" src="https://img.shields.io/badge/SHOWCASE-SCREENSHOT-283640?style=for-the-badge&amp;labelColor=283640"></a>
+  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Última versión" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=flat-square&amp;label=versión&amp;labelColor=283640&amp;color=00AFAF"></a>
+  <img alt="Windows, macOS y Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=flat-square">
+  <a href="#licencia"><img alt="MIT o Apache 2.0" src="https://img.shields.io/badge/licencia-MIT%20%2F%20Apache%202.0-283640?style=flat-square&amp;labelColor=283640&amp;color=00AFAF"></a>
 </p>
 
 </div>
@@ -27,82 +28,76 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/rowly-db.webp" alt="Interfaz de Rowly DB con temas claro y oscuro" width="900">
+  <img src="docs/assets/rowly-db.webp" alt="Rowly DB con tema claro y oscuro" width="900">
 </p>
 
-## Funciones
+<br>
 
 <table>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/assets/features/inline-edit.webp" alt="Grid de resultados con celdas editadas resaltadas">
-      <br><strong>Edición en línea</strong>
-      <br><sub>Doble clic en una celda para editarla. Los cambios quedan marcados hasta aplicarlos.</sub>
+      <p><strong>Edición en la celda</strong><br>Cambia cualquier valor. Nada se escribe hasta que aplicas.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/add-rows.webp" alt="Diálogo de cambios pendientes con DELETE, UPDATE e INSERT">
-      <br><strong>Agregar y borrar registros</strong>
-      <br><sub>Revisa el SQL exacto antes de ejecutarlo. En producción siempre pide confirmación.</sub>
+      <img src="docs/assets/features/add-rows.webp" alt="Cambios pendientes con sentencias DELETE, UPDATE e INSERT">
+      <p><strong>Revisa antes de ejecutar</strong><br>Las filas que agregas, editas o borras se vuelven el SQL exacto que apruebas.</p>
     </td>
   </tr>
   <tr>
-    <td width="50%" valign="top">
-      <img src="docs/assets/features/export.webp" alt="Diálogo de exportación con vista previa en JSON">
-      <br><strong>Exportar datos</strong>
-      <br><sub>TSV, CSV, JSON, Markdown o SQL INSERT, con vista previa en vivo.</sub>
-    </td>
     <td width="50%" valign="top">
       <img src="docs/assets/features/autocomplete.webp" alt="Autocompletado que sugiere un JOIN con su condición ON">
-      <br><strong>Autocompletado inteligente</strong>
-      <br><sub>Sugiere tablas, columnas y JOIN completos a partir de las claves foráneas.</sub>
+      <p><strong>Autocompletado que conoce tu esquema</strong><br>Tablas, columnas y JOIN completos a partir de las claves foráneas.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/diagnostics.webp" alt="Editor marcando una tabla y una columna mal escritas">
+      <p><strong>Errores a la vista mientras escribes</strong><br>Tablas y columnas que no existen, con el nombre que querías.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/diagnostics.webp" alt="Editor con errores en línea y sugerencias">
-      <br><strong>Diagnósticos en el editor</strong>
-      <br><sub>Marca tablas y columnas que no existen mientras escribes y sugiere la corrección.</sub>
+      <img src="docs/assets/features/export.webp" alt="Exportación con vista previa en JSON">
+      <p><strong>Exportar</strong><br>TSV, CSV, JSON, Markdown o SQL INSERT.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/themes.webp" alt="Ajustes con la galería de temas">
-      <br><strong>Temas</strong>
-      <br><sub>Rowly, DataGrip, VS Code, Gruvbox, Solarized, One Dark, Dracula y Nord.</sub>
+      <img src="docs/assets/features/history.webp" alt="Historial de consultas">
+      <p><strong>Historial</strong><br>Cada consulta que ejecutaste, a un <kbd>Ctrl</kbd>+<kbd>E</kbd>.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/assets/features/files.webp" alt="Panel de archivos SQL junto al editor">
-      <br><strong>Explorador de archivos</strong>
-      <br><sub>Abre una carpeta de archivos .sql y edítalos junto a tu conexión.</sub>
+      <p><strong>Tus archivos SQL</strong><br>Abre una carpeta y ten tus scripts junto a la conexión.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/history.webp" alt="Historial de consultas">
-      <br><strong>Historial de consultas</strong>
-      <br><sub>Ctrl+E busca y vuelve a ejecutar cualquier consulta de esta conexión.</sub>
+      <img src="docs/assets/features/themes.webp" alt="Galería de temas en Ajustes">
+      <p><strong>Temas</strong><br>Ocho temas, claros y oscuros.</p>
     </td>
   </tr>
 </table>
 
-Además: MySQL, MariaDB y PostgreSQL · Contraseñas en el almacén seguro del sistema · Actualizaciones firmadas que tú confirmas
+<p align="center">
+  <sub>Pensado para el teclado &nbsp;·&nbsp; En producción cada escritura pide confirmación &nbsp;·&nbsp; Las contraseñas quedan en el almacén seguro del sistema &nbsp;·&nbsp; Las actualizaciones se instalan cuando tú decides</sub>
+</p>
 
 ## Instalación
 
-Descarga tu paquete desde [Releases](https://github.com/anderson-andres-dev/rowly-db/releases).
-Ejecuta el comando en la carpeta de descargas. Los paquetes Linux son para **x86_64**.
+Descarga el paquete para tu sistema desde la [última versión](https://github.com/anderson-andres-dev/rowly-db/releases/latest).
 
-| Linux | Instalar |
-| :--- | :--- |
-| Basadas en Debian `.deb` | `sudo apt install ./Rowly*.deb` |
-| Basadas en Fedora `.rpm` | `sudo dnf install ./Rowly*.rpm` |
-| Basadas en Arch `.pkg.tar.zst` | `sudo pacman -U ./rowly-db_*.pkg.tar.zst` |
-| AppImage | `chmod +x ./Rowly*.AppImage`<br>`./Rowly*.AppImage` |
+| Sistema | Paquete | Instalar |
+| :--- | :--- | :--- |
+| Windows | `.msi` o `.exe` | Ejecuta el instalador |
+| macOS | `.dmg` | Ábrelo y arrastra Rowly DB a Aplicaciones |
+| Debian, Ubuntu | `.deb` | `sudo apt install ./Rowly*.deb` |
+| Fedora | `.rpm` | `sudo dnf install ./Rowly*.rpm` |
+| Arch | `.pkg.tar.zst` | `sudo pacman -U ./rowly-db_*.pkg.tar.zst` |
+| Cualquier Linux | `.AppImage` | `chmod +x Rowly*.AppImage && ./Rowly*.AppImage` |
 
-En **Windows**, ejecuta el `.msi` o `.exe`. En **macOS**, abre el `.dmg` para tu
-procesador y arrastra Rowly DB a Aplicaciones.
+Los paquetes Linux son para x86_64. Las nuevas versiones aparecen en **Ajustes → Actualizaciones**.
 
-Las nuevas versiones aparecen en **Ajustes → Actualizaciones**.
-
-## Compilar desde el código
+<details>
+<summary><strong>Compilar desde el código</strong></summary>
+<br>
 
 Necesitas Rust 1.85+, Node.js 20.19+ y las [dependencias de Tauri](https://tauri.app/start/prerequisites/).
 
@@ -115,10 +110,12 @@ npm run tauri build
 
 Los paquetes quedan en `target/release/bundle/`.
 
+</details>
+
 ## Contribuir
 
-[Guía de desarrollo](CONTRIBUTING.md) · [Reportar un problema](https://github.com/anderson-andres-dev/rowly-db/issues)
+Los reportes de errores y los pull requests son bienvenidos. Empieza por la [guía de desarrollo](CONTRIBUTING.md) o [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues).
 
 ## Licencia
 
-Licencia dual. Elige [MIT](LICENSE-MIT) o [Apache 2.0](LICENSE-APACHE).
+Rowly DB tiene licencia dual: [MIT](LICENSE-MIT) o [Apache 2.0](LICENSE-APACHE), a tu elección.
