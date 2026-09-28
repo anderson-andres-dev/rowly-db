@@ -29,7 +29,7 @@
   import { backendText, invoke, type BackendMessage } from "$lib/backend";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
   import { sql } from "@codemirror/lang-sql";
@@ -365,6 +365,7 @@
                 defaultTable,
                 fkIndex: sqlSchema.fkIndex,
                 tableIndex: sqlSchema.tableIndex,
+                tableAliases: get(editorSettings).tableAliases,
               }),
             ],
           }),
@@ -778,6 +779,11 @@
     view.dispatch({
       effects: behaviorCompartment.reconfigure(autoUppercase ? autoUppercaseSqlKeywords : []),
     });
+  });
+
+  $effect(() => {
+    $editorSettings.tableAliases;
+    untrack(reconfigureCompletion);
   });
 
   $effect(() => {

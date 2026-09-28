@@ -83,3 +83,50 @@ describe("splitStatements", () => {
     expect(parts("SELECT 1 # 2; SELECT 3;", postgres)).toEqual(["SELECT 1 # 2;", "SELECT 3;"]);
   });
 });
+
+describe("splitStatements - linea en blanco", () => {
+  const texts = (text: string) => splitStatements(text, mysql).map(({ from, to }) => text.slice(from, to));
+
+  it("separa dos consultas sin ;", () => {
+    expect(texts("SELECT * FROM users\n\nSELECT * FROM orders")).toEqual(["SELECT * FROM users", "SELECT * FROM orders"]);
+  });
+
+  it("con espacios en la linea vacia y con \\r\\n", () => {
+    expect(texts("SELECT 1\n   \t\nSELECT 2")).toEqual(["SELECT 1", "SELECT 2"]);
+    expect(texts("SELECT 1\r\n\r\nSELECT 2")).toEqual(["SELECT 1", "SELECT 2"]);
+  });
+
+  it("un solo salto de linea no separa", () => {
+    expect(texts("SELECT *\nFROM users")).toEqual(["SELECT *\nFROM users"]);
+  });
+
+  it("dentro de parentesis no separa", () => {
+    const text = "SELECT * FROM (\n  SELECT id FROM users\n\n) u";
+    expect(texts(text)).toEqual([text]);
+  });
+
+  it("tras una coma o un operador no separa", () => {
+    const cte = "WITH a AS (SELECT 1),\n\nb AS (SELECT 2)\nSELECT * FROM a, b";
+    expect(texts(cte)).toEqual([cte]);
+    expect(texts("SELECT 1 +\n\n2")).toEqual(["SELECT 1 +\n\n2"]);
+  });
+
+  it("dentro de comillas o de un comentario de bloque no separa", () => {
+    const quoted = "SELECT 'a\n\nb'";
+    expect(texts(quoted)).toEqual([quoted]);
+    const comment = "SELECT 1 /* nota\n\nlarga */ + 2";
+    expect(texts(comment)).toEqual([comment]);
+  });
+
+  it("el ; sigue separando como siempre", () => {
+    expect(texts("SELECT 1; SELECT 2;\n\nSELECT 3")).toEqual(["SELECT 1;", "SELECT 2;", "SELECT 3"]);
+  });
+
+  it("un comentario entre sentencias no forma una sentencia", () => {
+    expect(texts("SELECT 1\n\n-- siguiente\nSELECT 2")).toEqual(["SELECT 1", "SELECT 2"]);
+  });
+
+  it("SELECT * seguido de una linea en blanco tambien separa", () => {
+    expect(texts("SELECT *\n\nFROM users")).toEqual(["SELECT *", "FROM users"]);
+  });
+});

@@ -14,9 +14,10 @@ import type { QueryExecutionResult } from "$lib/types";
 
 // Estado de la ultima sentencia ejecutada desde el editor, al estilo
 // DataGrip: un icono en el margen de su primera linea (ejecutando / ok /
-// error) y el tiempo en ms al final de la sentencia. El rango se mapea con
-// cada edicion, asi que el marcador sigue a la sentencia si se escribe
-// antes o dentro de ella.
+// error) y el tiempo en ms al final de la linea donde termina. El rango se
+// mapea con cada edicion, asi que el marcador sigue a la sentencia si se
+// escribe antes o dentro de ella. El tiempo nunca queda pegado al cursor:
+// va al final de la linea y se oculta mientras esa linea se edita.
 //
 // "pending" es el tramo en que el guard de sentencias destructivas espera
 // confirmacion: se conserva el rango (si se confirma, el resultado vuelve a
@@ -239,18 +240,43 @@ class ExecutionTimeWidget extends WidgetType {
   }
 }
 
+// Las lineas con un cursor, si el editor tiene el foco: ahi no se pinta el
+// tiempo, que taparia lo que se escribe.
+function editedLines(state: EditorState, focused: boolean): Set<number> {
+  const lines = new Set<number>();
+  if (!focused) return lines;
+  for (const range of state.selection.ranges) lines.add(state.doc.lineAt(range.head).number);
+  return lines;
+}
+
+// Donde va el tiempo de cada parte: al final de la linea en que termina,
+// salvo que esa linea se este editando.
+export function executionTimePositions(
+  state: EditorState,
+  parts: readonly ExecutionPart[],
+  focused: boolean,
+): { pos: number; text: string }[] {
+  const edited = editedLines(state, focused);
+  const positions: { pos: number; text: string }[] = [];
+  for (const part of parts) {
+    if (part.executionTimeMs === undefined) continue;
+    const line = state.doc.lineAt(part.to);
+    if (edited.has(line.number)) continue;
+    positions.push({ pos: line.to, text: formatExecutionTime(part.executionTimeMs) });
+  }
+  return positions;
+}
+
 // Solo lo visible (ver visibleParts).
 function executionTimeDecorations(view: EditorView): DecorationSet {
   const { state } = view;
   const marker = state.field(executionMarkerField);
   const widgets = view.visibleRanges.flatMap(({ from, to }) =>
-    visibleParts(marker, state.doc.length, from, to)
-      .filter((part) => part.executionTimeMs !== undefined && part.to >= from && part.to <= to)
-      .map((part) =>
-        Decoration.widget({ widget: new ExecutionTimeWidget(formatExecutionTime(part.executionTimeMs!)), side: 1 }).range(
-          part.to,
-        ),
-      ),
+    executionTimePositions(
+      state,
+      visibleParts(marker, state.doc.length, from, to).filter((part) => part.to >= from && part.to <= to),
+      view.hasFocus,
+    ).map(({ pos, text }) => Decoration.widget({ widget: new ExecutionTimeWidget(text), side: 1 }).range(pos)),
   );
   return Decoration.set(widgets, true);
 }
@@ -267,6 +293,8 @@ const executionTimes = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
+        update.selectionSet ||
+        update.focusChanged ||
         update.startState.field(executionMarkerField) !== update.state.field(executionMarkerField)
       ) {
         this.decorations = executionTimeDecorations(update.view);

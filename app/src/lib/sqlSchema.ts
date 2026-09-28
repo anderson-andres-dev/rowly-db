@@ -11,6 +11,7 @@ import { boostFor, recordUsage } from "$lib/usageStats";
 import { classifyContext, sqlTokens } from "$lib/sqlContext";
 import { statementTextAt } from "$lib/sqlStatementIndex";
 import { aliasFor, relationRef, statementRelations, takenNames, type StatementRelation } from "$lib/sqlRelations";
+import type { TableAliasMode } from "$lib/stores/editorSettings";
 import { translate, type MessageKey } from "$lib/i18n";
 import { completionPolicy, type CompletionPolicy } from "$lib/sqlCompletionPolicy";
 import { standardSql, type SqlProfile } from "$lib/engines";
@@ -361,6 +362,7 @@ interface SmartEnv {
   tableIndex: TableIndex;
   defaultSchema?: string;
   reserved: ReadonlySet<string>;
+  tableAliases: TableAliasMode;
 }
 
 interface StatementInfo {
@@ -460,8 +462,12 @@ function joinOptions(env: SmartEnv, info: StatementInfo, withKeyword: boolean): 
   const { relations, taken } = info;
   const aliases = new Map<string, string | undefined>();
   const last = relations.length - 1;
+  // Un JOIN ya deja dos tablas en la consulta: "multiple" tambien lleva alias.
+  const withAliases = env.tableAliases !== "never";
   return joinCandidates(env, relations).map((candidate) => {
-    if (!aliases.has(candidate.target)) aliases.set(candidate.target, aliasFor(candidate.target, taken, env.reserved));
+    if (!aliases.has(candidate.target)) {
+      aliases.set(candidate.target, withAliases ? aliasFor(candidate.target, taken, env.reserved) : undefined);
+    }
     const alias = aliases.get(candidate.target);
     const name = writtenName(env, candidate.target);
     const ref = alias ?? env.identifier(candidate.target);
@@ -489,6 +495,9 @@ const ALIAS_AFTER = /^\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)/i;
 
 // Una tabla elegida en el FROM o en un JOIN escrito a mano: con su alias
 // (si la sentencia es una consulta y la tabla no tiene ya uno escrito).
+// Solo se agrega al elegir la sugerencia: una tabla escrita a mano nunca se
+// toca, y un alias que el usuario borra no vuelve. Con "multiple", la
+// primera tabla de la consulta va sin alias.
 // `table`: el nombre del que sale el alias; `text`: como se inserta.
 function withAlias(
   option: Completion,
@@ -497,6 +506,7 @@ function withAlias(
   table = option.label,
   text = env.identifier(table),
 ): Completion {
+  if (env.tableAliases === "never" || (env.tableAliases === "multiple" && info.relations.length === 0)) return option;
   const alias = aliasFor(table, info.taken, env.reserved);
   if (!alias) return option;
   return {
@@ -792,6 +802,7 @@ export function buildCompletionSource(options: {
   defaultTable?: string;
   fkIndex: FkIndex;
   tableIndex?: TableIndex;
+  tableAliases?: TableAliasMode;
 }): CompletionSource {
   const { dialect, engine, schema, defaultSchema, defaultTable, fkIndex } = options;
   const schemaSource = schemaCompletionSource({ dialect, schema, defaultSchema, defaultTable });
@@ -808,6 +819,7 @@ export function buildCompletionSource(options: {
     tableIndex: options.tableIndex ?? EMPTY_TABLE_INDEX,
     defaultSchema,
     reserved: new Set([...reservedWords(dialect), ...engine.reservedWords]),
+    tableAliases: options.tableAliases ?? "always",
   };
 
   return async (context) => {
