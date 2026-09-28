@@ -5,9 +5,7 @@
   <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
 </picture>
 
-<h3>A fast, focused SQL client.</h3>
-
-<p>Free and open source. No account, no Pro edition.</p>
+<h3>Free &amp; Open Source SQL Client</h3>
 
 <p>
   <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><strong>Download</strong></a>
@@ -20,7 +18,6 @@
 <p>
   <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=flat-square&amp;label=release&amp;labelColor=283640&amp;color=00AFAF"></a>
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=flat-square">
-  <a href="#license"><img alt="MIT or Apache 2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache%202.0-283640?style=flat-square&amp;labelColor=283640&amp;color=00AFAF"></a>
 </p>
 
 </div>
