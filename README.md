@@ -28,7 +28,10 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/rowly-db.webp" alt="Rowly DB in light and dark themes" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rowly-db-dark.webp">
+    <img src="docs/assets/rowly-db.webp" alt="Rowly DB in light and dark themes" width="900">
+  </picture>
 </p>
 
 <br>
@@ -36,41 +39,65 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/inline-edit.webp" alt="Result grid with edited cells highlighted">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/inline-edit-dark.webp">
+        <img src="docs/assets/features/inline-edit-light.webp" alt="Result grid with edited cells highlighted">
+      </picture>
       <p><strong>Edit in place</strong><br>Change any cell. Nothing is written until you apply.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/add-rows.webp" alt="Pending changes with DELETE, UPDATE and INSERT statements">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/add-rows-dark.webp">
+        <img src="docs/assets/features/add-rows-light.webp" alt="Pending changes with DELETE, UPDATE and INSERT statements">
+      </picture>
       <p><strong>Review before it runs</strong><br>Added, edited and deleted rows become the exact SQL you approve.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/autocomplete.webp" alt="Autocomplete suggesting a JOIN with its ON condition">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/autocomplete-dark.webp">
+        <img src="docs/assets/features/autocomplete-light.webp" alt="Autocomplete suggesting a JOIN with its ON condition">
+      </picture>
       <p><strong>Autocomplete that knows your schema</strong><br>Tables, columns and whole JOINs, built from foreign keys.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/diagnostics.webp" alt="Editor flagging a misspelled table and column">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/diagnostics-dark.webp">
+        <img src="docs/assets/features/diagnostics-light.webp" alt="Editor flagging a misspelled table and column">
+      </picture>
       <p><strong>Mistakes caught as you type</strong><br>Unknown tables and columns, with the name you meant.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/export.webp" alt="Export dialog with a JSON preview">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/export-dark.webp">
+        <img src="docs/assets/features/export-light.webp" alt="Export dialog with a JSON preview">
+      </picture>
       <p><strong>Export</strong><br>TSV, CSV, JSON, Markdown or SQL INSERT.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/history.webp" alt="Query history">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/history-dark.webp">
+        <img src="docs/assets/features/history-light.webp" alt="Query history">
+      </picture>
       <p><strong>History</strong><br>Every query you ran, one <kbd>Ctrl</kbd>+<kbd>E</kbd> away.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/files.webp" alt="SQL files panel next to the editor">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/files-dark.webp">
+        <img src="docs/assets/features/files-light.webp" alt="SQL files panel next to the editor">
+      </picture>
       <p><strong>Your SQL files</strong><br>Open a folder and keep your scripts next to the connection.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/themes.webp" alt="Theme gallery in Settings">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/themes-dark.webp">
+        <img src="docs/assets/features/themes-light.webp" alt="Theme gallery in Settings">
+      </picture>
       <p><strong>Themes</strong><br>Eight themes, light and dark.</p>
     </td>
   </tr>

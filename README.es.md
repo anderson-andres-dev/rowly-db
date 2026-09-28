@@ -28,7 +28,10 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/rowly-db.webp" alt="Rowly DB con tema claro y oscuro" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rowly-db-dark.webp">
+    <img src="docs/assets/rowly-db.webp" alt="Rowly DB con tema claro y oscuro" width="900">
+  </picture>
 </p>
 
 <br>
@@ -36,41 +39,65 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/inline-edit.webp" alt="Grid de resultados con celdas editadas resaltadas">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/inline-edit-dark.webp">
+        <img src="docs/assets/features/inline-edit-light.webp" alt="Grid de resultados con celdas editadas resaltadas">
+      </picture>
       <p><strong>Edición en la celda</strong><br>Cambia cualquier valor. Nada se escribe hasta que aplicas.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/add-rows.webp" alt="Cambios pendientes con sentencias DELETE, UPDATE e INSERT">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/add-rows-dark.webp">
+        <img src="docs/assets/features/add-rows-light.webp" alt="Cambios pendientes con sentencias DELETE, UPDATE e INSERT">
+      </picture>
       <p><strong>Revisa antes de ejecutar</strong><br>Las filas que agregas, editas o borras se vuelven el SQL exacto que apruebas.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/autocomplete.webp" alt="Autocompletado que sugiere un JOIN con su condición ON">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/autocomplete-dark.webp">
+        <img src="docs/assets/features/autocomplete-light.webp" alt="Autocompletado que sugiere un JOIN con su condición ON">
+      </picture>
       <p><strong>Autocompletado que conoce tu esquema</strong><br>Tablas, columnas y JOIN completos a partir de las claves foráneas.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/diagnostics.webp" alt="Editor marcando una tabla y una columna mal escritas">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/diagnostics-dark.webp">
+        <img src="docs/assets/features/diagnostics-light.webp" alt="Editor marcando una tabla y una columna mal escritas">
+      </picture>
       <p><strong>Errores a la vista mientras escribes</strong><br>Tablas y columnas que no existen, con el nombre que querías.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/export.webp" alt="Exportación con vista previa en JSON">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/export-dark.webp">
+        <img src="docs/assets/features/export-light.webp" alt="Exportación con vista previa en JSON">
+      </picture>
       <p><strong>Exportar</strong><br>TSV, CSV, JSON, Markdown o SQL INSERT.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/history.webp" alt="Historial de consultas">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/history-dark.webp">
+        <img src="docs/assets/features/history-light.webp" alt="Historial de consultas">
+      </picture>
       <p><strong>Historial</strong><br>Cada consulta que ejecutaste, a un <kbd>Ctrl</kbd>+<kbd>E</kbd>.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/files.webp" alt="Panel de archivos SQL junto al editor">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/files-dark.webp">
+        <img src="docs/assets/features/files-light.webp" alt="Panel de archivos SQL junto al editor">
+      </picture>
       <p><strong>Tus archivos SQL</strong><br>Abre una carpeta y ten tus scripts junto a la conexión.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/assets/features/themes.webp" alt="Galería de temas en Ajustes">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/themes-dark.webp">
+        <img src="docs/assets/features/themes-light.webp" alt="Galería de temas en Ajustes">
+      </picture>
       <p><strong>Temas</strong><br>Ocho temas, claros y oscuros.</p>
     </td>
   </tr>
