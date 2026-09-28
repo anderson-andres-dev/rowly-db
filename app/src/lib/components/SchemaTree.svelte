@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import {
     CalendarClock,
     Check,
@@ -18,6 +19,8 @@
     ListOrdered,
     ListTree,
     LoaderCircle,
+    Pin,
+    PinOff,
     LockOpen,
     Minus,
     RefreshCw,
@@ -33,10 +36,12 @@
   import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/explorerTree";
   import { t } from "$lib/i18n";
   import type { DatabaseExplorer } from "$lib/types";
+  import { pinnedTables, togglePinnedTable } from "$lib/stores/pinnedTables";
 
   let {
     explorer,
     connectionLabel,
+    profileId,
     refreshing = false,
     loadingSchemas = false,
     hideShortcut = "",
@@ -50,6 +55,8 @@
     explorer: DatabaseExplorer | null;
     // "schema@host", la misma etiqueta de origen que usa Workspace.svelte.
     connectionLabel: string;
+    // Conexion activa: las tablas fijadas se guardan por conexion.
+    profileId: string;
     refreshing?: boolean;
     loadingSchemas?: boolean;
     hideShortcut?: string;
@@ -78,6 +85,7 @@
   }
 
   const ICONS: Record<ExplorerIcon, IconComponent> = {
+    pinned: Pin,
     schema: Grid2x2,
     folder: Folder,
     table: Table,
@@ -100,6 +108,27 @@
   };
 
   const CONNECTION_KEY = "connection";
+
+  // Bordes que se desvanecen al hacer scroll (como las pestañas de consola):
+  // arriba solo si hay contenido oculto arriba, abajo si queda mas por ver.
+  function scrollFade(node: HTMLElement) {
+    const update = () => {
+      node.classList.toggle("fade-top", node.scrollTop > 1);
+      node.classList.toggle("fade-bottom", node.scrollTop + node.clientHeight < node.scrollHeight - 1);
+    };
+    // El contenido cambia de alto al abrir o cerrar ramas del arbol.
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    for (const child of node.children) observer.observe(child);
+    node.addEventListener("scroll", update, { passive: true });
+    update();
+    return {
+      destroy() {
+        observer.disconnect();
+        node.removeEventListener("scroll", update);
+      },
+    };
+  }
 
   let filter = $state("");
   // Estado explicito de cada nodo que el usuario abrio o cerro; lo que no
@@ -125,7 +154,21 @@
           : $t("explorer.tls.unknown");
     return `${connectionLabel}\n${explorer.serverVersion} · ${tls}`;
   });
-  const nodes = $derived(explorer ? buildExplorerTree(explorer, filter) : []);
+  const nodes = $derived(
+    explorer ? buildExplorerTree(explorer, filter, $pinnedTables[profileId] ?? [], $t("explorer.pinned")) : [],
+  );
+
+  // Fijar / desfijar una tabla: el alfiler de la fila o la tecla P con la
+  // fila enfocada.
+  function togglePin(node: ExplorerNode) {
+    if (node.relation) togglePinnedTable(profileId, node.relation.schema, node.relation.name);
+  }
+
+  function onRowKeydown(event: KeyboardEvent, node: ExplorerNode) {
+    if (!node.relation || event.ctrlKey || event.altKey || event.metaKey || event.key.toLowerCase() !== "p") return;
+    event.preventDefault();
+    togglePin(node);
+  }
   const visibleSchemas = $derived(new Set(explorer?.schemas.map((objects) => objects.schema) ?? []));
 
   function isOpen(node: ExplorerNode): boolean {
@@ -203,13 +246,15 @@
   {@const hasChildren = !!node.children && node.children.length > 0}
   {@const open = hasChildren && isOpen(node)}
   <li role="treeitem" aria-expanded={hasChildren ? open : undefined} aria-selected="false">
+    <div class="row-wrap" class:relation={!!node.relation}>
     {#if hasChildren}
       <button
         type="button"
         class="row"
         style:--depth={depth}
-        title={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
         onclick={() => toggle(node.key, open)}
+        onkeydown={(event) => onRowKeydown(event, node)}
         ondblclick={() => {
           if (!node.relation) return;
           // El doble clic ya alterno dos veces (abrio y cerro): se deja como
@@ -225,12 +270,29 @@
       <div
         class="row leaf"
         style:--depth={depth}
-        title={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
         ondblclick={() => node.relation && onopentable(node.relation.schema, node.relation.name)}
       >
         {@render nodeContent(node, Icon)}
       </div>
     {/if}
+    {#if node.relation}
+      <button
+        type="button"
+        class="pin-toggle"
+        class:on={node.pinned}
+        tabindex="-1"
+        use:tooltip={node.pinned ? $t("explorer.unpin") : $t("explorer.pin")}
+        onclick={() => togglePin(node)}
+      >
+        {#if node.key.startsWith("pinned/")}
+          <PinOff size={12} aria-hidden="true" />
+        {:else}
+          <Pin size={12} aria-hidden="true" />
+        {/if}
+      </button>
+    {/if}
+    </div>
 
     {#if open}
       <ul role="group">
@@ -252,7 +314,7 @@
     <span class="detail">{node.detail}</span>
   {/if}
   {#if node.warnings}
-    <span class="warning" title={node.warnings.join("\n")}>
+    <span class="warning" use:tooltip={node.warnings.join("\n")}>
       <TriangleAlert size={12} aria-label={$t("explorer.schema.warnings")} />
     </span>
   {/if}
@@ -265,7 +327,7 @@
       <button
         type="button"
         class="action"
-        title={$t("explorer.open.label")}
+        use:tooltip={$t("explorer.open.label")}
         aria-label={$t("explorer.open.label")}
         aria-haspopup="menu"
         onclick={openMenu}
@@ -275,7 +337,7 @@
       <button
         type="button"
         class="action"
-        title={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
+        use:tooltip={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
         aria-label={anyOpen ? $t("explorer.collapseAll") : $t("explorer.expandAll")}
         onclick={() => (anyOpen ? collapseAll() : expandAll())}
       >
@@ -289,7 +351,7 @@
         type="button"
         class="action"
         class:spinning={refreshing}
-        title={$t("explorer.refresh")}
+        use:tooltip={$t("explorer.refresh")}
         aria-label={$t("explorer.refresh.label")}
         disabled={refreshing}
         onclick={onrefresh}
@@ -299,7 +361,7 @@
       <button
         type="button"
         class="action"
-        title={hideShortcut ? $t("explorer.hide.withShortcut", { shortcut: hideShortcut }) : $t("explorer.hide")}
+        use:tooltip={hideShortcut ? $t("explorer.hide.withShortcut", { shortcut: hideShortcut }) : $t("explorer.hide")}
         aria-label={$t("explorer.hide.label")}
         onclick={onhide}
       >
@@ -323,7 +385,7 @@
     {/if}
   </div>
 
-  <nav class="tree-scroll" aria-label={$t("explorer.tree.label")}>
+  <nav class="tree-scroll" aria-label={$t("explorer.tree.label")} use:scrollFade>
     <ul class="tree" role="tree">
       <li role="treeitem" aria-expanded={isConnectionOpen()} aria-selected="false">
         <div class="connection-row">
@@ -331,7 +393,7 @@
             type="button"
             class="row"
             style:--depth={0}
-            title={connectionTitle}
+            use:tooltip={connectionTitle}
             onclick={() => toggle(CONNECTION_KEY, isConnectionOpen())}
           >
             {@render chevron(isConnectionOpen())}
@@ -340,7 +402,7 @@
             {#if unencrypted}
               <span
                 class="warning"
-                title={explorer?.tls.fellBack
+                use:tooltip={explorer?.tls.fellBack
                   ? $t("explorer.unencrypted.fellBack")
                   : $t("explorer.unencrypted.noTls")}
               >
@@ -356,7 +418,7 @@
                 class="schema-count"
                 aria-haspopup="true"
                 aria-expanded={schemaPickerOpen}
-                title={$t("explorer.schemas.pick")}
+                use:tooltip={$t("explorer.schemas.pick")}
                 onclick={() => (schemaPickerOpen = !schemaPickerOpen)}
               >
                 {#if loadingSchemas}
@@ -367,21 +429,21 @@
               </button>
 
               {#if schemaPickerOpen}
-                <div class="schema-menu" role="menu" aria-label={$t("explorer.schemas.menu")}>
+                <div class="ui-menu schema-menu" role="menu" aria-label={$t("explorer.schemas.menu")}>
                   {#each explorer.availableSchemas as schema (schema)}
                     {@const isDefault = schema === explorer.defaultSchema}
                     <button
                       type="button"
                       role="menuitemcheckbox"
                       aria-checked={visibleSchemas.has(schema)}
-                      class="schema-option"
+                      class="ui-menu-item schema-option"
                       disabled={isDefault || loadingSchemas}
-                      title={isDefault ? $t("explorer.schemas.defaultTitle") : undefined}
+                      use:tooltip={isDefault ? $t("explorer.schemas.defaultTitle") : undefined}
                       onclick={() => toggleSchema(schema)}
                     >
-                      <span class="checkbox" class:checked={visibleSchemas.has(schema)}>
+                      <span class="ui-checkbox-box">
                         {#if visibleSchemas.has(schema)}
-                          <Check size={11} aria-hidden="true" />
+                          <Check size={10} strokeWidth={3} aria-hidden="true" />
                         {/if}
                       </span>
                       <span class="label">{schema}</span>
@@ -519,20 +581,19 @@
   .filter input {
     box-sizing: border-box;
     width: 100%;
-    min-height: 1.75rem;
-    padding: var(--space-1) var(--space-5) var(--space-1) 1.75rem;
-    border: 1px solid var(--border);
+    height: 1.75rem;
+    padding: 0 var(--space-5) 0 1.75rem;
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-primary);
     font: inherit;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   .filter input:focus-visible {
     border-color: var(--focus-ring);
-    outline: 1px solid var(--focus-ring);
-    outline-offset: 0;
+    outline: none;
   }
 
   .clear-filter {
@@ -556,10 +617,30 @@
   }
 
   .tree-scroll {
+    --fade-top: 0px;
+    --fade-bottom: 0px;
     overflow-y: auto;
     min-height: 0;
     padding: 0 var(--space-1) var(--space-2);
     box-sizing: border-box;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--fade-top),
+      #000 calc(100% - var(--fade-bottom)),
+      transparent
+    );
+    transition:
+      --fade-top 180ms ease,
+      --fade-bottom 180ms ease;
+  }
+
+  .tree-scroll:global(.fade-top) {
+    --fade-top: 1.5rem;
+  }
+
+  .tree-scroll:global(.fade-bottom) {
+    --fade-bottom: 1.5rem;
   }
 
   ul {
@@ -592,6 +673,60 @@
 
   button.row {
     cursor: pointer;
+  }
+
+  /* El alfiler de una tabla o vista: aparece al pasar el mouse; en las
+     fijadas queda siempre, tenue. La fila le deja lugar a la derecha. */
+  .row-wrap {
+    position: relative;
+  }
+
+  .row-wrap.relation > .row {
+    overflow: hidden;
+    padding-right: 2.25rem;
+  }
+
+  /* Un nombre largo termina en "…" antes del alfiler, no pasa por debajo. */
+  .row-wrap.relation > .row .label {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  /* Aire a la derecha: pegado al borde, el clic caia en la barra de scroll. */
+  .pin-toggle {
+    position: absolute;
+    top: 50%;
+    right: var(--space-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition:
+      opacity var(--duration-fast),
+      background-color var(--duration-fast),
+      color var(--duration-fast);
+  }
+
+  .pin-toggle.on {
+    opacity: 0.55;
+  }
+
+  .row-wrap:hover .pin-toggle {
+    opacity: 1;
+  }
+
+  .pin-toggle:hover {
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    color: var(--text-primary);
   }
 
   .row:hover {
@@ -729,31 +864,9 @@
     left: var(--space-2);
     overflow-y: auto;
     max-height: 18rem;
-    padding: var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
   }
 
-  .schema-option {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 3px var(--space-2);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .schema-option:hover:not(:disabled) {
-    background: var(--surface);
-  }
 
   .schema-option:disabled {
     cursor: default;
@@ -764,24 +877,9 @@
     outline-offset: -2px;
   }
 
-  .checkbox {
-    display: inline-flex;
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--control-border);
-    border-radius: 3px;
-    color: var(--text-on-accent);
-  }
 
-  .checkbox.checked {
-    border-color: var(--accent);
-    background: var(--accent);
-  }
 
-  .schema-option:disabled .checkbox.checked {
+  .schema-option:disabled .ui-checkbox-box {
     opacity: 0.6;
   }
 

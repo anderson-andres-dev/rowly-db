@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { activeEngine } from "$lib/stores/connection";
+  import Checkbox from "$lib/components/Checkbox.svelte";
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke } from "$lib/backend";
   import { downloadDir, join } from "@tauri-apps/api/path";
   import { save } from "@tauri-apps/plugin-dialog";
   import { FolderOpen } from "@lucide/svelte";
@@ -91,7 +94,7 @@
           columns.map((column) => ({ name: column.name, type: column.type })),
           toValues(rows.slice(0, PREVIEW_ROWS)),
           // La vista previa nunca cae en "una sola celda => valor puro".
-          { format, headers, tableName },
+          { format, headers, tableName, quoteString: $activeEngine?.quoteString },
         ),
   );
 
@@ -136,7 +139,7 @@
     const text = serializeSelection(
       columns.map((column) => ({ name: column.name, type: column.type })),
       toValues(rows),
-      { format, headers, tableName },
+      { format, headers, tableName, quoteString: $activeEngine?.quoteString },
     );
     if (await writeClipboardText(text)) {
       oncopied(rows.length);
@@ -185,17 +188,14 @@
       </div>
 
       {#if format === "tsv" || format === "csv"}
-        <label class="checkbox">
-          <input type="checkbox" bind:checked={headers} />
-          <span>{$t("results.includeHeaders")}</span>
-        </label>
+        <Checkbox bind:checked={headers} label={$t("results.includeHeaders")} />
       {/if}
 
       <div class="field">
         <span class="label">{$t("results.export.file")}</span>
         <div class="path">
           <input aria-label={$t("results.export.target")} bind:value={path} spellcheck="false" />
-          <button type="button" class="icon-button" title={$t("results.export.chooseFile")} aria-label={$t("results.export.chooseFile")} onclick={() => void chooseFile()}>
+          <button type="button" class="icon-button" use:tooltip={$t("results.export.chooseFile")} aria-label={$t("results.export.chooseFile")} onclick={() => void chooseFile()}>
             <FolderOpen size={15} aria-hidden="true" />
           </button>
         </div>
@@ -221,12 +221,12 @@
   </div>
 
   <footer>
-    <button type="button" class="secondary-action" disabled={exporting} onclick={() => void copyPage()}>
+    <button type="button" class="action-button secondary" disabled={exporting} onclick={() => void copyPage()}>
       {$t("results.export.copyPage")}
     </button>
     <span class="spacer"></span>
-    <button type="button" class="secondary-action" disabled={exporting} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="primary-action" disabled={exporting} onclick={() => void exportToFile()}>
+    <button type="button" class="action-button secondary" disabled={exporting} onclick={close}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button primary" disabled={exporting} onclick={() => void exportToFile()}>
       {exporting ? $t("results.export.exporting") : $t("results.export.toFile")}
     </button>
   </footer>
@@ -236,7 +236,7 @@
   .export-dialog {
     width: min(58rem, calc(100vw - 2rem));
     max-height: calc(100vh - 4rem);
-    padding: 1.5rem 1.75rem;
+    padding: var(--space-5);
     box-sizing: border-box;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -338,17 +338,7 @@
     color: var(--text-primary);
   }
 
-  .checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: 0.8125rem;
-    cursor: pointer;
-  }
 
-  .checkbox input {
-    accent-color: var(--accent);
-  }
 
   .path {
     display: flex;
@@ -359,9 +349,9 @@
     min-width: 0;
     flex: 1;
     height: 2rem;
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-3);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-primary);
@@ -381,7 +371,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-secondary);
@@ -478,49 +468,13 @@
   footer {
     display: flex;
     align-items: center;
-    gap: 0.625rem;
+    gap: var(--space-2);
   }
 
   .spacer {
     flex: 1;
   }
 
-  footer button {
-    height: 2.5rem;
-    padding: 0 var(--space-4);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-
-  footer button:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  footer button:focus-visible,
   .format:focus-visible,
   .icon-button:focus-visible {
     outline: 2px solid var(--focus-ring);

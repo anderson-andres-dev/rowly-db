@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "$lib/backend";
 
 // Consulta en vivo al motor (SHOW CREATE TABLE en MySQL, reconstruccion via
 // pg_catalog en Postgres — ver table_definition en los drivers). A

@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
 import type { ConnectionDriver } from "$lib/connections";
+import { ENGINES } from "$lib/engines";
 import type { PasswordPolicy } from "$lib/credentials";
 import type { TlsMode } from "$lib/types";
 
@@ -20,12 +21,34 @@ export interface ConnectionProfile {
   caCertificatePath?: string;
   // Grupo para ordenar la pantalla de conexiones ("Produccion", "Clientes").
   group?: string;
-  // Color de identidad de la conexion, "#rrggbb". Por ahora solo se guarda.
+  // Color de identidad de la conexion, "#rrggbb": tiñe el topbar y su tarjeta.
   color?: string;
+  // Para que es la base. A diferencia del grupo y el color, cambia el
+  // comportamiento: en "production" toda escritura pide confirmacion.
+  // Sin valor = sin especificar.
+  environment?: ConnectionEnvironment;
 }
 
+export type ConnectionEnvironment = "local" | "development" | "production";
+
+export const CONNECTION_ENVIRONMENTS: readonly ConnectionEnvironment[] = [
+  "local",
+  "development",
+  "production",
+];
+
+// "testing" existio en una primera version; para la app se comporta igual
+// que desarrollo, asi que los perfiles que lo tengan pasan a "development".
+function parseEnvironment(value: unknown): ConnectionEnvironment | undefined {
+  if (value === "testing") return "development";
+  return CONNECTION_ENVIRONMENTS.includes(value as ConnectionEnvironment)
+    ? (value as ConnectionEnvironment)
+    : undefined;
+}
+
+// Un motor que la app conoce: el que tiene perfil (lib/engines).
 function isDriver(value: unknown): value is ConnectionDriver {
-  return value === "mysql" || value === "mariadb" || value === "postgres";
+  return typeof value === "string" && Object.hasOwn(ENGINES, value);
 }
 
 const TLS_MODES: readonly TlsMode[] = ["auto", "required", "verifyCa", "verifyIdentity", "disabled"];
@@ -77,6 +100,7 @@ export function parseProfile(value: unknown): ConnectionProfile | null {
     caCertificatePath: optionalText(profile.caCertificatePath),
     group: optionalText(profile.group),
     color: isHexColor(profile.color) ? profile.color.toLowerCase() : undefined,
+    environment: parseEnvironment(profile.environment),
   };
 }
 

@@ -34,8 +34,7 @@ export default defineMessages({
     noNotes: "Esta versión no tiene notas.",
     empty: "Sin versiones publicadas.",
     "rollback.title": "¿Volver a la versión {version}?",
-    "rollback.message":
-      "Se instalará la versión {version} en lugar de la {current}. Tus conexiones, consultas y ajustes se conservan, y puedes volver a actualizar cuando quieras.",
+    "rollback.message": "Se conservan tus conexiones, consultas y ajustes.",
     "rollback.confirm": "Volver a {version}",
     "progress.downloading": "Descargando {version}… {percent}",
     "progress.installing": "Instalando {version}; confirma con la contraseña del sistema si te la pide.",
@@ -84,8 +83,7 @@ export default defineMessages({
     noNotes: "This version has no notes.",
     empty: "No published versions.",
     "rollback.title": "Go back to version {version}?",
-    "rollback.message":
-      "Version {version} will be installed instead of {current}. Your connections, queries and settings are kept, and you can update again whenever you want.",
+    "rollback.message": "Your connections, queries and settings are kept.",
     "rollback.confirm": "Go back to {version}",
     "progress.downloading": "Downloading {version}… {percent}",
     "progress.installing": "Installing {version}; confirm with your system password if asked.",
@@ -134,8 +132,7 @@ export default defineMessages({
     noNotes: "Esta versão não tem notas.",
     empty: "Sem versões publicadas.",
     "rollback.title": "Voltar para a versão {version}?",
-    "rollback.message":
-      "A versão {version} será instalada no lugar da {current}. Suas conexões, consultas e configurações são mantidas, e você pode atualizar de novo quando quiser.",
+    "rollback.message": "Suas conexões, consultas e configurações são mantidas.",
     "rollback.confirm": "Voltar para {version}",
     "progress.downloading": "Baixando {version}… {percent}",
     "progress.installing": "Instalando {version}; confirme com a senha do sistema se ela for pedida.",
@@ -184,8 +181,7 @@ export default defineMessages({
     noNotes: "Cette version n’a pas de notes.",
     empty: "Aucune version publiée.",
     "rollback.title": "Revenir à la version {version} ?",
-    "rollback.message":
-      "La version {version} sera installée à la place de la {current}. Vos connexions, requêtes et paramètres sont conservés, et vous pourrez remettre à jour quand vous voudrez.",
+    "rollback.message": "Vos connexions, requêtes et paramètres sont conservés.",
     "rollback.confirm": "Revenir à {version}",
     "progress.downloading": "Téléchargement de {version}… {percent}",
     "progress.installing": "Installation de {version} ; confirmez avec le mot de passe du système s’il est demandé.",
@@ -234,8 +230,7 @@ export default defineMessages({
     noNotes: "Für diese Version gibt es keine Hinweise.",
     empty: "Keine veröffentlichten Versionen.",
     "rollback.title": "Zu Version {version} zurückkehren?",
-    "rollback.message":
-      "Version {version} wird anstelle von {current} installiert. Deine Verbindungen, Abfragen und Einstellungen bleiben erhalten, und du kannst jederzeit wieder aktualisieren.",
+    "rollback.message": "Verbindungen, Abfragen und Einstellungen bleiben erhalten.",
     "rollback.confirm": "Zurück zu {version}",
     "progress.downloading": "{version} wird heruntergeladen… {percent}",
     "progress.installing": "{version} wird installiert; bestätige mit deinem Systempasswort, falls danach gefragt wird.",

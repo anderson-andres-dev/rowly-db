@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { Check, ChevronDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, LoaderCircle } from "@lucide/svelte";
   import type { ResultPage } from "$lib/types";
@@ -82,7 +83,6 @@
   let menuPosition = $state({ left: 0, bottom: 0 });
 
   async function toggleMenu() {
-    hideTooltip();
     if (menuOpen) {
       menuOpen = false;
       return;
@@ -134,40 +134,6 @@
     items[(next + items.length) % items.length]?.focus();
     event.preventDefault();
   }
-
-  // --- Tooltips ----------------------------------------------------------
-  // Propios (no el title nativo): salen enseguida, con el atajo al lado y
-  // encima de la barra, que esta al pie del panel.
-  let tooltip = $state<{ label: string; shortcut: string; x: number; bottom: number } | null>(null);
-  let tooltipTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function prettyShortcut(keys: string): string {
-    return keys.replace("ArrowDown", $t("results.key.down")).replace("ArrowUp", $t("results.key.up"));
-  }
-
-  function showTooltip(event: Event, label: string, shortcut = "") {
-    if (menuOpen) return;
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-    tooltipTimer = setTimeout(() => {
-      tooltip = {
-        label,
-        shortcut: prettyShortcut(shortcut),
-        x: rect.left + rect.width / 2,
-        bottom: window.innerHeight - rect.top + 6,
-      };
-    }, 350);
-  }
-
-  function hideTooltip() {
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-    tooltipTimer = null;
-    tooltip = null;
-  }
-
-  $effect(() => () => {
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-  });
 </script>
 
 <svelte:window onpointerdown={onWindowPointerDown} />
@@ -178,14 +144,8 @@
     class="nav-button"
     aria-label={label}
     disabled={!enabled}
-    onclick={() => {
-      hideTooltip();
-      action();
-    }}
-    onpointerenter={(event) => showTooltip(event, label, shortcut)}
-    onpointerleave={hideTooltip}
-    onfocus={(event) => showTooltip(event, label, shortcut)}
-    onblur={hideTooltip}
+    use:tooltip={{ label, shortcut, placement: "above" }}
+    onclick={action}
   >
     <Icon size={15} aria-hidden="true" />
   </button>
@@ -204,8 +164,7 @@
     disabled={busy}
     bind:this={sizeButton}
     onclick={() => void toggleMenu()}
-    onpointerenter={(event) => showTooltip(event, $t("results.pager.changeSize"))}
-    onpointerleave={hideTooltip}
+    use:tooltip={menuOpen ? null : { label: $t("results.pager.changeSize"), placement: "above" }}
   >
     <span class="range">{format(start)}-{format(end)}</span>
     <ChevronDown size={13} aria-hidden="true" />
@@ -220,12 +179,8 @@
       type="button"
       class="total-button"
       disabled={busy || counting}
-      onclick={() => {
-        hideTooltip();
-        void oncount();
-      }}
-      onpointerenter={(event) => showTooltip(event, $t("results.pager.countHint"))}
-      onpointerleave={hideTooltip}
+      onclick={() => void oncount()}
+      use:tooltip={{ label: $t("results.pager.countHint"), placement: "above" }}
     >
       {#if counting}
         <LoaderCircle size={13} class="spin" aria-label={$t("results.pager.counting")} />
@@ -234,7 +189,7 @@
       {/if}
     </button>
   {:else}
-    <span class="total" title={$t("results.pager.notPageable")}>{format(end)}+</span>
+    <span class="total" use:tooltip={$t("results.pager.notPageable")}>{format(end)}+</span>
   {/if}
 
   {@render navButton($t("results.pager.next"), nextShortcut, canGoForward, goNext, ChevronRight)}
@@ -244,7 +199,7 @@
 {#if menuOpen}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="size-menu"
+    class="ui-menu size-menu"
     role="menu"
     tabindex="-1"
     aria-label={$t("results.pager.pageSize")}
@@ -258,11 +213,11 @@
         type="button"
         role="menuitemradio"
         aria-checked={page.pageSize === size}
-        class="menu-item"
+        class="ui-menu-item menu-item"
         class:selected={page.pageSize === size}
         onclick={() => changePageSize(size)}
       >
-        <span class="check">{#if page.pageSize === size}<Check size={13} aria-hidden="true" />{/if}</span>
+        <span class="ui-menu-check">{#if page.pageSize === size}<Check size={13} aria-hidden="true" />{/if}</span>
         <span>{format(size)}</span>
         {#if size === $defaultPageSize}<span class="hint">{$t("results.pager.default")}</span>{/if}
       </button>
@@ -271,11 +226,11 @@
       type="button"
       role="menuitemradio"
       aria-checked={isAll}
-      class="menu-item"
+      class="ui-menu-item menu-item"
       class:selected={isAll}
       onclick={() => changePageSize(MAX_PAGE_SIZE)}
     >
-      <span class="check">{#if isAll}<Check size={13} aria-hidden="true" />{/if}</span>
+      <span class="ui-menu-check">{#if isAll}<Check size={13} aria-hidden="true" />{/if}</span>
       <span>{$t("results.pager.all")}</span>
       <span class="hint">{$t("results.pager.upTo", { count: format(MAX_PAGE_SIZE) })}</span>
     </button>
@@ -299,8 +254,8 @@
         <button type="submit" class="apply">{$t("common.apply")}</button>
       </form>
     {:else}
-      <button type="button" role="menuitem" class="menu-item" onclick={() => void openCustom()}>
-        <span class="check">
+      <button type="button" role="menuitem" class="ui-menu-item menu-item" onclick={() => void openCustom()}>
+        <span class="ui-menu-check">
           {#if !isAll && !PAGE_SIZE_OPTIONS.includes(page.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])}
             <Check size={13} aria-hidden="true" />
           {/if}
@@ -312,20 +267,13 @@
     <button
       type="button"
       role="menuitem"
-      class="menu-item"
+      class="ui-menu-item menu-item"
       disabled={page.pageSize === $defaultPageSize}
       onclick={setAsDefault}
     >
-      <span class="check"></span>
+      <span class="ui-menu-check"></span>
       <span>{$t("results.pager.setDefault")}</span>
     </button>
-  </div>
-{/if}
-
-{#if tooltip}
-  <div class="pager-tooltip" role="tooltip" style={`left:${tooltip.x}px; bottom:${tooltip.bottom}px;`}>
-    <span>{tooltip.label}</span>
-    {#if tooltip.shortcut}<span class="tooltip-shortcut">{tooltip.shortcut}</span>{/if}
   </div>
 {/if}
 
@@ -421,59 +369,19 @@
   .size-menu {
     position: fixed;
     z-index: 1000;
-    display: flex;
     min-width: 13rem;
-    flex-direction: column;
-    padding: var(--space-1);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    font-size: 0.8125rem;
     outline: none;
   }
 
   .menu-heading {
-    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 1.25rem);
+    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) * 2 + 1rem);
     color: var(--text-secondary);
     font-size: 0.75rem;
   }
 
-  .menu-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 1.75rem;
-    padding: 0 var(--space-3) 0 var(--space-2);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .menu-item:hover:not(:disabled),
-  .menu-item:focus-visible {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    outline: none;
-  }
 
-  .menu-item:disabled {
-    color: var(--text-secondary);
-    cursor: default;
-    opacity: 0.6;
-  }
 
-  .check {
-    display: inline-flex;
-    width: 1rem;
-    flex-shrink: 0;
-    justify-content: center;
-    color: var(--accent);
-  }
 
   .hint {
     margin-left: auto;
@@ -491,20 +399,23 @@
   .custom-row {
     display: flex;
     gap: var(--space-1);
-    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 1.25rem);
+    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) * 2 + 1rem);
   }
 
   .custom-row input {
     width: 0;
     min-width: 0;
     flex: 1;
-    padding: 2px var(--space-2);
+    height: 1.75rem;
+    padding: 0 var(--space-2);
+    box-sizing: border-box;
     border: 1px solid var(--focus-ring);
     border-radius: var(--radius-sm);
     outline: none;
     background: var(--surface);
     color: var(--text-primary);
     font: inherit;
+    font-size: 0.8125rem;
   }
 
   .apply {
@@ -517,24 +428,5 @@
     cursor: pointer;
   }
 
-  .pager-tooltip {
-    position: fixed;
-    z-index: 1001;
-    display: flex;
-    gap: var(--space-3);
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateX(-50%);
-  }
 
-  .tooltip-shortcut {
-    color: var(--text-secondary);
-  }
 </style>

@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "keyring",
  "khipu-driver-core",
@@ -2521,6 +2521,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-updater",
+ "tauri-plugin-window-state",
  "tokio",
  "trash",
  "url",
@@ -2528,17 +2529,18 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
 name = "khipu-driver-mysql"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2549,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-postgres"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2560,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2569,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-lsp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "khipu-engine",
  "serde_json",
@@ -5126,6 +5128,21 @@ dependencies = [
  "url",
  "windows-sys 0.60.2",
  "zip",
+]
+
+[[package]]
+name = "tauri-plugin-window-state"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73736611e14142408d15353e21e3cca2f12a3cfb523ad0ce85999b6d2ef1a704"
+dependencies = [
+ "bitflags 2.13.2",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

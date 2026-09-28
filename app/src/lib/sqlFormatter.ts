@@ -1,4 +1,4 @@
-import type { ConnectionDriver } from "$lib/connections";
+import type { SqlProfile } from "$lib/engines";
 
 type Quote = "'" | '"' | "`" | "]";
 
@@ -169,15 +169,15 @@ function scanFormattedSql(sql: string): SqlScanResult {
 
 export async function formatSqlBlock(
   sql: string,
-  driver: ConnectionDriver,
+  engine: SqlProfile,
   lineWidth: number,
 ): Promise<string> {
   if (!sql.trim()) return sql;
 
   try {
-    const { formatDialect, mysql, postgresql } = await import("sql-formatter");
-    const formatted = formatDialect(sql, {
-      dialect: driver === "postgres" ? postgresql : mysql,
+    const formatter = await import("sql-formatter");
+    const formatted = formatter.formatDialect(sql, {
+      dialect: formatter[engine.formatterDialect],
       keywordCase: "upper",
       dataTypeCase: "upper",
       functionCase: "upper",

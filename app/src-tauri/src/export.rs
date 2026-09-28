@@ -6,7 +6,8 @@
 //! Los formatos son los mismos que el copiado del grid (gridClipboard.ts) y
 //! se serializan igual: TSV, CSV, JSON, Markdown y SQL INSERT.
 
-use khipu_driver_core::{QueryColumn, QueryValue, RowSink};
+use khipu_driver_core::{Message, QueryColumn, QueryValue, RowSink};
+use khipu_engine::Dialect;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -26,10 +27,10 @@ pub enum ExportFormat {
 /// nativo), pero aunque mandara otra cosa no puede pisar un `.bashrc`.
 const ALLOWED_EXTENSIONS: &[&str] = &["tsv", "csv", "json", "md", "sql", "txt"];
 
-pub fn validated_path(path: &str) -> Result<PathBuf, String> {
+pub fn validated_path(path: &str) -> Result<PathBuf, Message> {
     let path = PathBuf::from(path);
     if !path.is_absolute() {
-        return Err("La ruta del archivo debe ser absoluta.".to_string());
+        return Err(Message::key("files.pathNotAbsolute"));
     }
     let allowed = path
         .extension()
@@ -40,13 +41,13 @@ pub fn validated_path(path: &str) -> Result<PathBuf, String> {
                 .any(|allowed| allowed.eq_ignore_ascii_case(extension))
         });
     if !allowed {
-        return Err(format!(
-            "Solo se puede exportar a archivos {}.",
+        return Err(Message::key("export.extensions").with(
+            "extensions",
             ALLOWED_EXTENSIONS
                 .iter()
                 .map(|extension| format!(".{extension}"))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
         ));
     }
     Ok(path)
@@ -90,6 +91,8 @@ pub struct FileSink {
     format: ExportFormat,
     headers: bool,
     table_name: String,
+    // Los textos del INSERT, como literales del motor de la conexion.
+    dialect: Dialect,
     columns: Vec<QueryColumn>,
     rows: u64,
 }
@@ -100,23 +103,28 @@ impl FileSink {
         format: ExportFormat,
         headers: bool,
         table_name: String,
-    ) -> Result<Self, String> {
-        let file = File::create(path)
-            .map_err(|error| format!("No se pudo crear {}: {error}", path.display()))?;
+        dialect: Dialect,
+    ) -> Result<Self, Message> {
+        let file = File::create(path).map_err(|error| {
+            Message::key("files.createFailed")
+                .with("path", path.display())
+                .with("error", error)
+        })?;
         Ok(Self {
             out: BufWriter::with_capacity(256 * 1024, file),
             format,
             headers,
             table_name,
+            dialect,
             columns: Vec::new(),
             rows: 0,
         })
     }
 
-    fn write(&mut self, text: &str) -> Result<(), String> {
+    fn write(&mut self, text: &str) -> Result<(), Message> {
         self.out
             .write_all(text.as_bytes())
-            .map_err(|error| format!("No se pudo escribir el archivo: {error}"))
+            .map_err(|error| Message::key("export.writeFailed").with("error", error))
     }
 
     fn json_value(&self, value: &QueryValue, column: &QueryColumn) -> String {
@@ -133,17 +141,17 @@ impl FileSink {
         }
     }
 
-    fn sql_value(value: &QueryValue, column: &QueryColumn) -> String {
+    fn sql_value(&self, value: &QueryValue, column: &QueryColumn) -> String {
         match value {
             None => "NULL".to_string(),
             Some(text) if is_numeric(&column.data_type) && is_plain_number(text) => text.clone(),
-            Some(text) => format!("'{}'", text.replace('\'', "''")),
+            Some(text) => self.dialect.string_literal(text),
         }
     }
 }
 
 impl RowSink for FileSink {
-    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), String> {
+    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), Message> {
         self.columns = columns.to_vec();
         let names: Vec<String> = columns.iter().map(|column| column.name.clone()).collect();
         match self.format {
@@ -166,7 +174,7 @@ impl RowSink for FileSink {
         }
     }
 
-    fn row(&mut self, row: &[QueryValue]) -> Result<(), String> {
+    fn row(&mut self, row: &[QueryValue]) -> Result<(), Message> {
         let line = match self.format {
             ExportFormat::Tsv => {
                 let fields: Vec<String> = row
@@ -221,7 +229,7 @@ impl RowSink for FileSink {
                 let values: Vec<String> = row
                     .iter()
                     .zip(&self.columns)
-                    .map(|(value, column)| Self::sql_value(value, column))
+                    .map(|(value, column)| self.sql_value(value, column))
                     .collect();
                 format!(
                     "INSERT INTO {} ({}) VALUES ({});\n",
@@ -235,14 +243,14 @@ impl RowSink for FileSink {
         self.write(&line)
     }
 
-    fn finish(&mut self) -> Result<(), String> {
+    fn finish(&mut self) -> Result<(), Message> {
         if self.format == ExportFormat::Json {
             let closing = if self.rows == 0 { "]\n" } else { "\n]\n" };
             self.write(closing)?;
         }
         self.out
             .flush()
-            .map_err(|error| format!("No se pudo terminar de escribir el archivo: {error}"))
+            .map_err(|error| Message::key("export.finishFailed").with("error", error))
     }
 }
 
@@ -271,15 +279,20 @@ mod tests {
     }
 
     fn export(format: ExportFormat, headers: bool) -> String {
+        export_as(format, headers, Dialect::Postgres, "o'h, \"x\"")
+    }
+
+    fn export_as(format: ExportFormat, headers: bool, dialect: Dialect, name: &str) -> String {
         let dir = std::env::temp_dir().join(format!("khipu-export-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("{format:?}.txt"));
-        let mut sink = FileSink::create(&path, format, headers, "core.t".to_string()).unwrap();
+        let path = dir.join(format!("{format:?}-{dialect:?}.txt"));
+        let mut sink =
+            FileSink::create(&path, format, headers, "core.t".to_string(), dialect).unwrap();
         sink.begin(&columns()).unwrap();
         sink.row(&[
             Some("1".into()),
             Some("{\"a\": 1}".into()),
-            Some("o'h, \"x\"".into()),
+            Some(name.into()),
         ])
         .unwrap();
         sink.row(&[Some("2".into()), None, None]).unwrap();
@@ -315,6 +328,17 @@ mod tests {
             export(ExportFormat::Sql, false),
             "INSERT INTO core.t (id, ctx, name) VALUES (1, '{\"a\": 1}', 'o''h, \"x\"');\n\
              INSERT INTO core.t (id, ctx, name) VALUES (2, NULL, NULL);\n"
+        );
+    }
+
+    #[test]
+    fn sql_con_los_literales_de_cada_motor() {
+        // En MySQL la barra invertida escapa: se duplica; en Postgres no.
+        assert!(
+            export_as(ExportFormat::Sql, false, Dialect::MySql, "C:\\tmp").contains("'C:\\\\tmp'")
+        );
+        assert!(
+            export_as(ExportFormat::Sql, false, Dialect::Postgres, "C:\\tmp").contains("'C:\\tmp'")
         );
     }
 

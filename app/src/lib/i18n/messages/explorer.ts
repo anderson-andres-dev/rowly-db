@@ -3,6 +3,9 @@ import { defineMessages } from "../define";
 // Explorador de base de datos (SchemaTree.svelte).
 export default defineMessages({
   es: {
+    pinned: "Fijadas",
+    pin: "Fijar arriba (P)",
+    unpin: "Quitar de fijadas (P)",
     title: "Explorador",
     "open.label": "Abrir archivo o carpeta",
     "open.file": "Abrir archivo…",
@@ -37,6 +40,9 @@ export default defineMessages({
     "schemas.default": "por defecto",
   },
   en: {
+    pinned: "Pinned",
+    pin: "Pin to top (P)",
+    unpin: "Unpin (P)",
     title: "Explorer",
     "open.label": "Open file or folder",
     "open.file": "Open file…",
@@ -71,6 +77,9 @@ export default defineMessages({
     "schemas.default": "default",
   },
   "pt-BR": {
+    pinned: "Fixadas",
+    pin: "Fixar no topo (P)",
+    unpin: "Desafixar (P)",
     title: "Explorador",
     "open.label": "Abrir arquivo ou pasta",
     "open.file": "Abrir arquivo…",
@@ -105,6 +114,9 @@ export default defineMessages({
     "schemas.default": "padrão",
   },
   fr: {
+    pinned: "Épinglées",
+    pin: "Épingler en haut (P)",
+    unpin: "Désépingler (P)",
     title: "Explorateur",
     "open.label": "Ouvrir un fichier ou un dossier",
     "open.file": "Ouvrir un fichier…",
@@ -139,6 +151,9 @@ export default defineMessages({
     "schemas.default": "par défaut",
   },
   de: {
+    pinned: "Angeheftet",
+    pin: "Oben anheften (P)",
+    unpin: "Lösen (P)",
     title: "Explorer",
     "open.label": "Datei oder Ordner öffnen",
     "open.file": "Datei öffnen…",

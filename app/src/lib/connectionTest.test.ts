@@ -46,8 +46,14 @@ describe("summarizeReport", () => {
 
 describe("summaryText", () => {
   it("arma el texto que se copia, una linea por dato", () => {
-    expect(summaryText(summarizeError("Access denied", "db:3306"))).toBe(
-      "No se pudo conectar\nDestino: db:3306\nError: Access denied",
+    const target = { host: "db", port: 3306, database: "core" };
+    expect(summaryText(summarizeError({ kind: "other", detail: "boom" }, target))).toBe(
+      "No se pudo conectar\nDestino: db:3306\nError: boom",
+    );
+    expect(summaryText(summarizeError({ kind: "unknownDatabase", detail: "Unknown database 'core'" }, target))).toBe(
+      "La base «core» no existe\nDestino: db:3306\n" +
+        "Qué revisar: Revisa el nombre; en algunos servidores importan las mayúsculas.\n" +
+        "Detalle: Unknown database 'core'",
     );
   });
 });

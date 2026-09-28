@@ -7,6 +7,7 @@
     type ConnectionProfile,
   } from "$lib/stores/connectionProfiles";
   import type { ConnectionDriver } from "$lib/connections";
+  import type { ConnectionFailure } from "$lib/types";
   import ConnectionLanding from "$lib/components/ConnectionLanding.svelte";
   import DriverPicker from "$lib/components/DriverPicker.svelte";
   import ConnectionForm from "$lib/components/ConnectionForm.svelte";
@@ -19,7 +20,8 @@
   let choosingDriver = $state(false);
   let selectedDriver = $state<ConnectionDriver | null>(null);
   let activeProfile = $state<ConnectionProfile | null>(null);
-  let fallbackError = $state<string | null>(null);
+  let fallbackError = $state<ConnectionFailure | null>(null);
+  let formIntent = $state<"connect" | "edit">("connect");
   let connectingId = $state<string | null>(null);
   let deletingProfile = $state<ConnectionProfile | null>(null);
   let deleteError = $state<string | null>(null);
@@ -35,13 +37,19 @@
     selectedDriver = driver;
     activeProfile = null;
     fallbackError = null;
+    formIntent = "connect";
   }
 
-  function openProfile(profile: ConnectionProfile, error: string | null = null) {
+  function openProfile(
+    profile: ConnectionProfile,
+    error: ConnectionFailure | null = null,
+    intent: "connect" | "edit" = "connect",
+  ) {
     choosingDriver = false;
     activeProfile = profile;
     selectedDriver = profile.driver;
     fallbackError = error;
+    formIntent = intent;
   }
 
   async function handleConnect(profile: ConnectionProfile) {
@@ -110,7 +118,7 @@
       {connectingId}
       onnewconnection={startConnection}
       onconnect={handleConnect}
-      onedit={openProfile}
+      onedit={(profile) => openProfile(profile, null, "edit")}
       ondelete={(profile) => (deletingProfile = profile)}
       error={deleteError}
     />
@@ -119,8 +127,8 @@
   {#if deletingProfile}
     {@const profile = deletingProfile}
     <ConfirmDialog
-      title={$t("connections.delete.title")}
-      message={$t("connections.delete.message", { name: profile.name })}
+      title={$t("connections.delete.title", { name: profile.name })}
+      message={$t("connections.delete.message")}
       confirmLabel={$t("connections.delete.confirm")}
       onconfirm={() => void confirmDelete(profile)}
       oncancel={() => (deletingProfile = null)}
@@ -136,6 +144,7 @@
       driver={selectedDriver}
       profile={activeProfile}
       initialError={fallbackError}
+      intent={formIntent}
       onclose={closeForm}
     />
   {/if}

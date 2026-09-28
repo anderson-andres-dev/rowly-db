@@ -12,6 +12,7 @@ import type { DatabaseExplorer, ExplorerTable, SchemaObjects } from "$lib/types"
 // Solo aparecen las carpetas con algo adentro, cada una con su contador.
 
 export type ExplorerIcon =
+  | "pinned"
   | "schema"
   | "folder"
   | "table"
@@ -50,6 +51,9 @@ export interface ExplorerNode {
   openOnFilter?: boolean;
   // Solo en tablas y vistas: cual es (doble clic la abre en una pestaña).
   relation?: { schema: string; name: string };
+  // Tabla o vista fijada (se marca con un alfiler, y en la carpeta de
+  // fijadas el mismo boton la quita).
+  pinned?: boolean;
   children?: ExplorerNode[];
 }
 
@@ -156,12 +160,21 @@ function matches(name: string, query: string): boolean {
   return query === "" || name.toLowerCase().includes(query);
 }
 
-function schemaNode(objects: SchemaObjects, isDefault: boolean, query: string): ExplorerNode | null {
+type PinnedSet = ReadonlySet<string>;
+
+function pinKey(schema: string, name: string): string {
+  return `${schema}\u0000${name}`;
+}
+
+function schemaNode(objects: SchemaObjects, isDefault: boolean, query: string, pinned: PinnedSet): ExplorerNode | null {
   const key = `schema:${objects.schema}`;
   const relations = (kind: ExplorerTable["kind"], folderKey: string) =>
     objects.tables
       .filter((table) => table.kind === kind && matches(table.name, query))
-      .map((table) => tableNode(table, `${key}/${folderKey}`));
+      .map((table) => ({
+        ...tableNode(table, `${key}/${folderKey}`),
+        pinned: pinned.has(pinKey(table.schema, table.name)),
+      }));
 
   const routines = objects.routines
     .filter((routine) => matches(routine.name, query))
@@ -228,11 +241,40 @@ function schemaNode(objects: SchemaObjects, isDefault: boolean, query: string): 
   };
 }
 
-export function buildExplorerTree(explorer: DatabaseExplorer, filter: string): ExplorerNode[] {
+// `pinned`: tablas fijadas de la conexion (en el orden en que se fijaron).
+// Van primero, en una carpeta propia abierta, y ademas quedan marcadas en su
+// lugar del arbol. Las que no estan cargadas (schema oculto, tabla borrada)
+// no aparecen. `pinnedLabel`: el nombre de la carpeta, ya traducido.
+export function buildExplorerTree(
+  explorer: DatabaseExplorer,
+  filter: string,
+  pinned: { schema: string; name: string }[] = [],
+  pinnedLabel = "pinned",
+): ExplorerNode[] {
   const query = filter.trim().toLowerCase();
-  return explorer.schemas
-    .map((objects) => schemaNode(objects, objects.schema === explorer.defaultSchema, query))
+  const pinnedSet = new Set(pinned.map((item) => pinKey(item.schema, item.name)));
+  const manySchemas = explorer.schemas.length > 1;
+  const pinnedNodes = pinned
+    .map((item): ExplorerNode | null => {
+      const table = explorer.schemas
+        .find((objects) => objects.schema === item.schema)
+        ?.tables.find((candidate) => candidate.name === item.name);
+      if (!table || !matches(table.name, query)) return null;
+      return {
+        ...tableNode(table, "pinned"),
+        // Con varios schemas, el de la tabla va al lado para distinguirla.
+        detail: manySchemas ? table.schema : undefined,
+        pinned: true,
+      };
+    })
     .filter((node): node is ExplorerNode => node !== null);
+  const schemas = explorer.schemas
+    .map((objects) => schemaNode(objects, objects.schema === explorer.defaultSchema, query, pinnedSet))
+    .filter((node): node is ExplorerNode => node !== null);
+  return [
+    ...folder("pinned", pinnedLabel, pinnedNodes, { icon: "pinned", defaultOpen: true, openOnFilter: true }),
+    ...schemas,
+  ];
 }
 
 // Todas las claves de nodos con hijos, recorriendo el arbol completo (para

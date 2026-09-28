@@ -5,9 +5,9 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, DriverError, QueryColumn, QueryExecutionOptions,
-    QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects, TlsMode, TlsStatus,
-    TransactionError, TransactionStatement,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
+    QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
+    SchemaObjects, TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
 };
 use sqlx::mysql::{
     MySqlConnectOptions, MySqlConnection, MySqlDatabaseError, MySqlPoolOptions, MySqlRow,
@@ -15,13 +15,17 @@ use sqlx::mysql::{
 use sqlx::{Column, Executor, MySqlPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct MySqlConnector {
     pool: MySqlPool,
     version: version::ServerVersion,
     tls: TlsStatus,
 }
+
+/// How long the pool waits for a connection before giving up. sqlx's default
+/// (30 s) leaves the app hanging too long on a host that doesn't answer.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<MySqlPool, sqlx::Error> {
     let options = MySqlConnectOptions::new()
@@ -31,6 +35,7 @@ async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<MySqlPool
         .password(&config.password)
         .database(&config.database);
     MySqlPoolOptions::new()
+        .acquire_timeout(CONNECT_TIMEOUT)
         .connect_with(tls::apply(
             options,
             mode,
@@ -116,7 +121,7 @@ fn mysql_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
     if let sqlx::Error::Database(database_error) = &error {
         if let Some(mysql_error) = database_error.try_downcast_ref::<MySqlDatabaseError>() {
             return QueryExecutionResult::Error {
-                message: mysql_error.message().to_string(),
+                message: mysql_error.message().into(),
                 code: Some(mysql_error.number().to_string()),
                 position: None,
             };
@@ -124,7 +129,7 @@ fn mysql_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
     }
 
     QueryExecutionResult::Error {
-        message: error.to_string(),
+        message: error.to_string().into(),
         code: None,
         position: None,
     }
@@ -137,6 +142,7 @@ impl DbConnector for MySqlConnector {
         // ver tls::is_tls_failure) se reintenta sin cifrar. El pool entero
         // queda con esas opciones, asi que las conexiones que abra despues
         // no vuelven a intentar TLS.
+        probe_tcp(&config.host, config.port, CONNECT_TIMEOUT).await?;
         let (pool, fell_back) = match open_pool(config, config.tls_mode).await {
             Ok(pool) => (pool, false),
             Err(error) if config.tls_mode == TlsMode::Auto && tls::is_tls_failure(&error) => {
@@ -150,7 +156,7 @@ impl DbConnector for MySqlConnector {
         let raw_version = sqlx::query("SELECT VERSION()")
             .fetch_one(&pool)
             .await
-            .map_err(|e| DriverError::Connection(e.to_string()))
+            .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))
             .and_then(|row| text_column(&row, 0))?;
         let tls = tls::read_status(&pool, fell_back).await;
         Ok(Self {
@@ -207,11 +213,9 @@ impl DbConnector for MySqlConnector {
         if self.version.is_below_minimum() {
             objects.warnings.insert(
                 0,
-                format!(
-                    "{} es anterior a las versiones soportadas (MySQL 5.7, MariaDB 10.3): \
-                     algunos objetos pueden faltar.",
-                    self.version.display()
-                ),
+                Message::key("introspect.unsupportedVersion")
+                    .with("version", self.version.display())
+                    .with("minimum", "MySQL 5.7, MariaDB 10.3"),
             );
         }
         Ok(objects)
@@ -242,16 +246,16 @@ impl DbConnector for MySqlConnector {
         &'a self,
         sql: &'a str,
         sink: &'a mut dyn RowSink,
-    ) -> Pin<Box<dyn Future<Output = Result<u64, String>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<u64, Message>> + Send + 'a>> {
         Box::pin(async move {
             let message = |error: sqlx::Error| match mysql_error_to_result(error) {
                 QueryExecutionResult::Error { message, .. } => message,
-                _ => "Error al leer las filas.".to_string(),
+                _ => Message::key("export.readFailed"),
             };
             let mut conn = self.pool.acquire().await.map_err(message)?;
             let describe = conn.describe(sql).await.map_err(message)?;
             if describe.columns().is_empty() {
-                return Err("La sentencia no devuelve filas: no hay nada que exportar.".to_string());
+                return Err(Message::key("export.noRows"));
             }
             let columns: Vec<QueryColumn> = describe
                 .columns()
@@ -268,7 +272,7 @@ impl DbConnector for MySqlConnector {
             let mut count = 0u64;
             let mut values: Vec<QueryValue> = Vec::with_capacity(columns.len());
             let mut finished = false;
-            let outcome: Result<(), String> = async {
+            let outcome: Result<(), Message> = async {
                 let mut stream = Executor::fetch(&mut *conn, RawStatement(sql));
                 while let Some(row) = stream.try_next().await.map_err(message)? {
                     values.clear();
@@ -333,22 +337,75 @@ impl DbConnector for MySqlConnector {
         sql: &'a str,
         options: QueryExecutionOptions,
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let mut conn = match self.pool.acquire().await {
-                Ok(conn) => conn,
-                Err(error) => return mysql_error_to_result(error),
-            };
+        Box::pin(self.run_query(sql, options, None))
+    }
 
-            let outcome = execute_on_connection(&mut conn, sql, options).await;
-            if !outcome.connection_reusable {
-                // Devolverla al pool haria que sqlx la "limpie" leyendo (y
-                // tirando) todo lo que el servidor todavia tenga para mandar
-                // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
-                // en seco; el pool abre otra conexion cuando haga falta.
-                drop(conn.detach());
+    fn execute_query_cancellable<'a>(
+        &'a self,
+        sql: &'a str,
+        options: QueryExecutionOptions,
+        cancel: &'a QueryCancel,
+    ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
+        Box::pin(self.run_query(sql, options, Some(cancel)))
+    }
+
+    async fn cancel_query(&self, cancel: &QueryCancel) -> Result<(), DriverError> {
+        let Some(id) = cancel.request() else {
+            return Ok(());
+        };
+        Executor::execute(&self.pool, RawStatement(&format!("KILL QUERY {id}")))
+            .await
+            .map(|_| ())
+            .map_err(|error| DriverError::Query(error.to_string()))
+    }
+}
+
+impl MySqlConnector {
+    async fn run_query(
+        &self,
+        sql: &str,
+        options: QueryExecutionOptions,
+        cancel: Option<&QueryCancel>,
+    ) -> QueryExecutionResult {
+        let mut conn = match self.pool.acquire().await {
+            Ok(conn) => conn,
+            Err(error) => return mysql_error_to_result(error),
+        };
+
+        // Id de la conexion en el servidor: cancelar la interrumpe desde otra
+        // (ver QueryCancel). Si ya se cancelo mientras se esperaba una
+        // conexion, ni se empieza.
+        if let Some(cancel) = cancel {
+            match sqlx::query_scalar::<_, u64>("SELECT CONNECTION_ID()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                Ok(id) if !cancel.begin(id) => return cancelled_before_start(),
+                Ok(_) => {}
+                Err(error) => return mysql_error_to_result(error),
             }
-            outcome.result
-        })
+        }
+
+        let outcome = execute_on_connection(&mut conn, sql, options).await;
+        if let Some(cancel) = cancel {
+            cancel.end();
+        }
+        if !outcome.connection_reusable {
+            // Devolverla al pool haria que sqlx la "limpie" leyendo (y
+            // tirando) todo lo que el servidor todavia tenga para mandar
+            // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
+            // en seco; el pool abre otra conexion cuando haga falta.
+            drop(conn.detach());
+        }
+        outcome.result
+    }
+}
+
+fn cancelled_before_start() -> QueryExecutionResult {
+    QueryExecutionResult::Error {
+        message: Message::key("query.cancelledBeforeStart"),
+        code: None,
+        position: None,
     }
 }
 
@@ -847,6 +904,19 @@ mod tests {
         // MariaDB and MySQL 5.7 keep the display width ("int(11)").
         let arguments = purge.arguments.replace("(11)", "");
         assert_eq!(arguments, "p_before int, OUT p_count int");
+        use khipu_driver_core::ParameterMode;
+        let described: Vec<(Option<&str>, ParameterMode)> = purge
+            .parameters
+            .iter()
+            .map(|p| (p.name.as_deref(), p.mode))
+            .collect();
+        assert_eq!(
+            described,
+            vec![
+                (Some("p_before"), ParameterMode::In),
+                (Some("p_count"), ParameterMode::Out),
+            ]
+        );
         let twice = objects
             .routines
             .iter()
@@ -857,6 +927,9 @@ mod tests {
             twice.return_type.as_deref().map(|t| t.replace("(11)", "")),
             Some("int".to_string())
         );
+        // El valor de retorno (ordinal 0) no es un parametro.
+        assert_eq!(twice.parameters.len(), 1);
+        assert_eq!(twice.parameters[0].mode, ParameterMode::In);
 
         assert_eq!(objects.events[0].name, "nightly");
         assert_eq!(objects.events[0].schedule, "EVERY 1 DAY");
@@ -918,15 +991,17 @@ mod tests {
                 assert_eq!(connector.tls_status().encrypted, Some(true));
                 assert!(!connector.tls_status().fell_back);
             }
-            (Err(DriverError::Connection(message)), expected) => {
-                assert_ne!(expected, Some("encrypted"), "{message}");
+            (Err(DriverError::Connection { kind, detail }), expected) => {
+                assert_ne!(expected, Some("encrypted"), "{detail}");
                 assert!(
-                    message.starts_with("El servidor no ofrece un cifrado TLS compatible")
-                        || message.starts_with("El servidor no tiene TLS habilitado"),
-                    "{message}"
+                    matches!(
+                        kind,
+                        ConnectionErrorKind::TlsIncompatible | ConnectionErrorKind::TlsUnavailable
+                    ),
+                    "{kind:?}: {detail}"
                 );
                 if expected == Some("none") {
-                    assert!(message.starts_with("El servidor no tiene TLS habilitado"));
+                    assert_eq!(kind, ConnectionErrorKind::TlsUnavailable, "{detail}");
                 }
             }
             (Err(other), _) => panic!("unexpected error: {other}"),
@@ -956,8 +1031,8 @@ mod tests {
         let result = MySqlConnector::connect(&config_with_tls(TlsMode::VerifyCa)).await;
 
         match result {
-            Err(DriverError::Connection(message)) => {
-                assert!(message.starts_with("Certificado inválido:"), "{message}")
+            Err(DriverError::Connection { kind, detail }) => {
+                assert_eq!(kind, ConnectionErrorKind::TlsCertificate, "{detail}")
             }
             Ok(_) => panic!("a self-signed certificate must not pass VerifyCa"),
             Err(other) => panic!("unexpected error: {other}"),

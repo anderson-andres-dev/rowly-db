@@ -44,6 +44,10 @@ export const connectionDrivers: DriverDefinition[] = [
   },
 ];
 
+// Sin caida a otro motor: un perfil guardado con un motor desconocido ya se
+// descarta al cargar (connectionProfiles.ts).
 export function getDriver(driver: ConnectionDriver): DriverDefinition {
-  return connectionDrivers.find((candidate) => candidate.id === driver) ?? connectionDrivers[0];
+  const found = connectionDrivers.find((candidate) => candidate.id === driver);
+  if (!found) throw new Error(`Motor sin definir: ${driver}`);
+  return found;
 }

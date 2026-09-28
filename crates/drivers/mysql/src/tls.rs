@@ -7,8 +7,10 @@
 //! sqlx, so it can't host it).
 
 use crate::RawStatement;
-use khipu_driver_core::{DriverError, TlsMode, TlsStatus};
-use sqlx::mysql::{MySqlConnectOptions, MySqlSslMode};
+use khipu_driver_core::{
+    ConnectionErrorKind, DriverError, TlsMode, TlsStatus, io_error_kind, tls_failure_kind,
+};
+use sqlx::mysql::{MySqlConnectOptions, MySqlDatabaseError, MySqlSslMode};
 use sqlx::{Executor, MySqlPool, Row};
 use std::io::ErrorKind;
 
@@ -55,31 +57,34 @@ pub fn is_tls_failure(error: &sqlx::Error) -> bool {
     }
 }
 
-/// The error shown when connecting fails. TLS failures get an explanation
-/// of what to change, since the raw rustls alert means nothing to most
-/// people; everything else is passed through unchanged.
+/// The error shown when connecting fails: the raw detail plus its cause
+/// (`ConnectionErrorKind`), which the app turns into a message and a hint in
+/// the user's language.
 pub fn connection_error(error: sqlx::Error, mode: TlsMode) -> DriverError {
     let detail = error.to_string();
-    if mode != TlsMode::Disabled && is_tls_failure(&error) {
-        if detail.to_ascii_lowercase().contains("certificate") {
-            return DriverError::Connection(format!("Certificado inválido: {detail}"));
+    let kind = if mode != TlsMode::Disabled && is_tls_failure(&error) {
+        tls_failure_kind(&detail)
+    } else {
+        match &error {
+            // Codigos de MySQL/MariaDB: el SQLSTATE (28000, 42000) no los
+            // distingue.
+            sqlx::Error::Database(database) => {
+                match database
+                    .try_downcast_ref::<MySqlDatabaseError>()
+                    .map(MySqlDatabaseError::number)
+                {
+                    Some(1045) => ConnectionErrorKind::AuthFailed,
+                    Some(1044) => ConnectionErrorKind::AccessDenied,
+                    Some(1049) => ConnectionErrorKind::UnknownDatabase,
+                    _ => ConnectionErrorKind::Other,
+                }
+            }
+            sqlx::Error::PoolTimedOut => ConnectionErrorKind::Timeout,
+            sqlx::Error::Io(io) => io_error_kind(io.kind(), &detail),
+            _ => ConnectionErrorKind::Other,
         }
-        // sqlx: Error::Tls("server does not support TLS") cuando el servidor
-        // ni siquiera ofrece TLS (p.ej. MariaDB sin certificados configurados).
-        if detail.contains("does not support TLS") {
-            return DriverError::Connection(
-                "El servidor no tiene TLS habilitado. Usa SSL «Automático» o \
-                 «Desactivado», o habilita TLS en el servidor."
-                    .to_string(),
-            );
-        }
-        return DriverError::Connection(format!(
-            "El servidor no ofrece un cifrado TLS compatible (común en MySQL 5.7 y \
-             servidores antiguos). Usa SSL «Automático» o «Desactivado», o actualiza \
-             la configuración TLS del servidor. Detalle: {detail}"
-        ));
-    }
-    DriverError::Connection(detail)
+    };
+    DriverError::connection(kind, detail)
 }
 
 /// Reads `Ssl_version`/`Ssl_cipher` for the session: both are empty strings
@@ -162,29 +167,40 @@ mod tests {
         )));
     }
 
+    fn kind_of(error: DriverError) -> ConnectionErrorKind {
+        match error {
+            DriverError::Connection { kind, .. } => kind,
+            other => panic!("expected a connection error, got {other}"),
+        }
+    }
+
     #[test]
-    fn tls_errors_get_an_actionable_message() {
-        let DriverError::Connection(message) =
-            connection_error(io_error(ErrorKind::InvalidData), TlsMode::Required)
-        else {
-            panic!("expected a connection error");
-        };
-        assert!(message.starts_with("El servidor no ofrece un cifrado TLS compatible"));
-
-        let DriverError::Connection(message) = connection_error(
-            sqlx::Error::Tls("invalid peer certificate: UnknownIssuer".into()),
-            TlsMode::VerifyCa,
-        ) else {
-            panic!("expected a connection error");
-        };
-        assert!(message.starts_with("Certificado inválido:"));
-
-        let DriverError::Connection(message) =
-            connection_error(io_error(ErrorKind::ConnectionRefused), TlsMode::Required)
-        else {
-            panic!("expected a connection error");
-        };
-        assert!(!message.contains("TLS"));
+    fn tls_errors_get_their_own_cause() {
+        assert_eq!(
+            kind_of(connection_error(
+                io_error(ErrorKind::InvalidData),
+                TlsMode::Required
+            )),
+            ConnectionErrorKind::TlsIncompatible
+        );
+        assert_eq!(
+            kind_of(connection_error(
+                sqlx::Error::Tls("invalid peer certificate: UnknownIssuer".into()),
+                TlsMode::VerifyCa,
+            )),
+            ConnectionErrorKind::TlsCertificate
+        );
+        assert_eq!(
+            kind_of(connection_error(
+                io_error(ErrorKind::ConnectionRefused),
+                TlsMode::Required
+            )),
+            ConnectionErrorKind::Refused
+        );
+        assert_eq!(
+            kind_of(connection_error(sqlx::Error::PoolTimedOut, TlsMode::Auto)),
+            ConnectionErrorKind::Timeout
+        );
     }
 
     #[test]
@@ -208,14 +224,14 @@ mod tests {
     }
 
     #[test]
-    fn server_without_tls_gets_its_own_message() {
-        let DriverError::Connection(message) = connection_error(
-            sqlx::Error::Tls("server does not support TLS".into()),
-            TlsMode::Required,
-        ) else {
-            panic!("expected a connection error");
-        };
-        assert!(message.starts_with("El servidor no tiene TLS habilitado"));
+    fn server_without_tls_gets_its_own_cause() {
+        assert_eq!(
+            kind_of(connection_error(
+                sqlx::Error::Tls("server does not support TLS".into()),
+                TlsMode::Required,
+            )),
+            ConnectionErrorKind::TlsUnavailable
+        );
     }
 
     #[test]

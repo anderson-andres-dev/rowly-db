@@ -14,6 +14,8 @@ export function openConnectionWindow(profile: ConnectionProfile): Promise<void> 
     title: `${profile.name} · Rowly DB`,
     width: 1200,
     height: 800,
+    minWidth: 900,
+    minHeight: 600,
     // Igual que la ventana principal (tauri.conf.json): la barra de titulo
     // la dibuja la app.
     decorations: false,

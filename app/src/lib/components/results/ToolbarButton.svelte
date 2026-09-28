@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { t } from "$lib/i18n";
+  import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
+  import { opticalIconSize, TOOLBAR_ICON_STROKE } from "$lib/iconOptics";
 
-  // Boton de icono de las barras del resultado, con tooltip propio (etiqueta
-  // + atajo) debajo del boton — el mismo estilo que el de la paginacion.
+  // Boton de icono de las barras del resultado, con el tooltip de la app
+  // (etiqueta + atajo, lib/tooltip.ts).
   let {
     icon: Icon,
     label,
@@ -11,67 +13,49 @@
     disabled = false,
     tone = "default",
     badge = 0,
-    size = 16,
+    size,
     onclick,
   }: {
-    icon: Component<{ size?: number; "aria-hidden"?: boolean | "true" }>;
+    icon: Component<{
+      size?: number;
+      strokeWidth?: number;
+      absoluteStrokeWidth?: boolean;
+      "aria-hidden"?: boolean | "true";
+    }>;
     label: string;
     shortcut?: string;
     disabled?: boolean;
     // "submit": el verde de "aplicar" cuando esta habilitado.
-    tone?: "default" | "submit";
+    // "active": algo encendido (p. ej. un filtro aplicado), en acento.
+    // "danger": algo que fallo (p. ej. un filtro invalido), en rojo.
+    tone?: "default" | "submit" | "active" | "danger";
     // Contador tipo notificacion en la esquina superior derecha (0 = oculto).
     badge?: number;
-    // Tamaño del icono: cada glifo de lucide ocupa distinto su caja (una
-    // flecha circular llena mas que un "+"), se ajusta para que se vean
-    // parejos.
+    // Sin valor usa la correccion optica de iconOptics.ts: cada glifo a su
+    // tamaño medido para que todos se vean del mismo tamaño.
     size?: number;
     onclick: () => void;
   } = $props();
-
-  let tooltip = $state<{ x: number; y: number } | null>(null);
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  function prettyShortcut(keys: string): string {
-    return keys
-      .replace("ArrowDown", $t("results.key.down"))
-      .replace("ArrowUp", $t("results.key.up"))
-      .replace("Insert", $t("results.key.insert"));
-  }
-
-  function show(event: Event) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => (tooltip = { x: rect.left + rect.width / 2, y: rect.bottom + 6 }), 350);
-  }
-
-  function hide() {
-    if (timer) clearTimeout(timer);
-    timer = null;
-    tooltip = null;
-  }
-
-  $effect(() => () => {
-    if (timer) clearTimeout(timer);
-  });
 </script>
 
 <button
   type="button"
   class="toolbar-button"
   class:submit={tone === "submit"}
+  class:active={tone === "active"}
+  class:danger={tone === "danger"}
   aria-label={label}
   {disabled}
-  onclick={() => {
-    hide();
-    onclick();
-  }}
-  onpointerenter={show}
-  onpointerleave={hide}
-  onfocus={show}
-  onblur={hide}
+  use:tooltip={{ label, shortcut }}
+  use:settleTransitions
+  {onclick}
 >
-  <Icon {size} aria-hidden="true" />
+  <Icon
+    size={size ?? opticalIconSize(Icon as Component<never>)}
+    strokeWidth={TOOLBAR_ICON_STROKE}
+    absoluteStrokeWidth
+    aria-hidden="true"
+  />
   {#if badge > 0}
     <!-- {#key}: cada cambio del numero vuelve a montar la burbuja y repite
          su pequeño "pop", asi se nota que el contador cambio. -->
@@ -80,13 +64,6 @@
     {/key}
   {/if}
 </button>
-
-{#if tooltip}
-  <div class="toolbar-tooltip" role="tooltip" style={`left:${tooltip.x}px; top:${tooltip.y}px;`}>
-    <span>{label}</span>
-    {#if shortcut}<span class="shortcut">{prettyShortcut(shortcut)}</span>{/if}
-  </div>
-{/if}
 
 <style>
   .toolbar-button {
@@ -108,6 +85,11 @@
       opacity var(--duration-fast) ease;
   }
 
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts). */
+  .toolbar-button:not([data-settled]) {
+    transition: none;
+  }
+
   .toolbar-button:hover:not(:disabled) {
     background: var(--surface-hover);
     color: var(--text-primary);
@@ -115,6 +97,16 @@
 
   .toolbar-button.submit:not(:disabled) {
     color: var(--success);
+  }
+
+  .toolbar-button.active {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+  }
+
+  .toolbar-button.danger {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
   }
 
   /* Burbuja de notificacion: el anillo del color de la barra la despega del
@@ -167,26 +159,5 @@
   .toolbar-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
-  }
-
-  .toolbar-tooltip {
-    position: fixed;
-    z-index: 1001;
-    display: flex;
-    gap: var(--space-3);
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateX(-50%);
-  }
-
-  .shortcut {
-    color: var(--text-secondary);
   }
 </style>

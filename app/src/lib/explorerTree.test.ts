@@ -149,3 +149,35 @@ describe("expandableKeys", () => {
     expect(expandableKeys(tree)).toContain("schema:core/tables/orders/columns");
   });
 });
+
+describe("buildExplorerTree: tablas fijadas", () => {
+  it("van primero en su carpeta, en el orden en que se fijaron, y quedan marcadas en su lugar", () => {
+    const tree = buildExplorerTree(
+      explorer(core),
+      "",
+      [
+        { schema: "core", name: "customers" },
+        { schema: "core", name: "orders" },
+      ],
+      "Fijadas",
+    );
+    expect(tree[0].label).toBe("Fijadas");
+    expect(tree[0].icon).toBe("pinned");
+    expect(tree[0].children?.map((node) => node.label)).toEqual(["customers", "orders"]);
+    expect(tree[0].children?.every((node) => node.pinned)).toBe(true);
+    const tables = child(tree[1], "tables");
+    expect(child(tables, "orders")?.pinned).toBe(true);
+    expect(child(tables, "big_orders")).toBeUndefined();
+    expect(child(child(tree[1], "views"), "big_orders")?.pinned).toBe(false);
+  });
+
+  it("sin fijadas no hay carpeta, y las que no estan cargadas no aparecen", () => {
+    expect(buildExplorerTree(explorer(core), "", [])[0].label).toBe("core");
+    expect(buildExplorerTree(explorer(core), "", [{ schema: "otro", name: "x" }])[0].label).toBe("core");
+  });
+
+  it("el filtro tambien aplica a las fijadas", () => {
+    const tree = buildExplorerTree(explorer(core), "cust", [{ schema: "core", name: "orders" }], "Fijadas");
+    expect(tree[0].label).toBe("core");
+  });
+});

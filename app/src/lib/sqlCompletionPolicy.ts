@@ -5,7 +5,7 @@
 // decision). Funcion pura, sin imports de CodeMirror.
 
 import type { ClauseContext } from "./sqlContext";
-import type { ConnectionDriver } from "./connections";
+import type { SqlProfile } from "./engines";
 
 export interface CompletionPolicy {
   /** Que tan permisivo es el completado de catalogo (tablas/columnas). */
@@ -18,14 +18,6 @@ export interface CompletionPolicy {
   allowFkJoin: boolean;
 }
 
-const COMMON_STARTERS = ["select", "insert", "update", "delete", "with", "explain", "create", "alter", "show", "set"];
-const MYSQL_STARTERS = [...COMMON_STARTERS, "start", "commit", "rollback", "truncate", "replace", "describe", "use", "call"];
-const POSTGRES_STARTERS = [...COMMON_STARTERS, "begin", "commit", "rollback", "truncate", "table", "values", "copy", "vacuum", "analyze"];
-
-function starterSetFor(driver: ConnectionDriver): ReadonlySet<string> {
-  return new Set(driver === "postgres" ? POSTGRES_STARTERS : MYSQL_STARTERS);
-}
-
 const RELATION_TAIL_BASE = ["where", "group", "order", "having", "join", "inner", "left", "right", "full", "outer", "cross", "union", "limit"];
 
 function relationTailKeywords(clause: ClauseContext["clause"]): ReadonlySet<string> {
@@ -36,14 +28,18 @@ const RELATION_TAIL_BOOST: Record<string, number> = { where: 30, group: 18, orde
 
 const NO_BOOST = () => 0;
 
-export function completionPolicy(context: ClauseContext, driver: ConnectionDriver): CompletionPolicy {
+// `engine`: lo que puede abrir una sentencia depende del motor (su perfil).
+export function completionPolicy(
+  context: ClauseContext,
+  engine: Pick<SqlProfile, "statementStarters">,
+): CompletionPolicy {
   const allowFkJoin =
     context.position === "unknown" ||
     (context.position === "relation-target" && context.clause === "join" && context.confidence !== "unknown");
 
   switch (context.position) {
     case "statement-start":
-      return { schemaMode: "none", allowedKeywords: starterSetFor(driver), keywordBoost: NO_BOOST, allowFkJoin };
+      return { schemaMode: "none", allowedKeywords: new Set(engine.statementStarters), keywordBoost: NO_BOOST, allowFkJoin };
 
     case "select-tail":
       return {

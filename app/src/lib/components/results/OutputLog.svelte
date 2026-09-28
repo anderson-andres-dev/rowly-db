@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import type { LogEntry } from "$lib/stores/executionLog";
   import { highlightSql } from "$lib/sqlHighlight";
   import { t } from "$lib/i18n";
@@ -7,7 +7,12 @@
   // Pestaña "Salida": el registro de la consola, al estilo del Output de
   // DataGrip. Cada entrada con su marca de tiempo; las lineas siguientes de
   // una sentencia o un mensaje largo quedan alineadas bajo el texto.
-  let { entries, running = false }: { entries: LogEntry[]; running?: boolean } = $props();
+  // `runningAction`: lo que acompaña a "Ejecutando…" (el boton de cancelar).
+  let {
+    entries,
+    running = false,
+    runningAction,
+  }: { entries: LogEntry[]; running?: boolean; runningAction?: Snippet } = $props();
 
   let scroller = $state<HTMLDivElement>();
   // Sigue al final mientras el usuario este abajo; si subio a leer algo, no
@@ -55,7 +60,9 @@
   {/each}
   {#if running}
     <span class="time"></span>
-    <span class="text running"><span class="dot"></span>{$t("results.output.running")}</span>
+    <span class="text running"
+      ><span class="dot"></span>{$t("results.output.running")}{#if runningAction}{@render runningAction()}{/if}</span
+    >
   {/if}
 </div>
 
@@ -128,6 +135,12 @@
     align-items: center;
     gap: var(--space-2);
     color: var(--text-secondary);
+  }
+
+  /* El boton de cancelar lleva la letra de la interfaz, no la del registro. */
+  .running :global(.action-button) {
+    margin-left: var(--space-2);
+    font-family: var(--font-family);
   }
 
   .dot {

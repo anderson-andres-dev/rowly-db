@@ -6,7 +6,7 @@
 //! (existencia de la tabla y columnas, clave primaria, tipos) se vuelve a
 //! comprobar aca contra el catalogo.
 
-use khipu_driver_core::{RelationKind, SchemaObjects, TableInfo, TransactionStatement};
+use khipu_driver_core::{Message, RelationKind, SchemaObjects, TableInfo, TransactionStatement};
 use khipu_engine::Dialect;
 use khipu_engine::editing::{
     CellValue, ColumnValue, ResultChanges, RowUpdate, analyze_editable_query,
@@ -71,21 +71,22 @@ pub fn edit_info(
     default_schema: &str,
     schemas: &BTreeMap<String, SchemaObjects>,
     result_columns: &[String],
-) -> Result<ResultEditInfo, String> {
-    let query = analyze_editable_query(sql, dialect)?;
+) -> Result<ResultEditInfo, Message> {
+    let query = analyze_editable_query(sql, dialect)
+        .map_err(|reason| Message::key(format!("notEditable.{}", reason.as_key())))?;
     let schema = query
         .schema
         .clone()
         .unwrap_or_else(|| default_schema.to_string());
     let table = find_table(schemas, &schema, &query.table).ok_or_else(|| {
         if schemas.contains_key(&schema) {
-            format!("No se encontró la tabla {} en el catálogo.", query.table)
+            Message::key("edit.tableNotInCatalog").with("table", &query.table)
         } else {
-            format!("El schema {schema} no está cargado en el explorador.")
+            Message::key("edit.schemaNotLoaded").with("schema", &schema)
         }
     })?;
     if table.kind != RelationKind::Table {
-        return Err("Las vistas no se editan desde el resultado.".to_string());
+        return Err(Message::key("edit.isView"));
     }
     let key_columns: Vec<String> = table
         .columns
@@ -94,10 +95,7 @@ pub fn edit_info(
         .map(|column| column.name.clone())
         .collect();
     if key_columns.is_empty() {
-        return Err(format!(
-            "La tabla {} no tiene clave primaria: no hay forma segura de identificar cada fila.",
-            table.name
-        ));
+        return Err(Message::key("edit.noPrimaryKey").with("table", &table.name));
     }
 
     let table_column = |name: &str| {
@@ -150,13 +148,13 @@ pub fn edit_info(
         })
         .collect();
     if !missing.is_empty() {
-        return Err(format!(
-            "El resultado no incluye la clave primaria ({}).",
+        return Err(Message::key("edit.keyMissing").with(
+            "columns",
             missing
                 .iter()
                 .map(|key| key.as_str())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
         ));
     }
 
@@ -177,27 +175,26 @@ pub fn statements(
     schemas: &BTreeMap<String, SchemaObjects>,
     target: &EditTarget,
     changes: &ResultChanges,
-) -> Result<Vec<TransactionStatement>, String> {
+) -> Result<Vec<TransactionStatement>, Message> {
     let table = find_table(schemas, &target.schema, &target.table)
         .filter(|table| table.kind == RelationKind::Table)
         .ok_or_else(|| {
-            format!(
-                "No se encontró la tabla {}.{}.",
-                target.schema, target.table
-            )
+            Message::key("edit.tableNotFound")
+                .with("table", format!("{}.{}", target.schema, target.table))
         })?;
 
-    let typed = |item: &ColumnValue, writing: bool| -> Result<ColumnValue, String> {
+    let typed = |item: &ColumnValue, writing: bool| -> Result<ColumnValue, Message> {
         let column = table
             .columns
             .iter()
             .find(|column| column.name.eq_ignore_ascii_case(&item.column))
-            .ok_or_else(|| format!("La columna {} no existe en {}.", item.column, table.name))?;
+            .ok_or_else(|| {
+                Message::key("edit.columnNotFound")
+                    .with("column", &item.column)
+                    .with("table", &table.name)
+            })?;
         if writing && column.generated && item.value != CellValue::Default {
-            return Err(format!(
-                "La columna {} la genera el servidor: no se puede escribir.",
-                column.name
-            ));
+            return Err(Message::key("edit.generatedColumn").with("column", &column.name));
         }
         Ok(ColumnValue {
             column: column.name.clone(),
@@ -211,7 +208,7 @@ pub fn statements(
         .filter(|column| column.is_primary_key)
         .map(|column| column.name.as_str())
         .collect();
-    let key = |values: &[ColumnValue]| -> Result<Vec<ColumnValue>, String> {
+    let key = |values: &[ColumnValue]| -> Result<Vec<ColumnValue>, Message> {
         let typed_key = values
             .iter()
             .map(|item| typed(item, false))
@@ -225,7 +222,7 @@ pub fn statements(
                 .iter()
                 .any(|item| !matches!(item.value, CellValue::Text(_)))
         {
-            return Err("La fila no está identificada por su clave primaria completa.".to_string());
+            return Err(Message::key("edit.incompleteKey"));
         }
         Ok(typed_key)
     };
@@ -246,10 +243,10 @@ pub fn statements(
                         .set
                         .iter()
                         .map(|item| typed(item, true))
-                        .collect::<Result<_, String>>()?,
+                        .collect::<Result<_, Message>>()?,
                 })
             })
-            .collect::<Result<_, String>>()?,
+            .collect::<Result<_, Message>>()?,
         inserts: changes
             .inserts
             .iter()
@@ -338,7 +335,7 @@ mod tests {
             &names(&["seve"]),
         )
         .unwrap_err();
-        assert!(error.contains("clave primaria"), "{error}");
+        assert_eq!(error.key_name(), Some("edit.keyMissing"), "{error}");
     }
 
     #[test]

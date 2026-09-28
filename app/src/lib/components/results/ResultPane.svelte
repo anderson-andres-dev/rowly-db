@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
   import {
     ArrowUpFromLine,
     Eye,
@@ -16,6 +18,7 @@
     Pin,
     PinOff,
     Search,
+    Filter,
   } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
@@ -43,7 +46,8 @@
     type ResultEditInfo,
     type RowRange,
   } from "$lib/resultEditing";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
+  import { registerCommands } from "$lib/commands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, type Snippet } from "svelte";
 
@@ -75,6 +79,8 @@
     onnotice = () => {},
     outputLog = [],
     consoleRunning = false,
+    oncancelquery,
+    cancellingQuery = false,
     tabs = [],
     activeTab = "output",
     onselecttab = () => {},
@@ -85,6 +91,9 @@
     onunpin = () => {},
     onrepin = () => {},
     filters,
+    tableView = false,
+    filterCount = 0,
+    filterError = false,
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -118,6 +127,10 @@
     outputLog?: LogEntry[];
     // Hay una ejecucion nueva en curso en la consola (indicador de la Salida).
     consoleRunning?: boolean;
+    // Interrumpe la ejecucion en curso; el boton sale junto a cada indicador
+    // de "ejecutando" (y Esc hace lo mismo, comando cancel-query).
+    oncancelquery?: () => void;
+    cancellingQuery?: boolean;
     // Pestañas de resultado (fijadas y la normal). Cada una tiene su estado
     // completo en Workspace; este panel muestra la elegida con TODAS sus
     // funciones: fijar es solo para que la proxima ejecucion no la
@@ -135,8 +148,17 @@
     onunpin?: () => void;
     onrepin?: () => void;
     // Barra extra entre la barra de herramientas y el grid (los filtros
-    // WHERE / ORDER BY de una pestaña de tabla).
+    // de una pestaña de tabla: el constructor visual).
     filters?: Snippet;
+    // Pestaña de tabla (abierta desde el explorador): una sola vista, sin la
+    // fila de pestañas del resultado (la pestaña de afuera ya la nombra y los
+    // errores del filtro salen junto al filtro) y con los filtros en
+    // su propia fila bajo la barra de herramientas.
+    tableView?: boolean;
+    // Vista de tabla: condiciones aplicadas (burbuja del boton de filtro) y
+    // si el ultimo filtro fallo (el boton se marca y la barra se abre).
+    filterCount?: number;
+    filterError?: boolean;
   } = $props();
 
   // --- Pestañas ----------------------------------------------------------
@@ -158,6 +180,8 @@
   function shortcutKeys(id: string): string {
     return $shortcuts.find((shortcut) => shortcut.id === id)?.keys ?? "";
   }
+
+  const cancelQueryKeys = $derived(shortcutKeys("cancel-query"));
 
   const lastCol = $derived(Math.max(0, (result?.type === "resultSet" ? result.columns.length : 1) - 1));
 
@@ -272,8 +296,9 @@
   let findResult = $state<FindResult>({ matches: [], error: null, capped: false });
   let findBar = $state<ReturnType<typeof FindBar>>();
 
-  // Para el Workspace (Ctrl+F con el mouse sobre el resultado).
+  // Para el comando find con el resultado como zona activa (Workspace).
   export function toggleFind() {
+
     if (showingResult) openFind();
   }
 
@@ -351,6 +376,24 @@
   let formatMenuPosition = $state({ right: 0, top: 0 });
   const formatLabel = $derived(COPY_FORMATS.find((item) => item.id === $copySettings.format)?.label ?? "TSV");
 
+  // --- Barra de filtros (vista de tabla) --------------------------------
+  // Como la barra de buscar: el boton la abre y la cierra, Esc la cierra y
+  // devuelve el foco al grid. Si un filtro falla, se abre para mostrarlo.
+  let filtersOpen = $state(false);
+
+  function toggleFilters() {
+    filtersOpen = !filtersOpen;
+  }
+
+  export function closeFilters() {
+    filtersOpen = false;
+    grid?.focusCell();
+  }
+
+  $effect(() => {
+    if (filterError && tableView) filtersOpen = true;
+  });
+
   function toggleFormatMenu() {
     if (formatMenuOpen) {
       formatMenuOpen = false;
@@ -368,24 +411,31 @@
     formatMenuOpen = false;
   }
 
-  function onGridKeydown(event: KeyboardEvent) {
-    const matches = (id: string) => {
-      const keys = shortcutKeys(id);
-      return keys !== "" && eventMatchesShortcut(event, keys);
+  // Comandos del grid (lib/commands.ts): solo con el foco en el grid y no
+  // mientras se edita una celda (su input tiene sus propias teclas), asi un
+  // atajo no actua sobre las filas desde la barra de filtros o de busqueda.
+  let gridScroll = $state<HTMLElement>();
+
+  function inGrid(run: () => void) {
+    return () => {
+      const active = document.activeElement;
+      if (!gridScroll || !active || !gridScroll.contains(active) || active.closest("input, textarea")) return false;
+      run();
     };
-    let handled = true;
-    if (matches("add-result-row")) addNewRow();
-    else if (matches("delete-result-rows")) deleteSelectedRows();
-    else if (matches("revert-result-changes")) {
-      if (canRevert) void revertChanges();
-    } else if (matches("submit-result-changes")) {
-      if (pending > 0) onsubmit();
-    } else handled = false;
-    if (handled) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
   }
+
+  $effect(() =>
+    registerCommands("results", {
+      "add-result-row": inGrid(addNewRow),
+      "delete-result-rows": inGrid(deleteSelectedRows),
+      "revert-result-changes": inGrid(() => {
+        if (canRevert) void revertChanges();
+      }),
+      "submit-result-changes": inGrid(() => {
+        if (pending > 0) onsubmit();
+      }),
+    }),
+  );
 
 </script>
 
@@ -396,13 +446,29 @@
   }}
 />
 
+{#snippet cancelButton()}
+  {#if oncancelquery}
+    <button
+      type="button"
+      class="action-button secondary small"
+      disabled={cancellingQuery}
+      use:tooltip={$t("results.cancelQueryTitle", { keys: cancelQueryKeys })}
+      onclick={() => oncancelquery?.()}
+    >
+      {cancellingQuery ? $t("results.cancellingQuery") : $t("results.cancelQuery")}
+    </button>
+  {/if}
+{/snippet}
+
 <div class="result-pane">
   {#if consoleRunning || isExecuting || tabs.length > 0 || outputLog.length > 0}
+    {#if !tableView}
     <div
       class="result-tabs"
       role="tablist"
       aria-label={$t("results.tabs")}
       use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
+      use:settleTransitions
     >
       <button
         type="button"
@@ -437,17 +503,17 @@
         </div>
       {/each}
     </div>
+    {/if}
     {#if showingResult}
       <!-- Barra de herramientas del resultado: fila propia debajo de las
            pestañas. Una pestaña fijada es de solo lectura: solo copia y
            exporta. -->
-      <div class="result-toolbar" role="toolbar" aria-label={$t("results.toolbar")}>
+      <div class="result-toolbar" role="toolbar" aria-label={$t("results.toolbar")} use:settleTransitions>
         <!-- Misma barra para una pestaña fijada: lo que edita queda
              deshabilitado (es solo lectura) y el alfiler pasa a "Desfijar". -->
         <div class="toolbar-group">
           <ToolbarButton
             icon={RotateCw}
-            size={15}
             label={$t("results.rerun")}
             disabled={isExecuting}
             onclick={onreload}
@@ -494,17 +560,27 @@
           />
         </div>
         <div class="toolbar-group">
-          {#if activeResultTab?.pinned}
-            <ToolbarButton icon={PinOff} size={15} label={$t("results.unpin")} onclick={onunpin} />
+          {#if tableView}
+            <!-- Una tabla no se fija: se vuelve a abrir desde el explorador. -->
+          {:else if activeResultTab?.pinned}
+            <ToolbarButton icon={PinOff} label={$t("results.unpin")} onclick={onunpin} />
           {:else if activeResultTab && activeResultTab.key.includes("#pin")}
             <!-- Desfijada pero todavia abierta: se puede volver a fijar. -->
-            <ToolbarButton icon={Pin} size={15} label={$t("results.pin")} onclick={onrepin} />
+            <ToolbarButton icon={Pin} label={$t("results.pin")} onclick={onrepin} />
           {:else}
-            <ToolbarButton icon={Pin} size={15} label={$t("results.pin")} disabled={isExecuting} onclick={onpin} />
+            <ToolbarButton icon={Pin} label={$t("results.pin")} disabled={isExecuting} onclick={onpin} />
+          {/if}
+          {#if tableView && filters}
+            <ToolbarButton
+              icon={Filter}
+              label={$t("results.filters.toggle")}
+              badge={filterCount}
+              tone={filterError ? "danger" : filterCount > 0 || filtersOpen ? "active" : "default"}
+              onclick={toggleFilters}
+            />
           {/if}
           <ToolbarButton
             icon={Search}
-            size={15}
             label={$t("results.find.label")}
             shortcut="Ctrl+F"
             onclick={openFind}
@@ -519,7 +595,7 @@
           class:open={formatMenuOpen}
           aria-haspopup="menu"
           aria-expanded={formatMenuOpen}
-          title={$t("results.copyFormat.title")}
+          use:tooltip={$t("results.copyFormat.title")}
           bind:this={formatButton}
           onclick={toggleFormatMenu}
         >
@@ -534,7 +610,7 @@
           />
         </div>
       </div>
-      {#if filters}{@render filters()}{/if}
+      {#if filters && (!tableView || filtersOpen)}{@render filters()}{/if}
       {#if findOpen}
         <FindBar
           bind:this={findBar}
@@ -552,7 +628,7 @@
       {/if}
       {#if formatMenuOpen}
         <div
-          class="format-menu"
+          class="ui-menu format-menu"
           role="menu"
           aria-label={$t("results.copyFormat.menu")}
           bind:this={formatMenu}
@@ -564,13 +640,13 @@
               type="button"
               role="menuitemradio"
               aria-checked={$copySettings.format === item.id}
-              class="menu-item"
+              class="ui-menu-item menu-item"
               onclick={() => {
                 copySettings.update((current) => ({ ...current, format: item.id }));
                 formatMenuOpen = false;
               }}
             >
-              <span class="check">{#if $copySettings.format === item.id}<Check size={13} aria-hidden="true" />{/if}</span>
+              <span class="ui-menu-check">{#if $copySettings.format === item.id}<Check size={13} aria-hidden="true" />{/if}</span>
               <span>{item.label}</span>
             </button>
           {/each}
@@ -579,10 +655,10 @@
             type="button"
             role="menuitemcheckbox"
             aria-checked={$copySettings.headers}
-            class="menu-item"
+            class="ui-menu-item menu-item"
             onclick={() => copySettings.update((current) => ({ ...current, headers: !current.headers }))}
           >
-            <span class="check">{#if $copySettings.headers}<Check size={13} aria-hidden="true" />{/if}</span>
+            <span class="ui-menu-check">{#if $copySettings.headers}<Check size={13} aria-hidden="true" />{/if}</span>
             <span>{$t("results.includeHeaders")}</span>
             <span class="hint">TSV · CSV</span>
           </button>
@@ -591,8 +667,9 @@
     {/if}
   {/if}
   {#if (isExecuting || consoleRunning) && !hasResultTab && outputLog.length === 0}
-    <div class="centered">
+    <div class="centered running-state">
       <div class="spinner" role="status" aria-label={$t("results.executingQuery")}></div>
+      {@render cancelButton()}
     </div>
   {:else if result === null && outputLog.length === 0}
     <div class="centered empty-state">
@@ -601,13 +678,24 @@
     </div>
   {:else if !showingResult || result?.type !== "resultSet"}
     {#if filters}{@render filters()}{/if}
-    <div class="output-region">
-      <OutputLog entries={outputLog} running={consoleRunning} />
-    </div>
+    {#if tableView}
+      <!-- Tabla cargando o con un filtro invalido (el error sale junto al
+           filtro): sin registro de Salida. -->
+      <div class="centered running-state">
+        {#if isExecuting || consoleRunning}
+          <div class="spinner" role="status" aria-label={$t("results.executingQuery")}></div>
+          {@render cancelButton()}
+        {/if}
+      </div>
+    {:else}
+      <div class="output-region">
+        <OutputLog entries={outputLog} running={consoleRunning} runningAction={cancelButton} />
+      </div>
+    {/if}
   {:else}
     <div class="grid-region">
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="grid-scroll" onkeydown={onGridKeydown}>
+      <div class="grid-scroll" bind:this={gridScroll}>
+
         <!-- Siempre montado (aunque no haya filas): asi un filtro sin
              resultados no desarma el grid y el siguiente no vuelve a medir
              ni a mover las columnas. -->
@@ -634,15 +722,15 @@
             findMatches={findOpen ? findResult.matches : []}
             findCurrent={findOpen ? findCurrent : -1}
             {hiddenRows}
-            onfind={openFind}
             {sort}
             sortable={page?.sortable === true && !isExecuting}
             {onsort}
           />
         {/if}
         {#if isExecuting}
-          <div class="busy-overlay">
+          <div class="busy-overlay running-state">
             <div class="spinner" role="status" aria-label={$t("results.loadingPage")}></div>
+            {@render cancelButton()}
           </div>
         {/if}
       </div>
@@ -658,7 +746,7 @@
             count: result.columns.length,
           })} · {result.executionTimeMs} ms
           {#if result.truncated && !page?.pageable}
-            <span class="truncated" title={$t("results.stats.truncatedTitle")}>
+            <span class="truncated" use:tooltip={$t("results.stats.truncatedTitle")}>
               · {$t("results.stats.truncated")}
             </span>
           {/if}
@@ -751,11 +839,13 @@
   /* Pestañas al estilo de las de consola (.console-tab): Salida (fija, sin
      cerrar) y el resultado (con ×). La activa lleva el acento; las otras
      son planas y se aclaran al pasar el mouse. */
+  /* Pestañas y barra forman una sola cabecera: sin linea entre ellas, una
+     sola al pie. Nada de cajas: el orden lo dan el espacio y el peso. */
   .result-tabs {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: var(--space-1);
+    gap: 2px;
     min-height: 2.25rem;
     padding: var(--space-1) var(--space-2);
     box-sizing: border-box;
@@ -763,11 +853,17 @@
     background: var(--surface);
   }
 
+  /* Con la barra debajo, la linea pasa al pie de la barra. */
+  .result-tabs:has(+ .result-toolbar) {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
   .result-toolbar {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-4);
     min-height: 2.5rem;
     padding: 0 var(--space-2);
     box-sizing: border-box;
@@ -795,6 +891,12 @@
       color var(--duration-fast) ease;
   }
 
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts). */
+  .result-toolbar:not([data-settled]) .format-button,
+  .result-tabs:not([data-settled]) .result-tab {
+    transition: none;
+  }
+
   .format-button:hover,
   .format-button.open {
     background: var(--surface-hover);
@@ -806,64 +908,21 @@
     outline-offset: -2px;
   }
 
-  /* Mismo menu que el selector de tamaño de pagina (ResultPager). */
+  /* El menu compartido (.ui-menu); aca solo su posicion. */
   .format-menu {
     position: fixed;
     z-index: 1000;
-    display: flex;
     min-width: 12.5rem;
-    flex-direction: column;
-    padding: var(--space-1);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    font-size: 0.8125rem;
-    animation: menu-in 120ms ease-out;
-  }
-
-  @keyframes menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-3px);
-    }
   }
 
   .menu-heading {
-    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 1.25rem);
+    padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) * 2 + 1rem);
     color: var(--text-secondary);
     font-size: 0.75rem;
   }
 
-  .menu-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 1.75rem;
-    padding: 0 var(--space-3) 0 var(--space-2);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .menu-item:hover,
-  .menu-item:focus-visible {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    outline: none;
-  }
 
-  .check {
-    display: inline-flex;
-    width: 1rem;
-    flex-shrink: 0;
-    justify-content: center;
-    color: var(--accent);
-  }
 
   .hint {
     margin-left: auto;
@@ -877,26 +936,23 @@
   }
 
   /* Grupos por funcion (datos · editar · cambios · pestaña · copiar y
-     exportar): cada uno es un segmento con un fondo apenas perceptible y
-     esquinas redondeadas. Sin lineas: la forma y el espacio entre segmentos
-     son los que organizan. */
+     exportar): botones juntos dentro del grupo y aire entre grupos. Sin
+     fondos ni contornos: con cinco cajas seguidas la barra se sentia
+     amontonada. */
   .toolbar-group {
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 2px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--text-primary) 4.5%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 5%, transparent);
   }
 
   .toolbar-group.end {
     margin-left: auto;
   }
 
-  /* Mismo diseño que las pestañas de consola (.console-tab en
-     Workspace.svelte): borde, fondo elevado, acento en la activa y su
-     icono en color de acento. */
+
+
+  /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
+     con un relleno tenue y su icono en acento. Sin bordes. */
   .result-tab {
     display: inline-flex;
     flex-shrink: 0;
@@ -905,23 +961,25 @@
     min-height: 1.75rem;
     padding: 0 var(--space-3);
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     font-size: 0.75rem;
     cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
   }
 
   .result-tab:hover {
-    background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary));
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     color: var(--text-primary);
   }
 
   .result-tab.active {
-    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated));
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
     color: var(--text-primary);
   }
 
@@ -942,6 +1000,8 @@
   }
 
   .result-tab.closable:global(.reorder-dragging) {
+    /* Sin fondo propio, al arrastrarla se veria vacia. */
+    background: var(--surface-elevated);
     position: relative;
     z-index: 2;
     box-shadow: var(--shadow-elevated);
@@ -1015,6 +1075,11 @@
     min-height: 0;
     flex: 1;
     overflow: hidden;
+  }
+
+  .running-state {
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .busy-overlay {
