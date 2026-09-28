@@ -1,72 +1,76 @@
-# Contribuir a Rowly DB
+# Contributing to Rowly DB
 
-Gracias por el interés. El proyecto recién arranca, así que hay bastante
-espacio para decisiones de diseño — abrir un issue antes de un PR grande.
+**English** · [Español](CONTRIBUTING.es.md)
 
-**Rowly DB** es el nombre del producto; **Khipu** es el nombre interno del
-motor. En el código vas a ver `khipu-*` (crates, identificadores, claves de
-configuración): es a propósito y no hay que renombrarlo. Los textos que ve el
-usuario dicen Rowly DB.
+Thanks for your interest. The project is young, so there is plenty of room
+for design decisions: open an issue before a large PR.
 
-## Antes de empezar
+**Rowly DB** is the product name; **Khipu** is the internal name of its
+engine. You will see `khipu-*` in the code (crates, identifiers, settings
+keys): that is intentional and should not be renamed. Anything the user sees
+says Rowly DB.
 
-Leer [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) para entender por qué el
-repo está dividido en `engine` / `driver-core` / `drivers/*` / `app`, y qué
-capa te toca según lo que quieras aportar.
+## Before you start
 
-## Setup local
+Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) to understand why the
+repo is split into `engine` / `driver-core` / `drivers/*` / `app`, and which
+layer your change belongs to.
+
+## Local setup
 
 ```bash
-mise use -g rust@latest   # o rustup
+mise use -g rust@latest   # or rustup
 cargo build
 cd app && npm install && npm run tauri dev
 ```
 
-## Agregar soporte para un nuevo motor de base de datos
+## Adding a new database engine
 
-Todo lo que cambia de un motor a otro vive en dos lugares: el enum `Dialect`
-en Rust (`crates/engine/src/lib.rs`) y su perfil en el frontend
-(`app/src/lib/engines/`). Ninguno cae a otro motor: si falta algo, **no
-compila**. El diseño completo está en `docs/specs/v0.2-perfiles-de-motor.md`.
+Everything that differs between engines lives in two places: the `Dialect`
+enum in Rust (`crates/engine/src/lib.rs`) and the engine profile in the
+frontend (`app/src/lib/engines/`). Nothing falls back to another engine: if
+something is missing, **it does not compile**. The full design is in
+`docs/specs/v0.2-perfiles-de-motor.md` (Spanish).
 
-1. **Driver**: `cargo new --lib crates/drivers/<motor>` e implementar el
-   trait `DbConnector` de `khipu-driver-core`, incluido `introspect_schema`
-   (ver `docs/design/explorador-base-de-datos.md`). Agregarlo a
-   `[workspace] members` en el `Cargo.toml` raíz.
-2. **Rust**: la variante en `DatabaseKind` (`app/src-tauri/src/drivers.rs`) y
-   en `Dialect`. El compilador marca cada decisión a completar: su parser de
-   `sqlparser`, comillas, literales, mayúsculas, la fila por defecto. Sumarla
-   a `ALL` en el contrato de `crates/engine/src/lib.rs`.
-3. **Frontend**: el motor en `ConnectionDriver` y `connectionDrivers`
-   (`app/src/lib/connections.ts`: nombre, logo, puerto), y su perfil en
-   `app/src/lib/engines/<motor>.ts`, con su entrada en `ENGINES`: comillas y
-   comentarios (`lexical`), dialecto del editor y del formateador, palabras
-   que abren sentencia, reservadas, códigos de error, cómo ubicar un error en
-   sus mensajes y la URL de conexión.
-4. **Contrato**: sus datos en `FIXTURES` de
-   `app/src/lib/engines/contract.test.ts` (el tipo lo exige) y correr
-   `npm test` y `cargo test --workspace`. Con eso, el autocompletado, los
-   alias, el JOIN por FK, Error Lens y el rendimiento con documentos enormes
-   ya funcionan con el motor nuevo.
-5. Abrir el PR.
+1. **Driver**: `cargo new --lib crates/drivers/<engine>` and implement the
+   `DbConnector` trait from `khipu-driver-core`, including
+   `introspect_schema` (see `docs/design/explorador-base-de-datos.md`). Add
+   it to `[workspace] members` in the root `Cargo.toml`.
+2. **Rust**: add the variant to `DatabaseKind`
+   (`app/src-tauri/src/drivers.rs`) and to `Dialect`. The compiler points at
+   every decision left to make: its `sqlparser` parser, quoting, literals,
+   case, the default row. Add it to `ALL` in the contract in
+   `crates/engine/src/lib.rs`.
+3. **Frontend**: add the engine to `ConnectionDriver` and
+   `connectionDrivers` (`app/src/lib/connections.ts`: name, logo, port), and
+   its profile in `app/src/lib/engines/<engine>.ts`, with its entry in
+   `ENGINES`: quotes and comments (`lexical`), editor and formatter dialect,
+   statement-opening keywords, reserved words, error codes, how to locate an
+   error in its messages, and the connection URL.
+4. **Contract**: add its data to `FIXTURES` in
+   `app/src/lib/engines/contract.test.ts` (the type requires it) and run
+   `npm test` and `cargo test --workspace`. With that, autocomplete, aliases,
+   JOIN by foreign key, inline diagnostics and large-document performance
+   already work with the new engine.
+5. Open the PR.
 
-Si `sqlparser` no trae el dialecto del motor, discútelo en un issue antes de
-mandar el PR.
+If `sqlparser` has no dialect for the engine, discuss it in an issue before
+sending the PR.
 
-## Pruebas de contrato de drivers
+## Driver contract tests
 
-`cargo test --workspace` corre en verde sin ninguna base de datos disponible:
-los tests que necesitan una conexión real están marcados `#[ignore = "requires
-database"]`, así que se saltean en una corrida normal.
+`cargo test --workspace` passes without any database available: tests that
+need a real connection are marked `#[ignore = "requires database"]`, so a
+normal run skips them.
 
-Para correrlos contra una instancia real:
+To run them against a real instance:
 
 ```bash
 cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Variables de entorno que necesita cada uno:
+Environment variables each one needs:
 
 - MySQL: `KHIPU_TEST_MYSQL_HOST`, `KHIPU_TEST_MYSQL_PORT`, `KHIPU_TEST_MYSQL_USER`,
   `KHIPU_TEST_MYSQL_PASSWORD`, `KHIPU_TEST_MYSQL_DATABASE`
@@ -74,72 +78,75 @@ Variables de entorno que necesita cada uno:
   `KHIPU_TEST_POSTGRES_USER`, `KHIPU_TEST_POSTGRES_PASSWORD`,
   `KHIPU_TEST_POSTGRES_DATABASE`
 
-Si falta alguna, el test hace `panic!` con un mensaje indicando qué setear
-(no hace falta memorizarlas: el mensaje del panic las lista).
+If one is missing, the test panics with a message saying what to set (no
+need to memorize them: the panic message lists them).
 
-Opcionales, para los tests de TLS (`<MOTOR>` es `MYSQL` o `POSTGRES`):
+Optional, for the TLS tests (`<ENGINE>` is `MYSQL` or `POSTGRES`):
 
-- `KHIPU_TEST_<MOTOR>_EXPECT_TLS`: qué debería negociar el servidor en modo
-  Automático. `encrypted` si tiene TLS moderno, `fallback` si ofrece TLS que
-  rustls no puede negociar (MySQL 5.7), `none` si no tiene TLS habilitado.
-  Sin la variable, solo se comprueba lo que vale para cualquier servidor.
-- `KHIPU_TEST_<MOTOR>_CA_CERT`: ruta a la CA que firmó el certificado del
-  servidor, para probar "Verificar CA" y "Verificar CA y host". El
-  certificado tiene que incluir el host del test en su subjectAltName.
+- `KHIPU_TEST_<ENGINE>_EXPECT_TLS`: what the server should negotiate in
+  Automatic mode. `encrypted` if it has modern TLS, `fallback` if it offers
+  TLS that rustls cannot negotiate (MySQL 5.7), `none` if TLS is disabled.
+  Without it, only what holds for any server is checked.
+- `KHIPU_TEST_<ENGINE>_CA_CERT`: path to the CA that signed the server
+  certificate, to test "Verify CA" and "Verify CA and host". The
+  certificate must include the test host in its subjectAltName.
 
-## Flujo de ramas y releases
+## Branches and releases
 
-- `main` es la rama por defecto y `develop` la de integración. Nada se
-  pushea directo a ninguna de las dos: `develop` y `main` tienen branch
-  protection (PR + 1 aprobación + checks de `quality.yml` en verde + sin
-  force-push).
+- `main` is the default branch and `develop` the integration branch. Nothing
+  is pushed directly to either: both have branch protection (PR + 1
+  approval + green `quality.yml` checks + no force-push).
 
-1. Abrir un PR desde `feature/...` hacia `develop`.
-2. `quality.yml` corre automático (Rust fmt/clippy/test + Node check/build).
-3. Confirmar que el check `quality` esté verde.
-4. Revisar y probar funcionalmente el cambio en desarrollo.
-5. Aprobar y fusionar el PR en `develop`.
-6. Para publicar una versión, crear `release/X.Y.Z` desde `develop`.
-7. Abrir un PR `release/X.Y.Z → main`.
-8. Esperar de nuevo `quality`, aprobar y fusionar.
-9. Etiquetar el commit de `main`:
+1. Open a PR from `feature/...` into `develop`.
+2. `quality.yml` runs automatically (Rust fmt/clippy/test + Node check/build).
+3. Make sure the `quality` check is green.
+4. Review and test the change functionally in development.
+5. Approve and merge the PR into `develop`.
+6. To publish a version, bump it in `Cargo.toml`, `app/package.json` and
+   `app/src-tauri/tauri.conf.json` (with their lockfiles) and open a PR
+   `develop → main`.
+7. Wait for `quality` again, approve and merge.
+8. Tag the `main` commit:
    ```bash
    git switch main
    git pull --ff-only
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-10. El tag dispara `release.yml` (build multiplataforma); esperar a que
-    termine en verde.
+9. The tag triggers `release.yml` (multi-platform build); wait for it to
+   finish green.
 
-### Qué publica una release
+### What a release publishes
 
-- Instaladores para Debian/Ubuntu (`.deb`), Fedora (`.rpm`), cualquier Linux
-  (AppImage), Arch (`.pkg.tar.zst`), Windows y macOS, todos firmados.
-- `latest.json`, que usa Ajustes > Actualizaciones para instalar esa versión.
-- `rowly-db-bin.PKGBUILD`, con las sumas ya calculadas, para publicar en AUR
-  (copiarlo como `PKGBUILD` en el repo de AUR, `makepkg --printsrcinfo >
-  .SRCINFO`, commit y push).
+- Installers for Debian/Ubuntu (`.deb`), Fedora (`.rpm`), any Linux
+  (AppImage), Arch (`.pkg.tar.zst`), Windows and macOS, all signed.
+- `latest.json`, which Settings > Updates uses to install that version.
+- `rowly-db-bin.PKGBUILD`, with checksums already filled in, for publishing
+  to the AUR (copy it as `PKGBUILD` into the AUR repo, run
+  `makepkg --printsrcinfo > .SRCINFO`, commit and push).
 
-La versión de `app/src-tauri/tauri.conf.json` tiene que coincidir con el tag
-(`v0.2.0` ↔ `0.2.0`); el workflow falla si no. Un tag con guion
-(`v0.3.0-rc.1`) publica una versión preliminar.
+The version in `app/src-tauri/tauri.conf.json` must match the tag
+(`v0.2.0` ↔ `0.2.0`); the workflow fails otherwise. A tag with a hyphen
+(`v0.3.0-rc.1`) publishes a pre-release.
 
-**Las releases no se borran.** La app deja volver a cualquier versión
-publicada; borrar una la saca de esa lista.
+**Releases are never deleted.** The app lets users go back to any published
+version; deleting one removes it from that list.
 
-### Firma de las actualizaciones
+### Update signing
 
-El workflow firma con la clave privada de los secrets
-`TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; la
-clave pública está en `tauri.conf.json`. Si esa clave privada se pierde, las
-copias instaladas no aceptan actualizaciones firmadas con otra: guardarla
-con respaldo. Compilar el repo no la necesita.
+The workflow signs with the private key in the `TAURI_SIGNING_PRIVATE_KEY`
+and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public key is in
+`tauri.conf.json`. If that private key is lost, installed copies will not
+accept updates signed with another one: keep it backed up. Building the
+repo does not need it.
 
-## Estilo
+## Style
 
-- Rust: `cargo fmt` + `cargo clippy` antes de cada PR
-- Commits: mensajes cortos en imperativo, en español o inglés, da igual
-- Sin abstracciones especulativas: si un motor nuevo necesita algo que el
-  trait `DbConnector` no cubre, se discute en el issue antes de forzar la
-  interfaz existente
+- Rust: `cargo fmt` + `cargo clippy` before every PR
+- Commits: short messages in the imperative, in English or Spanish
+- Docs: English is the main language; every public document has a Spanish
+  version (`*.es.md`). Design notes in `docs/specs/` and `docs/design/` are
+  in Spanish
+- No speculative abstractions: if a new engine needs something the
+  `DbConnector` trait does not cover, discuss it in the issue before bending
+  the existing interface

@@ -5,7 +5,7 @@
   <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
 </picture>
 
-<h3>Un cliente SQL rápido y enfocado para MySQL, MariaDB y PostgreSQL.</h3>
+<h3>Un cliente SQL rápido y enfocado.</h3>
 
 <p>Libre y de código abierto. Sin cuentas, sin edición Pro.</p>
 
@@ -114,7 +114,7 @@ Los paquetes quedan en `target/release/bundle/`.
 
 ## Contribuir
 
-Los reportes de errores y los pull requests son bienvenidos. Empieza por la [guía de desarrollo](CONTRIBUTING.md) o [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues).
+Los reportes de errores y los pull requests son bienvenidos. Empieza por la [guía de desarrollo](CONTRIBUTING.es.md) o [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues).
 
 ## Licencia
 

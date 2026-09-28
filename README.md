@@ -5,7 +5,7 @@
   <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
 </picture>
 
-<h3>A fast, focused SQL client for MySQL, MariaDB and PostgreSQL.</h3>
+<h3>A fast, focused SQL client.</h3>
 
 <p>Free and open source. No account, no Pro edition.</p>
 
