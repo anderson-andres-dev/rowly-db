@@ -32,7 +32,58 @@
 
 ## Funciones
 
-Explorador de esquemas · Autocompletado SQL · Resultados editables · Almacén seguro del sistema · Actualizaciones confirmadas
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/inline-edit.webp" alt="Grid de resultados con celdas editadas resaltadas">
+      <br><strong>Edición en línea</strong>
+      <br><sub>Doble clic en una celda para editarla. Los cambios quedan marcados hasta aplicarlos.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/add-rows.webp" alt="Diálogo de cambios pendientes con DELETE, UPDATE e INSERT">
+      <br><strong>Agregar y borrar registros</strong>
+      <br><sub>Revisa el SQL exacto antes de ejecutarlo. En producción siempre pide confirmación.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/export.webp" alt="Diálogo de exportación con vista previa en JSON">
+      <br><strong>Exportar datos</strong>
+      <br><sub>TSV, CSV, JSON, Markdown o SQL INSERT, con vista previa en vivo.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/autocomplete.webp" alt="Autocompletado que sugiere un JOIN con su condición ON">
+      <br><strong>Autocompletado inteligente</strong>
+      <br><sub>Sugiere tablas, columnas y JOIN completos a partir de las claves foráneas.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/diagnostics.webp" alt="Editor con errores en línea y sugerencias">
+      <br><strong>Diagnósticos en el editor</strong>
+      <br><sub>Marca tablas y columnas que no existen mientras escribes y sugiere la corrección.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/themes.webp" alt="Ajustes con la galería de temas">
+      <br><strong>Temas</strong>
+      <br><sub>Rowly, DataGrip, VS Code, Gruvbox, Solarized, One Dark, Dracula y Nord.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/files.webp" alt="Panel de archivos SQL junto al editor">
+      <br><strong>Explorador de archivos</strong>
+      <br><sub>Abre una carpeta de archivos .sql y edítalos junto a tu conexión.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/history.webp" alt="Historial de consultas">
+      <br><strong>Historial de consultas</strong>
+      <br><sub>Ctrl+E busca y vuelve a ejecutar cualquier consulta de esta conexión.</sub>
+    </td>
+  </tr>
+</table>
+
+Además: MySQL, MariaDB y PostgreSQL · Contraseñas en el almacén seguro del sistema · Actualizaciones firmadas que tú confirmas
 
 ## Instalación
 

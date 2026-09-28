@@ -32,7 +32,58 @@
 
 ## Features
 
-Schema explorer · SQL autocomplete · Editable results · System keyring · Confirmed updates
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/inline-edit.webp" alt="Result grid with edited cells highlighted">
+      <br><strong>Inline editing</strong>
+      <br><sub>Double-click a cell to edit it. Changes stay highlighted until you apply them.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/add-rows.webp" alt="Pending changes dialog with DELETE, UPDATE and INSERT statements">
+      <br><strong>Add and delete rows</strong>
+      <br><sub>Review the exact SQL before it runs. Production connections always ask first.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/export.webp" alt="Export dialog with JSON preview">
+      <br><strong>Export data</strong>
+      <br><sub>TSV, CSV, JSON, Markdown or SQL INSERT, with a live preview.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/autocomplete.webp" alt="Autocomplete suggesting a JOIN with its ON condition">
+      <br><strong>Smart autocomplete</strong>
+      <br><sub>Suggests tables, columns and full JOINs built from foreign keys.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/diagnostics.webp" alt="Editor showing inline errors with suggestions">
+      <br><strong>Inline diagnostics</strong>
+      <br><sub>Unknown tables and columns are flagged as you type, with a suggested fix.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/themes.webp" alt="Settings panel with the theme gallery">
+      <br><strong>Themes</strong>
+      <br><sub>Rowly, DataGrip, VS Code, Gruvbox, Solarized, One Dark, Dracula and Nord.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/files.webp" alt="SQL files panel next to the editor">
+      <br><strong>SQL file explorer</strong>
+      <br><sub>Open a folder of .sql files and edit them next to your connection.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/features/history.webp" alt="Query history popup">
+      <br><strong>Query history</strong>
+      <br><sub>Ctrl+E finds and reruns any query you ran on this connection.</sub>
+    </td>
+  </tr>
+</table>
+
+Also: MySQL, MariaDB and PostgreSQL · Passwords in the system keyring · Signed updates you confirm
 
 ## Installation
 
