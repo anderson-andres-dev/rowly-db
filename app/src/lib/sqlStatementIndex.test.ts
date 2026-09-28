@@ -68,6 +68,12 @@ const PIECES = [
   "\\",
   "INSERT INTO t VALUES ('a;b', 2);",
   "x",
+  "\n\n",
+  "\n  \n",
+  "(",
+  ")",
+  ",",
+  "SELECT 2",
 ];
 
 describe("indice de sentencias", () => {
@@ -145,5 +151,21 @@ describe("E'...' en el borde de un trozo", () => {
       expect(indexed(state)).toEqual(split(doc));
       expect(indexed(state).length).toBe(2);
     }
+  });
+});
+
+describe("linea en blanco entre sentencias", () => {
+  it("borrarla une las dos partes y volver a ponerla las separa", () => {
+    lexical = ENGINES.mysql.lexical;
+    let state = create("SELECT *\n\nFROM users");
+    expect(indexed(state)).toEqual([
+      { from: 0, to: 8 },
+      { from: 10, to: 20 },
+    ]);
+    state = state.update({ changes: { from: 8, to: 9 } }).state;
+    expect(indexed(state)).toEqual([{ from: 0, to: 19 }]);
+    state = state.update({ changes: { from: 8, insert: "\n" } }).state;
+    expect(indexed(state)).toEqual(split(state.doc.toString()));
+    expect(indexed(state)).toHaveLength(2);
   });
 });
