@@ -2,77 +2,36 @@
 
 **English** · [Español](ARCHITECTURE.es.md)
 
-Rowly DB is the application; Khipu is the internal name of its engine. That
-is why the crates are called `khipu-*`.
+Rowly DB is the app. Khipu is its engine, which is why the crates are named `khipu-*`.
 
-## Principle
+## The idea
 
-The core (parsing, catalog, autocomplete) does not know that Tauri, Svelte or
-any particular database engine exist. All it knows is the `DbConnector`
-trait (`crates/driver-core`) and a generic `SchemaCatalog`
-(`crates/engine/src/catalog.rs`). This is what allows:
+The engine parses SQL, keeps the schema catalog and builds suggestions without knowing about Tauri, Svelte or any particular database. All it sees is a generic `SchemaCatalog`. That is what makes it possible to:
 
-- integrating `khipu-lsp` into Neovim/VS Code without touching the desktop
-  app
-- adding an engine whose dialect `sqlparser` already covers (for example
-  another MySQL- or Postgres-compatible one) without touching the engine —
-  you do need to add its branch to the driver factory in
-  `app/src-tauri/src/drivers.rs`
-- testing the engine without a real database
-
-An engine with a SQL dialect that `sqlparser` does not support yet (for
-example SQLite or DuckDB) does require extending the `Dialect` enum in
-`crates/engine/src/lib.rs`; in that case it is not dialect-agnostic.
-
-MySQL and PostgreSQL are required dependencies of `app/src-tauri` today:
-there are no Cargo feature flags to make them optional.
+- use `khipu-lsp` from Neovim or VS Code without the desktop app
+- add an engine without touching the core, as long as `sqlparser` already understands its dialect
+- test the engine without a running database
 
 ## Layers
 
-1. **`crates/engine`** — dialect-agnostic except for the closed `Dialect`
-   enum (`MySql`/`Postgres`). Validation against each dialect's real grammar
-   (`sqlparser`), context resolution at the cursor, and suggestion ranking
-   against the `SchemaCatalog`. Incremental, error-tolerant parsing of the
-   buffer while typing is not implemented yet.
-2. **`crates/engine-lsp`** — exposes `khipu-engine` as an LSP server
-   (`tower-lsp`) so any editor can use it.
-3. **`crates/driver-core`** — the contract (`DbConnector`) every database
-   engine must implement: connect, list schemas, introspect a whole schema
-   (`introspect_schema`: tables, views, keys, indexes, triggers, routines,
-   sequences, events) and run queries. It also provides
-   `assembly::TableSet`, which groups catalog rows into that structure so
-   each driver only translates its engine's rows. Each profile picks its
-   SSL/TLS mode (`TlsMode` in `ConnectionConfig`) and each driver resolves it
-   in its `tls.rs`; see
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md)
-   (Spanish). The engine and the app depend only on this trait.
-4. **`crates/drivers/*`** — one crate per database engine
-   (`khipu-driver-mysql`, `khipu-driver-postgres`, ...), each implementing
-   `DbConnector` on top of `sqlx`.
-5. **`app/src-tauri`** — the desktop shell. It depends directly on
-   `khipu-engine` and the drivers (not through LSP/stdio) to keep latency
-   low inside the app.
-6. **`app/src`** — Svelte frontend, CodeMirror 6 editor.
+| Path | Role |
+| :--- | :--- |
+| `crates/engine` | Validates SQL against each dialect's grammar, resolves what is under the cursor and ranks suggestions from the catalog. |
+| `crates/engine-lsp` | Exposes the engine as an LSP server so any editor can use it. |
+| `crates/driver-core` | The `DbConnector` contract every database implements: connect, list schemas, read a full schema and run queries. |
+| `crates/drivers/*` | One crate per database, built on `sqlx`. |
+| `app/src-tauri` | The desktop shell. It calls the engine and drivers directly, not through LSP, to keep latency low. |
+| `app/src` | Svelte frontend with a CodeMirror 6 editor. |
 
-## Adding a new database engine
+The engine depends on no driver, not even `driver-core`. The app creates each driver in `app/src-tauri/src/drivers.rs`, works with it through `DbConnector` and turns the schema it reads into the engine's catalog in `catalog_adapter.rs`. Each connection profile chooses its TLS mode, and each driver applies it in its own `tls.rs`.
 
-For an engine whose dialect `sqlparser` already supports:
+## Dialects
 
-1. Create `crates/drivers/<engine>` (`cargo new --lib`).
-2. Implement `DbConnector` for that engine. For `introspect_schema`, see
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md):
-   what goes in each category, how to handle server versions and what to do
-   when a category cannot be read.
-3. Add it as a workspace member and as a dependency of `app/src-tauri`
-   (it is not optional today: there are no Cargo feature flags to disable
-   drivers).
-4. Add its branch to the driver factory in `app/src-tauri/src/drivers.rs`
-   (`DatabaseKind` enum).
+The `Dialect` enum in `crates/engine/src/lib.rs` is the only place where the engine knows which databases exist. An engine whose dialect `sqlparser` supports needs a new variant there and nothing else in the core. One with a dialect `sqlparser` lacks, like SQLite or DuckDB, needs work in the engine itself.
 
-No changes to `khipu-engine` or the frontend are needed. An engine with a
-different SQL dialect does require extending the `Dialect` enum in
-`crates/engine/src/lib.rs`.
+Every driver is compiled into the app. There are no Cargo features to leave one out.
 
-## Engine roadmap
+## Where to go next
 
-MySQL → PostgreSQL → to be decided by community demand.
+- [Adding a database engine](../CONTRIBUTING.md#adding-a-database-engine), step by step.
+- [`design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md) covers what a driver must return when reading a schema and how to handle server versions. It is in Spanish.

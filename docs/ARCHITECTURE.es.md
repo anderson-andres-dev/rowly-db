@@ -2,75 +2,36 @@
 
 [English](ARCHITECTURE.md) · **Español**
 
-Rowly DB es la aplicación; Khipu es el nombre interno de su motor. Por eso los
-crates se llaman `khipu-*`.
+Rowly DB es la app. Khipu es su motor, y por eso los crates se llaman `khipu-*`.
 
-## Principio
+## La idea
 
-El core (parsing, catálogo, autocompletado) no sabe que existe Tauri, Svelte
-ni ningún motor de base de datos concreto. Todo lo que sabe es el trait
-`DbConnector` (`crates/driver-core`) y un `SchemaCatalog` genérico
-(`crates/engine/src/catalog.rs`). Esto es lo que permite que:
+El motor analiza SQL, mantiene el catálogo del esquema y arma las sugerencias sin saber nada de Tauri, Svelte ni de ninguna base de datos en particular. Lo único que ve es un `SchemaCatalog` genérico. Gracias a eso se puede:
 
-- alguien integre `khipu-lsp` en Neovim/VSCode sin tocar la app de escritorio
-- alguien agregue soporte para un motor con un dialecto ya cubierto por
-  `sqlparser` (por ejemplo otro compatible con MySQL o Postgres) sin tocar el
-  engine — sí hay que agregar la rama correspondiente en la fábrica de
-  drivers de `app/src-tauri/src/drivers.rs`
-- el engine se pueda testear sin levantar una base de datos real
-
-Un motor con un dialecto SQL distinto de los que ya soporta `sqlparser` (por
-ejemplo SQLite o DuckDB) sí requiere extender el enum `Dialect` de
-`crates/engine/src/lib.rs`; no es agnóstico de dialecto en ese caso.
-
-MySQL y PostgreSQL son dependencias obligatorias de `app/src-tauri` hoy: no
-hay feature flags de Cargo que las hagan opcionales.
+- usar `khipu-lsp` desde Neovim o VS Code sin la app de escritorio
+- agregar un motor sin tocar el núcleo, siempre que `sqlparser` ya entienda su dialecto
+- probar el motor sin una base de datos corriendo
 
 ## Capas
 
-1. **`crates/engine`** — dialecto-agnóstico salvo por el enum `Dialect`
-   cerrado (`MySql`/`Postgres`). Validación contra la gramática real por
-   dialecto (`sqlparser`), resolución de contexto en el cursor, y ranking de
-   sugerencias contra el `SchemaCatalog`. El parsing incremental y tolerante
-   a errores del buffer mientras se escribe todavía no está implementado.
-2. **`crates/engine-lsp`** — expone `khipu-engine` como servidor LSP
-   (`tower-lsp`) para que cualquier editor lo consuma.
-3. **`crates/driver-core`** — el contrato (`DbConnector`) que todo motor de
-   base de datos debe implementar: conectar, listar schemas, introspectar un
-   schema completo (`introspect_schema`: tablas, vistas, claves, índices,
-   triggers, rutinas, secuencias, eventos) y ejecutar consultas. También trae
-   `assembly::TableSet`, que agrupa las filas del catálogo en esa estructura
-   para que cada driver solo traduzca las filas de su motor. El modo SSL/TLS
-   lo elige cada perfil (`TlsMode` en `ConnectionConfig`) y lo resuelve cada
-   driver en su `tls.rs`; ver
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md).
-   El engine y la app solo dependen de este trait.
-4. **`crates/drivers/*`** — un crate por motor de base de datos
-   (`khipu-driver-mysql`, `khipu-driver-postgres`, ...), cada uno implementando
-   `DbConnector` sobre `sqlx`.
-5. **`app/src-tauri`** — el shell de escritorio. Depende directo de
-   `khipu-engine` y de los drivers (sin pasar por LSP/stdio) para minimizar
-   latencia dentro de la propia app.
-6. **`app/src`** — frontend Svelte, editor CodeMirror 6.
+| Ruta | Qué hace |
+| :--- | :--- |
+| `crates/engine` | Valida el SQL con la gramática de cada dialecto, entiende qué hay bajo el cursor y ordena las sugerencias a partir del catálogo. |
+| `crates/engine-lsp` | Expone el motor como servidor LSP para que cualquier editor lo use. |
+| `crates/driver-core` | El contrato `DbConnector` que implementa cada base de datos: conectar, listar esquemas, leer un esquema completo y ejecutar consultas. |
+| `crates/drivers/*` | Un crate por base de datos, construido sobre `sqlx`. |
+| `app/src-tauri` | La app de escritorio. Llama al motor y a los drivers directamente, sin pasar por LSP, para que la latencia sea mínima. |
+| `app/src` | Frontend en Svelte con el editor CodeMirror 6. |
 
-## Cómo agregar un motor de base de datos nuevo
+El motor no depende de ningún driver, ni siquiera de `driver-core`. La app crea cada driver en `app/src-tauri/src/drivers.rs`, trabaja con él a través de `DbConnector` y convierte el esquema que lee en el catálogo del motor en `catalog_adapter.rs`. Cada perfil de conexión elige su modo TLS y cada driver lo aplica en su propio `tls.rs`.
 
-Para un motor con un dialecto ya soportado por `sqlparser`:
+## Dialectos
 
-1. Crear `crates/drivers/<motor>` (`cargo new --lib`).
-2. Implementar `DbConnector` para ese motor. Para `introspect_schema`, ver
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md):
-   qué va en cada categoría, cómo manejar versiones del servidor y qué hacer
-   cuando una categoría no se puede leer.
-3. Agregarlo como miembro del workspace y como dependencia de `app/src-tauri`
-   (hoy no es opcional: no hay feature flags de Cargo para desactivar drivers).
-4. Agregar la rama correspondiente en la fábrica de drivers de
-   `app/src-tauri/src/drivers.rs` (enum `DatabaseKind`).
+El enum `Dialect` de `crates/engine/src/lib.rs` es el único lugar donde el motor sabe qué bases de datos existen. Un motor cuyo dialecto soporta `sqlparser` necesita una variante nueva ahí y nada más en el núcleo. Uno con un dialecto que `sqlparser` no tiene, como SQLite o DuckDB, requiere trabajo en el propio motor.
 
-No requiere cambios en `khipu-engine` ni en el frontend. Un motor con un
-dialecto SQL distinto sí requiere extender el enum `Dialect` de
-`crates/engine/src/lib.rs`.
+Todos los drivers se compilan dentro de la app. No hay features de Cargo para dejar alguno fuera.
 
-## Roadmap de motores
+## Para seguir
 
-MySQL → PostgreSQL → a definir según demanda de la comunidad.
+- [Agregar un motor de base de datos](../CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos), paso a paso.
+- [`design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md) explica qué debe devolver un driver al leer un esquema y cómo manejar las versiones del servidor.

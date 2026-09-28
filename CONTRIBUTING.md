@@ -1,152 +1,99 @@
-# Contributing to Rowly DB
+# Contributing
 
 **English** · [Español](CONTRIBUTING.es.md)
 
-Thanks for your interest. The project is young, so there is plenty of room
-for design decisions: open an issue before a large PR.
+Thanks for helping out. The project is young and many design decisions are still open, so for anything large, open an issue first and let's talk it through.
 
-**Rowly DB** is the product name; **Khipu** is the internal name of its
-engine. You will see `khipu-*` in the code (crates, identifiers, settings
-keys): that is intentional and should not be renamed. Anything the user sees
-says Rowly DB.
+## Names
 
-## Before you start
+Rowly DB is the product. Khipu is the internal name of its engine, which is why crates, identifiers and settings keys start with `khipu`. Keep them that way. Everything the user sees says Rowly DB.
 
-Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) to understand why the
-repo is split into `engine` / `driver-core` / `drivers/*` / `app`, and which
-layer your change belongs to.
-
-## Local setup
+## Getting started
 
 ```bash
-mise use -g rust@latest   # or rustup
 cargo build
-cd app && npm install && npm run tauri dev
+cd app
+npm install
+npm run tauri dev
 ```
 
-## Adding a new database engine
+You need Rust 1.85+ and Node.js 20.19+. [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is laid out and where each kind of change goes.
 
-Everything that differs between engines lives in two places: the `Dialect`
-enum in Rust (`crates/engine/src/lib.rs`) and the engine profile in the
-frontend (`app/src/lib/engines/`). Nothing falls back to another engine: if
-something is missing, **it does not compile**. The full design is in
-`docs/specs/v0.2-perfiles-de-motor.md` (Spanish).
+## Workflow
 
-1. **Driver**: `cargo new --lib crates/drivers/<engine>` and implement the
-   `DbConnector` trait from `khipu-driver-core`, including
-   `introspect_schema` (see `docs/design/explorador-base-de-datos.md`). Add
-   it to `[workspace] members` in the root `Cargo.toml`.
-2. **Rust**: add the variant to `DatabaseKind`
-   (`app/src-tauri/src/drivers.rs`) and to `Dialect`. The compiler points at
-   every decision left to make: its `sqlparser` parser, quoting, literals,
-   case, the default row. Add it to `ALL` in the contract in
-   `crates/engine/src/lib.rs`.
-3. **Frontend**: add the engine to `ConnectionDriver` and
-   `connectionDrivers` (`app/src/lib/connections.ts`: name, logo, port), and
-   its profile in `app/src/lib/engines/<engine>.ts`, with its entry in
-   `ENGINES`: quotes and comments (`lexical`), editor and formatter dialect,
-   statement-opening keywords, reserved words, error codes, how to locate an
-   error in its messages, and the connection URL.
-4. **Contract**: add its data to `FIXTURES` in
-   `app/src/lib/engines/contract.test.ts` (the type requires it) and run
-   `npm test` and `cargo test --workspace`. With that, autocomplete, aliases,
-   JOIN by foreign key, inline diagnostics and large-document performance
-   already work with the new engine.
-5. Open the PR.
+`main` holds released versions and `develop` is where work comes together. Neither accepts direct pushes.
 
-If `sqlparser` has no dialect for the engine, discuss it in an issue before
-sending the PR.
+1. Branch off `develop` as `feature/<name>`.
+2. Open a pull request into `develop`.
+3. Wait for the `quality` check to pass.
+4. Once it is reviewed and tested in the app, it gets merged.
 
-## Driver contract tests
+Before opening the pull request, run:
 
-`cargo test --workspace` passes without any database available: tests that
-need a real connection are marked `#[ignore = "requires database"]`, so a
-normal run skips them.
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets
+cargo test --workspace
+cd app && npm run check && npm test
+```
 
-To run them against a real instance:
+## Tests against a real database
+
+`cargo test --workspace` needs no database. Tests that do are marked `#[ignore]` and run on demand:
 
 ```bash
 cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Environment variables each one needs:
+They read the connection from these variables, where `<ENGINE>` is `MYSQL` or `POSTGRES`:
 
-- MySQL: `KHIPU_TEST_MYSQL_HOST`, `KHIPU_TEST_MYSQL_PORT`, `KHIPU_TEST_MYSQL_USER`,
-  `KHIPU_TEST_MYSQL_PASSWORD`, `KHIPU_TEST_MYSQL_DATABASE`
-- PostgreSQL: `KHIPU_TEST_POSTGRES_HOST`, `KHIPU_TEST_POSTGRES_PORT`,
-  `KHIPU_TEST_POSTGRES_USER`, `KHIPU_TEST_POSTGRES_PASSWORD`,
-  `KHIPU_TEST_POSTGRES_DATABASE`
+| Variable | Value |
+| :--- | :--- |
+| `KHIPU_TEST_<ENGINE>_HOST` | Server host |
+| `KHIPU_TEST_<ENGINE>_PORT` | Server port |
+| `KHIPU_TEST_<ENGINE>_USER` | User |
+| `KHIPU_TEST_<ENGINE>_PASSWORD` | Password |
+| `KHIPU_TEST_<ENGINE>_DATABASE` | Database |
+| `KHIPU_TEST_<ENGINE>_EXPECT_TLS` | Optional. `encrypted`, `fallback` or `none` |
+| `KHIPU_TEST_<ENGINE>_CA_CERT` | Optional. CA that signed the server certificate |
 
-If one is missing, the test panics with a message saying what to set (no
-need to memorize them: the panic message lists them).
+If one is missing, the test stops and tells you which. `EXPECT_TLS` is what the server should negotiate in automatic mode: `fallback` covers servers with TLS that rustls cannot negotiate, like MySQL 5.7. With `CA_CERT` set, the CA verification modes are tested too, and the certificate must include the test host.
 
-Optional, for the TLS tests (`<ENGINE>` is `MYSQL` or `POSTGRES`):
+## Adding a database engine
 
-- `KHIPU_TEST_<ENGINE>_EXPECT_TLS`: what the server should negotiate in
-  Automatic mode. `encrypted` if it has modern TLS, `fallback` if it offers
-  TLS that rustls cannot negotiate (MySQL 5.7), `none` if TLS is disabled.
-  Without it, only what holds for any server is checked.
-- `KHIPU_TEST_<ENGINE>_CA_CERT`: path to the CA that signed the server
-  certificate, to test "Verify CA" and "Verify CA and host". The
-  certificate must include the test host in its subjectAltName.
+Everything that changes from one engine to another lives in the `Dialect` enum in `crates/engine/src/lib.rs` and in the engine profile in `app/src/lib/engines/`. Nothing falls back to another engine, so if something is missing, the build fails and tells you what.
 
-## Branches and releases
+1. **Driver.** Create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace.
+2. **Rust.** Add the engine to `DatabaseKind` in `app/src-tauri/src/drivers.rs`, and to `Dialect` and its `ALL` list in `crates/engine/src/lib.rs`. The compiler points at each decision left.
+3. **Frontend.** Add it to `app/src/lib/connections.ts` with its name, logo and default port, and write its profile in `app/src/lib/engines/<engine>.ts`.
+4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts` and run both test suites.
 
-- `main` is the default branch and `develop` the integration branch. Nothing
-  is pushed directly to either: both have branch protection (PR + 1
-  approval + green `quality.yml` checks + no force-push).
+With that, autocomplete, JOINs by foreign key, diagnostics and large files work on the new engine. If `sqlparser` has no dialect for it, open an issue before you start.
 
-1. Open a PR from `feature/...` into `develop`.
-2. `quality.yml` runs automatically (Rust fmt/clippy/test + Node check/build).
-3. Make sure the `quality` check is green.
-4. Review and test the change functionally in development.
-5. Approve and merge the PR into `develop`.
-6. To publish a version, bump it in `Cargo.toml`, `app/package.json` and
-   `app/src-tauri/tauri.conf.json` (with their lockfiles) and open a PR
-   `develop → main`.
-7. Wait for `quality` again, approve and merge.
-8. Tag the `main` commit:
+## Releasing
+
+For maintainers.
+
+1. Bump the version in `Cargo.toml`, `app/package.json` and `app/src-tauri/tauri.conf.json`, along with their lockfiles.
+2. Open a pull request from `develop` into `main` and merge it once `quality` passes.
+3. Tag the merge commit:
+
    ```bash
    git switch main
    git pull --ff-only
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-9. The tag triggers `release.yml` (multi-platform build); wait for it to
-   finish green.
 
-### What a release publishes
+The tag starts `release.yml`, which builds and signs the installers for every system, the `latest.json` that the app reads for updates, and a PKGBUILD ready for the AUR. The tag must match the version in `tauri.conf.json`. A tag like `v0.3.0-rc.1` publishes a pre-release.
 
-- Installers for Debian/Ubuntu (`.deb`), Fedora (`.rpm`), any Linux
-  (AppImage), Arch (`.pkg.tar.zst`), Windows and macOS, all signed.
-- `latest.json`, which Settings > Updates uses to install that version.
-- `rowly-db-bin.PKGBUILD`, with checksums already filled in, for publishing
-  to the AUR (copy it as `PKGBUILD` into the AUR repo, run
-  `makepkg --printsrcinfo > .SRCINFO`, commit and push).
+Never delete a release. The app lets people go back to any published version.
 
-The version in `app/src-tauri/tauri.conf.json` must match the tag
-(`v0.2.0` ↔ `0.2.0`); the workflow fails otherwise. A tag with a hyphen
-(`v0.3.0-rc.1`) publishes a pre-release.
-
-**Releases are never deleted.** The app lets users go back to any published
-version; deleting one removes it from that list.
-
-### Update signing
-
-The workflow signs with the private key in the `TAURI_SIGNING_PRIVATE_KEY`
-and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public key is in
-`tauri.conf.json`. If that private key is lost, installed copies will not
-accept updates signed with another one: keep it backed up. Building the
-repo does not need it.
+Updates are signed with the key stored in the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets. If that key is lost, installed copies will reject every future update, so keep a backup.
 
 ## Style
 
-- Rust: `cargo fmt` + `cargo clippy` before every PR
-- Commits: short messages in the imperative, in English or Spanish
-- Docs: English is the main language; every public document has a Spanish
-  version (`*.es.md`). Design notes in `docs/specs/` and `docs/design/` are
-  in Spanish
-- No speculative abstractions: if a new engine needs something the
-  `DbConnector` trait does not cover, discuss it in the issue before bending
-  the existing interface
+- Short commit messages in the imperative, in English or Spanish.
+- No abstractions ahead of need. If an engine needs something `DbConnector` does not cover, raise it in an issue first.
+- Public docs are written in English with a Spanish copy in `*.es.md`. Keep both in sync. Design notes in `docs/specs` and `docs/design` are in Spanish.
