@@ -283,9 +283,13 @@ mod tests {
     }
 
     fn export_as(format: ExportFormat, headers: bool, dialect: Dialect, name: &str) -> String {
+        // Un archivo por llamada: los tests corren en paralelo y dos de ellos
+        // exportan el mismo formato y motor.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("khipu-export-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("{format:?}-{dialect:?}.txt"));
+        let path = dir.join(format!("{format:?}-{dialect:?}-{n}.txt"));
         let mut sink =
             FileSink::create(&path, format, headers, "core.t".to_string(), dialect).unwrap();
         sink.begin(&columns()).unwrap();
