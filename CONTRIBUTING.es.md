@@ -92,6 +92,10 @@ Nunca borres una release. La app permite volver a cualquier versión publicada.
 
 Las actualizaciones se firman con la clave guardada en los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Si esa clave se pierde, las copias instaladas rechazan todas las actualizaciones siguientes, así que guarda un respaldo.
 
+## Sitio web
+
+La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés en `site/index.html` y en español en `site/es/index.html`. Mantén las dos al día. Cada push a `main` que toque `site/` la publica en GitHub Pages. Para verla en local, ejecuta `python3 -m http.server --directory site`.
+
 ## Estilo
 
 - Commits cortos en imperativo, en español o inglés.
