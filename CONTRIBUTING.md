@@ -92,6 +92,10 @@ Never delete a release. The app lets people go back to any published version.
 
 Updates are signed with the key stored in the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets. If that key is lost, installed copies will reject every future update, so keep a backup.
 
+## Website
+
+The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `site/index.html` and Spanish at `site/es/index.html`. Keep both in sync. Every push to `main` that touches `site/` publishes it to GitHub Pages. To try it locally, run `python3 -m http.server --directory site`.
+
 ## Style
 
 - Short commit messages in the imperative, in English or Spanish.
