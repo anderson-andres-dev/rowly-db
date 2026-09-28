@@ -15,8 +15,8 @@
 use crate::version::{Capabilities, CheckConstraints};
 use khipu_driver_core::assembly::{IndexColumnRow, KeyColumnRow, TableSet, TriggerEventRow};
 use khipu_driver_core::{
-    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, RelationKind, RoutineInfo,
-    RoutineKind, SchemaObjects, SequenceInfo,
+    CheckInfo, ColumnInfo, DriverError, EventInfo, ForeignKeyInfo, Message, ParameterMode,
+    RelationKind, RoutineInfo, RoutineKind, RoutineParameter, SchemaObjects, SequenceInfo,
 };
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySqlPool, Row};
@@ -45,9 +45,11 @@ async fn fetch(pool: &MySqlPool, sql: &str, schema: &str) -> Result<Vec<MySqlRow
 
 /// Runs a secondary category: on failure the category stays empty and a
 /// note goes to `warnings` (see `SchemaObjects`).
-fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<String>) -> T {
+/// `what` is the category ("keys", "indexes"...): the frontend translates
+/// `introspect.<what>`.
+fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<Message>) -> T {
     result.unwrap_or_else(|error| {
-        warnings.push(format!("No se pudieron leer {what}: {error}"));
+        warnings.push(Message::key(format!("introspect.{what}")).with("error", error));
         T::default()
     })
 }
@@ -122,14 +124,14 @@ pub async fn introspect_schema(
 
     let key_rows: Vec<KeyColumnRow> = soft(
         keys.and_then(|rows| rows.iter().map(key_row).collect()),
-        "las claves",
+        "keys",
         warnings,
     );
     set.add_key_columns(key_rows);
 
     let foreign_key_rows: Vec<(String, ForeignKeyInfo)> = soft(
         foreign_keys.and_then(|rows| rows.iter().map(foreign_key_row).collect()),
-        "las claves foráneas",
+        "foreignKeys",
         warnings,
     );
     for (table, foreign_key) in foreign_key_rows {
@@ -138,26 +140,26 @@ pub async fn introspect_schema(
 
     let index_rows: Vec<IndexColumnRow> = soft(
         indexes.and_then(|rows| rows.iter().map(index_row).collect()),
-        "los índices",
+        "indexes",
         warnings,
     );
     set.add_index_columns(index_rows);
 
-    for (table, check) in soft(checks, "los checks", warnings) {
+    for (table, check) in soft(checks, "checks", warnings) {
         set.add_check(&table, check);
     }
 
     let trigger_rows: Vec<TriggerEventRow> = soft(
         triggers.and_then(|rows| rows.iter().map(trigger_row).collect()),
-        "los triggers",
+        "triggers",
         warnings,
     );
     set.add_trigger_events(trigger_rows);
 
-    objects.routines = soft(routines, "las rutinas", warnings);
+    objects.routines = soft(routines, "routines", warnings);
     objects.events = soft(
         events.and_then(|rows| rows.iter().map(event_row).collect()),
-        "los eventos",
+        "events",
         warnings,
     );
 
@@ -327,15 +329,23 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
     .await?;
 
     let mut arguments: HashMap<String, Vec<String>> = HashMap::new();
+    let mut parameters: HashMap<String, Vec<RoutineParameter>> = HashMap::new();
     for row in &parameter_rows {
+        let id = text(row, 0)?;
+        let mode = opt_text(row, 1)?;
+        let name = text(row, 2)?;
+        let data_type = text(row, 3)?;
         arguments
-            .entry(text(row, 0)?)
+            .entry(id.clone())
             .or_default()
-            .push(format_parameter(
-                opt_text(row, 1)?.as_deref(),
-                &text(row, 2)?,
-                &text(row, 3)?,
-            ));
+            .push(format_parameter(mode.as_deref(), &name, &data_type));
+        parameters.entry(id).or_default().push(RoutineParameter {
+            name: Some(name),
+            mode: parameter_mode(mode.as_deref()),
+            data_type,
+            // MySQL/MariaDB parameters have no default values.
+            has_default: false,
+        });
     }
 
     routine_rows
@@ -351,6 +361,7 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
                 name: text(row, 1)?,
                 kind,
                 arguments: arguments.remove(&id).unwrap_or_default().join(", "),
+                parameters: parameters.remove(&id).unwrap_or_default(),
                 return_type: match kind {
                     RoutineKind::Function => opt_text(row, 3)?,
                     RoutineKind::Procedure => None,
@@ -362,6 +373,15 @@ async fn read_routines(pool: &MySqlPool, schema: &str) -> Result<Vec<RoutineInfo
 
 /// `"p_id int"`, or `"OUT p_total decimal(10,2)"` — IN is the default mode
 /// (and the only one a function argument can have), so it isn't repeated.
+/// A function's parameters come without a mode: they are all IN.
+fn parameter_mode(mode: Option<&str>) -> ParameterMode {
+    match mode {
+        Some("OUT") => ParameterMode::Out,
+        Some("INOUT") => ParameterMode::InOut,
+        _ => ParameterMode::In,
+    }
+}
+
 fn format_parameter(mode: Option<&str>, name: &str, data_type: &str) -> String {
     match mode {
         Some(mode) if mode != "IN" => format!("{mode} {name} {data_type}"),

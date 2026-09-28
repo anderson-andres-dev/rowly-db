@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { engineFor } from "$lib/engines";
+  import { tooltip } from "$lib/tooltip";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
-  import { Check, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
+  import { Check, ChevronDown, CircleAlert, CircleCheck, Copy, TriangleAlert, X } from "@lucide/svelte";
+  import { slide } from "svelte/transition";
   import Field from "$lib/components/Field.svelte";
   import Button from "$lib/components/Button.svelte";
   import ColorPicker from "$lib/components/ColorPicker.svelte";
@@ -17,9 +20,11 @@
     type ConnectionConfig,
   } from "$lib/stores/connection";
   import {
+    CONNECTION_ENVIRONMENTS,
     connectionProfiles,
     createConnectionProfileId,
     saveConnectionProfile,
+    type ConnectionEnvironment,
     type ConnectionProfile,
   } from "$lib/stores/connectionProfiles";
   import {
@@ -27,17 +32,23 @@
     saveConnectionPassword,
     type PasswordPolicy,
   } from "$lib/credentials";
-  import type { TestConnectionReport, TlsMode } from "$lib/types";
+  import type { ConnectionFailure, TestConnectionReport, TlsMode } from "$lib/types";
+  import { explainConnectionFailure, toConnectionFailure } from "$lib/connectionErrors";
 
   let {
     driver,
     profile = null,
     initialError = null,
+    intent = "connect",
     onclose,
   }: {
     driver: ConnectionDriver;
     profile?: ConnectionProfile | null;
-    initialError?: string | null;
+    initialError?: ConnectionFailure | null;
+    // "edit": se abrio con el lapiz para cambiar algo; el boton solo guarda.
+    // "connect": conexion nueva o un intento de conectar que necesita datos;
+    // el boton guarda y conecta.
+    intent?: "connect" | "edit";
     onclose: () => void;
   } = $props();
 
@@ -48,6 +59,7 @@
   let name = $state("");
   let group = $state<string | undefined>(undefined);
   let color = $state<string | undefined>(undefined);
+  let environment = $state<ConnectionEnvironment | undefined>(undefined);
   let host = $state("localhost");
   let port = $state(0);
   let username = $state("");
@@ -74,7 +86,7 @@
   // cambie de idioma sin volver a probar.
   let testResult = $state<
     | { kind: "report"; report: TestConnectionReport }
-    | { kind: "error"; message: string; endpoint: string }
+    | { kind: "error"; failure: ConnectionFailure; target: { host: string; port: number; database: string } }
     | null
   >(null);
   const testSummary = $derived<TestSummary | null>(
@@ -82,11 +94,11 @@
       ? null
       : testResult.kind === "report"
         ? summarizeReport(testResult.report, $t)
-        : summarizeError(testResult.message, testResult.endpoint, $t),
+        : summarizeError(testResult.failure, testResult.target, $t),
   );
   let testPopoverOpen = $state(false);
   let testArea = $state<HTMLElement>();
-  let copied = $state<"test" | "url" | null>(null);
+  let copied = $state<"test" | "url" | "detail" | null>(null);
   let errors = $state<{
     name?: MessageKey;
     host?: MessageKey;
@@ -105,7 +117,7 @@
     ),
   );
   const connectionUrl = $derived.by(() => {
-    const scheme = driverDefinition.backendKind === "mysql" ? "mysql" : "postgresql";
+    const scheme = engineFor(driver).connectionUrl.scheme;
     const encodedUser = username.trim() ? `${encodeURIComponent(username.trim())}@` : "";
     const encodedDatabase = database.trim() ? `/${encodeURIComponent(database.trim())}` : "";
     // Mismo nombre de parametro y valores que usan los clientes oficiales de
@@ -118,34 +130,27 @@
     { value: "restart", label: $t("connections.form.policy.restart") },
     { value: "forever", label: $t("connections.form.policy.forever") },
   ]);
-  const tlsModeOptions: { value: TlsMode; label: string }[] = $derived([
-    { value: "auto", label: $t("connections.form.tls.auto") },
-    { value: "required", label: $t("connections.form.tls.required") },
-    { value: "verifyCa", label: $t("connections.form.tls.verifyCa") },
-    { value: "verifyIdentity", label: $t("connections.form.tls.verifyIdentity") },
-    { value: "disabled", label: $t("connections.form.tls.disabled") },
-  ]);
+  // SSL es un interruptor: encendido queda en Automatico (lo recomendado) y
+  // solo quien despliega las opciones elige un modo mas estricto.
+  const SSL_MODES = ["auto", "required", "verifyCa", "verifyIdentity"] as const satisfies TlsMode[];
+  const sslEnabled = $derived(tlsMode !== "disabled");
+  let sslExpanded = $state(false);
 
-  function sslUrlParameter(mode: TlsMode): string {
-    if (driverDefinition.backendKind === "mysql") {
-      const values: Record<TlsMode, string> = {
-        auto: "PREFERRED",
-        required: "REQUIRED",
-        verifyCa: "VERIFY_CA",
-        verifyIdentity: "VERIFY_IDENTITY",
-        disabled: "DISABLED",
-      };
-      return `ssl-mode=${values[mode]}`;
+  function toggleSsl() {
+    if (sslEnabled) {
+      tlsMode = "disabled";
+      sslExpanded = false;
+    } else {
+      tlsMode = "auto";
     }
-    const values: Record<TlsMode, string> = {
-      auto: "prefer",
-      required: "require",
-      verifyCa: "verify-ca",
-      verifyIdentity: "verify-full",
-      disabled: "disable",
-    };
-    return `sslmode=${values[mode]}`;
   }
+
+  // El nombre y los valores del parametro, los de los clientes oficiales de
+  // cada motor (perfil en lib/engines).
+  function sslUrlParameter(mode: TlsMode): string {
+    return engineFor(driver).connectionUrl.tlsParameter(mode);
+  }
+
 
   $effect(() => {
     if (!initialized) {
@@ -153,6 +158,7 @@
       name = profile?.name ?? "";
       group = profile?.group;
       color = profile?.color;
+      environment = profile?.environment;
       host = profile?.host ?? "localhost";
       port = profile?.port ?? driverDefinition.defaultPort;
       username = profile?.username ?? "";
@@ -167,8 +173,13 @@
     }
   });
 
+  // Al abrir, el foco va al Nombre (lo primero que se escribe), no a la ✕
+  // con su anillo.
   $effect(() => {
-    if (dialogEl && !dialogEl.open) dialogEl.showModal();
+    if (dialogEl && !dialogEl.open) {
+      dialogEl.showModal();
+      dialogEl.querySelector<HTMLInputElement>("#connection-name")?.focus();
+    }
   });
 
   async function hydratePassword(id: string, policy: PasswordPolicy) {
@@ -225,7 +236,11 @@
     try {
       testResult = { kind: "report", report: await testConnection(driverDefinition.backendKind, config) };
     } catch (error) {
-      testResult = { kind: "error", message: String(error), endpoint: `${config.host}:${config.port}` };
+      testResult = {
+        kind: "error",
+        failure: toConnectionFailure(error),
+        target: { host: config.host, port: config.port, database: config.database },
+      };
     } finally {
       testing = false;
       testPopoverOpen = true;
@@ -235,11 +250,15 @@
   async function handleSubmit() {
     const config = validatedConfig();
     if (!config) return;
+    if (intent === "edit") {
+      await saveOnly(config);
+      return;
+    }
 
     attempted = true;
     persistenceError = null;
     testPopoverOpen = false;
-    const tableCount = await connect(driverDefinition.backendKind, config);
+    const tableCount = await connect(driverDefinition.backendKind, config, environment === "production");
     if (tableCount === null) return;
 
     saving = true;
@@ -250,6 +269,7 @@
         name: name.trim(),
         group,
         color,
+        environment,
         driver,
         host: config.host,
         port: config.port,
@@ -267,7 +287,39 @@
     }
   }
 
-  async function copy(text: string, what: "test" | "url") {
+  // Editar no conecta: guarda perfil y contraseña y vuelve a la pantalla
+  // de conexiones, donde un clic en la tarjeta conecta cuando haga falta.
+  async function saveOnly(config: ConnectionConfig) {
+    attempted = true;
+    persistenceError = null;
+    testPopoverOpen = false;
+    saving = true;
+    try {
+      await saveConnectionPassword(profileId, config.password, passwordPolicy);
+      saveConnectionProfile({
+        id: profileId,
+        name: name.trim(),
+        group,
+        color,
+        environment,
+        driver,
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        username: config.username,
+        passwordPolicy,
+        tlsMode,
+        caCertificatePath: config.caCertificatePath,
+      });
+      dialogEl?.close();
+    } catch (error) {
+      persistenceError = String(error);
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function copy(text: string, what: "test" | "url" | "detail") {
     if (!(await writeClipboard(text))) return;
     copied = what;
     setTimeout(() => {
@@ -327,23 +379,48 @@
     }}
   >
     <div class="form-body">
-      <div class="name-row">
-        <Field
-          label={$t("connections.form.name")}
-          id="connection-name"
-          name="connection-name"
-          bind:value={name}
-          error={errors.name && $t(errors.name)}
-          autocomplete="off"
-          orientation="horizontal"
-          required
-          disabled={busy}
-        >
-          {#snippet trailing()}
-            <ColorPicker bind:value={color} disabled={busy} />
-          {/snippet}
-        </Field>
-        <GroupPicker bind:value={group} groups={existingGroups} disabled={busy} />
+      <div class="identity">
+        <div class="name-row">
+          <Field
+            label={$t("connections.form.name")}
+            id="connection-name"
+            name="connection-name"
+            bind:value={name}
+            error={errors.name && $t(errors.name)}
+            autocomplete="off"
+            orientation="horizontal"
+            required
+            disabled={busy}
+          >
+            {#snippet trailing()}
+              <ColorPicker bind:value={color} disabled={busy} />
+            {/snippet}
+          </Field>
+          <GroupPicker bind:value={group} groups={existingGroups} disabled={busy} />
+        </div>
+
+        <!-- Un clic elige el entorno; otro clic sobre el elegido lo quita. -->
+        <div class="environment-row">
+          <span class="row-label" id="environment-label">{$t("connections.environment.label")}</span>
+          <div class="environment-options" role="radiogroup" aria-labelledby="environment-label">
+            {#each CONNECTION_ENVIRONMENTS as option (option)}
+              <button
+                class="environment-option {option}"
+                class:selected={environment === option}
+                type="button"
+                role="radio"
+                aria-checked={environment === option}
+                disabled={busy}
+                onclick={() => (environment = environment === option ? undefined : option)}
+              >
+                {$t(`connections.environment.${option}`)}
+              </button>
+            {/each}
+          </div>
+          {#if environment === "production"}
+            <p class="environment-hint">{$t("connections.environment.productionHint")}</p>
+          {/if}
+        </div>
       </div>
 
       <section class="section">
@@ -431,16 +508,63 @@
       </section>
 
       <section class="section">
-        <Field
-          label={$t("connections.form.ssl")}
-          id="tls-mode"
-          name="tls-mode"
-          type="select"
-          bind:value={tlsMode}
-          options={tlsModeOptions}
-          orientation="horizontal"
-          disabled={busy}
-        />
+        <div class="ssl-row">
+          <span class="row-label" id="ssl-label">{$t("connections.form.ssl")}</span>
+          <div class="ssl-controls">
+            <button
+              class="ui-switch"
+              type="button"
+              role="switch"
+              aria-checked={sslEnabled}
+              aria-labelledby="ssl-label"
+              disabled={busy}
+              onclick={toggleSsl}
+            >
+              <span></span>
+            </button>
+            {#if sslEnabled}
+              <button
+                class="ssl-summary"
+                type="button"
+                aria-expanded={sslExpanded}
+                aria-controls="ssl-modes"
+                aria-label={$t("connections.form.ssl.options")}
+                use:tooltip={$t("connections.form.ssl.options")}
+                disabled={busy}
+                onclick={() => (sslExpanded = !sslExpanded)}
+              >
+                <!-- Automatico es lo normal y no hace falta decirlo: solo se
+                     nombra un modo mas estricto. -->
+                {#if tlsMode !== "auto"}{$t(`connections.form.tls.${tlsMode}`)}{/if}
+                <ChevronDown size={13} class="ssl-chevron" aria-hidden="true" />
+              </button>
+            {:else}
+              <span class="ssl-off">{$t("connections.form.tls.disabled")}</span>
+            {/if}
+          </div>
+
+          {#if sslEnabled && sslExpanded}
+            <div id="ssl-modes" class="ssl-modes" role="radiogroup" aria-labelledby="ssl-label" transition:slide={{ duration: 140 }}>
+              {#each SSL_MODES as mode (mode)}
+                <button
+                  class="ssl-mode"
+                  class:selected={tlsMode === mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={tlsMode === mode}
+                  disabled={busy}
+                  onclick={() => (tlsMode = mode)}
+                >
+                  <span class="radio" aria-hidden="true"></span>
+                  <span class="ssl-mode-text">
+                    <strong>{$t(`connections.form.tls.${mode}`)}</strong>
+                    <span>{$t(`connections.form.tls.${mode}.description`)}</span>
+                  </span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
 
         {#if verifiesCertificate}
           <Field
@@ -459,12 +583,12 @@
       <div class="url-row">
         <span class="row-label">{$t("connections.form.url")}</span>
         <div class="url-box">
-          <code title={connectionUrl}>{connectionUrl}</code>
+          <code use:tooltip={connectionUrl}>{connectionUrl}</code>
           <button
             type="button"
             class="icon-action"
             aria-label={$t("connections.form.copyUrl")}
-            title={copied === "url" ? $t("connections.form.urlCopied") : $t("connections.form.copyUrl")}
+            use:tooltip={copied === "url" ? $t("connections.form.urlCopied") : $t("connections.form.copyUrl")}
             onclick={() => copy(connectionUrl, "url")}
           >
             {#if copied === "url"}
@@ -485,14 +609,40 @@
       {/if}
 
       {#if attempted && $connection.error}
-        <div role="alert" class="feedback error">
-          <strong>
-            {$t("connections.form.error.connect", {
-              host: host.trim() || $t("connections.form.error.theServer"),
-              port,
-            })}
-          </strong>
-          <span>{$connection.error}</span>
+        <!-- Que paso y que revisar; el texto crudo del driver queda para
+             copiar (connectionErrors.ts). Sin causa reconocida, se muestra
+             tal cual. -->
+        {@const explained = explainConnectionFailure(
+          $connection.error,
+          { host: host.trim(), port, database: database.trim() },
+          $t,
+        )}
+        <div role="alert" class="feedback error with-action">
+          <div class="feedback-text">
+            <strong>
+              {explained.title ??
+                $t("connections.form.error.connect", {
+                  host: host.trim() || $t("connections.form.error.theServer"),
+                  port,
+                })}
+            </strong>
+            <span>{explained.hint ?? explained.detail}</span>
+          </div>
+          {#if explained.detail}
+            <button
+              type="button"
+              class="icon-action"
+              aria-label={$t("connections.form.copyDetail")}
+              use:tooltip={copied === "detail" ? $t("connections.form.detailCopied") : $t("connections.form.copyDetail")}
+              onclick={() => copy(explained.detail, "detail")}
+            >
+              {#if copied === "detail"}
+                <Check size={14} aria-hidden="true" />
+              {:else}
+                <Copy size={14} aria-hidden="true" />
+              {/if}
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -509,7 +659,7 @@
             class={`test-badge ${testSummary.outcome}`}
             aria-expanded={testPopoverOpen}
             aria-controls="test-report"
-            title={$t("connections.form.testDetail")}
+            use:tooltip={$t("connections.form.testDetail")}
             onclick={() => (testPopoverOpen = !testPopoverOpen)}
           >
             {#if testSummary.outcome === "success"}
@@ -562,7 +712,9 @@
             ? $t("connections.form.connecting")
             : saving
               ? $t("connections.form.saving")
-              : $t("connections.form.saveAndConnect")}
+              : intent === "edit"
+                ? $t("connections.form.save")
+                : $t("connections.form.saveAndConnect")}
         </Button>
       </div>
     </footer>
@@ -659,7 +811,7 @@
   .form-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-5);
     overflow-y: auto;
     padding: var(--space-3) var(--space-5) var(--space-5);
   }
@@ -686,16 +838,216 @@
     margin-top: 2px;
   }
 
-  .row-label {
-    color: var(--text-primary);
-    font-size: 0.875rem;
+  .identity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
+  .environment-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+
+  .environment-options {
+    display: inline-flex;
+    justify-self: start;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+  }
+
+  .environment-option {
+    height: 1.75rem;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition:
+      background 120ms ease,
+      color 120ms ease;
+  }
+
+  .environment-option:hover:not(:disabled, .selected) {
+    color: var(--text-primary);
+  }
+
+  .environment-option.selected {
+    background: var(--surface);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .environment-option.production.selected {
+    background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+    color: var(--danger);
+  }
+
+  .environment-option:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .environment-option:disabled {
+    cursor: default;
+  }
+
+  .environment-hint {
+    grid-column: 2;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .ssl-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+
+  .ssl-controls {
+    display: flex;
+    min-height: 2.125rem;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+
+
+
+
+  .ssl-summary:focus-visible,
+  .ssl-mode:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .ssl-summary:disabled,
+  .ssl-mode:disabled {
+    cursor: default;
+  }
+
+  .ssl-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: color var(--duration-fast);
+  }
+
+  .ssl-summary:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+
+  .ssl-summary :global(.ssl-chevron) {
+    transition: transform var(--duration-fast);
+  }
+
+  .ssl-summary[aria-expanded="true"] :global(.ssl-chevron) {
+    transform: rotate(180deg);
+  }
+
+  .ssl-off {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .ssl-modes {
+    display: flex;
+    grid-column: 2;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+  }
+
+  .ssl-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--duration-fast);
+  }
+
+  .ssl-mode:hover:not(:disabled, .selected) {
+    background: color-mix(in srgb, var(--surface) 50%, transparent);
+  }
+
+  .ssl-mode.selected {
+    background: var(--surface);
+  }
+
+  .radio {
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: 2px;
+    box-sizing: border-box;
+    border: 1px solid var(--control-border);
+    border-radius: 50%;
+    transition:
+      border-color var(--duration-fast),
+      border-width var(--duration-fast);
+  }
+
+  .ssl-mode.selected .radio {
+    border: 4px solid var(--accent);
+  }
+
+  .ssl-mode-text {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ssl-mode-text strong {
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .ssl-mode-text span {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  /* Mismo tamaño que las etiquetas de Field: una sola columna de rotulos. */
+  .row-label {
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+  }
+
+  /* Campo principal a lo ancho y, a su derecha, uno corto (Puerto, Guardar)
+     con el mismo ancho en ambas filas para que queden alineados. */
   .endpoint,
   .password-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 13rem;
-    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr) 12.5rem;
+    gap: var(--space-4);
   }
 
   .url-row {
@@ -756,6 +1108,24 @@
     background: color-mix(in srgb, var(--accent) 9%, transparent);
     font-size: 0.8125rem;
     line-height: 1.4;
+  }
+
+  .feedback.with-action {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .feedback-text {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .feedback.with-action .icon-action {
+    margin: -4px -4px 0 0;
   }
 
   .feedback.error {

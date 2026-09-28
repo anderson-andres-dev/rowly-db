@@ -268,10 +268,10 @@ describe("queryConsoles: pestañas de tabla", () => {
     expect(again).toBe(first);
     expect(get(mod.queryConsoles).activeByProfile.p1).toBe(first);
 
-    mod.setTableFilters(first, "estado = 'activo'", "id DESC");
+    mod.setTableFilters(first, { where: "estado = 'activo'", conditions: [] });
     const item = get(mod.queryConsoles).consoles.find((candidate) => candidate.id === first)!;
     expect(item.title).toBe("api_core_smoke_test");
-    expect(item.table).toEqual({ schema: "core", name: "api_core_smoke_test", where: "estado = 'activo'", orderBy: "id DESC" });
+    expect(item.table).toEqual({ schema: "core", name: "api_core_smoke_test", where: "estado = 'activo'", conditions: [] });
     // Nunca queda "sin guardar": no tiene texto propio.
     expect(mod.isQueryConsoleDirty(item)).toBe(false);
 
@@ -284,7 +284,7 @@ describe("queryConsoles: pestañas de tabla", () => {
   it("al recargar la app se restaura la pestaña de tabla con sus filtros", async () => {
     const mod = await freshQueryConsoles();
     const id = mod.openTableConsole("p1", "core", "t");
-    mod.setTableFilters(id, "a = 1", "");
+    mod.setTableFilters(id, { where: "a = 1", conditions: [] });
     const stored = localStorage.getItem("khipu:query-consoles:v1");
 
     vi.resetModules();
@@ -296,7 +296,28 @@ describe("queryConsoles: pestañas de tabla", () => {
     });
     const reloaded = await import("./queryConsoles");
     const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
-    expect(item.table?.where).toBe("a = 1");
+    // Un WHERE que no salio del constructor no se restaura.
+    expect(item.table?.where).toBe("");
+  });
+
+  it("una pestaña guardada antes del constructor abre en el constructor, sin el filtro viejo", async () => {
+    const legacy = (where: string) =>
+      JSON.stringify({
+        consoles: [{ id: "t1", profileId: "p1", title: "t", sql: "", filePath: null, savedSql: "", table: { schema: "s", name: "t", where, orderBy: "" } }],
+        activeByProfile: { p1: "t1" },
+      });
+    for (const where of ["id > 1", ""]) {
+      vi.resetModules();
+      const storage = new Map([["khipu:query-consoles:v1", legacy(where)]]);
+      vi.stubGlobal("localStorage", {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      });
+      const reloaded = await import("./queryConsoles");
+      const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === "t1");
+      expect(item?.table?.where).toBe("");
+    }
   });
 });
 
@@ -318,5 +339,79 @@ describe("queryConsoles: eliminar un perfil", () => {
     expect(state.consoles.map((item) => item.id)).toEqual([kept]);
     expect(state.activeByProfile).toEqual({ "profile-b": kept });
     expect(Object.keys(state.executionByConsole)).toEqual([kept]);
+  });
+});
+
+describe("queryConsoles: textos grandes fuera de localStorage", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.doUnmock("$lib/backend");
+    vi.useRealTimers();
+  });
+
+  it("un texto grande va a disco con retraso y en localStorage queda solo la marca", async () => {
+    vi.useFakeTimers();
+    const invoke = vi.fn(async () => null);
+    vi.doMock("$lib/backend", () => ({ invoke }));
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("p1");
+    const big = "SELECT 1;\n".repeat(mod.LARGE_TEXT / 5);
+    mod.updateQueryConsoleSql(id, big);
+
+    const persisted = JSON.parse(localStorage.getItem("khipu:query-consoles:v1") ?? "{}");
+    const item = persisted.consoles.find((candidate: { id: string }) => candidate.id === id);
+    expect(item.sql).toBeUndefined();
+    expect(item.sqlOnDisk).toBe(true);
+    expect(localStorage.getItem("khipu:query-consoles:v1")!.length).toBeLessThan(1000);
+
+    expect(invoke).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(invoke).toHaveBeenCalledWith("write_console_text", { key: id, contents: big });
+  });
+
+  it("al arrancar, la consola espera su texto del disco antes de mostrarse", async () => {
+    const big = "SELECT 2;\n".repeat(40_000);
+    let release: (text: string) => void = () => {};
+    const invoke = vi.fn((command: string) =>
+      command === "read_console_text" ? new Promise<string>((resolve) => (release = resolve)) : Promise.resolve(null),
+    );
+    vi.doMock("$lib/backend", () => ({ invoke }));
+    vi.resetModules();
+    const storage = new Map([
+      [
+        "khipu:query-consoles:v1",
+        JSON.stringify({
+          consoles: [{ id: "c1", profileId: "p1", title: "consola_1", sqlOnDisk: true, savedSame: true, filePath: null, table: null }],
+          activeByProfile: { p1: "c1" },
+          nextOrdinal: 2,
+        }),
+      ],
+    ]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    });
+    const mod = await import("./queryConsoles");
+    const pending = get(mod.queryConsoles).consoles[0];
+    expect(pending.textPending).toBe(true);
+    // Mientras tanto se vuelve a guardar igual: la marca no se pierde.
+    mod.renameQueryConsole("c1", "grande");
+    expect(JSON.parse(storage.get("khipu:query-consoles:v1")!).consoles[0].sqlOnDisk).toBe(true);
+
+    release(big);
+    await vi.waitFor(() => expect(get(mod.queryConsoles).consoles[0].textPending).toBeUndefined());
+    const loaded = get(mod.queryConsoles).consoles[0];
+    expect(loaded.sql).toBe(big);
+    expect(loaded.savedSql).toBe(big);
+    expect(invoke).toHaveBeenCalledWith("read_console_text", { key: "c1" });
+  });
+
+  it("flushConsoleTexts pide el texto a los editores abiertos", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("p1");
+    const unregister = mod.registerConsoleTextFlush(() => mod.updateQueryConsoleSql(id, "SELECT 3"));
+    expect(mod.currentQueryConsole(id)?.sql).toBe("SELECT 3");
+    unregister();
   });
 });

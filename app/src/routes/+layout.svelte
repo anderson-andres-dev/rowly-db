@@ -1,7 +1,15 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { tooltip } from "$lib/tooltip";
+  import { onMount, onDestroy, tick } from "svelte";
+  import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
+  import { registerCommands } from "$lib/commands";
+  import { installKeybindings } from "$lib/keybindings";
   import type { Snippet } from "svelte";
   import "$lib/styles/tokens.css";
+  import "$lib/styles/buttons.css";
+  import "$lib/styles/controls.css";
+  import "$lib/styles/alert-dialog.css";
+  import "$lib/styles/tooltip.css";
   import {
     connection,
     connectToProfile,
@@ -12,7 +20,7 @@
     setVisibleSchemas,
   } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
   import {
     DEFAULT_SIDEBAR_WIDTH,
     MAX_SIDEBAR_WIDTH,
@@ -35,6 +43,8 @@
     X,
   } from "@lucide/svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import ShortcutSheet from "$lib/components/ShortcutSheet.svelte";
+  import RowlyMark from "$lib/components/RowlyMark.svelte";
   import SchemaTree from "$lib/components/SchemaTree.svelte";
   import FileTree from "$lib/components/FileTree.svelte";
   import { installDialogMotion } from "$lib/dialogMotion";
@@ -47,6 +57,32 @@
   let cleanupThemeEffects: (() => void) | undefined;
   let cleanupLocaleEffects: (() => void) | undefined;
   let settingsOpen = $state(false);
+  let settingsSection = $state<"appearance" | "shortcuts">("appearance");
+
+  // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
+  let sheetOpen = $state(false);
+  let focusBeforeSheet: HTMLElement | null = null;
+
+  function toggleShortcutSheet() {
+    if (sheetOpen) {
+      closeShortcutSheet(true);
+      return;
+    }
+    focusBeforeSheet = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    sheetOpen = true;
+  }
+
+  function closeShortcutSheet(restoreFocus: boolean) {
+    sheetOpen = false;
+    if (restoreFocus) focusBeforeSheet?.focus({ preventScroll: true });
+    focusBeforeSheet = null;
+  }
+
+  function customizeShortcuts() {
+    closeShortcutSheet(false);
+    settingsSection = "shortcuts";
+    settingsOpen = true;
+  }
   let sidebarCollapsed = $state(false);
   let refreshingTables = $state(false);
   let sidebar = $state<HTMLElement>();
@@ -139,37 +175,14 @@
     }
   }
 
-  // Atajos globales resueltos desde Ajustes > Atajos (shortcuts.ts). Se
-  // desactivan mientras el modal de Ajustes esta abierto, porque ahi mismo
-  // se pueden estar capturando nuevas combinaciones.
-  // Ultima zona donde el usuario hizo clic. WebKit no enfoca los botones al
-  // hacer clic (y las filas del arbol del sidebar son botones), asi que
-  // "el foco esta en el sidebar" no se puede saber solo por activeElement.
-  let lastPointerInSidebar = false;
-
-  function trackPointerRegion(event: PointerEvent) {
-    lastPointerInSidebar = event.target instanceof Element && !!event.target.closest(".sidebar");
-  }
-
-  // Ctrl+F con el sidebar activo: lleva al filtro del explorador; si ya se
-  // esta en el filtro, lo deja (toggle). En el editor y en el grid, Ctrl+F lo
-  // resuelve cada uno (su propia barra de busqueda).
-  function handleSidebarFind(event: KeyboardEvent): boolean {
-    const mod = event.ctrlKey || event.metaKey;
-    if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f" || !sidebar) return false;
-    const active = document.activeElement;
-    // Manda el mouse: con el puntero sobre el sidebar, alcanza. Si no, el
-    // foco (o el ultimo clic, que WebKit no enfoca botones).
-    const inSidebar =
-      sidebar.matches(":hover") ||
-      (active && active !== document.body ? sidebar.contains(active) : lastPointerInSidebar);
-    if (!inSidebar) return false;
-    const filterInput = sidebar.querySelector<HTMLInputElement>(".filter input");
+  // Buscar con el sidebar como zona activa (foco o ultimo clic, nunca el
+  // mouse encima; focusZones.ts): lleva al filtro del explorador; si ya se
+  // esta en el filtro, lo deja (toggle). En el editor y en el grid lo
+  // resuelve el Workspace (su propia barra de busqueda).
+  function findInSidebar(): boolean {
+    const filterInput = sidebar?.querySelector<HTMLInputElement>(".filter input");
     if (!filterInput) return false;
-    event.preventDefault();
-    // Que CodeMirror no la vea si el foco estaba en el editor.
-    event.stopImmediatePropagation();
-    if (active === filterInput) {
+    if (document.activeElement === filterInput) {
       filterInput.blur();
     } else {
       filterInput.focus();
@@ -178,19 +191,18 @@
     return true;
   }
 
-  function onSidebarFindKeydown(event: KeyboardEvent) {
-    if (!settingsOpen) handleSidebarFind(event);
+  // Al llegar con el teclado a una zona del sidebar sin foco previo: la
+  // primera fila del arbol, no los botones de la cabecera.
+  function focusFirstTreeRow(zone: HTMLElement): boolean {
+    const row = zone.querySelector<HTMLElement>('[role="tree"] .row');
+    row?.focus({ preventScroll: true });
+    return !!row;
   }
 
-  function handleGlobalKeydown(event: KeyboardEvent) {
-    if (settingsOpen) return;
-
-    const toggleSidebar = $shortcuts.find((shortcut) => shortcut.id === "toggle-sidebar");
-    if (toggleSidebar && eventMatchesShortcut(event, toggleSidebar.keys)) {
-      if (!$connection.connected) return;
-      event.preventDefault();
-      sidebarCollapsed = !sidebarCollapsed;
-    }
+  function toggleSidebar(): boolean {
+    if (!$connection.connected) return false;
+    sidebarCollapsed = !sidebarCollapsed;
+    return true;
   }
 
   // El colapso usa la misma transicion de width que Alt+1: al soltar por
@@ -237,25 +249,64 @@
     }
   }
 
+  // El menu contextual del navegador (Recargar, Inspeccionar elemento...)
+  // no es parte de la app: un clic derecho descuidado no debe ofrecerlo. Se
+  // bloquea donde la app no tiene menu propio, salvo en campos de texto,
+  // donde el nativo da cortar/copiar/pegar. El inspector sigue a mano con su
+  // atajo de teclado en desarrollo.
+  function blockNativeContextMenu(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) return;
+    event.preventDefault();
+  }
+
+  let cleanupFocusZones: (() => void) | undefined;
+  let cleanupKeybindings: (() => void) | undefined;
+  let cleanupCommands: (() => void) | undefined;
+
   onMount(() => {
     installDialogMotion();
+    window.addEventListener("contextmenu", blockNativeContextMenu);
     cleanupThemeEffects = initThemeEffects();
     cleanupLocaleEffects = initLocaleEffects();
     // Solo la ventana principal busca versiones al arrancar: las de conexión
     // no repiten la consulta a GitHub.
     if (getCurrentWindow().label === "main") void checkOnStartup();
-    document.addEventListener("keydown", handleGlobalKeydown);
-    window.addEventListener("pointerdown", trackPointerRegion, true);
-    // En captura: tiene que llegar antes que el keymap de CodeMirror.
-    window.addEventListener("keydown", onSidebarFindKeydown, true);
+    // Los atajos se apagan con cualquier modal abierto; en Ajustes, ademas,
+    // se pueden estar capturando combinaciones nuevas.
+    const shortcutsBlocked = () => settingsOpen || !!document.querySelector("dialog[open]");
+    // Primero las zonas: sus flechas del modo mover van antes que los atajos.
+    cleanupFocusZones = installFocusZones(shortcutsBlocked);
+    cleanupKeybindings = installKeybindings(shortcutsBlocked);
+    const cleanupSidebarCommands = registerCommands("global", {
+      "toggle-sidebar": toggleSidebar,
+      "shortcut-sheet": toggleShortcutSheet,
+    });
+    const cleanupExplorerFind = registerCommands("explorer", { find: findInSidebar });
+    const cleanupFilesFind = registerCommands("files", { find: findInSidebar });
+    cleanupCommands = () => {
+      cleanupSidebarCommands();
+      cleanupExplorerFind();
+      cleanupFilesFind();
+    };
+    // Ir al sidebar con el teclado lo abre si estaba plegado.
+    setSidebarRevealer(async () => {
+      if (!$connection.connected) return;
+      sidebarCollapsed = false;
+      await tick();
+    });
   });
 
   onDestroy(() => {
     cleanupThemeEffects?.();
     cleanupLocaleEffects?.();
-    document.removeEventListener("keydown", handleGlobalKeydown);
-    window.removeEventListener("pointerdown", trackPointerRegion, true);
-    window.removeEventListener("keydown", onSidebarFindKeydown, true);
+    cleanupCommands?.();
+    cleanupKeybindings?.();
+    cleanupFocusZones?.();
+    setSidebarRevealer(null);
+
+    window.removeEventListener("contextmenu", blockNativeContextMenu);
   });
 </script>
 
@@ -265,9 +316,18 @@
        en la pantalla de conexiones. -->
   <header
     class="topbar"
-    class:tinted={$connection.connected && !!activeProfile?.color}
-    style:--identity={$connection.connected ? activeProfile?.color : undefined}
+    class:tinted={$connection.connected ? !!activeProfile?.color : true}
+    style:--identity={$connection.connected ? activeProfile?.color : "var(--accent)"}
   >
+    <!-- En la pantalla de conexiones, el logo y el degradado toman el acento
+         del tema elegido; con una conexion abierta, el color de la
+         conexion. -->
+    {#if !$connection.connected}
+      <span class="topbar-brand">
+        <RowlyMark size="1.5rem" mono />
+        <span class="wordmark">Rowly<span class="wordmark-db">DB</span></span>
+      </span>
+    {/if}
     {#if $connection.connected}
       <!-- Con el panel visible, ocultarlo vive en su propia barra
            (SchemaTree); aca solo queda la forma de volver a abrirlo. -->
@@ -275,7 +335,7 @@
         <button
           class="icon-button"
           type="button"
-          title={toggleSidebarKeys
+          use:tooltip={toggleSidebarKeys
             ? $t("shell.showTablesPanelWithKeys", { keys: toggleSidebarKeys })
             : $t("shell.showTablesPanel")}
           aria-label={$t("shell.showTablesPanel")}
@@ -289,7 +349,7 @@
         <button
           class="icon-button"
           type="button"
-          title={$t("shell.backToConnections")}
+          use:tooltip={$t("shell.backToConnections")}
           aria-label={$t("shell.backToConnections")}
           disabled={$connection.connecting}
           onclick={reset}
@@ -307,11 +367,14 @@
     <button
       class="icon-button"
       type="button"
-      title={$t("shell.settings")}
+      use:tooltip={$t("shell.settings")}
       aria-label={settingsOpen ? $t("shell.closeSettings") : $t("shell.openSettings")}
       aria-expanded={settingsOpen}
       aria-pressed={settingsOpen}
-      onclick={() => (settingsOpen = !settingsOpen)}
+      onclick={() => {
+        settingsSection = "appearance";
+        settingsOpen = !settingsOpen;
+      }}
     >
       <Settings size={17} aria-hidden="true" />
       {#if $newerRelease}
@@ -321,7 +384,7 @@
     <div class="window-controls" aria-label={$t("shell.windowControls")}>
       <button
         type="button"
-        title={$t("shell.minimize")}
+        use:tooltip={$t("shell.minimize")}
         aria-label={$t("shell.minimize")}
         onclick={() => appWindow.minimize()}
       >
@@ -329,7 +392,7 @@
       </button>
       <button
         type="button"
-        title={$t("shell.maximizeRestore")}
+        use:tooltip={$t("shell.maximizeRestore")}
         aria-label={$t("shell.maximizeRestore")}
         onclick={() => appWindow.toggleMaximize()}
       >
@@ -338,7 +401,7 @@
       <button
         class="close-window"
         type="button"
-        title={$t("common.close")}
+        use:tooltip={$t("common.close")}
         aria-label={$t("common.close")}
         onclick={() => appWindow.close()}
       >
@@ -365,10 +428,11 @@
         bind:this={sidebarContent}
         style:width={`${Math.max(liveSidebarWidth, MIN_SIDEBAR_WIDTH)}px`}
       >
-        <div class="schema-pane">
+        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTreeRow }}>
         <SchemaTree
           explorer={$databaseExplorer}
           {connectionLabel}
+          {profileId}
           refreshing={refreshingTables}
           loadingSchemas={$explorerLoading}
           hideShortcut={toggleSidebarKeys}
@@ -397,6 +461,7 @@
                (nunca auto) para que la transicion pueda interpolarlo. -->
           <div
             class="files-pane"
+            use:focusZoneAction={{ zone: "files", focusDefault: focusFirstTreeRow }}
             class:collapsed={$sqlFolders.collapsed}
             style:height={$sqlFolders.collapsed
               ? undefined
@@ -418,7 +483,7 @@
           aria-valuemin={MIN_SIDEBAR_WIDTH}
           aria-valuemax={MAX_SIDEBAR_WIDTH}
           tabindex="0"
-          title={$t("shell.resizeSidebarHint")}
+          use:tooltip={$t("shell.resizeSidebarHint")}
           onpointerdown={startSidebarResize}
           ondblclick={() => sidebarWidth.set(DEFAULT_SIDEBAR_WIDTH)}
           onkeydown={onSidebarHandleKeydown}
@@ -433,8 +498,11 @@
     </div>
   </main>
 
+  {#if sheetOpen}
+    <ShortcutSheet onclose={closeShortcutSheet} oncustomize={customizeShortcuts} />
+  {/if}
   {#if settingsOpen}
-    <SettingsPanel onclose={() => (settingsOpen = false)} />
+    <SettingsPanel initialSection={settingsSection} onclose={() => (settingsOpen = false)} />
   {/if}
 </div>
 
@@ -488,6 +556,34 @@
        margen sin cubrir.
      - Muchos puntos de paso con una caida tipo ease-out: con solo dos o
        tres se nota donde termina el degradado. */
+  /* Marca en el topbar de inicio: el pajaro y "Rowly" con peso, "DB" en
+     tono secundario, mas chico y espaciado, como una etiqueta. */
+  .topbar-brand {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: var(--space-1);
+    color: var(--text-primary);
+    user-select: none;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+
+  .wordmark-db {
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+  }
+
   .topbar::before {
     content: "";
     position: absolute;

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { activeEngine } from "$lib/stores/connection";
+  import { tooltip } from "$lib/tooltip";
+  import { settleTransitions } from "$lib/settleTransitions";
   import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
   import type { ColumnCatalogInfo, QueryColumn, QueryRow, SortKey } from "$lib/types";
@@ -41,7 +44,6 @@
     findMatches = [],
     findCurrent = -1,
     hiddenRows = null,
-    onfind = () => {},
     sort = [],
     sortable = false,
     onsort = () => {},
@@ -74,7 +76,6 @@
     findMatches?: FindMatch[];
     findCurrent?: number;
     hiddenRows?: ReadonlySet<number> | null;
-    onfind?: () => void;
     // Orden desde los encabezados (se aplica en la base, ver gridSort.ts):
     // criterios actuales, si la consulta lo admite, y el clic (Shift =
     // agregar criterio).
@@ -460,6 +461,7 @@
       format: copyFormat,
       headers: copyHeaders,
       tableName: copyTableName || $t("grid.defaultTableName"),
+      quoteString: $activeEngine?.quoteString,
     });
     rememberCopy(text, values);
     if (await writeClipboardText(text)) for (const range of ranges) addEffect(range, "copy");
@@ -491,10 +493,8 @@
     const mod = event.ctrlKey || event.metaKey;
     if (!mod || event.altKey || event.shiftKey || editing) return;
     const key = event.key.toLowerCase();
-    if (key === "f") {
-      event.preventDefault();
-      onfind();
-    } else if (key === "c") {
+    if (key === "c") {
+
       event.preventDefault();
       void copySelection();
     } else if (key === "v") {
@@ -1497,6 +1497,7 @@
   aria-label={$t("grid.label")}
   tabindex="-1"
   bind:this={gridEl}
+  use:settleTransitions
   onselectstart={preventNativeSelection}
   onkeydown={onGridKeydown}
 >
@@ -1581,7 +1582,7 @@
                         aria-label={active
                           ? $t(active.descending ? "grid.sort.descendingLabel" : "grid.sort.ascendingLabel")
                           : $t("grid.sort.by", { column: column.name })}
-                        title={active
+                        use:tooltip={active
                           ? $t(active.descending ? "grid.sort.descendingTitle" : "grid.sort.ascendingTitle")
                           : $t("grid.sort.title")}
                         onclick={(event) => {
@@ -1696,7 +1697,7 @@
               <button
                 type="button"
                 class="null-chip"
-                title={$t("grid.edit.setNull")}
+                use:tooltip={$t("grid.edit.setNull")}
                 onpointerdown={(event) => event.preventDefault()}
                 onclick={setEditingNull}>NULL</button
               >
@@ -2042,6 +2043,12 @@
       opacity var(--duration-fast) ease,
       background-color var(--duration-fast) ease,
       color var(--duration-fast) ease;
+  }
+
+  /* Sin transicion hasta el primer pintado (lib/settleTransitions.ts): si
+     no, los botones de orden se ven un instante antes de ocultarse. */
+  .data-grid:not([data-settled]) .sort-button {
+    transition: none;
   }
 
   .column-header:hover .sort-button,

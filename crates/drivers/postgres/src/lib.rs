@@ -5,9 +5,9 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, DriverError, QueryColumn, QueryExecutionOptions,
-    QueryExecutionResult, QueryRow, QueryValue, RowSink, SchemaObjects, TlsMode, TlsStatus,
-    TransactionError, TransactionStatement,
+    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
+    QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
+    SchemaObjects, TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
 };
 use sqlx::postgres::{
     PgConnectOptions, PgConnection, PgDatabaseError, PgErrorPosition, PgPoolOptions,
@@ -15,13 +15,17 @@ use sqlx::postgres::{
 use sqlx::{Column, Executor, PgPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct PostgresConnector {
     pool: PgPool,
     version: version::ServerVersion,
     tls: TlsStatus,
 }
+
+/// How long the pool waits for a connection before giving up. sqlx's default
+/// (30 s) leaves the app hanging too long on a host that doesn't answer.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, sqlx::Error> {
     let options = PgConnectOptions::new()
@@ -31,6 +35,7 @@ async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, s
         .password(&config.password)
         .database(&config.database);
     PgPoolOptions::new()
+        .acquire_timeout(CONNECT_TIMEOUT)
         .connect_with(tls::apply(
             options,
             mode,
@@ -80,7 +85,7 @@ fn postgres_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
                 _ => None,
             };
             return QueryExecutionResult::Error {
-                message: pg_error.message().to_string(),
+                message: pg_error.message().into(),
                 code: Some(pg_error.code().to_string()),
                 position,
             };
@@ -88,7 +93,7 @@ fn postgres_error_to_result(error: sqlx::Error) -> QueryExecutionResult {
     }
 
     QueryExecutionResult::Error {
-        message: error.to_string(),
+        message: error.to_string().into(),
         code: None,
         position: None,
     }
@@ -101,6 +106,7 @@ impl DbConnector for PostgresConnector {
         // ver tls::is_tls_failure) se reintenta sin cifrar. El pool entero
         // queda con esas opciones, asi que las conexiones que abra despues
         // no vuelven a intentar TLS.
+        probe_tcp(&config.host, config.port, CONNECT_TIMEOUT).await?;
         let (pool, fell_back) = match open_pool(config, config.tls_mode).await {
             Ok(pool) => (pool, false),
             Err(error) if config.tls_mode == TlsMode::Auto && tls::is_tls_failure(&error) => {
@@ -115,7 +121,7 @@ impl DbConnector for PostgresConnector {
             sqlx::query_scalar("SELECT current_setting('server_version_num')")
                 .fetch_one(&pool)
                 .await
-                .map_err(|e| DriverError::Connection(e.to_string()))?;
+                .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))?;
         let tls = tls::read_status(&pool, fell_back).await;
         Ok(Self {
             pool,
@@ -163,11 +169,9 @@ impl DbConnector for PostgresConnector {
         if self.version.is_below_minimum() {
             objects.warnings.insert(
                 0,
-                format!(
-                    "{} es anterior a la version soportada (PostgreSQL 10): \
-                     algunos objetos pueden faltar.",
-                    self.version.display()
-                ),
+                Message::key("introspect.unsupportedVersion")
+                    .with("version", self.version.display())
+                    .with("minimum", "PostgreSQL 10"),
             );
         }
         Ok(objects)
@@ -261,16 +265,16 @@ impl DbConnector for PostgresConnector {
         &'a self,
         sql: &'a str,
         sink: &'a mut dyn RowSink,
-    ) -> Pin<Box<dyn Future<Output = Result<u64, String>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<u64, Message>> + Send + 'a>> {
         Box::pin(async move {
             let message = |error: sqlx::Error| match postgres_error_to_result(error) {
                 QueryExecutionResult::Error { message, .. } => message,
-                _ => "Error al leer las filas.".to_string(),
+                _ => Message::key("export.readFailed"),
             };
             let mut conn = self.pool.acquire().await.map_err(message)?;
             let describe = conn.describe(sql).await.map_err(message)?;
             if describe.columns().is_empty() {
-                return Err("La sentencia no devuelve filas: no hay nada que exportar.".to_string());
+                return Err(Message::key("export.noRows"));
             }
             let columns: Vec<QueryColumn> = describe
                 .columns()
@@ -287,7 +291,7 @@ impl DbConnector for PostgresConnector {
             let mut count = 0u64;
             let mut values: Vec<QueryValue> = Vec::with_capacity(columns.len());
             let mut finished = false;
-            let outcome: Result<(), String> = async {
+            let outcome: Result<(), Message> = async {
                 let mut stream = Executor::fetch(&mut *conn, RawStatement(sql));
                 while let Some(row) = stream.try_next().await.map_err(message)? {
                     values.clear();
@@ -355,22 +359,77 @@ impl DbConnector for PostgresConnector {
         sql: &'a str,
         options: QueryExecutionOptions,
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let mut conn = match self.pool.acquire().await {
-                Ok(conn) => conn,
-                Err(error) => return postgres_error_to_result(error),
-            };
+        Box::pin(self.run_query(sql, options, None))
+    }
 
-            let outcome = execute_on_connection(&mut conn, sql, options).await;
-            if !outcome.connection_reusable {
-                // Devolverla al pool haria que sqlx la "limpie" leyendo (y
-                // tirando) todo lo que el servidor todavia tenga para mandar
-                // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
-                // en seco; el pool abre otra conexion cuando haga falta.
-                drop(conn.detach());
+    fn execute_query_cancellable<'a>(
+        &'a self,
+        sql: &'a str,
+        options: QueryExecutionOptions,
+        cancel: &'a QueryCancel,
+    ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
+        Box::pin(self.run_query(sql, options, Some(cancel)))
+    }
+
+    async fn cancel_query(&self, cancel: &QueryCancel) -> Result<(), DriverError> {
+        let Some(id) = cancel.request() else {
+            return Ok(());
+        };
+        sqlx::query("SELECT pg_cancel_backend($1)")
+            .bind(id as i32)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(|error| DriverError::Query(error.to_string()))
+    }
+}
+
+impl PostgresConnector {
+    async fn run_query(
+        &self,
+        sql: &str,
+        options: QueryExecutionOptions,
+        cancel: Option<&QueryCancel>,
+    ) -> QueryExecutionResult {
+        let mut conn = match self.pool.acquire().await {
+            Ok(conn) => conn,
+            Err(error) => return postgres_error_to_result(error),
+        };
+
+        // Id de la conexion en el servidor: cancelar la interrumpe desde otra
+        // (ver QueryCancel). Si ya se cancelo mientras se esperaba una
+        // conexion, ni se empieza.
+        if let Some(cancel) = cancel {
+            match sqlx::query_scalar::<_, i32>("SELECT pg_backend_pid()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                Ok(id) if !cancel.begin(id as u64) => return cancelled_before_start(),
+                Ok(_) => {}
+                Err(error) => return postgres_error_to_result(error),
             }
-            outcome.result
-        })
+        }
+
+        let outcome = execute_on_connection(&mut conn, sql, options).await;
+        if let Some(cancel) = cancel {
+            cancel.end();
+        }
+        if !outcome.connection_reusable {
+            // Devolverla al pool haria que sqlx la "limpie" leyendo (y
+            // tirando) todo lo que el servidor todavia tenga para mandar
+            // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
+            // en seco; el pool abre otra conexion cuando haga falta.
+            drop(conn.detach());
+        }
+        outcome.result
+    }
+}
+
+fn cancelled_before_start() -> QueryExecutionResult {
+    QueryExecutionResult::Error {
+        message: Message::key("query.cancelledBeforeStart"),
+        code: None,
+        position: None,
     }
 }
 
@@ -783,6 +842,12 @@ mod tests {
         ))
         .await;
         run(format!(
+            "CREATE FUNCTION {SCHEMA}.calc(p_id integer, INOUT p_total numeric, \
+             p_note text DEFAULT 'x', VARIADIC p_tags text[] DEFAULT '{{}}') \
+             LANGUAGE sql AS 'SELECT p_total'"
+        ))
+        .await;
+        run(format!(
             "CREATE TRIGGER orders_audit AFTER INSERT OR UPDATE ON {SCHEMA}.orders \
              FOR EACH ROW EXECUTE PROCEDURE {SCHEMA}.touch()"
         ))
@@ -863,6 +928,38 @@ mod tests {
         assert_eq!(twice.kind, RoutineKind::Function);
         assert_eq!(twice.arguments, "p integer");
         assert_eq!(twice.return_type.as_deref(), Some("integer"));
+        let only = &twice.parameters[..];
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].name.as_deref(), Some("p"));
+        assert_eq!(only[0].data_type, "integer");
+
+        use khipu_driver_core::ParameterMode;
+        let calc = objects
+            .routines
+            .iter()
+            .find(|r| r.name == "calc")
+            .expect("calc");
+        let described: Vec<(Option<&str>, ParameterMode, &str, bool)> = calc
+            .parameters
+            .iter()
+            .map(|p| {
+                (
+                    p.name.as_deref(),
+                    p.mode,
+                    p.data_type.as_str(),
+                    p.has_default,
+                )
+            })
+            .collect();
+        assert_eq!(
+            described,
+            vec![
+                (Some("p_id"), ParameterMode::In, "integer", false),
+                (Some("p_total"), ParameterMode::InOut, "numeric", false),
+                (Some("p_note"), ParameterMode::In, "text", true),
+                (Some("p_tags"), ParameterMode::Variadic, "text[]", true),
+            ]
+        );
         if has_procedures {
             let purge = objects
                 .routines
@@ -871,6 +968,7 @@ mod tests {
                 .expect("purge");
             assert_eq!(purge.kind, RoutineKind::Procedure);
             assert_eq!(purge.return_type, None);
+            assert_eq!(purge.parameters[0].name.as_deref(), Some("p_before"));
         }
     }
 
@@ -930,15 +1028,17 @@ mod tests {
                 assert_eq!(connector.tls_status().encrypted, Some(true));
                 assert!(!connector.tls_status().fell_back);
             }
-            (Err(DriverError::Connection(message)), expected) => {
-                assert_ne!(expected, Some("encrypted"), "{message}");
+            (Err(DriverError::Connection { kind, detail }), expected) => {
+                assert_ne!(expected, Some("encrypted"), "{detail}");
                 assert!(
-                    message.starts_with("El servidor no ofrece un cifrado TLS compatible")
-                        || message.starts_with("El servidor no tiene TLS habilitado"),
-                    "{message}"
+                    matches!(
+                        kind,
+                        ConnectionErrorKind::TlsIncompatible | ConnectionErrorKind::TlsUnavailable
+                    ),
+                    "{kind:?}: {detail}"
                 );
                 if expected == Some("none") {
-                    assert!(message.starts_with("El servidor no tiene TLS habilitado"));
+                    assert_eq!(kind, ConnectionErrorKind::TlsUnavailable, "{detail}");
                 }
             }
             (Err(other), _) => panic!("unexpected error: {other}"),
@@ -968,8 +1068,8 @@ mod tests {
         let result = PostgresConnector::connect(&config_with_tls(TlsMode::VerifyCa)).await;
 
         match result {
-            Err(DriverError::Connection(message)) => {
-                assert!(message.starts_with("Certificado inválido:"), "{message}")
+            Err(DriverError::Connection { kind, detail }) => {
+                assert_eq!(kind, ConnectionErrorKind::TlsCertificate, "{detail}")
             }
             Ok(_) => panic!("a self-signed certificate must not pass VerifyCa"),
             Err(other) => panic!("unexpected error: {other}"),

@@ -1,12 +1,16 @@
-import { get, writable } from "svelte/store";
-import { invoke } from "@tauri-apps/api/core";
+import { derived, get, writable } from "svelte/store";
+import { engineFor } from "$lib/engines";
+import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
-import type { CatalogTable, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
+import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
+import { toConnectionFailure } from "$lib/connectionErrors";
+import { forgetQueryHistory } from "./queryHistory";
 import { getDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
-import { removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
+import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
 import { forgetProfileConsoles } from "./queryConsoles";
 import { closeSqlFolder } from "./sqlFolders";
+import { forgetPinnedTables } from "./pinnedTables";
 
 export interface ConnectionState {
   // true = el ultimo connect() cargo un catalogo con exito. El backend
@@ -16,7 +20,7 @@ export interface ConnectionState {
   connecting: boolean;
   tableCount: number | null;
   profileId: string | null;
-  error: string | null;
+  error: ConnectionFailure | null;
 }
 
 const initialState: ConnectionState = {
@@ -28,6 +32,22 @@ const initialState: ConnectionState = {
 };
 
 export const connection = writable<ConnectionState>(initialState);
+
+// Perfil de la conexion activa de esta ventana (null sin conexion).
+export const activeProfile = derived(
+  [connection, connectionProfiles],
+  ([$connection, $profiles]) =>
+    ($connection.connected && $profiles.find((profile) => profile.id === $connection.profileId)) || null,
+);
+
+// El perfil del motor de la conexion activa (lib/engines); null sin
+// conexion.
+export const activeEngine = derived(activeProfile, ($profile) => ($profile ? engineFor($profile.driver) : null));
+
+// La conexion activa es de produccion: el backend ya pide confirmar cada
+// escritura; la interfaz lo hace visible y confirma tambien los cambios del
+// grid antes de aplicarlos.
+export const isProduction = derived(activeProfile, ($profile) => $profile?.environment === "production");
 
 // Tablas del catalogo cargado por el ultimo connect() exitoso. Se usa tanto
 // para el arbol de tablas del sidebar (SchemaTree.svelte) como para el
@@ -68,13 +88,22 @@ function saveVisibleSchemas(profileId: string, schemas: string[]): void {
   }
 }
 
+// Los avisos de cada schema (una categoria que no se pudo leer, una version
+// no soportada) llegan como mensajes del backend: se traducen al recibirlos.
+function withTranslatedWarnings(explorer: DatabaseExplorer): DatabaseExplorer {
+  return {
+    ...explorer,
+    schemas: explorer.schemas.map((objects) => ({ ...objects, warnings: objects.warnings.map(backendText) })),
+  };
+}
+
 // Pide al backend que muestre exactamente `schemas` (mas el por defecto) y
 // refresca el arbol y el autocompletado, que tambien ve los schemas nuevos.
 export async function setVisibleSchemas(schemas: string[]): Promise<void> {
   const profileId = get(connection).profileId;
   explorerLoading.set(true);
   try {
-    const explorer = await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas });
+    const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas }));
     databaseExplorer.set(explorer);
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
     if (profileId) {
@@ -101,19 +130,21 @@ export interface ConnectionConfig {
 export async function connect(
   kind: "mysql" | "postgres",
   config: ConnectionConfig,
+  production = false,
 ): Promise<number | null> {
   connection.update((state) => ({ ...state, connecting: true, error: null }));
 
   try {
-    const tableCount = await invoke<number>("connect", { kind, config });
+    const tableCount = await invoke<number>("connect", { kind, config, production });
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
-    databaseExplorer.set(await invoke<DatabaseExplorer | null>("database_explorer"));
+    const explorer = await invoke<DatabaseExplorer | null>("database_explorer");
+    databaseExplorer.set(explorer && withTranslatedWarnings(explorer));
     return tableCount;
   } catch (e) {
     connection.update((state) => ({
       ...state,
       connected: false,
-      error: String(e),
+      error: toConnectionFailure(e),
     }));
     return null;
   } finally {
@@ -129,12 +160,37 @@ export function completeConnection(tableCount: number, profileId: string): void 
     profileId,
     error: null,
   }));
+  saveLastProfileId(profileId);
+}
+
+// Ultimo perfil al que se conecto con exito. La pantalla de conexiones lo
+// resalta y le da el foco (Enter conecta); nunca se conecta solo, para no
+// abrir sin querer una base de produccion al iniciar la app.
+const LAST_PROFILE_KEY = "khipu:last-connection:v1";
+
+export function loadLastProfileId(): string | null {
+  if (!browser) return null;
+  try {
+    return localStorage.getItem(LAST_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLastProfileId(profileId: string | null): void {
+  if (!browser) return;
+  try {
+    if (profileId) localStorage.setItem(LAST_PROFILE_KEY, profileId);
+    else localStorage.removeItem(LAST_PROFILE_KEY);
+  } catch {
+    // Sin almacenamiento, simplemente no se resalta ninguna.
+  }
 }
 
 type ConnectResult =
   | { ok: true }
   | { ok: false; reason: "no-password" }
-  | { ok: false; reason: "connect-failed"; error: string };
+  | { ok: false; reason: "connect-failed"; error: ConnectionFailure };
 
 // Orquesta el flujo completo de conectar a un perfil guardado (carga de
 // contrasena + connect() + completeConnection()) para que la tarjeta de la
@@ -157,9 +213,9 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
     password,
     tlsMode: profile.tlsMode,
     caCertificatePath: profile.caCertificatePath,
-  });
+  }, profile.environment === "production");
   if (tableCount === null) {
-    return { ok: false, reason: "connect-failed", error: get(connection).error ?? "" };
+    return { ok: false, reason: "connect-failed", error: get(connection).error ?? { kind: "other", detail: "" } };
   }
 
   completeConnection(tableCount, profile.id);
@@ -179,7 +235,7 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
 // pida a +page.svelte que abra el modal de edicion con contexto cuando un
 // cambio de conexion falla, sin acoplar el layout al estado local de la
 // pagina.
-export const pendingEdit = writable<{ profile: ConnectionProfile; error: string | null } | null>(
+export const pendingEdit = writable<{ profile: ConnectionProfile; error: ConnectionFailure | null } | null>(
   null,
 );
 
@@ -209,7 +265,10 @@ export function reset(): void {
 export async function deleteConnectionProfile(profileId: string): Promise<void> {
   await forgetConnectionPassword(profileId);
   saveVisibleSchemas(profileId, []);
+  if (loadLastProfileId() === profileId) saveLastProfileId(null);
   closeSqlFolder(profileId);
   forgetProfileConsoles(profileId);
+  forgetPinnedTables(profileId);
+  forgetQueryHistory(profileId);
   removeConnectionProfile(profileId);
 }

@@ -46,6 +46,13 @@ describe("parseProfile", () => {
       color: undefined,
     });
   });
+
+  it("conserva un entorno valido; sin entorno o con uno desconocido queda sin especificar", () => {
+    expect(parseProfile({ ...saved, environment: "production" })?.environment).toBe("production");
+    expect(parseProfile(saved)?.environment).toBeUndefined();
+    expect(parseProfile({ ...saved, environment: "staging" })?.environment).toBeUndefined();
+    expect(parseProfile({ ...saved, environment: "testing" })?.environment).toBe("development");
+  });
 });
 
 describe("removeConnectionProfile", () => {

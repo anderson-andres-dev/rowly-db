@@ -18,13 +18,22 @@ export type Translate = (key: MessageKey, params?: MessageParams) => string;
 
 const STORAGE_KEY = "khipu:locale";
 
+function systemLocale(): Locale {
+  // Fuera del navegador (tests en Node) no hay idioma del sistema: se usa el
+  // español para que los tests comparen contra los textos fuente.
+  if (!browser || typeof navigator === "undefined") return SOURCE_LOCALE;
+  return matchSystemLocale(navigator.languages?.length ? navigator.languages : [navigator.language ?? FALLBACK_LOCALE]);
+}
+
+// Sin eleccion guardada (o con la vieja "system"), el idioma se detecta del
+// sistema entre los disponibles; si no coincide ninguno, ingles.
 function loadPreference(): LocalePreference {
-  if (!browser) return "system";
+  if (!browser) return systemLocale();
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "system" || isLocale(stored) ? stored : "system";
+    return isLocale(stored) ? stored : systemLocale();
   } catch {
-    return "system";
+    return systemLocale();
   }
 }
 
@@ -43,20 +52,12 @@ if (browser) {
   globalThis.window?.addEventListener("storage", (event) => {
     if (event.key !== STORAGE_KEY) return;
     const value = event.newValue;
-    if (value === "system" || isLocale(value)) localePreference.set(value);
+    if (isLocale(value)) localePreference.set(value);
   });
 }
 
-function systemLocale(): Locale {
-  // Fuera del navegador (tests en Node) no hay idioma del sistema: se usa el
-  // español para que los tests comparen contra los textos fuente.
-  if (!browser || typeof navigator === "undefined") return SOURCE_LOCALE;
-  return matchSystemLocale(navigator.languages?.length ? navigator.languages : [navigator.language ?? FALLBACK_LOCALE]);
-}
 
-export const locale: Readable<Locale> = derived(localePreference, (preference) =>
-  preference === "system" ? systemLocale() : preference,
-);
+export const locale: Readable<Locale> = derived(localePreference, (preference) => preference);
 
 function interpolate(template: string, params?: MessageParams): string {
   if (!params) return template;

@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { ChevronRight, FileCode, FilePlus, Folder, FolderOpen, RefreshCw, TriangleAlert, X } from "@lucide/svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { t } from "$lib/i18n";
@@ -138,19 +140,17 @@
   }
 
   // --- Mover a la papelera ------------------------------------------------
-  let trashDialog = $state<HTMLDialogElement>();
   let pendingTrash = $state<string | null>(null);
 
-  async function requestTrash(path: string) {
+  function requestTrash(path: string) {
     menu = null;
     pendingTrash = path;
-    await tick();
-    trashDialog?.showModal();
   }
 
+  // Llega cuando el aviso (ConfirmDialog) termino de cerrarse.
   async function confirmTrash() {
     const path = pendingTrash;
-    trashDialog?.close();
+    pendingTrash = null;
     if (!path) return;
     try {
       await trashSqlFile(path);
@@ -219,7 +219,7 @@
             type="button"
             class="row"
             style:--depth={depth}
-            title={entry.path}
+            use:tooltip={entry.path}
             onclick={() => toggleDir(entry.path)}
             oncontextmenu={(event) => openMenu(event, folderMenuItems(entry.path))}
           >
@@ -246,7 +246,7 @@
             class="row leaf"
             class:active={entry.path === activeFilePath}
             style:--depth={depth}
-            title={entry.path}
+            use:tooltip={entry.path}
             onclick={() => openFile(entry.path)}
             oncontextmenu={(event) => openMenu(event, fileMenuItems(entry.path))}
             onkeydown={(event) => {
@@ -262,7 +262,7 @@
             <FileCode size={14} class="node-icon icon-file" aria-hidden="true" />
             <span class="label">{entry.name}</span>
             {#if dirtyPaths.has(entry.path)}
-              <span class="dirty-dot" title={$t("workspace.files.unsaved")}></span>
+              <span class="dirty-dot" use:tooltip={$t("workspace.files.unsaved")}></span>
             {/if}
           </button>
         </li>
@@ -272,7 +272,7 @@
       <li class="empty">{$t("workspace.files.empty")}</li>
     {/if}
   {:else if listing?.status === "error"}
-    <li class="row message error" style:--depth={depth} title={listing.message}>
+    <li class="row message error" style:--depth={depth} use:tooltip={listing.message}>
       <TriangleAlert size={13} aria-hidden="true" />
       <span class="label">{$t("workspace.files.readError")}</span>
     </li>
@@ -285,7 +285,7 @@
     <button
       type="button"
       class="files-title"
-      title={folder}
+      use:tooltip={folder}
       aria-expanded={!collapsed}
       onclick={() => setFilePanelCollapsed(!collapsed)}
     >
@@ -296,19 +296,19 @@
       <button
         type="button"
         class="action"
-        title={$t("workspace.files.newFile")}
+        use:tooltip={$t("workspace.files.newFile")}
         aria-label={$t("workspace.files.newFile")}
         onclick={() => void startCreate(folder)}
       >
         <FilePlus size={13} aria-hidden="true" />
       </button>
-      <button type="button" class="action" title={$t("workspace.files.refresh")} aria-label={$t("workspace.files.refreshAria")} onclick={refreshAll}>
+      <button type="button" class="action" use:tooltip={$t("workspace.files.refresh")} aria-label={$t("workspace.files.refreshAria")} onclick={refreshAll}>
         <RefreshCw size={13} aria-hidden="true" />
       </button>
       <button
         type="button"
         class="action"
-        title={$t("workspace.files.closeFolder")}
+        use:tooltip={$t("workspace.files.closeFolder")}
         aria-label={$t("workspace.files.closeFolder")}
         onclick={() => closeSqlFolder(profileId)}
       >
@@ -337,30 +337,17 @@
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => (menu = null)} />
 {/if}
 
-<dialog
-  class="trash-dialog"
-  bind:this={trashDialog}
-  oncancel={(event) => {
-    event.preventDefault();
-    trashDialog?.close();
-  }}
-  onclose={() => (pendingTrash = null)}
->
-  <h2>
-    {pendingTrash
-      ? $t("workspace.files.trashTitle", { name: fileNameFromPath(pendingTrash) })
-      : $t("workspace.files.trashTitleFallback")}
-  </h2>
-  <p>{$t("workspace.files.trashMessage")}</p>
-  <div class="dialog-actions">
-    <button
-      type="button"
-      class="secondary-action"
-      onclick={() => trashDialog?.close()}>{$t("common.cancel")}</button
-    >
-    <button type="button" class="primary-action" onclick={() => void confirmTrash()}>{$t("workspace.files.trash")}</button>
-  </div>
-</dialog>
+{#if pendingTrash}
+  {@const path = pendingTrash}
+  <ConfirmDialog
+    tone="warning"
+    title={$t("workspace.files.trashTitle", { name: fileNameFromPath(path) })}
+    message={$t("workspace.files.trashMessage")}
+    confirmLabel={$t("workspace.files.trash")}
+    onconfirm={() => void confirmTrash()}
+    oncancel={() => (pendingTrash = null)}
+  />
+{/if}
 
 <style>
   .file-tree {
@@ -571,68 +558,4 @@
     font: inherit;
   }
 
-  .trash-dialog {
-    width: min(22rem, calc(100vw - 2rem));
-    padding: var(--space-5);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-  }
-
-  .trash-dialog h2 {
-    margin: 0;
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    overflow-wrap: anywhere;
-  }
-
-  .trash-dialog p {
-    margin: var(--space-2) 0 var(--space-5);
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-  }
-
-  .dialog-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-
-  .dialog-actions button {
-    min-height: 2rem;
-    padding: var(--space-1) var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-  }
-
-  .secondary-action {
-    background: var(--surface);
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover {
-    background: var(--surface-hover);
-  }
-
-  .primary-action {
-    border-color: transparent !important;
-    background: var(--accent);
-    color: var(--text-on-accent);
-    font-weight: 500;
-  }
-
-  .primary-action:hover {
-    background: var(--accent-hover);
-  }
-
-  .dialog-actions button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
 </style>

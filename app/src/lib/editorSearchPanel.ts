@@ -42,6 +42,8 @@ import { locale, numberFormat, translate } from "$lib/i18n";
 // (applyTexts, suscrito a `locale` mientras el panel esta montado).
 
 const MAX_COUNTED = 1000;
+const COUNT_CHUNK = 1024 * 1024;
+const COUNT_OVERLAP = 64 * 1024;
 const MAX_FIELD_LINES = 6;
 
 // --- Coincidencias excluidas -----------------------------------------------
@@ -409,15 +411,54 @@ function createSearchPanel(view: EditorView): Panel {
       return;
     }
     status.classList.remove("error");
-    const selection = view.state.selection.main;
-    const cursor = query.getCursor(view.state);
+    countMatches();
+  }
+
+  // Se cuenta por trozos de COUNT_CHUNK, cediendo entre ellos: con un
+  // documento de 30 MB y pocas coincidencias, contar de una vez congela la
+  // escritura (docs/specs/v0.2-documentos-grandes.md, 15e). Un conteo nuevo
+  // deja sin efecto al anterior.
+  let countRun = 0;
+
+  function countMatches() {
+    const run = ++countRun;
+    const state = view.state;
+    const selection = state.selection.main;
+    const length = state.doc.length;
     let count = 0;
     let current = -1;
-    for (let step = cursor.next(); !step.done; step = cursor.next()) {
-      if (step.value.from === selection.from && step.value.to === selection.to) current = count;
-      count++;
-      if (count >= MAX_COUNTED) break;
-    }
+    let windowFrom = 0;
+    // Una coincidencia que cruza el corte se cuenta en el trozo donde
+    // empieza; el siguiente se salta lo que ya cubrio.
+    let lastEnd = 0;
+
+    const step = () => {
+      if (run !== countRun) return;
+      const deadline = performance.now() + 8;
+      while (windowFrom < length && count < MAX_COUNTED) {
+        const windowTo = Math.min(length, windowFrom + COUNT_CHUNK);
+        const cursor = query.getCursor(state, windowFrom, Math.min(length, windowTo + COUNT_OVERLAP));
+        for (let found = cursor.next(); !found.done; found = cursor.next()) {
+          const match = found.value;
+          if (match.from >= windowTo && windowTo < length) break;
+          if (match.from < lastEnd) continue;
+          if (match.from === selection.from && match.to === selection.to) current = count;
+          count++;
+          lastEnd = Math.max(match.to, match.from + 1);
+          if (count >= MAX_COUNTED) break;
+        }
+        windowFrom = windowTo;
+        if (performance.now() > deadline && windowFrom < length && count < MAX_COUNTED) {
+          setTimeout(step, 0);
+          return;
+        }
+      }
+      showCount(count, current);
+    };
+    step();
+  }
+
+  function showCount(count: number, current: number) {
     const format = get(numberFormat);
     const total = `${format.format(count)}${count >= MAX_COUNTED ? "+" : ""}`;
     for (const button of [replaceOne, replaceEvery, exclude, previous, next]) button.disabled = count === 0;
@@ -558,7 +599,15 @@ function createSearchPanel(view: EditorView): Panel {
         }
       }
       syncToggles();
-      if (update.docChanged || update.selectionSet || update.transactions.some((t) => t.effects.length > 0)) {
+      // Solo lo que cambia el conteo: no los efectos de fondo del editor
+      // (indice de sentencias, analisis).
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.transactions.some((transaction) =>
+          transaction.effects.some((effect) => effect.is(setSearchQuery) || effect.is(addExclusion) || effect.is(clearExclusions)),
+        )
+      ) {
         refreshStatus();
       }
     },

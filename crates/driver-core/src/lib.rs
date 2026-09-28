@@ -1,9 +1,16 @@
 pub mod assembly;
+mod connection_error;
+mod message;
+mod query_cancel;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+
+pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
+pub use message::Message;
+pub use query_cancel::QueryCancel;
 
 /// How a connection negotiates TLS. Chosen per connection profile.
 ///
@@ -211,6 +218,31 @@ pub struct RoutineInfo {
     pub arguments: String,
     /// `None` for procedures.
     pub return_type: Option<String>,
+    /// The same parameters, one by one, for what needs to match them against
+    /// the arguments of a call (the editor's parameter hints).
+    #[serde(default)]
+    pub parameters: Vec<RoutineParameter>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+    /// PostgreSQL's `VARIADIC`: takes any number of trailing arguments.
+    Variadic,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineParameter {
+    /// PostgreSQL allows unnamed parameters.
+    pub name: Option<String>,
+    pub mode: ParameterMode,
+    pub data_type: String,
+    /// It can be left out of a call (PostgreSQL `DEFAULT`).
+    pub has_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,7 +278,7 @@ pub struct SchemaObjects {
     pub routines: Vec<RoutineInfo>,
     pub sequences: Vec<SequenceInfo>,
     pub events: Vec<EventInfo>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Message>,
 }
 
 impl SchemaObjects {
@@ -264,8 +296,11 @@ impl SchemaObjects {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriverError {
-    #[error("connection failed: {0}")]
-    Connection(String),
+    #[error("connection failed: {detail}")]
+    Connection {
+        kind: ConnectionErrorKind,
+        detail: String,
+    },
     #[error("query failed: {0}")]
     Query(String),
 }
@@ -323,7 +358,7 @@ pub enum QueryExecutionResult {
         execution_time_ms: u64,
     },
     Error {
-        message: String,
+        message: Message,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         code: Option<String>,
@@ -395,6 +430,27 @@ pub trait DbConnector: Send + Sync {
         options: QueryExecutionOptions,
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>>;
 
+    /// `execute_query` that `cancel_query` can interrupt: the driver records
+    /// in `cancel` which server connection runs it (see `QueryCancel`). A
+    /// driver without cancellation just runs it.
+    fn execute_query_cancellable<'a>(
+        &'a self,
+        sql: &'a str,
+        options: QueryExecutionOptions,
+        cancel: &'a QueryCancel,
+    ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
+        let _ = cancel;
+        self.execute_query(sql, options)
+    }
+
+    /// Asks the server to interrupt the query `cancel` tracks, from another
+    /// connection. The query then ends with the server's own error. Does
+    /// nothing if it already ended; if it hasn't started yet, it won't.
+    async fn cancel_query(&self, cancel: &QueryCancel) -> Result<(), DriverError> {
+        cancel.request();
+        Ok(())
+    }
+
     /// Runs every statement in ONE transaction, in order: either all of them
     /// are committed or none (rollback on the first failure). Returns the
     /// total of affected rows. Same boxed-future shape as `execute_query`.
@@ -412,16 +468,16 @@ pub trait DbConnector: Send + Sync {
         &'a self,
         sql: &'a str,
         sink: &'a mut dyn RowSink,
-    ) -> Pin<Box<dyn Future<Output = Result<u64, String>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Result<u64, Message>> + Send + 'a>>;
 }
 
 /// Destination of `DbConnector::stream_query` (e.g. a file being written).
 pub trait RowSink: Send {
     /// Called once, before the first row.
-    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), String>;
-    fn row(&mut self, row: &[QueryValue]) -> Result<(), String>;
+    fn begin(&mut self, columns: &[QueryColumn]) -> Result<(), Message>;
+    fn row(&mut self, row: &[QueryValue]) -> Result<(), Message>;
     /// Called once after the last row (not called if streaming failed).
-    fn finish(&mut self) -> Result<(), String>;
+    fn finish(&mut self) -> Result<(), Message>;
 }
 
 /// One statement of `DbConnector::execute_in_transaction`.
@@ -440,7 +496,7 @@ pub struct TransactionStatement {
 pub struct TransactionError {
     /// Index of the statement that failed (None: begin/commit failed).
     pub statement_index: Option<usize>,
-    pub message: String,
+    pub message: Message,
     pub code: Option<String>,
 }
 
@@ -456,7 +512,7 @@ impl TransactionError {
             },
             _ => Self {
                 statement_index,
-                message: "Error desconocido al aplicar los cambios.".to_string(),
+                message: Message::key("changes.unknownError"),
                 code: None,
             },
         }
@@ -466,11 +522,9 @@ impl TransactionError {
         Self {
             statement_index: Some(statement_index),
             message: if affected == 0 {
-                "La fila ya no existe o su clave cambió (otra sesión la modificó). No se aplicó ningún cambio.".to_string()
+                Message::key("changes.rowGone")
             } else {
-                format!(
-                    "La sentencia afectaría {affected} filas en lugar de 1. No se aplicó ningún cambio."
-                )
+                Message::key("changes.wrongRowCount").with("count", affected)
             },
             code: None,
         }
@@ -617,7 +671,7 @@ mod tests {
     #[test]
     fn error_omits_code_and_position_when_none() {
         let result = QueryExecutionResult::Error {
-            message: "syntax error".to_string(),
+            message: "syntax error".into(),
             code: None,
             position: None,
         };
@@ -633,7 +687,7 @@ mod tests {
     #[test]
     fn error_includes_code_and_position_when_present() {
         let result = QueryExecutionResult::Error {
-            message: "syntax error".to_string(),
+            message: "syntax error".into(),
             code: Some("42601".to_string()),
             position: Some(7),
         };

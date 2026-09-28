@@ -1,74 +1,37 @@
-# Arquitectura
+# Architecture
 
-Rowly DB es la aplicación; Khipu es el nombre interno de su motor. Por eso los
-crates se llaman `khipu-*`.
+**English** · [Español](ARCHITECTURE.es.md)
 
-## Principio
+Rowly DB is the app. Khipu is its engine, which is why the crates are named `khipu-*`.
 
-El core (parsing, catálogo, autocompletado) no sabe que existe Tauri, Svelte
-ni ningún motor de base de datos concreto. Todo lo que sabe es el trait
-`DbConnector` (`crates/driver-core`) y un `SchemaCatalog` genérico
-(`crates/engine/src/catalog.rs`). Esto es lo que permite que:
+## The idea
 
-- alguien integre `khipu-lsp` en Neovim/VSCode sin tocar la app de escritorio
-- alguien agregue soporte para un motor con un dialecto ya cubierto por
-  `sqlparser` (por ejemplo otro compatible con MySQL o Postgres) sin tocar el
-  engine — sí hay que agregar la rama correspondiente en la fábrica de
-  drivers de `app/src-tauri/src/drivers.rs`
-- el engine se pueda testear sin levantar una base de datos real
+The engine parses SQL, keeps the schema catalog and builds suggestions without knowing about Tauri, Svelte or any particular database. All it sees is a generic `SchemaCatalog`. That is what makes it possible to:
 
-Un motor con un dialecto SQL distinto de los que ya soporta `sqlparser` (por
-ejemplo SQLite o DuckDB) sí requiere extender el enum `Dialect` de
-`crates/engine/src/lib.rs`; no es agnóstico de dialecto en ese caso.
+- use `khipu-lsp` from Neovim or VS Code without the desktop app
+- add an engine without touching the core, as long as `sqlparser` already understands its dialect
+- test the engine without a running database
 
-MySQL y PostgreSQL son dependencias obligatorias de `app/src-tauri` hoy: no
-hay feature flags de Cargo que las hagan opcionales.
+## Layers
 
-## Capas
+| Path | Role |
+| :--- | :--- |
+| `crates/engine` | Validates SQL against each dialect's grammar, resolves what is under the cursor and ranks suggestions from the catalog. |
+| `crates/engine-lsp` | Exposes the engine as an LSP server so any editor can use it. |
+| `crates/driver-core` | The `DbConnector` contract every database implements: connect, list schemas, read a full schema and run queries. |
+| `crates/drivers/*` | One crate per database, built on `sqlx`. |
+| `app/src-tauri` | The desktop shell. It calls the engine and drivers directly, not through LSP, to keep latency low. |
+| `app/src` | Svelte frontend with a CodeMirror 6 editor. |
 
-1. **`crates/engine`** — dialecto-agnóstico salvo por el enum `Dialect`
-   cerrado (`MySql`/`Postgres`). Validación contra la gramática real por
-   dialecto (`sqlparser`), resolución de contexto en el cursor, y ranking de
-   sugerencias contra el `SchemaCatalog`. El parsing incremental y tolerante
-   a errores del buffer mientras se escribe todavía no está implementado.
-2. **`crates/engine-lsp`** — expone `khipu-engine` como servidor LSP
-   (`tower-lsp`) para que cualquier editor lo consuma.
-3. **`crates/driver-core`** — el contrato (`DbConnector`) que todo motor de
-   base de datos debe implementar: conectar, listar schemas, introspectar un
-   schema completo (`introspect_schema`: tablas, vistas, claves, índices,
-   triggers, rutinas, secuencias, eventos) y ejecutar consultas. También trae
-   `assembly::TableSet`, que agrupa las filas del catálogo en esa estructura
-   para que cada driver solo traduzca las filas de su motor. El modo SSL/TLS
-   lo elige cada perfil (`TlsMode` en `ConnectionConfig`) y lo resuelve cada
-   driver en su `tls.rs`; ver
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md).
-   El engine y la app solo dependen de este trait.
-4. **`crates/drivers/*`** — un crate por motor de base de datos
-   (`khipu-driver-mysql`, `khipu-driver-postgres`, ...), cada uno implementando
-   `DbConnector` sobre `sqlx`.
-5. **`app/src-tauri`** — el shell de escritorio. Depende directo de
-   `khipu-engine` y de los drivers (sin pasar por LSP/stdio) para minimizar
-   latencia dentro de la propia app.
-6. **`app/src`** — frontend Svelte, editor CodeMirror 6.
+The engine depends on no driver, not even `driver-core`. The app creates each driver in `app/src-tauri/src/drivers.rs`, works with it through `DbConnector` and turns the schema it reads into the engine's catalog in `catalog_adapter.rs`. Each connection profile chooses its TLS mode, and each driver applies it in its own `tls.rs`.
 
-## Cómo sumar un motor de base de datos nuevo
+## Dialects
 
-Para un motor con un dialecto ya soportado por `sqlparser`:
+The `Dialect` enum in `crates/engine/src/lib.rs` is the only place where the engine knows which databases exist. An engine whose dialect `sqlparser` supports needs a new variant there and nothing else in the core. One with a dialect `sqlparser` lacks, like SQLite or DuckDB, needs work in the engine itself.
 
-1. Crear `crates/drivers/<motor>` (`cargo new --lib`).
-2. Implementar `DbConnector` para ese motor. Para `introspect_schema`, ver
-   [`docs/design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md):
-   qué va en cada categoría, cómo manejar versiones del servidor y qué hacer
-   cuando una categoría no se puede leer.
-3. Agregarlo como miembro del workspace y como dependencia de `app/src-tauri`
-   (hoy no es opcional: no hay feature flags de Cargo para desactivar drivers).
-4. Agregar la rama correspondiente en la fábrica de drivers de
-   `app/src-tauri/src/drivers.rs` (enum `DatabaseKind`).
+Every driver is compiled into the app. There are no Cargo features to leave one out.
 
-No requiere cambios en `khipu-engine` ni en el frontend. Un motor con un
-dialecto SQL distinto sí requiere extender el enum `Dialect` de
-`crates/engine/src/lib.rs`.
+## Where to go next
 
-## Roadmap de motores
-
-MySQL → PostgreSQL → a definir según demanda de la comunidad.
+- [Adding a database engine](../CONTRIBUTING.md#adding-a-database-engine), step by step.
+- [`design/explorador-base-de-datos.md`](design/explorador-base-de-datos.md) covers what a driver must return when reading a schema and how to handle server versions. It is in Spanish.

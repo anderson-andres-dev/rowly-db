@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Check, ChevronDown, SquareArrowOutUpRight } from "@lucide/svelte";
   import ConnectionAvatar from "$lib/components/ConnectionAvatar.svelte";
+  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
   import { getDriver } from "$lib/connections";
   import { NEUTRAL_IDENTITY_COLOR } from "$lib/connectionColors";
@@ -144,6 +146,9 @@
     {#if activeProfile}
       <DriverLogo driver={activeProfile.driver} size={16} />
       <span class="switcher-name">{activeProfile.name}</span>
+      {#if activeProfile.environment}
+        <EnvironmentBadge environment={activeProfile.environment} />
+      {/if}
     {:else}
       <span class="switcher-name">{$t("connections.switcher.none")}</span>
     {/if}
@@ -151,7 +156,7 @@
   </button>
 
   {#if open}
-    <div class="switcher-menu" role="listbox" aria-label={$t("connections.switcher.saved")}>
+    <div class="ui-menu switcher-menu" role="listbox" aria-label={$t("connections.switcher.saved")}>
       {#each sections as section (section.title ?? "")}
         {#if section.title}
           <div class="section-title" role="presentation">{section.title}</div>
@@ -172,7 +177,12 @@
             <button type="button" class="option-main" tabindex="-1" onclick={() => select(profile)}>
               <ConnectionAvatar name={profile.name} color={profile.color} size={24} />
               <span class="option-text">
-                <span class="option-name">{profile.name}</span>
+                <span class="option-title">
+                  <span class="option-name">{profile.name}</span>
+                  {#if profile.environment}
+                    <EnvironmentBadge environment={profile.environment} compact />
+                  {/if}
+                </span>
                 <span class="option-detail">{driver.name} · {profile.database}@{profile.host}</span>
               </span>
               {#if profile.id === activeProfileId}
@@ -184,7 +194,7 @@
               class="new-window"
               tabindex="-1"
               aria-label={$t("connections.switcher.openLabel", { name: profile.name })}
-              title={$t("connections.switcher.openTitle")}
+              use:tooltip={$t("connections.switcher.openTitle")}
               onclick={() => openInNewWindow(profile)}
             >
               <SquareArrowOutUpRight size={14} aria-hidden="true" />
@@ -208,7 +218,7 @@
 
   .switcher-trigger {
     display: flex;
-    max-width: 14rem;
+    max-width: 18rem;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-1) var(--space-2);
@@ -264,28 +274,9 @@
     z-index: 20;
     top: calc(100% + 6px);
     left: 0;
-    display: flex;
     width: 20rem;
     max-height: min(26rem, 70vh);
-    flex-direction: column;
     overflow-y: auto;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    /* Una capa por encima de la app: levemente translucida con desenfoque y
-       un brillo de 1px arriba, en vez de un bloque opaco. */
-    background: color-mix(in srgb, var(--surface-elevated) 90%, transparent);
-    backdrop-filter: blur(18px) saturate(140%);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent),
-      var(--shadow-elevated);
-    animation: menu-in 140ms ease-out;
-  }
-
-  /* El brillo interior de 1px es un recurso de vidrio oscuro: sobre claro
-     se ve como una linea gris arriba. */
-  :global(:root[data-scheme="light"]) .switcher-menu {
-    box-shadow: var(--shadow-elevated);
   }
 
   :global(:root[data-scheme="light"]) .option.active {
@@ -302,13 +293,6 @@
     background: color-mix(in srgb, var(--identity) 7%, transparent);
   }
 
-  @keyframes menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-  }
-
   .section-title {
     padding: var(--space-3) var(--space-2) var(--space-1);
     color: var(--text-secondary);
@@ -322,7 +306,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    border-radius: var(--radius-sm);
+    border-radius: 4px;
     transition: background-color var(--duration-fast);
   }
 
@@ -359,6 +343,13 @@
     flex: 1;
     flex-direction: column;
     gap: 1px;
+  }
+
+  .option-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .option-name,
@@ -419,9 +410,4 @@
     font-size: 0.75rem;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .switcher-menu {
-      animation: none;
-    }
-  }
 </style>

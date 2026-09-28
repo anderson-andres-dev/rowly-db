@@ -1,0 +1,453 @@
+/*
+ * Controles compartidos (Ajustes, Actualizaciones, formulario de conexion).
+ * Un solo aspecto para cada cosa: interruptor, control segmentado, campo de
+ * texto/busqueda y la lista de ajustes en grupos.
+ *
+ *   <div class="set-group">                      grupo de filas
+ *     <div class="set-row">                      una fila: texto a la izquierda,
+ *       <div class="set-text">                   control a la derecha
+ *         <span class="set-label">…</span>
+ *         <span class="set-desc">…</span>        (opcional)
+ *       </div>
+ *       …control…
+ *     </div>
+ *   </div>
+ */
+
+/* --- Grupo de filas ------------------------------------------------------ */
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Las esquinas se redondean en las filas y no con overflow en el grupo: un
+   desplegable dentro de una fila tiene que poder salir del grupo. */
+.set-group > :first-child {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.set-group > :last-child {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.set-row {
+  display: flex;
+  min-height: 2.875rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  box-sizing: border-box;
+  background: var(--surface-elevated);
+}
+
+.set-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.set-label {
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.set-desc {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.set-caption {
+  margin: 0 0 var(--space-2) var(--space-1);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* --- Interruptor ---------------------------------------------------------- */
+
+.ui-switch {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast),
+    background-color var(--duration-fast);
+}
+
+.ui-switch > span {
+  display: block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition:
+    transform var(--duration-fast),
+    background-color var(--duration-fast);
+}
+
+.ui-switch[aria-checked="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface));
+}
+
+.ui-switch[aria-checked="true"] > span {
+  transform: translateX(0.95rem);
+  background: var(--accent);
+}
+
+.ui-switch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ui-switch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* --- Control segmentado --------------------------------------------------- */
+
+.ui-segmented {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-primary) 6%, var(--surface-elevated));
+}
+
+.ui-segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.ui-segmented button:hover:not([aria-checked="true"]) {
+  color: var(--text-primary);
+}
+
+/* La elegida se levanta: en oscuro, un tono mas claro que la pista; en
+   claro, blanca con sombra. */
+.ui-segmented button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--text-primary) 16%, var(--surface-elevated));
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+:root[data-scheme="light"] .ui-segmented {
+  background: color-mix(in srgb, var(--text-primary) 7%, var(--surface));
+}
+
+:root[data-scheme="light"] .ui-segmented button[aria-checked="true"] {
+  background: var(--surface-elevated);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+}
+
+.ui-segmented button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* --- Campo de texto y busqueda ------------------------------------------- */
+
+/* El unico aspecto de campo de la app: formularios, ajustes, dialogos y, en
+   su tamaño compacto (28 px), las barras (buscar, filtros). Mismas reglas en
+   Field.svelte, Select.svelte y NumberStepper.svelte. */
+.ui-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  transition: border-color var(--duration-fast);
+}
+
+.ui-field:focus-within {
+  border-color: var(--focus-ring);
+}
+
+.ui-field input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.ui-field input::placeholder {
+  color: var(--text-secondary);
+}
+
+.ui-field input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-field.compact {
+  height: 1.75rem;
+  padding: 0 var(--space-2);
+}
+
+.ui-field-suffix {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+/* --- Boton de icono chico (restablecer, editar) -------------------------- */
+
+.ui-icon-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.ui-icon-button:hover {
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+}
+
+.ui-icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* --- Tecla ---------------------------------------------------------------- */
+
+.ui-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ui-keys kbd {
+  display: inline-flex;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  box-sizing: border-box;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--surface));
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text-primary) 10%, transparent);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* --- Menu desplegable ----------------------------------------------------- */
+
+/* Un solo menu para todos los desplegables (selects, selector de conexion,
+   formato de copia, tamaño de pagina, grupos, colores, esquemas). */
+.ui-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  font-size: 0.8125rem;
+  animation: ui-menu-in 120ms ease-out;
+}
+
+@keyframes ui-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu {
+    animation: none;
+  }
+}
+
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.875rem;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ui-menu-item:hover,
+.ui-menu-item.active,
+.ui-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: none;
+}
+
+.ui-menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Hueco fijo a la izquierda para el check del elegido. */
+.ui-menu-check {
+  display: inline-flex;
+  width: 1rem;
+  flex-shrink: 0;
+  justify-content: center;
+  color: var(--accent);
+}
+
+/* --- Casilla ------------------------------------------------------------------ */
+
+.ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.ui-checkbox-box {
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--control-border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-on-accent);
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+[aria-checked="true"] > .ui-checkbox-box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.ui-checkbox:focus-visible {
+  outline: none;
+}
+
+.ui-checkbox:focus-visible > .ui-checkbox-box {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* --- Zona de foco -------------------------------------------------------------- */
+
+/* Capa encima del contenido de la zona (focusZones.ts): el editor y los
+   encabezados del grid llegan de borde a borde y taparian un contorno
+   propio del contenedor. */
+[data-focus-zone].zone-current::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  pointer-events: none;
+  transition: opacity 450ms ease;
+}
+
+/* Un segundo despues de dejar de moverse, la marca se desvanece sola. */
+[data-focus-zone].zone-fading::after {
+  opacity: 0;
+}
+
+/* Al llegar: un destello mas marcado que se asienta en la marca tenue. */
+[data-focus-zone].zone-flash::after {
+  animation: zone-flash 560ms ease-out;
+}
+
+@keyframes zone-flash {
+  0%,
+  30% {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-focus-zone].zone-flash::after {
+    animation: none;
+  }
+}
+
+/* --- Bordes que se desvanecen al hacer scroll ---------------------------------- */
+
+/* Registradas para que el desvanecido entre y salga con transicion. */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}

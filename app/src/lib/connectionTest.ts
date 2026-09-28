@@ -1,5 +1,6 @@
 import { translate, type Translate } from "$lib/i18n";
-import type { TestConnectionReport, TlsStatus } from "$lib/types";
+import { explainConnectionFailure, type ConnectionTarget } from "$lib/connectionErrors";
+import type { ConnectionFailure, TestConnectionReport, TlsStatus } from "$lib/types";
 
 // Resumen de "Probar conexión" para el popover del formulario
 // (ConnectionForm.svelte): el estado, el texto corto que queda junto al
@@ -46,15 +47,21 @@ export function summarizeReport(report: TestConnectionReport, t: Translate = tra
   };
 }
 
-export function summarizeError(message: string, endpoint: string, t: Translate = translate): TestSummary {
+// La causa va de titulo y lo que conviene revisar como primera linea; el
+// detalle crudo del driver, al final (tambien entra en "Copiar").
+export function summarizeError(failure: ConnectionFailure, target: ConnectionTarget, t: Translate = translate): TestSummary {
+  const explained = explainConnectionFailure(failure, target, t);
+  const lines = [{ label: t("connections.test.target"), value: `${target.host}:${target.port}` }];
+  if (explained.hint) lines.push({ label: t("connections.test.hint"), value: explained.hint });
+  lines.push({
+    label: explained.title ? t("connections.test.detail") : t("connections.test.error"),
+    value: explained.detail,
+  });
   return {
     outcome: "error",
-    title: t("connections.test.failed"),
+    title: explained.title ?? t("connections.test.failed"),
     badge: t("connections.test.failedBadge"),
-    lines: [
-      { label: t("connections.test.target"), value: endpoint },
-      { label: t("connections.test.error"), value: message },
-    ],
+    lines,
   };
 }
 

@@ -1,8 +1,11 @@
 //! Classifies a single SQL statement as destructive or not, so the app can
-//! ask for an explicit confirmation before running it. This module knows
-//! nothing about execution, Tauri or SQLx: it only looks at the parsed AST.
+//! ask for an explicit confirmation before running it. On a production
+//! connection every statement that writes needs confirmation too. This
+//! module knows nothing about execution, Tauri or SQLx: it only looks at the
+//! parsed AST.
 
 use crate::Dialect;
+use crate::pagination::query_is_read_only;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{AlterTableOperation, ObjectType, Query, SetExpr, Statement};
 use sqlparser::parser::{Parser, ParserError};
@@ -17,6 +20,9 @@ pub enum DestructiveStatement {
     DropSchema,
     DropDatabase,
     DropColumn,
+    /// Any statement that isn't read-only, on a connection marked as
+    /// production. Only produced by `classify_sql` with `production: true`.
+    WriteInProduction,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,12 +39,55 @@ pub fn classify_destructive_sql(
     sql: &str,
     dialect: Dialect,
 ) -> Result<DestructiveClassification, ParserError> {
+    classify_sql(sql, dialect, false)
+}
+
+/// Like `classify_destructive_sql`, but with `production: true` a statement
+/// that is not destructive still requires confirmation as
+/// `WriteInProduction` unless it only reads. Destructive statements keep
+/// their own, more specific classification.
+pub fn classify_sql(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Result<DestructiveClassification, ParserError> {
     let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)?;
-    match statements.as_slice() {
-        [statement] => Ok(classify_statement(statement)),
-        _ => Err(ParserError::ParserError(
+    let [statement] = statements.as_slice() else {
+        return Err(ParserError::ParserError(
             "expected exactly one SQL statement".to_string(),
-        )),
+        ));
+    };
+    Ok(match classify_statement(statement) {
+        DestructiveClassification::NotDestructive
+            if production && !statement_is_read_only(statement) =>
+        {
+            DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
+        }
+        classification => classification,
+    })
+}
+
+/// Statements that never change data or schema. `EXPLAIN` counts only when
+/// the explained statement does: `EXPLAIN ANALYZE` actually runs it.
+fn statement_is_read_only(statement: &Statement) -> bool {
+    match statement {
+        Statement::Query(query) => query_is_read_only(query),
+        Statement::Explain { statement, .. } => statement_is_read_only(statement),
+        Statement::ExplainTable { .. }
+        | Statement::ShowFunctions { .. }
+        | Statement::ShowVariable { .. }
+        | Statement::ShowStatus { .. }
+        | Statement::ShowVariables { .. }
+        | Statement::ShowCreate { .. }
+        | Statement::ShowColumns { .. }
+        | Statement::ShowDatabases { .. }
+        | Statement::ShowSchemas { .. }
+        | Statement::ShowObjects(_)
+        | Statement::ShowTables { .. }
+        | Statement::ShowViews { .. }
+        | Statement::ShowCollation { .. }
+        | Statement::Use(_) => true,
+        _ => false,
     }
 }
 
@@ -367,6 +416,66 @@ mod tests {
         not_destructive("CREATE TABLE users (id INT)", Dialect::Postgres);
         not_destructive("SELECT 1", Dialect::Postgres);
         not_destructive("EXPLAIN SELECT 1", Dialect::Postgres);
+    }
+
+    fn classify_production(sql: &str, dialect: Dialect) -> DestructiveClassification {
+        classify_sql(sql, dialect, true).expect("sql should parse as a single statement")
+    }
+
+    #[test]
+    fn production_reads_run_without_confirmation() {
+        for sql in [
+            "SELECT * FROM users",
+            "WITH recent AS (SELECT * FROM orders) SELECT count(*) FROM recent",
+            "SHOW TABLES",
+            "SHOW CREATE TABLE users",
+            "DESCRIBE users",
+            "EXPLAIN SELECT * FROM users",
+            "USE shop",
+        ] {
+            assert_eq!(
+                classify_production(sql, Dialect::MySql),
+                DestructiveClassification::NotDestructive,
+                "expected {sql:?} to run without confirmation in production"
+            );
+        }
+    }
+
+    #[test]
+    fn production_writes_require_confirmation() {
+        for sql in [
+            "INSERT INTO users (name) VALUES ('ana')",
+            "UPDATE users SET name = 'ana' WHERE id = 1",
+            "DELETE FROM users WHERE id = 1",
+            "CREATE TABLE t (id INT)",
+            "ALTER TABLE users ADD COLUMN age INT",
+            "SELECT * INTO backup FROM users",
+            "SELECT * FROM users FOR UPDATE",
+            "EXPLAIN ANALYZE DELETE FROM users WHERE id = 1",
+        ] {
+            assert_eq!(
+                classify_production(sql, Dialect::Postgres),
+                DestructiveClassification::RequiresConfirmation(
+                    DestructiveStatement::WriteInProduction
+                ),
+                "expected {sql:?} to require confirmation in production"
+            );
+        }
+    }
+
+    #[test]
+    fn production_keeps_the_specific_destructive_classification() {
+        assert_eq!(
+            classify_production("DELETE FROM users", Dialect::MySql),
+            DestructiveClassification::RequiresConfirmation(
+                DestructiveStatement::DeleteWithoutWhere
+            )
+        );
+    }
+
+    #[test]
+    fn writes_outside_production_are_not_classified() {
+        not_destructive("INSERT INTO users (name) VALUES ('ana')", Dialect::MySql);
     }
 
     #[test]

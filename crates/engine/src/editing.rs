@@ -30,37 +30,72 @@ pub struct EditableQuery {
     pub columns: Vec<(String, Option<String>)>,
 }
 
+/// Por que las filas de una consulta no se pueden editar una a una. La app
+/// lo muestra traducido (`backend.notEditable.<motivo>` en el frontend).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NotEditable {
+    Unparseable,
+    NotSelect,
+    UsesWith,
+    SetOperation,
+    UsesDistinct,
+    GroupsRows,
+    NoTable,
+    SeveralTables,
+    UsesJoin,
+    NotPlainTable,
+}
+
+impl NotEditable {
+    /// El nombre del motivo en camelCase, igual que al serializar.
+    pub fn as_key(self) -> &'static str {
+        match self {
+            NotEditable::Unparseable => "unparseable",
+            NotEditable::NotSelect => "notSelect",
+            NotEditable::UsesWith => "usesWith",
+            NotEditable::SetOperation => "setOperation",
+            NotEditable::UsesDistinct => "usesDistinct",
+            NotEditable::GroupsRows => "groupsRows",
+            NotEditable::NoTable => "noTable",
+            NotEditable::SeveralTables => "severalTables",
+            NotEditable::UsesJoin => "usesJoin",
+            NotEditable::NotPlainTable => "notPlainTable",
+        }
+    }
+}
+
 /// Analiza `sql` y devuelve la tabla de origen si sus filas se pueden
-/// editar una a una, o el motivo (para mostrarle al usuario) si no.
-pub fn analyze_editable_query(sql: &str, dialect: Dialect) -> Result<EditableQuery, String> {
+/// editar una a una, o el motivo si no.
+pub fn analyze_editable_query(sql: &str, dialect: Dialect) -> Result<EditableQuery, NotEditable> {
     let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)
-        .map_err(|_| "No se pudo analizar la consulta.".to_string())?;
+        .map_err(|_| NotEditable::Unparseable)?;
     let [Statement::Query(query)] = statements.as_slice() else {
-        return Err("Solo se puede editar el resultado de un SELECT.".to_string());
+        return Err(NotEditable::NotSelect);
     };
     if query.with.is_some() {
-        return Err("La consulta usa WITH.".to_string());
+        return Err(NotEditable::UsesWith);
     }
     let SetExpr::Select(select) = query.body.as_ref() else {
-        return Err("La consulta combina varios SELECT (UNION, INTERSECT...).".to_string());
+        return Err(NotEditable::SetOperation);
     };
     if select.distinct.is_some() {
-        return Err("La consulta usa DISTINCT.".to_string());
+        return Err(NotEditable::UsesDistinct);
     }
     let groups =
         !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty());
     if groups || select.having.is_some() {
-        return Err("La consulta agrupa filas (GROUP BY).".to_string());
+        return Err(NotEditable::GroupsRows);
     }
     let [from] = select.from.as_slice() else {
         return Err(if select.from.is_empty() {
-            "La consulta no lee de ninguna tabla.".to_string()
+            NotEditable::NoTable
         } else {
-            "La consulta lee de varias tablas.".to_string()
+            NotEditable::SeveralTables
         });
     };
     if !from.joins.is_empty() {
-        return Err("La consulta usa JOIN.".to_string());
+        return Err(NotEditable::UsesJoin);
     }
     let TableFactor::Table {
         name,
@@ -69,14 +104,14 @@ pub fn analyze_editable_query(sql: &str, dialect: Dialect) -> Result<EditableQue
         ..
     } = &from.relation
     else {
-        return Err("La consulta no lee directamente de una tabla.".to_string());
+        return Err(NotEditable::NotPlainTable);
     };
 
     let parts = name_parts(name, dialect);
     let (schema, table) = match parts.as_slice() {
         [table] => (None, table.clone()),
         [.., schema, table] => (Some(schema.clone()), table.clone()),
-        [] => return Err("La consulta no lee de ninguna tabla.".to_string()),
+        [] => return Err(NotEditable::NoTable),
     };
     // Calificadores validos para `x.columna` / `x.*`: el alias, o el nombre
     // de la tabla (con o sin schema) si no tiene alias.
@@ -127,7 +162,7 @@ pub fn analyze_editable_query(sql: &str, dialect: Dialect) -> Result<EditableQue
 /// no van entre comillas (`FROM Users` es la tabla `users`); MySQL los deja
 /// como estan.
 fn ident_name(ident: &Ident, dialect: Dialect) -> String {
-    if dialect == Dialect::Postgres && ident.quote_style.is_none() {
+    if dialect.folds_unquoted_to_lowercase() && ident.quote_style.is_none() {
         ident.value.to_lowercase()
     } else {
         ident.value.clone()
@@ -267,10 +302,7 @@ pub fn build_change_statements(
             .filter(|item| item.value != CellValue::Default)
             .collect();
         if explicit.is_empty() {
-            statements.push(match dialect {
-                Dialect::MySql => format!("INSERT INTO {target} () VALUES ();"),
-                Dialect::Postgres => format!("INSERT INTO {target} DEFAULT VALUES;"),
-            });
+            statements.push(dialect.insert_defaults(&target));
             continue;
         }
         let names = explicit
@@ -312,26 +344,8 @@ fn literal(dialect: Dialect, item: &ColumnValue) -> String {
         CellValue::Text(text) if is_numeric_type(&item.data_type) && is_plain_number(text) => {
             text.clone()
         }
-        CellValue::Text(text) => string_literal(dialect, text),
+        CellValue::Text(text) => dialect.string_literal(text),
     }
-}
-
-fn string_literal(dialect: Dialect, text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('\'');
-    for character in text.chars() {
-        match character {
-            '\'' => out.push_str("''"),
-            // MySQL interpreta la barra invertida como escape dentro de
-            // strings (salvo NO_BACKSLASH_ESCAPES); Postgres, con
-            // standard_conforming_strings (el default), no.
-            '\\' if dialect == Dialect::MySql => out.push_str("\\\\"),
-            '\0' if dialect == Dialect::MySql => out.push_str("\\0"),
-            _ => out.push(character),
-        }
-    }
-    out.push('\'');
-    out
 }
 
 fn is_numeric_type(data_type: &str) -> bool {
@@ -467,7 +481,7 @@ pub fn quote_ident(dialect: Dialect, ident: &str) -> String {
         && ident
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        && !(dialect == Dialect::Postgres
+        && !(dialect.folds_unquoted_to_lowercase()
             && ident
                 .chars()
                 .any(|character| character.is_ascii_uppercase()))
@@ -475,10 +489,7 @@ pub fn quote_ident(dialect: Dialect, ident: &str) -> String {
     if simple {
         return ident.to_string();
     }
-    match dialect {
-        Dialect::MySql => format!("`{}`", ident.replace('`', "``")),
-        Dialect::Postgres => format!("\"{}\"", ident.replace('"', "\"\"")),
-    }
+    dialect.quote_identifier(ident)
 }
 
 #[cfg(test)]

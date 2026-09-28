@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { t, type MessageKey } from "$lib/i18n";
   import { highlightSql } from "$lib/sqlHighlight";
@@ -14,6 +15,7 @@
     applying = false,
     error = null,
     dismiss = false,
+    production = false,
     onapply,
     onclose,
   }: {
@@ -24,24 +26,80 @@
     // El padre pide cerrar (p.ej. se aplico todo): se anima la salida y
     // recien al terminar llega onclose.
     dismiss?: boolean;
+    // Conexion de produccion: el boton lo dice y toma el tono de peligro
+    // (no hace falta repetirlo arriba).
+    production?: boolean;
     onapply: () => void;
     onclose: () => void;
   } = $props();
 
   let dialog = $state<HTMLDialogElement>();
 
+  const errorDetail = $derived(
+    error
+      ? [
+          error.statementIndex !== null
+            ? $t("results.changes.statement", { index: error.statementIndex + 1 })
+            : null,
+          error.message,
+          error.code ? `(${error.code})` : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "",
+  );
+
   const summary = $derived(
     [
-      { count: changes.deletes.length, one: "results.changes.deletesOne", many: "results.changes.deletesOther", tone: "delete" },
-      { count: changes.updates.length, one: "results.changes.updatesOne", many: "results.changes.updatesOther", tone: "update" },
-      { count: changes.inserts.length, one: "results.changes.insertsOne", many: "results.changes.insertsOther", tone: "insert" },
-    ].filter((item): item is { count: number; one: MessageKey; many: MessageKey; tone: string } => item.count > 0),
+      { count: changes.deletes.length, one: "results.changes.deletesOne", many: "results.changes.deletesOther", tone: "delete", keyword: "DELETE" },
+      { count: changes.updates.length, one: "results.changes.updatesOne", many: "results.changes.updatesOther", tone: "update", keyword: "UPDATE" },
+      { count: changes.inserts.length, one: "results.changes.insertsOne", many: "results.changes.insertsOther", tone: "insert", keyword: "INSERT" },
+    ].filter(
+      (item): item is { count: number; one: MessageKey; many: MessageKey; tone: string; keyword: string } =>
+        item.count > 0,
+    ),
   );
 
   // Se resalta linea por linea (no el texto entero y despues se corta): un
   // valor con saltos de linea dentro de un string no deja spans abiertos
   // entre dos <li>.
-  const lines = $derived(statements.join("\n\n").split("\n").map(highlightSql));
+  // Cada linea sabe a que sentencia pertenece (null = la linea en blanco
+  // entre dos), para marcar la que fallo.
+  const lines = $derived(
+    statements.flatMap((statement, index) => [
+      ...(index > 0 ? [{ html: "", statement: null, kind: null }] : []),
+      ...statement.split("\n").map((line, lineIndex) => ({
+        html: highlightSql(line),
+        statement: index,
+        // Solo la primera linea de la sentencia lleva el punto de su tipo.
+        kind: lineIndex === 0 ? statementKind(statement) : null,
+      })),
+    ]),
+  );
+
+  function statementKind(statement: string): "delete" | "update" | "insert" | null {
+    const keyword = statement.trimStart().slice(0, 6).toUpperCase();
+    if (keyword === "DELETE") return "delete";
+    if (keyword === "UPDATE") return "update";
+    if (keyword === "INSERT") return "insert";
+    return null;
+  }
+
+  // Cada intento fallido "golpea": el aviso de error se sacude y la
+  // sentencia culpable destella y queda a la vista. Asi un reintento que
+  // choca con el mismo error se nota, sin que el modal parpadee.
+  let codeBox = $state<HTMLElement>();
+  let attempt = $state(0);
+  let lastError: ChangeError | null = null;
+
+  $effect(() => {
+    if (!error || error === lastError) return;
+    lastError = error;
+    attempt += 1;
+    void tick().then(() => {
+      codeBox?.querySelector("li.failed")?.scrollIntoView({ block: "nearest" });
+    });
+  });
 
   $effect(() => {
     void tick().then(() => {
@@ -69,40 +127,56 @@
   }}
   onclose={onclose}
 >
+  <!-- Titulo y, debajo, una pastilla por tipo de sentencia: la palabra SQL
+       (igual en cualquier idioma) y la cantidad en su bolita. El mismo color
+       marca en el margen donde empieza cada sentencia de ese tipo. -->
   <header>
     <h2>{$t("results.changes.title")}</h2>
     <div class="summary">
       {#each summary as item (item.tone)}
-        <span class={`chip ${item.tone}`}>{$t(item.count === 1 ? item.one : item.many, { count: item.count })}</span>
+        {@const label = $t(item.count === 1 ? item.one : item.many, { count: item.count })}
+        <span class={`kind ${item.tone}`} use:tooltip={label} aria-label={label}>
+          {item.keyword}<span class="count" aria-hidden="true">{item.count}</span>
+        </span>
       {/each}
     </div>
   </header>
 
   <!-- Una fila por linea: el numero en su propia columna (no seleccionable)
        y el codigo resaltado al lado. -->
-  <div class="code" role="region" aria-label={$t("results.changes.sql")}>
-    <ol>
-      {#each lines as line, index (index)}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <li><span class="line-code">{@html line || " "}</span></li>
-      {/each}
-    </ol>
+  <div class="code" role="region" aria-label={$t("results.changes.sql")} bind:this={codeBox}>
+    {#key attempt}
+      <ol>
+        {#each lines as line, index (index)}
+          <li
+            class={line.kind ? `start ${line.kind}` : undefined}
+            class:failed={error !== null && line.statement !== null && line.statement === error.statementIndex}
+          >
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            <span class="line-code">{@html line.html || " "}</span>
+          </li>
+        {/each}
+      </ol>
+    {/key}
   </div>
 
   {#if error}
-    <div class="apply-error" role="alert">
-      <strong>{$t("results.changes.notApplied")}</strong>
-      <span>
-        {#if error.statementIndex !== null}{$t("results.changes.statement", { index: error.statementIndex + 1 })} {/if}{error.message}{#if error.code}
-          ({error.code}){/if}
-      </span>
-    </div>
+    {#key attempt}
+      <div class="apply-error" class:nudge={attempt > 1} role="alert">
+        <strong>{$t("results.changes.notApplied")}</strong>
+        <!-- Armado como un solo texto: Svelte recorta los espacios en los bordes
+             de los bloques {#if} y pegaba "Sentencia 1:" al mensaje. -->
+        <span>{errorDetail}</span>
+      </div>
+    {/key}
   {/if}
 
   <footer>
-    <button type="button" class="secondary-action" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="primary-action" disabled={applying} onclick={onapply}>
-      {applying ? $t("results.changes.applying") : $t("results.applyChanges")}
+    <button type="button" class="action-button secondary" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button {production ? 'danger' : 'primary'}" disabled={applying} onclick={onapply}>
+      <!-- El texto no cambia mientras aplica: un reintento rapido no hace
+           saltar el boton; basta con que quede deshabilitado. -->
+      {production ? $t("results.changes.applyInProduction") : $t("results.applyChanges")}
     </button>
   </footer>
 </dialog>
@@ -111,7 +185,7 @@
   .changes-dialog {
     width: min(46rem, calc(100vw - 2rem));
     max-height: calc(100vh - 4rem);
-    padding: 1.5rem 1.75rem;
+    padding: var(--space-5);
     box-sizing: border-box;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -124,7 +198,7 @@
   .changes-dialog[open] {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: var(--space-4);
     animation: dialog-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
   }
 
@@ -143,9 +217,8 @@
 
   header {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-3);
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   h2 {
@@ -161,34 +234,56 @@
     gap: var(--space-2);
   }
 
-  .chip {
+  .kind {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px var(--space-2);
+    height: 1.375rem;
+    padding: 0 3px 0 var(--space-2);
+    box-sizing: border-box;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--text-secondary) 12%, transparent);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
+    background: color-mix(in srgb, var(--kind-color) 14%, transparent);
+    color: var(--kind-color);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
   }
 
-  .chip::before {
+  .count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--kind-color);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.625rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  li.start::after {
     content: "";
     width: 6px;
     height: 6px;
     border-radius: 50%;
+    background: var(--kind-color);
   }
 
-  .chip.delete::before {
-    background: var(--danger-solid);
+  .delete {
+    --kind-color: var(--danger-solid);
   }
 
-  .chip.update::before {
-    background: var(--accent);
+  .update {
+    --kind-color: var(--accent);
   }
 
-  .chip.insert::before {
-    background: var(--success);
+  .insert {
+    --kind-color: var(--success);
   }
 
   .code {
@@ -211,8 +306,15 @@
   }
 
   li {
+    position: relative;
     display: flex;
     counter-increment: line;
+  }
+
+  li.start::after {
+    position: absolute;
+    top: calc(0.8em - 3px);
+    left: 0.625rem;
   }
 
   li::before {
@@ -226,6 +328,49 @@
     font-variant-numeric: tabular-nums;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  /* La sentencia que fallo: destella en rojo al llegar y despues queda solo
+     una barra fina a la izquierda; el codigo conserva sus colores. */
+  li.failed {
+    box-shadow: inset 2px 0 0 var(--danger);
+    animation: failed-flash 700ms ease-out;
+  }
+
+  @keyframes failed-flash {
+    0%,
+    40% {
+      background: color-mix(in srgb, var(--danger) 26%, transparent);
+    }
+    100% {
+      background: transparent;
+    }
+  }
+
+  .apply-error.nudge {
+    animation: nudge 320ms ease-in-out;
+  }
+
+  @keyframes nudge {
+    20% {
+      transform: translateX(-4px);
+    }
+    40% {
+      transform: translateX(4px);
+    }
+    60% {
+      transform: translateX(-2px);
+    }
+    80% {
+      transform: translateX(2px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    li.failed,
+    .apply-error.nudge {
+      animation: none;
+    }
   }
 
   .line-code {
@@ -272,46 +417,6 @@
   footer {
     display: flex;
     justify-content: flex-end;
-    gap: 0.625rem;
-  }
-
-  footer button {
-    height: 2.5rem;
-    padding: 0 var(--space-4);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-
-  footer button:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .secondary-action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  footer button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
+    gap: var(--space-2);
   }
 </style>

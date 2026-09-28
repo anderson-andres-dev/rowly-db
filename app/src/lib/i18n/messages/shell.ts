@@ -3,6 +3,8 @@ import { defineMessages } from "../define";
 // Marco de la ventana (topbar, sidebar) y componentes base compartidos.
 export default defineMessages({
   es: {
+    "shortcutSheet.title": "Atajos de teclado",
+    "shortcutSheet.customize": "Personalizar…",
     showTablesPanel: "Mostrar panel de tablas",
     showTablesPanelWithKeys: "Mostrar panel de tablas ({keys})",
     backToConnections: "Volver a conexiones",
@@ -20,6 +22,8 @@ export default defineMessages({
     hidePassword: "Ocultar contraseña",
   },
   en: {
+    "shortcutSheet.title": "Keyboard shortcuts",
+    "shortcutSheet.customize": "Customize…",
     showTablesPanel: "Show tables panel",
     showTablesPanelWithKeys: "Show tables panel ({keys})",
     backToConnections: "Back to connections",
@@ -37,6 +41,8 @@ export default defineMessages({
     hidePassword: "Hide password",
   },
   "pt-BR": {
+    "shortcutSheet.title": "Atalhos de teclado",
+    "shortcutSheet.customize": "Personalizar…",
     showTablesPanel: "Mostrar painel de tabelas",
     showTablesPanelWithKeys: "Mostrar painel de tabelas ({keys})",
     backToConnections: "Voltar às conexões",
@@ -54,6 +60,8 @@ export default defineMessages({
     hidePassword: "Ocultar senha",
   },
   fr: {
+    "shortcutSheet.title": "Raccourcis clavier",
+    "shortcutSheet.customize": "Personnaliser…",
     showTablesPanel: "Afficher le panneau des tables",
     showTablesPanelWithKeys: "Afficher le panneau des tables ({keys})",
     backToConnections: "Retour aux connexions",
@@ -71,6 +79,8 @@ export default defineMessages({
     hidePassword: "Masquer le mot de passe",
   },
   de: {
+    "shortcutSheet.title": "Tastenkürzel",
+    "shortcutSheet.customize": "Anpassen…",
     showTablesPanel: "Tabellenbereich einblenden",
     showTablesPanelWithKeys: "Tabellenbereich einblenden ({keys})",
     backToConnections: "Zurück zu den Verbindungen",

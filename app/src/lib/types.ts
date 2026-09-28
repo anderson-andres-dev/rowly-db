@@ -95,6 +95,18 @@ export interface ExplorerRoutine {
   kind: "procedure" | "function";
   arguments: string;
   returnType?: string | null;
+  // Uno por uno, para los hints de parametros (sqlCallHints.ts). Puede faltar
+  // con un backend viejo.
+  parameters?: RoutineParameter[];
+}
+
+export interface RoutineParameter {
+  // Postgres permite parametros sin nombre.
+  name: string | null;
+  mode: "in" | "out" | "inOut" | "variadic";
+  dataType: string;
+  // Se puede omitir en la llamada (DEFAULT en Postgres).
+  hasDefault: boolean;
 }
 
 export interface ExplorerSequence {
@@ -127,6 +139,27 @@ export interface TlsStatus {
   // Protocolo y cifrado, p.ej. "TLSv1.3 · TLS_AES_256_GCM_SHA384".
   detail: string | null;
   fellBack: boolean;
+}
+
+// Por que fallo conectar (ConnectionErrorKind en driver-core): la app lo
+// explica en su idioma (connectionErrors.ts) y el detalle tecnico queda para
+// copiar.
+export type ConnectionErrorKind =
+  | "authFailed"
+  | "accessDenied"
+  | "unknownDatabase"
+  | "hostNotFound"
+  | "refused"
+  | "unreachable"
+  | "timeout"
+  | "tlsUnavailable"
+  | "tlsIncompatible"
+  | "tlsCertificate"
+  | "other";
+
+export interface ConnectionFailure {
+  kind: ConnectionErrorKind;
+  detail: string;
 }
 
 // Lo que devuelve "Probar conexion" (test_connection en src-tauri).
@@ -187,7 +220,9 @@ export type DestructiveStatement =
   | "dropTable"
   | "dropSchema"
   | "dropDatabase"
-  | "dropColumn";
+  | "dropColumn"
+  // Cualquier escritura en una conexion marcada como Produccion.
+  | "writeInProduction";
 
 // Como se ubican las filas devueltas dentro del resultado completo.
 // pageable: false -> la sentencia no se pudo paginar (SHOW, FOR UPDATE...),

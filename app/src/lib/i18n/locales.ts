@@ -1,6 +1,8 @@
 export const LOCALES = ["es", "en", "pt-BR", "fr", "de"] as const;
 export type Locale = (typeof LOCALES)[number];
-export type LocalePreference = "system" | Locale;
+// Lo que se guarda: siempre un idioma concreto. La primera vez se detecta
+// del sistema (matchSystemLocale) y queda elegido.
+export type LocalePreference = Locale;
 
 // El español es la fuente: sus textos definen las claves que los demás idiomas
 // deben cubrir, y es el idioma de respaldo si falta alguna en tiempo de ejecución.

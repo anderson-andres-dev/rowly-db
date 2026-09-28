@@ -1,3 +1,4 @@
+import { ansiString } from "$lib/engines/common";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { writeClipboard } from "$lib/clipboard";
 import type { CellValue } from "$lib/resultEditing";
@@ -33,6 +34,9 @@ export interface CopyOptions {
   headers: boolean;
   // Tabla para SQL INSERT ("schema.tabla").
   tableName: string;
+  // Los textos del INSERT como literales del motor de la conexion (en
+  // MySQL la barra invertida tambien se escapa). Sin conexion, SQL estandar.
+  quoteString?: (value: string) => string;
 }
 
 const NUMERIC_TYPE = /int|decimal|numeric|float|double|real|serial|money/i;
@@ -74,12 +78,12 @@ function jsonValue(value: CellValue, column: CopyColumn): unknown {
   return raw;
 }
 
-function sqlLiteral(value: CellValue, column: CopyColumn): string {
+function sqlLiteral(value: CellValue, column: CopyColumn, quoteString: (value: string) => string): string {
   if (value.kind === "null") return "NULL";
   if (value.kind === "default") return "DEFAULT";
   const raw = value.value;
   if (NUMERIC_TYPE.test(column.type) && PLAIN_NUMBER.test(raw)) return raw;
-  return `'${raw.replace(/'/g, "''")}'`;
+  return quoteString(raw);
 }
 
 export function serializeSelection(columns: CopyColumn[], rows: CellValue[][], options: CopyOptions): string {
@@ -113,10 +117,11 @@ export function serializeSelection(columns: CopyColumn[], rows: CellValue[][], o
     }
     case "sql": {
       const names = columns.map((column) => column.name).join(", ");
+      const quoteString = options.quoteString ?? ansiString;
       return rows
         .map(
           (row) =>
-            `INSERT INTO ${options.tableName} (${names}) VALUES (${row.map((value, index) => sqlLiteral(value, columns[index])).join(", ")});`,
+            `INSERT INTO ${options.tableName} (${names}) VALUES (${row.map((value, index) => sqlLiteral(value, columns[index], quoteString)).join(", ")});`,
         )
         .join("\n");
     }

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import DriverLogo from "$lib/components/DriverLogo.svelte";
+  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
   import { browser } from "$app/environment";
   import { LayoutGrid, List, LoaderCircle, Pencil, Plus, Trash2 } from "@lucide/svelte";
   import Button from "$lib/components/Button.svelte";
@@ -9,6 +11,7 @@
   import { NEUTRAL_IDENTITY_COLOR } from "$lib/connectionColors";
   import { t } from "$lib/i18n";
   import type { ConnectionProfile } from "$lib/stores/connectionProfiles";
+  import { loadLastProfileId } from "$lib/stores/connection";
 
   let {
     profiles,
@@ -69,12 +72,25 @@
 
   const busy = $derived(connectingId !== null);
 
+  // La ultima conexion usada queda resaltada y con el foco: al abrir la app
+  // basta Enter para volver a ella.
+  const lastProfileId = loadLastProfileId();
+
+  function focusIfLast(node: HTMLButtonElement, profileId: string) {
+    if (profileId === lastProfileId) node.focus();
+  }
+
   function identityStyle(profile: ConnectionProfile): string {
     return `--identity: ${profile.color ?? NEUTRAL_IDENTITY_COLOR}`;
   }
 
   function endpoint(profile: ConnectionProfile): string {
     return `${profile.host}:${profile.port}`;
+  }
+
+  // En la tarjeta el puerto solo aparece si no es el de siempre del motor.
+  function shortEndpoint(profile: ConnectionProfile): string {
+    return profile.port === getDriver(profile.driver).defaultPort ? profile.host : endpoint(profile);
   }
 </script>
 
@@ -83,7 +99,7 @@
     class="corner-button"
     type="button"
     aria-label={$t("connections.landing.editLabel", { name: profile.name })}
-    title={$t("connections.landing.editTitle")}
+    use:tooltip={$t("connections.landing.editTitle")}
     disabled={busy}
     onclick={(event) => {
       event.stopPropagation();
@@ -96,7 +112,7 @@
     class="corner-button danger"
     type="button"
     aria-label={$t("connections.landing.deleteLabel", { name: profile.name })}
-    title={$t("connections.landing.deleteTitle")}
+    use:tooltip={$t("connections.landing.deleteTitle")}
     disabled={busy}
     onclick={(event) => {
       event.stopPropagation();
@@ -119,7 +135,6 @@
     <div class="saved">
       <header class="landing-header">
         <div class="landing-title">
-          <RowlyMark />
           <div>
             <h1 id="connection-state-title">{$t("connections.landing.title")}</h1>
             <p>{$t("connections.landing.subtitle")}</p>
@@ -131,7 +146,7 @@
               type="button"
               aria-pressed={view === "cards"}
               aria-label={$t("connections.landing.viewCards")}
-              title={$t("connections.landing.cards")}
+              use:tooltip={$t("connections.landing.cards")}
               onclick={() => setView("cards")}
             >
               <LayoutGrid size={15} aria-hidden="true" />
@@ -140,7 +155,7 @@
               type="button"
               aria-pressed={view === "list"}
               aria-label={$t("connections.landing.viewList")}
-              title={$t("connections.landing.list")}
+              use:tooltip={$t("connections.landing.list")}
               onclick={() => setView("list")}
             >
               <List size={15} aria-hidden="true" />
@@ -168,20 +183,33 @@
             <div class="card-grid">
               {#each section.profiles as profile (profile.id)}
                 {@const driver = getDriver(profile.driver)}
-                <div class="card" class:connecting={connectingId === profile.id} style={identityStyle(profile)}>
+                <div
+                  class="card"
+                  class:connecting={connectingId === profile.id}
+                  class:recent={profile.id === lastProfileId}
+                  style={identityStyle(profile)}>
                   <button
                     class="card-main"
                     type="button"
                     aria-label={$t("connections.landing.connectTo", { name: profile.name, driver: driver.name })}
                     aria-busy={connectingId === profile.id}
                     disabled={busy}
+                    use:focusIfLast={profile.id}
                     onclick={() => onconnect(profile)}
                   >
-                    <ConnectionAvatar name={profile.name} color={profile.color} size={40} />
+                    <ConnectionAvatar name={profile.name} color={profile.color} size={32} />
+                    <!-- Dos lineas: nombre, y motor · base@host. El entorno va
+                         como icono. -->
                     <span class="card-text">
-                      <strong>{profile.name}</strong>
-                      <span class="meta">{driver.name}<span class="sep">·</span>{profile.database}</span>
-                      <code class="endpoint">{endpoint(profile)}</code>
+                      <span class="card-name">
+                        <strong>{profile.name}</strong>
+                        {#if profile.environment}
+                          <EnvironmentBadge environment={profile.environment} compact />
+                        {/if}
+                      </span>
+                      <span class="meta">
+                        {driver.name}<span class="sep">·</span>{profile.database}@{shortEndpoint(profile)}
+                      </span>
                     </span>
                   </button>
                   <div class="card-corner">
@@ -201,6 +229,7 @@
                 <div
                   class="row"
                   class:connecting={connectingId === profile.id}
+                  class:recent={profile.id === lastProfileId}
                   role="listitem"
                   style={identityStyle(profile)}
                 >
@@ -210,10 +239,16 @@
                     aria-label={$t("connections.landing.connectTo", { name: profile.name, driver: driver.name })}
                     aria-busy={connectingId === profile.id}
                     disabled={busy}
+                    use:focusIfLast={profile.id}
                     onclick={() => onconnect(profile)}
                   >
                     <ConnectionAvatar name={profile.name} color={profile.color} size={24} />
-                    <strong class="row-name">{profile.name}</strong>
+                    <span class="row-name">
+                      <strong>{profile.name}</strong>
+                      {#if profile.environment}
+                        <EnvironmentBadge environment={profile.environment} />
+                      {/if}
+                    </span>
                     <span class="row-driver">
                       <DriverLogo driver={profile.driver} size={13} />
                       {driver.name}
@@ -419,9 +454,9 @@
   }
 
   .card:hover .corner-button,
-  .card:focus-within .corner-button,
+  .card:has(.corner-button:focus-visible) .corner-button,
   .row:hover .corner-button,
-  .row:focus-within .corner-button {
+  .row:has(.corner-button:focus-visible) .corner-button {
     opacity: 1;
   }
 
@@ -481,7 +516,7 @@
     align-items: center;
     gap: var(--space-3);
     overflow: hidden;
-    padding: var(--space-3) 3.75rem var(--space-3) var(--space-3);
+    padding: var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-elevated);
@@ -489,9 +524,7 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition:
-      border-color 200ms ease,
-      transform 200ms ease;
+    transition: border-color 240ms ease;
   }
 
   .card-main::before {
@@ -516,16 +549,17 @@
     position: relative;
   }
 
-  /* Solo el degradado lleva el color; el borde apenas se aclara, en
-     neutro, a medio camino entre el borde normal y el de los controles. */
-  .card-main:hover:not(:disabled),
+  /* Dos estados, una sola senal: el color de la conexion. Al pasar el
+     mouse aparece su degradado; la elegida (la ultima usada, o la que esta
+     conectando) ademas se contornea con su color. Sin saltos ni sombras. */
+  .card.recent .card-main,
   .card.connecting .card-main {
-    border-color: color-mix(in srgb, var(--border) 65%, var(--control-border));
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--identity) 50%, var(--border));
   }
 
   .card-main:hover:not(:disabled)::before,
-  .card.connecting .card-main::before {
+  .card.connecting .card-main::before,
+  .card.recent .card-main::before {
     opacity: 1;
   }
 
@@ -546,6 +580,13 @@
     gap: 2px;
   }
 
+  .card-name {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
   .card-text strong {
     overflow: hidden;
     font-size: 0.875rem;
@@ -555,26 +596,46 @@
   }
 
   .meta {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 5px;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 0.8rem;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .sep {
+    margin: 0 5px;
     opacity: 0.6;
   }
 
+  /* Las acciones aparecen al pasar el mouse o al llegar a ellas con Tab,
+     centradas a la derecha sobre un velo del fondo de la tarjeta que tapa el
+     final del texto. El foco en la tarjeta misma (la ultima conexion) no las
+     muestra: la tarjeta queda limpia. */
   .card-corner {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-3) 0 var(--space-6);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background: linear-gradient(90deg, transparent, var(--surface-elevated) var(--space-5));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--duration-fast);
+  }
+
+  .card:hover .card-corner,
+  .card.connecting .card-corner,
+  .card:has(.corner-button:focus-visible) .card-corner {
+    opacity: 1;
+  }
+
+  .card-corner > :global(*) {
+    pointer-events: auto;
   }
 
   /* --- Lista compacta ---------------------------------------------------- */
@@ -631,7 +692,8 @@
   }
 
   .row-main:hover:not(:disabled)::before,
-  .row.connecting .row-main::before {
+  .row.connecting .row-main::before,
+  .row.recent .row-main::before {
     opacity: 1;
   }
 
@@ -652,7 +714,15 @@
   }
 
   .row-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     font-weight: 600;
+  }
+
+  .row-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .row-driver {
@@ -698,10 +768,6 @@
     .card-main::before,
     .row-main::before {
       transition: none;
-    }
-
-    .card-main:hover:not(:disabled) {
-      transform: none;
     }
 
     .card-corner :global(.spin),

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from "$lib/tooltip";
   import { Ban, Check, ChevronDown, Pipette } from "@lucide/svelte";
   import { CONNECTION_COLORS, colorLabel, isPaletteColor } from "$lib/connectionColors";
   import { t } from "$lib/i18n";
@@ -45,7 +46,7 @@
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={$t("connections.color.buttonLabel", { color: colorLabel(value, $t) })}
-    title={colorLabel(value, $t)}
+    use:tooltip={colorLabel(value, $t)}
     {disabled}
     onclick={() => (open = !open)}
   >
@@ -57,8 +58,9 @@
   </button>
 
   {#if open}
-    <div class="menu" role="menu" aria-label={$t("connections.color.menu")}>
-      <button type="button" role="menuitemradio" aria-checked={!value} class:selected={!value} onclick={() => choose(undefined)}>
+    <div class="ui-menu menu" role="menu" aria-label={$t("connections.color.menu")}>
+      <button type="button" class="ui-menu-item" role="menuitemradio" aria-checked={!value} onclick={() => choose(undefined)}>
+        <span class="ui-menu-check">{#if !value}<Check size={13} aria-hidden="true" />{/if}</span>
         <Ban size={13} class="none-icon" aria-hidden="true" />
         <span>{$t("connections.color.none")}</span>
       </button>
@@ -66,31 +68,31 @@
       {#each CONNECTION_COLORS as option (option.value)}
         <button
           type="button"
+          class="ui-menu-item"
           role="menuitemradio"
           aria-checked={value === option.value}
-          class:selected={value === option.value}
           onclick={() => choose(option.value)}
         >
+          <span class="ui-menu-check">{#if value === option.value}<Check size={13} aria-hidden="true" />{/if}</span>
           <span class="dot" style:--dot={option.value}></span>
           <span>{$t(option.labelKey)}</span>
-          {#if value === option.value}<Check size={13} class="check" aria-hidden="true" />{/if}
         </button>
       {/each}
       <div class="separator" role="separator"></div>
       <button
         type="button"
+        class="ui-menu-item"
         role="menuitemradio"
         aria-checked={custom}
-        class:selected={custom}
         onclick={() => customInput?.click()}
       >
+        <span class="ui-menu-check">{#if custom}<Check size={13} aria-hidden="true" />{/if}</span>
         {#if custom}
           <span class="dot" style:--dot={value}></span>
         {:else}
           <Pipette size={13} class="none-icon" aria-hidden="true" />
         {/if}
         <span>{$t("connections.color.customOption")}</span>
-        {#if custom}<Check size={13} class="check" aria-hidden="true" />{/if}
       </button>
     </div>
   {/if}
@@ -162,43 +164,14 @@
     top: calc(100% + 6px);
     right: 0;
     min-width: 11rem;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
   }
 
-  .menu button {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 5px var(--space-2);
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 0.8125rem;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .menu button:hover,
-  .menu button:focus-visible {
-    outline: none;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-  }
 
   .menu :global(.none-icon) {
     color: var(--text-secondary);
   }
 
-  .menu :global(.check) {
-    margin-left: auto;
-    color: var(--accent);
-  }
 
   .separator {
     height: 1px;

@@ -1,0 +1,84 @@
+/*
+ * Lenguaje unico de los modales de aviso (confirmar, descartar, mover a la
+ * papelera...). Mismo idioma visual que los modales de configuracion
+ * (formulario de conexion, vista previa de cambios): alineados a la
+ * izquierda, titulo con peso, texto secundario y los botones juntos a la
+ * derecha (styles/buttons.css, los mismos de toda la app).
+ *
+ *   <dialog class="alert-dialog danger|warning">
+ *     <div class="alert-body">
+ *       <span class="alert-icon"><Icono /></span>
+ *       <div class="alert-text"><h2>…</h2><p>…</p></div>
+ *     </div>
+ *     <div class="alert-actions">
+ *       [<button class="action-button danger-soft">] (opcional)
+ *       <button class="action-button secondary">Cancelar</button>
+ *       <button class="action-button primary|danger">Accion</button>
+ *     </div>
+ *   </dialog>
+ *
+ * La entrada y la salida animadas son las de cualquier <dialog> (tokens.css
+ * y dialogMotion.ts).
+ */
+
+.alert-dialog {
+  --alert-tone: var(--warning);
+  width: min(24rem, calc(100vw - 2rem));
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.alert-dialog.danger {
+  --alert-tone: var(--danger);
+}
+
+.alert-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-3);
+}
+
+.alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--alert-tone) 14%, transparent);
+  color: var(--alert-tone);
+}
+
+.alert-text {
+  min-width: 0;
+  padding-top: 0.3125rem;
+}
+
+.alert-text h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.alert-text p {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}

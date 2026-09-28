@@ -2,6 +2,9 @@
 // dependencias de CodeMirror/Svelte/Tauri: es una funcion pura sobre texto,
 // pensada para testearse en aislamiento (ver sqlContext.test.ts).
 //
+// Las comillas y comentarios los dice el motor (SqlLexical): en MySQL "#"
+// abre un comentario y la barra invertida escapa; en Postgres, no.
+//
 // No es un parser SQL real. `sqlparser` (crates/engine/src/parser.rs) solo
 // puede validar SQL completo y sintacticamente valido, asi que no sirve para
 // entender una sentencia a medio escribir mientras el cursor esta en el
@@ -10,6 +13,8 @@
 // transiciones (SELECT/FROM/JOIN/ON/WHERE/HAVING/GROUP BY/ORDER BY) y
 // degrada a "unknown" ante cualquier cosa que no reconozca (CTEs, DDL,
 // bloques procedurales, anidamiento malformado) en vez de adivinar mal.
+
+import type { SqlLexical } from "$lib/sqlStatements";
 
 export type ClauseKind =
   | "select"
@@ -52,7 +57,7 @@ const MAX_SCAN_CHARS = 128 * 1024;
 
 type TokenKind = "word" | "quoted" | "dot" | "comma" | "lparen" | "rparen" | "semi" | "star" | "other";
 
-interface Token {
+export interface Token {
   kind: TokenKind;
   /** Minuscula para "word" (para comparar contra keywords); tal cual para el resto. */
   text: string;
@@ -64,7 +69,17 @@ interface Token {
 
 type Lexical = ClauseContext["lexical"];
 
-function lex(doc: string, end: number): { tokens: Token[]; lexicalAtEnd: Lexical } {
+// Los tokens de `text` hasta `end` (sqlRelations.ts arma las relaciones de
+// la sentencia con ellos).
+export function sqlTokens(text: string, lexical: SqlLexical, end = text.length): Token[] {
+  return lex(text, end, lexical).tokens;
+}
+
+// `lexical`: las comillas y comentarios del motor (su perfil en lib/engines).
+function lex(doc: string, end: number, rules: SqlLexical): { tokens: Token[]; lexicalAtEnd: Lexical } {
+  const identifierQuotes = new Map<string, string>(
+    rules.identifierQuotes.map((quote) => [quote, quote === "[" ? "]" : quote]),
+  );
   const tokens: Token[] = [];
   let i = 0;
   let lexicalAtEnd: Lexical = "code";
@@ -78,11 +93,9 @@ function lex(doc: string, end: number): { tokens: Token[]; lexicalAtEnd: Lexical
       continue;
     }
 
-    // Comentario de linea: "--" (todos los dialectos) o "#" (MySQL/MariaDB).
-    // Aceptar ambos sin importar el dialecto activo es deliberadamente
-    // permisivo: en el peor caso ignoramos texto que no era un comentario en
-    // ese motor puntual, nunca clasificamos peor por eso.
-    if ((ch === "-" && doc[i + 1] === "-") || ch === "#") {
+    // Comentario de linea: "--" (todos los motores) o "#" (si el motor lo
+    // usa: MySQL/MariaDB; en Postgres es un operador).
+    if ((ch === "-" && doc[i + 1] === "-") || (ch === "#" && rules.hashComments)) {
       i += ch === "#" ? 1 : 2;
       while (i < end && doc[i] !== "\n") i++;
       lexicalAtEnd = i >= end ? "comment" : "code";
@@ -104,13 +117,17 @@ function lex(doc: string, end: number): { tokens: Token[]; lexicalAtEnd: Lexical
       continue;
     }
 
-    // String literal: '...'. Comillas dobles escapadas ('') y backslash
-    // (MySQL) ambas toleradas.
+    // String literal: '...'. Comillas dobles escapadas ('') y la barra
+    // invertida si el motor la usa de escape (MySQL).
     if (ch === "'") {
+      // E'...' (Postgres): ahi la barra invertida si escapa.
+      const escaping =
+        rules.backslashEscapes ||
+        (rules.escapeStringPrefix && /[eE]/.test(doc[i - 1] ?? "") && !/[A-Za-z0-9_$]/.test(doc[i - 2] ?? ""));
       i++;
       let closed = false;
       while (i < end) {
-        if (doc[i] === "\\") {
+        if (doc[i] === "\\" && escaping) {
           i += 2;
           continue;
         }
@@ -129,11 +146,11 @@ function lex(doc: string, end: number): { tokens: Token[]; lexicalAtEnd: Lexical
       continue;
     }
 
-    // Identificador entre comillas: backtick (MySQL/MariaDB) o comilla doble
-    // (Postgres/ANSI). Igual que los comentarios, se aceptan ambos formatos
-    // sin mirar el dialecto activo.
-    if (ch === "`" || ch === '"') {
-      const quote = ch;
+    // Identificador entre las comillas que acepta el motor: backtick
+    // (MySQL/MariaDB), comilla doble (Postgres/ANSI), corchetes ([nombre]).
+    const closing = identifierQuotes.get(ch);
+    if (closing !== undefined) {
+      const quote = closing;
       const start = i;
       i++;
       let closed = false;
@@ -233,7 +250,7 @@ function newFrame(): FrameState {
   return { clause: "none", relationCapture: "none" };
 }
 
-export function classifyContext(doc: string, pos: number): ClauseContext {
+export function classifyContext(doc: string, pos: number, lexical: SqlLexical): ClauseContext {
   // No hay forma de conocer con seguridad el estado lexico (dentro de un
   // string/comentario abierto, profundidad de parentesis, etc.) sin escanear
   // desde el principio de la sentencia. Mas alla del limite, no se adivina:
@@ -250,7 +267,7 @@ export function classifyContext(doc: string, pos: number): ClauseContext {
     };
   }
 
-  const { tokens: rawTokens, lexicalAtEnd } = lex(doc, pos);
+  const { tokens: rawTokens, lexicalAtEnd } = lex(doc, pos, lexical);
 
   // Si el cursor esta dentro de un string/comentario/identificador sin
   // cerrar, no tiene sentido completar sintaxis SQL ahi - la libreria ya

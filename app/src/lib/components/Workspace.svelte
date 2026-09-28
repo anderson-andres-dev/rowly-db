@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { quoteIdentifier as quoteSqlIdentifier } from "$lib/filterBuilder";
+  import { get } from "svelte/store";
+  import { focusZoneAction } from "$lib/focusZones";
+  import { registerCommand, registerCommands } from "$lib/commands";
+  import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
@@ -10,11 +15,17 @@
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
-  import { catalogTables, connection } from "$lib/stores/connection";
+  import { catalogTables, connection, isProduction } from "$lib/stores/connection";
+  import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
-  import { eventMatchesShortcut, shortcuts } from "$lib/stores/shortcuts";
+  import { shortcuts } from "$lib/stores/shortcuts";
+
   import { extractFromContext } from "$lib/sqlSchema";
-  import { countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
+  import { splitStatements, STANDARD_LEXICAL } from "$lib/sqlStatements";
+  import { engineFor } from "$lib/engines";
+  import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -25,6 +36,7 @@
   import { numberFormat, t } from "$lib/i18n";
   import {
     addPinnedTab,
+    addResultTab,
     consoleOfKey,
     forgetPinnedResults,
     pinnedResults,
@@ -70,6 +82,7 @@
     cancelQueryConfirmation,
     closeQueryConsole,
     createQueryConsole,
+    currentQueryConsole,
     ensureQueryConsole,
     executionForConsole,
     finishQueryExecution,
@@ -79,6 +92,7 @@
     reorderQueryConsoles,
     setTableFilters,
     type QueryConsole,
+    type TableTab,
     requireQueryConfirmation,
     setQueryCounting,
     setQuerySort,
@@ -272,7 +286,6 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
   let renameInput = $state<HTMLInputElement>();
-  let closeDialog = $state<HTMLDialogElement>();
   let pendingCloseId = $state<string | null>(null);
   // Titulo congelado al abrir: si la consola se cierra (Descartar) mientras
   // el modal se desvanece, el titulo no debe cambiar a mitad de animacion.
@@ -445,7 +458,8 @@
   async function requestClose(id: string) {
     tabMenu = null;
     if (!(await confirmDiscardPending(id))) return;
-    const item = consoles.find((candidate) => candidate.id === id);
+    // Con el texto del editor al dia (lo manda con un retraso).
+    const item = currentQueryConsole(id);
     // Solo se pregunta cuando cerrar perderia algo.
     if (item && !isQueryConsoleDirty(item)) {
       closeQueryConsole(profileId, id);
@@ -454,30 +468,24 @@
       forgetConsoleResults(id);
       return;
     }
-    pendingCloseId = id;
     closeDialogTitle = item ? consoleDisplayTitle(item.title, $t) : $t("workspace.consoleFallback");
-    await tick();
-    closeDialog?.showModal();
-    // El foco va al dialogo y no a un boton: asi ninguno aparece con el
-    // anillo de foco al abrir y un Enter accidental no dispara nada. Esc
-    // sigue cancelando y Tab entra a los botones.
-    closeDialog?.focus();
+    pendingCloseId = id;
   }
 
-  // pendingCloseId se limpia en el onclose del dialogo (al terminar su
-  // animacion de salida), no aca.
+  // Las tres respuestas llegan cuando el aviso (ConfirmDialog) termino de
+  // cerrarse.
   function cancelClose() {
-    closeDialog?.close();
+    pendingCloseId = null;
   }
 
   function discardAndClose() {
-    if (pendingCloseId) {
-      closeQueryConsole(profileId, pendingCloseId);
-      forgetResultEdits(pendingCloseId);
-      forgetLog(pendingCloseId);
-      forgetConsoleResults(pendingCloseId);
-    }
-    closeDialog?.close();
+    const id = pendingCloseId;
+    pendingCloseId = null;
+    if (!id) return;
+    closeQueryConsole(profileId, id);
+    forgetResultEdits(id);
+    forgetLog(id);
+    forgetConsoleResults(id);
   }
 
   // Guarda (con el dialogo de "Guardar como" si es una consola) y recien
@@ -485,9 +493,9 @@
   // pestaña queda abierta.
   async function saveAndClose() {
     const id = pendingCloseId;
+    pendingCloseId = null;
     const item = id ? currentConsole(id) : undefined;
     if (!id || !item) return;
-    closeDialog?.close();
     if (await runFileAction(() => saveConsole(item))) {
       closeQueryConsole(profileId, id);
       forgetResultEdits(id);
@@ -496,109 +504,113 @@
     }
   }
 
-  function handleConsoleShortcut(event: KeyboardEvent) {
-    if (event.defaultPrevented || closeDialog?.open) return;
-    if (event.target instanceof Element && event.target.closest("dialog")) return;
-
-    const newConsoleKeys = shortcutKeys("new-query-console");
-    if (newConsoleKeys && eventMatchesShortcut(event, newConsoleKeys)) {
-      event.preventDefault();
-      tabMenu = null;
-      renamingId = null;
-      createQueryConsole(profileId);
-      return;
-    }
-
-    const renameKeys = shortcutKeys("rename-query-console");
-    if (renameKeys && activeConsole && eventMatchesShortcut(event, renameKeys)) {
-      event.preventDefault();
-      void startRename(activeConsole.id, activeConsole.title);
-      return;
-    }
-
-    const saveAsKeys = shortcutKeys("save-query-console-as");
-    if (saveAsKeys && activeConsole && !activeConsole.table && eventMatchesShortcut(event, saveAsKeys)) {
-      event.preventDefault();
-      const item = activeConsole;
-      void runFileAction(() => saveConsoleAs(item));
-      return;
-    }
-
-    const saveKeys = shortcutKeys("save-query-console");
-    if (saveKeys && activeConsole && !activeConsole.table && eventMatchesShortcut(event, saveKeys)) {
-      event.preventDefault();
-      const item = activeConsole;
-      void runFileAction(() => saveConsole(item));
-      return;
-    }
-
-    const nextPageKeys = shortcutKeys("next-result-page");
-    if (nextPageKeys && eventMatchesShortcut(event, nextPageKeys)) {
-      if (stepPage(1)) event.preventDefault();
-      return;
-    }
-
-    const previousPageKeys = shortcutKeys("previous-result-page");
-    if (previousPageKeys && eventMatchesShortcut(event, previousPageKeys)) {
-      if (stepPage(-1)) event.preventDefault();
-      return;
-    }
-
-    const openKeys = shortcutKeys("open-sql-file");
-    if (openKeys && eventMatchesShortcut(event, openKeys)) {
-      event.preventDefault();
-      void runFileAction(() => openSqlFileWithDialog(profileId));
-      return;
-    }
-
-    const closeKeys = shortcutKeys("close-query-console");
-    if (closeKeys && activeConsole && eventMatchesShortcut(event, closeKeys)) {
-      event.preventDefault();
-      void requestClose(activeConsole.id);
-    }
-  }
+  // Comandos de las pestañas (lib/commands.ts); la tecla la pone
+  // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => pendingCloseId === null && run() !== false;
+    return registerCommands("global", {
+      "new-query-console": whenIdle(() => {
+        tabMenu = null;
+        renamingId = null;
+        createQueryConsole(profileId);
+      }),
+      "rename-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item) return false;
+        void startRename(item.id, item.title);
+      }),
+      "save-query-console-as": whenIdle(() => {
+        const item = activeConsole;
+        if (!item || item.table) return false;
+        void runFileAction(() => saveConsoleAs(item));
+      }),
+      "save-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item || item.table) return false;
+        void runFileAction(() => saveConsole(item));
+      }),
+      "next-result-page": whenIdle(() => stepPage(1)),
+      "previous-result-page": whenIdle(() => stepPage(-1)),
+      "open-sql-file": whenIdle(() => {
+        void runFileAction(() => openSqlFileWithDialog(profileId));
+      }),
+      "cancel-query": whenIdle(() => !!activeConsole && cancelExecution(activeConsole.id)),
+      "query-history": whenIdle(() => {
+        if (!activeConsole || activeConsole.table) return false;
+        if (historyOpen) closeHistory(true);
+        else historyOpen = true;
+      }),
+      "close-query-console": whenIdle(() => {
+        const item = activeConsole;
+        if (!item) return false;
+        void requestClose(item.id);
+      }),
+    });
+  });
 
   // --- Pestañas de tabla ----------------------------------------------------
   // Doble clic en una tabla del explorador: sus datos a pantalla completa
-  // (sin editor), con filtros WHERE / ORDER BY. Por dentro es una consulta
+  // (sin editor), con el constructor visual de filtros. Por dentro es una consulta
   // "SELECT * FROM tabla ..." en la pestaña, asi que tiene TODO lo del
   // resultado: editar, paginar, ordenar, buscar, exportar, fijar.
   let tableFilterError = $state<Record<string, string | null>>({});
   const tableLoadAttempted = new Set<string>();
 
   function quoteIdentifier(name: string): string {
-    if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(name)) return name;
-    return activeProfile?.driver === "postgres" ? `"${name.replace(/"/g, '""')}"` : `\`${name.replace(/`/g, "``")}\``;
+    // Sin perfil no hay conexion ni pestaña de tabla que armar.
+    return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
   }
 
   function tableSql(item: QueryConsole): string {
     const table = item.table;
     if (!table) return "";
     const parts = [`SELECT * FROM ${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`];
+    // El orden se hace con clic en los encabezados del grid.
     if (table.where.trim()) parts.push(`WHERE ${table.where.trim()}`);
-    if (table.orderBy.trim()) parts.push(`ORDER BY ${table.orderBy.trim()}`);
     return parts.join(" ");
   }
 
   // Un filtro con error no borra lo que se estaba viendo: el error queda al
   // lado de los filtros y en la Salida.
+  // Los filtros se ejecutan mientras se arman: nunca dos consultas a la vez
+  // por pestaña. Si llega un cambio mientras una corre, al terminar se
+  // ejecuta una sola vez mas con lo ultimo (lee los filtros del store).
+  const tableRunning = new Set<string>();
+  const tableRerun = new Set<string>();
+
   async function runTableQuery(consoleId: string) {
-    const item = consoles.find((candidate) => candidate.id === consoleId);
+    if (tableRunning.has(consoleId)) {
+      tableRerun.add(consoleId);
+      return;
+    }
+    tableRunning.add(consoleId);
+    try {
+      await runTableQueryOnce(consoleId);
+    } finally {
+      tableRunning.delete(consoleId);
+    }
+    if (tableRerun.delete(consoleId)) void runTableQuery(consoleId);
+  }
+
+  async function runTableQueryOnce(consoleId: string) {
+    const item = get(queryConsoles).consoles.find((candidate) => candidate.id === consoleId);
     if (!item?.table) return;
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
     const sql = tableSql(item);
     const startedAt = Date.now();
     const started = performance.now();
-    const response = await executeQuery(sql, null, firstPage(consoleId));
+    const { response, cancelled } = await executeCancellable(consoleId, sql, null, firstPage(consoleId));
     if (response.type !== "completed") {
       applyExecuteQueryResponse(consoleId, sql, response);
       return;
     }
     appendLog(consoleId, { kind: "query", schema: logSchema, text: sql, at: startedAt });
     appendLog(consoleId, {
-      kind: response.result.type === "error" ? "error" : "info",
-      text: describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
+      kind: response.result.type === "error" && !cancelled ? "error" : "info",
+      text: cancelled
+        ? $t("workspace.output.cancelled")
+        : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
     });
     const hadRows = executionForConsole($queryConsoles, consoleId).result?.type === "resultSet";
     if (response.result.type === "error") {
@@ -615,10 +627,22 @@
     dropUnpinnedResults(consoleId);
   }
 
-  function applyTableFilters(consoleId: string, where: string, orderBy: string) {
-    setTableFilters(consoleId, where, orderBy);
+  function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "conditions">) {
+    setTableFilters(consoleId, filters);
     void runTableQuery(consoleId);
   }
+
+  // Columnas que ofrece el constructor de filtros: las del catalogo (con su
+  // tipo, para citar bien los valores); si la tabla no esta en el catalogo,
+  // las del resultado.
+  const tableFilterColumns = $derived.by(() => {
+    const table = activeConsole?.table;
+    if (!table) return [];
+    const fromCatalog = $catalogTables.find((item) => item.schema === table.schema && item.name === table.name);
+    if (fromCatalog) return fromCatalog.columns.map((column) => ({ name: column.name, dataType: column.dataType }));
+    const result = liveExecution.result;
+    return result?.type === "resultSet" ? result.columns.map((column) => ({ name: column.name, dataType: column.type })) : [];
+  });
 
   // Al abrir (o volver a) una pestaña de tabla sin datos todavia, se carga.
   $effect(() => {
@@ -629,36 +653,35 @@
     void runTableQuery(item.id);
   });
 
-  // --- Ctrl+F segun el mouse -----------------------------------------------
-  // La busqueda sale segun la zona que tiene el MOUSE encima (sin hacer
-  // clic): editor -> su barra de buscar/reemplazar; resultado -> la barra del
-  // grid. En captura, antes de que CodeMirror vea la tecla (si el foco esta
-  // en el editor pero el mouse sobre el grid, gana el grid). Con el mouse
-  // sobre el sidebar no se toca: lo resuelve +layout.svelte. En cualquier
-  // otro lado, cada zona sigue respondiendo por foco.
+  // --- Buscar segun la zona activa ------------------------------------------
+  // El comando find sale en la zona activa (foco o ultimo clic,
+  // focusZones.ts), nunca en la que tiene el mouse encima: editor -> su
+  // barra de buscar/reemplazar; resultado -> la barra del grid. El sidebar
+  // lo resuelve +layout.svelte.
   let sqlEditor = $state<ReturnType<typeof SqlEditor>>();
+
+  // Primer foco de una zona a la que se llega con el teclado (focusZones.ts).
+  function focusIn(zone: HTMLElement, selector: string): boolean {
+    const target = zone.querySelector<HTMLElement>(selector);
+    target?.focus({ preventScroll: true });
+    return !!target;
+  }
   let resultPane = $state<ReturnType<typeof ResultPane>>();
   let editorPane = $state<HTMLElement>();
   let resultRegion = $state<HTMLElement>();
 
   $effect(() => {
-    function onKeydown(event: KeyboardEvent) {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "f") return;
-      if (document.querySelector("dialog[open]")) return;
-      if (document.querySelector(".sidebar:hover")) return;
-      if (editorPane?.matches(":hover") && sqlEditor) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        sqlEditor.toggleSearch();
-      } else if (resultRegion?.matches(":hover")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        resultPane?.toggleFind();
-      }
-    }
-    window.addEventListener("keydown", onKeydown, true);
-    return () => window.removeEventListener("keydown", onKeydown, true);
+    const cleanupEditor = registerCommand("find", "editor", () => {
+      if (!sqlEditor) return false;
+      sqlEditor.toggleSearch();
+    });
+    const cleanupResults = registerCommand("find", "results", () => {
+      resultPane?.toggleFind();
+    });
+    return () => {
+      cleanupEditor();
+      cleanupResults();
+    };
   });
 
   // --- Salida -----------------------------------------------------------
@@ -690,6 +713,64 @@
     return result.code ? `[${result.code}] ${result.message}` : result.message;
   }
 
+  // --- Historial (Ctrl+E) ---------------------------------------------------
+  // Capa flotante sobre el editor; al cerrarla, el foco vuelve al editor en
+  // la posicion exacta del cursor.
+  let historyOpen = $state(false);
+  const historyEntries = $derived($queryHistory[profileId] ?? []);
+
+  function closeHistory(refocusEditor: boolean) {
+    historyOpen = false;
+    if (refocusEditor) sqlEditor?.focus();
+  }
+
+  function insertFromHistory(sql: string) {
+    historyOpen = false;
+    sqlEditor?.insertAtCursor(sql);
+  }
+
+  function executeFromHistory(sql: string) {
+    const consoleId = activeConsole?.id;
+    closeHistory(true);
+    if (consoleId) void requestExecution(consoleId, sql);
+  }
+
+  // --- Cancelar ---------------------------------------------------------
+  // Cada ejecucion lleva un id; mientras corre, cancelExecution() le pide
+  // al servidor que la interrumpa (cancel_query). Termina con el error del
+  // servidor (o, en MySQL, a veces con un resultado parcial): en la Salida
+  // queda como "cancelada", no como error.
+  const runningExecutions = new Map<string, string>();
+  let cancelling = $state<Record<string, boolean>>({});
+
+  async function executeCancellable(
+    consoleId: string,
+    sql: string,
+    confirmed: DestructiveStatement | null,
+    page: PageRequest,
+  ): Promise<{ response: ExecuteQueryResponse; cancelled: boolean }> {
+    const executionId = crypto.randomUUID();
+    runningExecutions.set(consoleId, executionId);
+    try {
+      const response = await executeQuery(sql, confirmed, page, executionId);
+      return { response, cancelled: cancelling[consoleId] === true };
+    } finally {
+      if (runningExecutions.get(consoleId) === executionId) runningExecutions.delete(consoleId);
+      const { [consoleId]: _done, ...rest } = cancelling;
+      cancelling = rest;
+    }
+  }
+
+  function cancelExecution(consoleId: string): boolean {
+    const executionId = runningExecutions.get(consoleId);
+    if (!executionId) return false;
+    if (!cancelling[consoleId]) {
+      cancelling = { ...cancelling, [consoleId]: true };
+      void cancelQuery(executionId);
+    }
+    return true;
+  }
+
   // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
   // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
   // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
@@ -703,17 +784,30 @@
     confirmed: DestructiveStatement | null,
     page: PageRequest,
     paging = false,
+    // Ejecucion nueva desde el editor: queda en el historial (Ctrl+E).
+    record = false,
   ) {
     const consoleId = consoleOfKey(key);
     const startedAt = Date.now();
     const started = performance.now();
-    const response = await executeQuery(sql, confirmed, page);
+    const { response, cancelled } = await executeCancellable(consoleId, sql, confirmed, page);
     if (response.type === "completed") {
+      const elapsed = performance.now() - started;
       appendLog(consoleId, { kind: "query", schema: logSchema, text: sql.trim(), at: startedAt });
       appendLog(consoleId, {
-        kind: response.result.type === "error" ? "error" : "info",
-        text: describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
+        kind: response.result.type === "error" && !cancelled ? "error" : "info",
+        text: cancelled
+          ? $t("workspace.output.cancelled")
+          : describeOutcome(response.result, response.page?.offset ?? 0, elapsed),
       });
+      if (record) {
+        recordQuery(profileId, {
+          sql,
+          at: startedAt,
+          durationMs: elapsed,
+          outcome: cancelled ? "cancelled" : response.result.type === "error" ? "error" : "ok",
+        });
+      }
     }
     applyExecuteQueryResponse(key, sql, response, paging);
     if (response.type === "completed") {
@@ -799,11 +893,17 @@
 
   // El SQL se pide ANTES de abrir: el modal aparece ya completo, sin un
   // instante vacio ni contenido que salta al llegar.
+  // Ancho de la vista previa (ver sqlPreviewFormat.ts): una clausula por
+  // linea, sin lineas kilometricas ni un valor por linea.
+  const PREVIEW_LINE_WIDTH = 78;
+
   async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
     const current = currentChanges(consoleId);
     if (!current) return;
     try {
-      const statements = await previewChanges(current.target, current.changes);
+      const statements = (await previewChanges(current.target, current.changes)).map((statement) =>
+        formatPreviewSql(statement, PREVIEW_LINE_WIDTH),
+      );
       applyError = error;
       preview = { consoleId, ...current, statements, dismiss: false };
     } catch (cause) {
@@ -821,12 +921,19 @@
 
   // Aplica todo en una transaccion. Si falla no queda nada aplicado: los
   // cambios siguen pendientes y el error se muestra en la vista previa.
-  async function submitChanges(key: string) {
+  // En produccion nada se aplica sin ver antes el SQL: el atajo o el boton
+  // del grid abren la vista previa, y aplicar desde ella confirma.
+  async function submitChanges(key: string, confirmed = false) {
+    if ($isProduction && !confirmed) {
+      void openChangesPreview(key);
+      return;
+    }
     const consoleId = consoleOfKey(key);
     const current = currentChanges(key);
     if (!current || applyingChanges) return;
     applyingChanges = true;
-    applyError = null;
+    // El error anterior sigue a la vista mientras se reintenta: si vuelve a
+    // fallar, la vista previa lo "golpea" en vez de borrarlo y redibujarlo.
     // Las mismas sentencias que muestra la vista previa, para la Salida.
     const statements = await previewChanges(current.target, current.changes).catch(() => [] as string[]);
     const startedAt = Date.now();
@@ -846,6 +953,7 @@
           ms: formatMs(performance.now() - started),
         }),
       });
+      applyError = null;
       clearResultPendingEdits(key);
       // El modal (si estaba abierto) se cierra animado; lo quita su onclose.
       if (preview) preview = { ...preview, dismiss: true };
@@ -1069,8 +1177,123 @@
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
-    await runQuery(consoleId, sql, null, firstPage(consoleId));
+    // Con las reglas del motor: las mismas con que el editor marca cada
+    // sentencia del script.
+    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
+    const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
+    if (statements.length > 1) {
+      await startScript(consoleId, sql, statements);
+      return;
+    }
+    await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
+  }
+
+  // --- Scripts -------------------------------------------------------------
+  // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
+  // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
+  // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
+  // script entero (el guard las lista). Despues corren en orden, cada una
+  // con autocommit, y el script se detiene en la primera que falle o al
+  // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
+  // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
+  const MAX_SCRIPT_RESULT_TABS = 10;
+
+  async function startScript(consoleId: string, sql: string, statements: string[]) {
+    const checks = await classifyStatements(statements);
+    const invalid = checks.findIndex((check) => check.error !== undefined);
+    if (invalid !== -1) {
+      appendLog(consoleId, { kind: "query", schema: logSchema, text: statements[invalid].trim(), at: Date.now() });
+      const message = $t("workspace.output.scriptInvalid", { index: invalid + 1, error: checks[invalid].error ?? "" });
+      appendLog(consoleId, { kind: "error", text: message });
+      finishQueryExecution(consoleId, sql, { type: "error", message });
+      selectTab(consoleId, "output");
+      return;
+    }
+    const confirmations = checks.map((check) => check.confirmation ?? null);
+    const first = confirmations.find((item) => item !== null);
+    if (first) {
+      requireQueryConfirmation(consoleId, { sql, statement: first, script: { statements, confirmations } });
+      return;
+    }
+    await runScript(consoleId, sql, statements, confirmations);
+  }
+
+  async function runScript(
+    consoleId: string,
+    sql: string,
+    statements: string[],
+    confirmations: (DestructiveStatement | null)[],
+  ) {
+    // Lo de la ejecucion anterior se va de entrada: los resultados nuevos
+    // aparecen a medida que llegan.
+    dropUnpinnedResults(consoleId);
+    clearQueryResult(consoleId);
+    forgetResultEdits(consoleId);
+    const startedAt = Date.now();
+    const started = performance.now();
+    let outcome: HistoryOutcome = "ok";
+    let lastResultTab: string | null = null;
+    let resultTabs = 0;
+
+    for (let index = 0; index < statements.length; index += 1) {
+      const statement = statements[index].trim();
+      const statementStarted = performance.now();
+      // Cada sentencia con su marca en el editor (si sigue a la vista).
+      const markStatement = (outcome: "running" | QueryExecutionResult) => {
+        if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
+      };
+      markStatement("running");
+      appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: Date.now() });
+      const { response, cancelled } = await executeCancellable(
+        consoleId,
+        statement,
+        confirmations[index],
+        firstPage(consoleId),
+      );
+      // execute_query vuelve a clasificar cada sentencia: si ahora pide una
+      // confirmacion distinta, no se ejecuto y el script se detiene.
+      const result: QueryExecutionResult =
+        response.type === "completed"
+          ? response.result
+          : { type: "error", message: $t(`workspace.guard.${response.statement}`) };
+      const page = response.type === "completed" ? (response.page ?? null) : null;
+      markStatement(result);
+      appendLog(consoleId, {
+        kind: result.type === "error" && !cancelled ? "error" : "info",
+        text: cancelled
+          ? $t("workspace.output.cancelled")
+          : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
+      });
+
+      const stopped = result.type === "error" || cancelled;
+      if (stopped || index === statements.length - 1) {
+        finishQueryExecution(consoleId, statement, result, page);
+        prepareResultEditing(consoleId, statement, result);
+        if (result.type === "resultSet") lastResultTab = consoleId;
+        if (stopped) {
+          outcome = cancelled ? "cancelled" : "error";
+          const remaining = statements.length - index - 1;
+          if (remaining > 0) {
+            appendLog(consoleId, {
+              kind: "info",
+              text: $t("workspace.output.scriptStopped", { count: $numberFormat.format(remaining) }),
+            });
+          }
+        }
+        break;
+      }
+      if (result.type === "resultSet" && resultTabs < MAX_SCRIPT_RESULT_TABS) {
+        const key = resultKey(consoleId, addResultTab(consoleId, false));
+        finishQueryExecution(key, statement, result, page);
+        prepareResultEditing(key, statement, result);
+        lastResultTab = key;
+        resultTabs += 1;
+      }
+    }
+
+    recordQuery(profileId, { sql, at: startedAt, durationMs: performance.now() - started, outcome });
+    selectTab(consoleId, outcome === "error" || !lastResultTab ? "output" : lastResultTab);
   }
 
   // Unica via de confirmacion: el click explicito en "Ejecutar de todos
@@ -1081,7 +1304,11 @@
     const pending = takeQueryConfirmation(consoleId);
     if (!pending || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
-    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId));
+    if (pending.script) {
+      await runScript(consoleId, pending.sql, pending.script.statements, pending.script.confirmations);
+      return;
+    }
+    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
 
@@ -1122,7 +1349,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleConsoleShortcut} />
+
 
 <div class="workspace">
   <div class="console-tabs">
@@ -1179,14 +1406,14 @@
         {:else}
           <span
             class="console-tab-title"
-            title={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{consoleDisplayTitle(item.title, $t)}</span
+            use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{consoleDisplayTitle(item.title, $t)}</span
           >
         {/if}
         <button
           type="button"
           class="close-tab"
           aria-label={$t(dirty ? "workspace.tabs.closeDirty" : "workspace.tabs.close", { title: consoleDisplayTitle(item.title, $t) })}
-          title={dirty
+          use:tooltip={dirty
             ? $t(item.filePath ? "workspace.tabs.unsavedFile" : "workspace.tabs.unsavedConsole", {
                 shortcut: shortcutKeys("save-query-console"),
               })
@@ -1202,7 +1429,7 @@
     <button
       type="button"
       class="new-console"
-      title={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
+      use:tooltip={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
       aria-label={$t("workspace.tabs.newAria")}
       onclick={() => createQueryConsole(profileId)}
     >
@@ -1226,8 +1453,15 @@
   {:else}
   <section class="workspace-body" bind:this={workspaceBody}>
     {#if !activeConsole?.table}
-    <div class="editor-pane" bind:this={editorPane} style={`flex-basis: ${editorFraction * 100}%`}>
-      {#if activeConsole}
+    <div
+      class="editor-pane"
+      bind:this={editorPane}
+      use:focusZoneAction={{ zone: "editor", focusDefault: (zone) => focusIn(zone, ".cm-content") }}
+      style={`flex-basis: ${editorFraction * 100}%`}
+    >
+      <!-- Una consola grande cuyo texto todavia se lee del disco (al
+           arrancar) no monta el editor hasta tenerlo. -->
+      {#if activeConsole && !activeConsole.textPending}
         {#key activeConsole.id}
           <SqlEditor
             bind:this={sqlEditor}
@@ -1239,11 +1473,21 @@
             onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
           />
         {/key}
+        {#if historyOpen}
+          <QueryHistory
+            entries={historyEntries}
+            oninsert={insertFromHistory}
+            onexecute={executeFromHistory}
+            onclose={closeHistory}
+          />
+        {/if}
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}
       <ExecutionGuard
         statement={liveExecution.pendingConfirmation.statement}
+        script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
+        production={$isProduction}
         oncancel={() => cancelPendingExecution(activeConsole.id)}
         onconfirm={() => confirmPendingExecution(activeConsole.id)}
       />
@@ -1262,7 +1506,11 @@
       onkeydown={onSplitterKeydown}
     ></div>
     {/if}
-    <div class="result-region" bind:this={resultRegion}>
+    <div
+      class="result-region"
+      bind:this={resultRegion}
+      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') }}
+    >
       <ResultPane
         bind:this={resultPane}
         isExecuting={execution.isExecuting}
@@ -1289,6 +1537,8 @@
         onreload={() => void reloadResult(viewKey)}
         outputLog={activeConsole ? ($executionLog[activeConsole.id] ?? []) : []}
         consoleRunning={liveExecution.isExecuting}
+        oncancelquery={() => activeConsole && cancelExecution(activeConsole.id)}
+        cancellingQuery={!!activeConsole && cancelling[activeConsole.id] === true}
         tabs={resultTabs}
         activeTab={selectedTab}
         onselecttab={(tab) => activeConsole && selectTab(activeConsole.id, tab)}
@@ -1305,16 +1555,22 @@
         onsubmit={() => void submitChanges(viewKey)}
         onnotice={notifyError}
         filters={activeConsole?.table ? tableFiltersBar : undefined}
+        tableView={!!activeConsole?.table}
+        filterCount={activeConsole?.table?.where ? activeConsole.table.conditions.filter((condition) => condition.column).length : 0}
+        filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
       />
       {#snippet tableFiltersBar()}
-        {#if activeConsole?.table}
+        {#if activeConsole?.table && activeProfile}
           {@const consoleId = activeConsole.id}
+          {@const table = activeConsole.table}
           <TableFilters
-            where={activeConsole.table.where}
-            orderBy={activeConsole.table.orderBy}
+            filters={table}
+            columns={tableFilterColumns}
+            driver={activeProfile.driver}
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
-            onapply={(where, orderBy) => applyTableFilters(consoleId, where, orderBy)}
+            onapply={(filters) => applyTableFilters(consoleId, filters)}
+            onclose={() => resultPane?.closeFilters()}
           />
         {/if}
       {/snippet}
@@ -1382,7 +1638,8 @@
     applying={applyingChanges}
     error={applyError}
     dismiss={current.dismiss}
-    onapply={() => void submitChanges(current.consoleId)}
+    production={$isProduction}
+    onapply={() => void submitChanges(current.consoleId, true)}
     onclose={() => {
       preview = null;
       applyError = null;
@@ -1405,27 +1662,18 @@
   </div>
 {/if}
 
-<dialog
-  class="close-console-dialog"
-  tabindex="-1"
-  bind:this={closeDialog}
-  oncancel={(event) => {
-    event.preventDefault();
-    cancelClose();
-  }}
-  onclose={() => (pendingCloseId = null)}
->
-  <div class="dialog-icon" aria-hidden="true">
-    <TriangleAlert size={24} strokeWidth={2} />
-  </div>
-  <h2>{$t("workspace.close.title", { title: closeDialogTitle })}</h2>
-  <p class="dialog-message">{$t("workspace.close.message")}</p>
-  <div class="dialog-actions">
-    <button type="button" class="secondary-action" onclick={cancelClose}>{$t("common.cancel")}</button>
-    <button type="button" class="danger-action" onclick={discardAndClose}>{$t("common.discard")}</button>
-    <button type="button" class="primary-action" onclick={() => void saveAndClose()}>{$t("common.save")}</button>
-  </div>
-</dialog>
+{#if pendingCloseId}
+  <ConfirmDialog
+    tone="warning"
+    title={$t("workspace.close.title", { title: closeDialogTitle })}
+    message={$t("workspace.close.message")}
+    confirmLabel={$t("common.save")}
+    alternateLabel={$t("common.discard")}
+    onconfirm={() => void saveAndClose()}
+    onalternate={discardAndClose}
+    oncancel={cancelClose}
+  />
+{/if}
 
 <style>
   .workspace {
@@ -1486,18 +1734,23 @@
     justify-content: center;
     min-height: 1.75rem;
     box-sizing: border-box;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     font-size: 0.75rem;
     cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
   }
 
   /* Pestaña tomada al arrastrar (reorder.ts): por encima de las demas, con
      una sombra sutil. */
   .console-tab:global(.reorder-dragging) {
+    /* Sin fondo propio, al arrastrarla se veria vacia. */
+    background: var(--surface-elevated);
     position: relative;
     z-index: 2;
     box-shadow: var(--shadow-elevated);
@@ -1510,17 +1763,17 @@
     padding: 0 var(--space-2) 0 var(--space-3);
   }
 
-  /* Antes el hover repetia el fondo de reposo y no se notaba en ningun
-     tema: ahora aclara/oscurece apenas hacia el color del texto. */
+  /* Mismo resaltado que las pestañas del resultado (ResultPane): sin
+     bordes; en reposo solo texto e icono, la activa con un relleno tenue y
+     su icono en acento. */
   .console-tab:hover,
   .new-console:hover {
-    background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary));
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     color: var(--text-primary);
   }
 
   .console-tab.active {
-    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated));
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
     color: var(--text-primary);
   }
 
@@ -1753,118 +2006,6 @@
     overflow: hidden;
   }
 
-  /* Todo centrado: icono, titulo y mensaje apilados, y los tres botones
-     del mismo ancho en una fila. Colores planos, sin degradados. */
-  .close-console-dialog {
-    width: min(25rem, calc(100vw - 2rem));
-    padding: 2rem 1.75rem 1.75rem;
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    text-align: center;
-    outline: none;
-  }
-
-  .close-console-dialog[open] {
-    animation: dialog-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  @keyframes dialog-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px) scale(0.97);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .close-console-dialog[open] {
-      animation: none;
-    }
-  }
-
-  .dialog-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.5rem;
-    height: 3.5rem;
-    margin: 0 auto 1.25rem;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--warning) 14%, transparent);
-    color: var(--warning);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    letter-spacing: var(--tracking-heading);
-    overflow-wrap: anywhere;
-  }
-
-  .dialog-message {
-    margin: var(--space-2) 0 1.75rem;
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    line-height: 1.5;
-  }
-
-  .dialog-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.625rem;
-  }
-
-  .dialog-actions button {
-    /* Sin borde en ninguno: con borde, el relleno de un boton "neutro"
-       arranca 1px mas adentro que el de los de color y se ve mas bajo
-       aunque midan lo mismo. */
-    height: 2.5rem;
-    padding: 0 var(--space-3);
-    border: 0;
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      border-color 120ms ease;
-  }
-
-  .close-console-dialog .secondary-action {
-    background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-elevated));
-    color: var(--text-primary);
-  }
-
-  .close-console-dialog .secondary-action:hover {
-    background: color-mix(in srgb, var(--text-primary) 14%, var(--surface-elevated));
-  }
-
-  /* Rojo saturado propio: --danger en los temas oscuros es un rosado
-     pensado para texto y como relleno se ve lavado. */
-  .danger-action {
-    background: var(--danger-solid);
-    color: #fff;
-  }
-
-  .danger-action:hover {
-    background: var(--danger-solid-hover);
-  }
-
-  .primary-action {
-    background: var(--accent);
-    color: var(--text-on-accent);
-  }
-
-  .primary-action:hover {
-    background: var(--accent-hover);
-  }
-
   .notice {
     position: fixed;
     right: var(--space-4);
@@ -1918,10 +2059,5 @@
   .notice-close:hover {
     background: var(--surface);
     color: var(--text-primary);
-  }
-
-  .dialog-actions button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
   }
 </style>

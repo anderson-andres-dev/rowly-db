@@ -1,8 +1,10 @@
+import backend from "./backend";
 import common from "./common";
 import connections from "./connections";
 import editor from "./editor";
 import explorer from "./explorer";
 import grid from "./grid";
+import history from "./history";
 import results from "./results";
 import settings from "./settings";
 import shell from "./shell";
@@ -12,11 +14,13 @@ import workspace from "./workspace";
 
 // Un archivo por área de la interfaz; la clave completa es "área.clave".
 export const messages = {
+  backend,
   common,
   connections,
   editor,
   explorer,
   grid,
+  history,
   results,
   settings,
   shell,

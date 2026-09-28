@@ -126,7 +126,7 @@ pub fn is_read_only_query(sql: &str, dialect: Dialect) -> bool {
     }
 }
 
-fn query_is_read_only(query: &Query) -> bool {
+pub(crate) fn query_is_read_only(query: &Query) -> bool {
     let ctes_read_only = query.with.as_ref().is_none_or(|with| {
         with.cte_tables
             .iter()

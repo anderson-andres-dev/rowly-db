@@ -12,8 +12,8 @@
 use crate::version::Capabilities;
 use khipu_driver_core::assembly::{IndexColumnRow, KeyColumnRow, TableSet, TriggerEventRow};
 use khipu_driver_core::{
-    CheckInfo, ColumnInfo, DriverError, ForeignKeyInfo, RelationKind, RoutineInfo, RoutineKind,
-    SchemaObjects, SequenceInfo,
+    CheckInfo, ColumnInfo, DriverError, ForeignKeyInfo, Message, ParameterMode, RelationKind,
+    RoutineInfo, RoutineKind, RoutineParameter, SchemaObjects, SequenceInfo,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
@@ -39,9 +39,11 @@ async fn fetch(pool: &PgPool, sql: &str, schema: &str) -> Result<Vec<PgRow>, Dri
 
 /// Runs a secondary category: on failure the category stays empty and a
 /// note goes to `warnings` (see `SchemaObjects`).
-fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<String>) -> T {
+/// `what` is the category ("keys", "indexes"...): the frontend translates
+/// `introspect.<what>`.
+fn soft<T: Default>(result: Result<T, DriverError>, what: &str, warnings: &mut Vec<Message>) -> T {
     result.unwrap_or_else(|error| {
-        warnings.push(format!("No se pudieron leer {what}: {error}"));
+        warnings.push(Message::key(format!("introspect.{what}")).with("error", error));
         T::default()
     })
 }
@@ -119,7 +121,7 @@ pub async fn introspect_schema(
 
     let constraint_rows: Vec<ConstraintColumnRow> = soft(
         map_rows(constraints, constraint_column_row),
-        "las claves y checks",
+        "keysAndChecks",
         warnings,
     );
     let (key_rows, checks) = split_constraints(constraint_rows);
@@ -130,25 +132,21 @@ pub async fn introspect_schema(
 
     let foreign_key_rows = soft(
         map_rows(foreign_keys, foreign_key_row),
-        "las claves foráneas",
+        "foreignKeys",
         warnings,
     );
     for (table, foreign_key) in foreign_key_rows {
         set.add_foreign_key(&table, foreign_key);
     }
 
-    let index_rows = soft(map_rows(indexes, index_rows), "los índices", warnings);
+    let index_rows = soft(map_rows(indexes, index_rows), "indexes", warnings);
     set.add_index_columns(index_rows.into_iter().flatten());
 
-    let trigger_rows = soft(map_rows(triggers, trigger_rows), "los triggers", warnings);
+    let trigger_rows = soft(map_rows(triggers, trigger_rows), "triggers", warnings);
     set.add_trigger_events(trigger_rows.into_iter().flatten());
 
-    objects.routines = soft(map_rows(routines, routine_row), "las rutinas", warnings);
-    objects.sequences = soft(
-        map_rows(sequences, sequence_row),
-        "las secuencias",
-        warnings,
-    );
+    objects.routines = soft(map_rows(routines, routine_row), "routines", warnings);
+    objects.sequences = soft(map_rows(sequences, sequence_row), "sequences", warnings);
 
     objects.tables = set.into_tables();
     Ok(objects)
@@ -407,7 +405,12 @@ fn routines_sql(capabilities: Capabilities) -> String {
     };
     format!(
         "SELECT p.proname::text, {kind}, pg_get_function_arguments(p.oid), \
-                pg_get_function_result(p.oid) \
+                pg_get_function_result(p.oid), \
+                p.proargnames::text[], p.proargmodes::text[], \
+                ARRAY(SELECT format_type(t, NULL) \
+                      FROM unnest(COALESCE(p.proallargtypes, p.proargtypes::oid[])) \
+                           WITH ORDINALITY AS a(t, n) ORDER BY n)::text[], \
+                p.pronargdefaults::int4 \
          FROM pg_proc p \
          JOIN pg_namespace n ON n.oid = p.pronamespace \
          WHERE n.nspname = $1 AND {filter} \
@@ -432,7 +435,64 @@ fn routine_row(row: &PgRow) -> Result<RoutineInfo, DriverError> {
             RoutineKind::Function => get(row, 3)?,
             RoutineKind::Procedure => None,
         },
+        parameters: build_parameters(
+            get::<Option<Vec<String>>>(row, 4)?,
+            get::<Option<Vec<String>>>(row, 5)?,
+            get::<Option<Vec<String>>>(row, 6)?.unwrap_or_default(),
+            get::<Option<i32>>(row, 7)?.unwrap_or(0),
+        ),
     })
+}
+
+/// The parameters of a `pg_proc` row: `proargnames` and `proargmodes` are
+/// NULL when every parameter is an unnamed IN; `TABLE` ones (`RETURNS
+/// TABLE`) are result columns, not parameters; the defaults
+/// (`pronargdefaults`) are the last N input parameters.
+fn build_parameters(
+    names: Option<Vec<String>>,
+    modes: Option<Vec<String>>,
+    types: Vec<String>,
+    defaults: i32,
+) -> Vec<RoutineParameter> {
+    let mut parameters: Vec<RoutineParameter> = types
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, data_type)| {
+            let mode = match modes
+                .as_ref()
+                .and_then(|modes| modes.get(index))
+                .map(String::as_str)
+            {
+                Some("o") => ParameterMode::Out,
+                Some("b") => ParameterMode::InOut,
+                Some("v") => ParameterMode::Variadic,
+                Some("t") => return None,
+                _ => ParameterMode::In,
+            };
+            let name = names
+                .as_ref()
+                .and_then(|names| names.get(index))
+                .filter(|name| !name.is_empty())
+                .cloned();
+            Some(RoutineParameter {
+                name,
+                mode,
+                data_type,
+                has_default: false,
+            })
+        })
+        .collect();
+    let mut left = usize::try_from(defaults).unwrap_or(0);
+    for parameter in parameters.iter_mut().rev() {
+        if left == 0 {
+            break;
+        }
+        if parameter.mode != ParameterMode::Out {
+            parameter.has_default = true;
+            left -= 1;
+        }
+    }
+    parameters
 }
 
 const SEQUENCES_SQL: &str = "\
@@ -460,6 +520,52 @@ fn sequence_row(row: &PgRow) -> Result<SequenceInfo, DriverError> {
 
 #[cfg(test)]
 mod tests {
+
+    mod parameters {
+        use super::super::build_parameters;
+        use khipu_driver_core::ParameterMode;
+
+        fn texts(items: &[&str]) -> Option<Vec<String>> {
+            Some(items.iter().map(|item| item.to_string()).collect())
+        }
+
+        #[test]
+        fn todos_in_sin_nombres_ni_modos() {
+            let found = build_parameters(None, None, vec!["integer".into(), "text".into()], 0);
+            assert_eq!(found.len(), 2);
+            assert!(
+                found
+                    .iter()
+                    .all(|p| p.mode == ParameterMode::In && p.name.is_none())
+            );
+        }
+
+        #[test]
+        fn modos_nombres_defaults_y_table() {
+            let found = build_parameters(
+                texts(&["p_id", "", "p_total", "p_tags", "col"]),
+                texts(&["i", "i", "o", "v", "t"]),
+                vec![
+                    "integer".into(),
+                    "text".into(),
+                    "numeric".into(),
+                    "text[]".into(),
+                    "int".into(),
+                ],
+                1,
+            );
+            // La columna de RETURNS TABLE no es un parametro.
+            assert_eq!(found.len(), 4);
+            assert_eq!(found[0].name.as_deref(), Some("p_id"));
+            assert_eq!(found[1].name, None);
+            assert_eq!(found[2].mode, ParameterMode::Out);
+            assert_eq!(found[3].mode, ParameterMode::Variadic);
+            // El default es el del ultimo de entrada (el VARIADIC), no el OUT.
+            assert!(found[3].has_default);
+            assert!(!found[2].has_default && !found[1].has_default);
+        }
+    }
+
     use super::*;
 
     #[test]
