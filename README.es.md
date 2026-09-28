@@ -1,23 +1,18 @@
 <div align="center">
+<br>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/rowly-logo-dark.svg">
-  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="360">
+  <img src="docs/assets/brand/rowly-logo.svg" alt="Rowly DB" width="300">
 </picture>
 
-<h3>Cliente SQL libre y de código abierto</h3>
+<p>Cliente SQL libre y de código abierto</p>
 
 <p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><strong>Descargar</strong></a>
-  &nbsp;·&nbsp;
-  <a href="#instalación">Instalación</a>
-  &nbsp;·&nbsp;
-  <a href="README.md">English</a>
-</p>
-
-<p>
-  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Última versión" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=flat-square&amp;label=versión&amp;labelColor=283640&amp;color=00AFAF"></a>
-  <img alt="Windows, macOS y Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=flat-square">
+  <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Descargar" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=descargar&amp;labelColor=00AFAF&amp;color=283640"></a>
+  <img alt="Windows, macOS y Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=for-the-badge">
+  <br>
+  <sub><a href="README.md">English</a> &nbsp;·&nbsp; <b>Español</b></sub>
 </p>
 
 </div>
