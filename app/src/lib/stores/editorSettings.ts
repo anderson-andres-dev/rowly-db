@@ -6,10 +6,16 @@ export const DEFAULT_FORMATTER_LINE_WIDTH = 60;
 export const MIN_FORMATTER_LINE_WIDTH = 20;
 export const MAX_FORMATTER_LINE_WIDTH = 240;
 
+// Alias al elegir una tabla en el autocompletado: siempre, solo cuando la
+// consulta ya tiene otra tabla, o nunca.
+export type TableAliasMode = "always" | "multiple" | "never";
+const TABLE_ALIAS_MODES: readonly TableAliasMode[] = ["always", "multiple", "never"];
+
 export interface EditorSettings {
   formatterLineWidth: number;
   autoUppercaseKeywords: boolean;
   tabNavigatesCompletion: boolean;
+  tableAliases: TableAliasMode;
 }
 
 function normalizeLineWidth(value: unknown): number {
@@ -17,8 +23,17 @@ function normalizeLineWidth(value: unknown): number {
   return Math.min(MAX_FORMATTER_LINE_WIDTH, Math.max(MIN_FORMATTER_LINE_WIDTH, Math.round(value)));
 }
 
+function normalizeTableAliases(value: unknown): TableAliasMode {
+  return TABLE_ALIAS_MODES.includes(value as TableAliasMode) ? (value as TableAliasMode) : "always";
+}
+
 function defaultEditorSettings(): EditorSettings {
-  return { formatterLineWidth: DEFAULT_FORMATTER_LINE_WIDTH, autoUppercaseKeywords: true, tabNavigatesCompletion: true };
+  return {
+    formatterLineWidth: DEFAULT_FORMATTER_LINE_WIDTH,
+    autoUppercaseKeywords: true,
+    tabNavigatesCompletion: true,
+    tableAliases: "always",
+  };
 }
 
 function loadEditorSettings(): EditorSettings {
@@ -32,6 +47,7 @@ function loadEditorSettings(): EditorSettings {
       formatterLineWidth: normalizeLineWidth(parsed.formatterLineWidth),
       autoUppercaseKeywords: parsed.autoUppercaseKeywords !== false,
       tabNavigatesCompletion: parsed.tabNavigatesCompletion !== false,
+      tableAliases: normalizeTableAliases(parsed.tableAliases),
     };
   } catch {
     return defaultEditorSettings();
@@ -49,6 +65,7 @@ if (browser) {
           formatterLineWidth: normalizeLineWidth(settings.formatterLineWidth),
           autoUppercaseKeywords: settings.autoUppercaseKeywords,
           tabNavigatesCompletion: settings.tabNavigatesCompletion,
+          tableAliases: settings.tableAliases,
         }),
       );
     } catch {
@@ -70,4 +87,8 @@ export function setAutoUppercaseKeywords(enabled: boolean): void {
 
 export function setTabNavigatesCompletion(enabled: boolean): void {
   editorSettings.update((settings) => ({ ...settings, tabNavigatesCompletion: enabled }));
+}
+
+export function setTableAliases(mode: TableAliasMode): void {
+  editorSettings.update((settings) => ({ ...settings, tableAliases: normalizeTableAliases(mode) }));
 }

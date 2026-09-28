@@ -19,6 +19,8 @@
     setAutoUppercaseKeywords,
     setFormatterLineWidth,
     setTabNavigatesCompletion,
+    setTableAliases,
+    type TableAliasMode,
   } from "$lib/stores/editorSettings";
 
   // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
@@ -96,6 +98,12 @@
   );
 
   const languageOptions = LOCALES.map((option) => ({ value: option, label: LOCALE_NAMES[option], lang: option }));
+  const tableAliasOptions = $derived(
+    (["always", "multiple", "never"] as const).map((mode) => ({
+      value: mode,
+      label: $t(`settings.editor.tableAliases.${mode}`),
+    })),
+  );
 
   // --- Atajos -------------------------------------------------------------
   // Agrupados como en el registro de comandos (lib/commands.ts). Dos
@@ -387,6 +395,18 @@
               >
                 <span></span>
               </button>
+            </div>
+            <div class="set-row">
+              <div class="set-text">
+                <span class="set-label">{$t("settings.editor.tableAliases")}</span>
+                <span class="set-desc">{$t("settings.editor.tableAliases.description")}</span>
+              </div>
+              <Select
+                value={$editorSettings.tableAliases}
+                options={tableAliasOptions}
+                label={$t("settings.editor.tableAliases")}
+                onchange={(value) => setTableAliases(value as TableAliasMode)}
+              />
             </div>
           </div>
         {:else if activeSection === "shortcuts"}

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   executionMarkerField,
   executionPart,
+  executionTimePositions,
   formatExecutionTime,
   markerFromResult,
   setExecutionMarker,
@@ -97,5 +98,46 @@ describe("scripts enormes", () => {
     state = state.update({ changes: { from: 0, insert: "-- x\n" } }).state;
     expect(executionPart(state, 1)).toEqual({ from: 15, to: 24, status: "success", executionTimeMs: 1, message: undefined });
     expect(executionPart(state, count - 1)?.status).toBe("success");
+  });
+});
+
+describe("tiempo de ejecucion al escribir", () => {
+  // La parte del marcador como la pinta el editor, con su posicion de ahora.
+  function positions(state: EditorState, focused: boolean) {
+    const marker = state.field(executionMarkerField)!;
+    return executionTimePositions(state, [marker], focused);
+  }
+
+  it("va al final de la linea donde termina la sentencia", () => {
+    const state = stateWithMarker("SELECT *\nFROM users;", 0, 20);
+    expect(positions(state, false)).toEqual([{ pos: 20, text: "411 ms" }]);
+  });
+
+  it("al seguir escribiendo al final no queda entre la sentencia y lo nuevo", () => {
+    // Se ejecuto "SELECT * FRO" y despues se escribe la M.
+    let state = stateWithMarker("SELECT * FRO", 0, 12);
+    state = state.update({ changes: { from: 12, insert: "M" }, selection: { anchor: 13 } }).state;
+    // Sin foco, el tiempo va despues de la M, no antes.
+    expect(positions(state, false)).toEqual([{ pos: 13, text: "411 ms" }]);
+  });
+
+  it("se oculta mientras el cursor esta en esa linea", () => {
+    let state = stateWithMarker("SELECT * FROM users;", 0, 20);
+    state = state.update({ selection: { anchor: 8 } }).state;
+    expect(positions(state, true)).toEqual([]);
+  });
+
+  it("vuelve cuando el cursor pasa a otra linea", () => {
+    let state = stateWithMarker("SELECT * FROM users;\n", 0, 20);
+    state = state.update({ selection: { anchor: 21 } }).state;
+    expect(positions(state, true)).toEqual([{ pos: 20, text: "411 ms" }]);
+  });
+
+  it("borrar la linea y volver a escribirla no deja el tiempo pegado al cursor", () => {
+    let state = stateWithMarker("SELECT 1;\nSELECT * FROM users;", 10, 30);
+    state = state.update({ changes: { from: 10, to: 30, insert: "" } }).state;
+    expect(state.field(executionMarkerField)).toBeNull();
+    state = state.update({ changes: { from: 10, insert: "SELECT * FRO" }, selection: { anchor: 22 } }).state;
+    expect(state.field(executionMarkerField)).toBeNull();
   });
 });

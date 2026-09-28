@@ -5,8 +5,10 @@
 //
 // Se corta en cada ";" que no este dentro de comillas ('...', "...",
 // `...`), de un comentario (-- ..., /* ... */) ni de un bloque $tag$ de
-// PostgreSQL. Un tramo que solo tiene espacios o comentarios no es una
-// sentencia.
+// PostgreSQL. Tambien en una linea en blanco, como en DataGrip o DBeaver,
+// salvo dentro de parentesis o cuando la linea anterior termina en algo que
+// pide seguir (una coma, un parentesis que abre, un operador). Un tramo que
+// solo tiene espacios o comentarios no es una sentencia.
 //
 // En el editor no se usa sobre el texto entero: sqlStatementIndex.ts lleva
 // las sentencias del documento al dia por partes, con este mismo escaner.
@@ -19,7 +21,9 @@ export interface StatementRange {
 export interface ScannedStatement extends StatementRange {
   // Termino en ";": justo despues el escaner esta fuera de todo (comillas,
   // comentarios), asi que se puede volver a escanear desde ahi sin mirar
-  // atras (sqlStatementIndex.ts).
+  // atras (sqlStatementIndex.ts). Una sentencia cortada por una linea en
+  // blanco no lo es: si esa linea se borra, se une con la siguiente, y eso
+  // solo se ve escaneando desde antes.
   terminated: boolean;
 }
 
@@ -63,6 +67,9 @@ export interface ScanState {
   // Fin del ultimo caracter que no es espacio desde el ultimo ";" (absoluto):
   // el fin de una sentencia sin ";" final.
   lastNonSpace: number;
+  // Parentesis abiertos en la sentencia en curso: una linea en blanco
+  // adentro no la corta.
+  depth: number;
 }
 
 const CODE = 0;
@@ -78,6 +85,9 @@ const STAR = 42;
 const SINGLE_QUOTE = 39;
 const BACKSLASH = 92;
 const DOLLAR = 36;
+const OPEN_PAREN = 40;
+const CLOSE_PAREN = 41;
+const COMMA = 44;
 
 // Cuanto puede mirar el escaner mas alla del corte de un trozo: "--", "/*",
 // "''" y los $tag$ se leen enteros aunque crucen el corte.
@@ -87,6 +97,12 @@ const HASH = 35;
 const CLOSE_BRACKET = 93;
 
 const DOLLAR_TAG = /\$[A-Za-z_]*\$/y;
+
+
+// Lo que, al final de una linea, dice que la sentencia sigue abajo aunque
+// haya una linea en blanco en medio.
+// El "*" no: casi siempre es "todas las columnas" (SELECT *).
+const CONTINUES = new Set([COMMA, OPEN_PAREN, 43, DASH, SLASH, 61, 60, 62, 124, 38, 37]);
 
 // Las reglas de un motor, ya compiladas: lo que puede abrir o cerrar algo en
 // codigo (una regex para saltar rapido lo demas) y, por cada comilla, la
@@ -138,7 +154,7 @@ function rulesFor(lexical: SqlLexical): ScanRules {
     closer.set(close, new RegExp(`[${char}${escape}]`, "g"));
   }
   const opens = [...closeOf.keys()].map((code) => escapeClass(String.fromCharCode(code))).join("");
-  const special = new RegExp(`[;\\-/${opens}${lexical.dollarQuotes ? "$" : ""}${lexical.hashComments ? "#" : ""}]`, "g");
+  const special = new RegExp(`[;()\\-/${opens}${lexical.dollarQuotes ? "$" : ""}${lexical.hashComments ? "#" : ""}]`, "g");
   const rules = {
     special,
     closeOf,
@@ -169,7 +185,22 @@ function isSpace(code: number): boolean {
 }
 
 export function initialScanState(): ScanState {
-  return { mode: CODE, quote: 0, tag: "", escaping: false, codeStart: -1, lastNonSpace: -1 };
+  return { mode: CODE, quote: 0, tag: "", escaping: false, codeStart: -1, lastNonSpace: -1, depth: 0 };
+}
+
+// El salto de linea que abre una linea en blanco (con espacios o no, y con
+// \r\n) dentro de text[from, to), o -1. Solo mira ese tramo.
+function blankLineIn(text: string, from: number, to: number): number {
+  for (let newline = text.indexOf("\n", from); newline !== -1 && newline < to; newline = text.indexOf("\n", newline + 1)) {
+    let next = newline + 1;
+    while (next < text.length && next < to) {
+      const code = text.charCodeAt(next);
+      if (code === 10) return newline;
+      if (code !== 32 && (code < 9 || code > 13)) break;
+      next += 1;
+    }
+  }
+  return -1;
 }
 
 // Ultimo caracter que no es espacio en text[from, to), absoluto; o `fallback`.
@@ -201,7 +232,7 @@ export function scanChunk(
   const length = text.length;
   // En variables locales: leer y escribir `state` en cada caracter es lo
   // que mas cuesta en un documento de 30 MB.
-  let { mode, codeStart, lastNonSpace } = state;
+  let { mode, codeStart, lastNonSpace, depth } = state;
   let index = start;
 
   scan: while (index < limit) {
@@ -286,14 +317,26 @@ export function scanChunk(
       SPECIAL.lastIndex = index;
       const found = SPECIAL.exec(text);
       const at = found === null || found.index >= limit ? limit : found.index;
-      if (at > index) {
+      while (at > index) {
+        // Una linea en blanco en el tramo parte en dos lo que hay a cada lado.
+        const blank = depth === 0 ? blankLineIn(text, index, at) : -1;
+        const cut = blank === -1 ? at : blank;
         if (codeStart < 0) {
           let first = index;
-          while (first < at && isSpace(text.charCodeAt(first))) first += 1;
-          if (first < at) codeStart = base + first;
+          while (first < cut && isSpace(text.charCodeAt(first))) first += 1;
+          if (first < cut) codeStart = base + first;
         }
-        lastNonSpace = trimmedEnd(text, index, at, base, lastNonSpace);
-        index = at;
+        lastNonSpace = trimmedEnd(text, index, cut, base, lastNonSpace);
+        index = cut;
+        if (cut === at) break;
+        const last = lastNonSpace - base - 1;
+        const continues = last >= 0 && CONTINUES.has(text.charCodeAt(last));
+        if (codeStart >= 0 && depth === 0 && !continues) {
+          out.push({ from: codeStart, to: lastNonSpace, terminated: false });
+          codeStart = -1;
+          lastNonSpace = -1;
+        }
+        index = cut + 1;
       }
       if (index >= limit) break;
 
@@ -302,6 +345,14 @@ export function scanChunk(
         if (codeStart >= 0) out.push({ from: codeStart, to: base + index + 1, terminated: true });
         codeStart = -1;
         lastNonSpace = -1;
+        depth = 0;
+        index += 1;
+        continue;
+      }
+      if (code === OPEN_PAREN || code === CLOSE_PAREN) {
+        depth = code === OPEN_PAREN ? depth + 1 : Math.max(0, depth - 1);
+        if (codeStart < 0) codeStart = base + index;
+        lastNonSpace = base + index + 1;
         index += 1;
         continue;
       }
@@ -354,11 +405,13 @@ export function scanChunk(
     state.mode = mode;
     state.codeStart = -1;
     state.lastNonSpace = -1;
+    state.depth = 0;
     return length;
   }
   state.mode = mode;
   state.codeStart = codeStart;
   state.lastNonSpace = lastNonSpace;
+  state.depth = depth;
   return index;
 }
 
