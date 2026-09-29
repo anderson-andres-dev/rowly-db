@@ -422,7 +422,14 @@ if (browser) {
     persistTimer ??= setTimeout(writeConsoles, PERSIST_DELAY_MS);
   });
   if (pendingPersisted.size > 0) void hydrateLargeTexts();
-  // Al cerrar, lo que esperaba su retraso sale ya.
+  // Al cerrar, lo que esperaba su retraso sale ya. Tambien al ocultarse la
+  // ventana (minimizar, cambiar de escritorio): si el webview se destruye
+  // sin pagehide, lo ultimo ya quedo guardado.
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden") return;
+    flushConsoleTexts();
+    flushConsolePersistence();
+  });
   globalThis.addEventListener?.("pagehide", () => {
     flushConsoleTexts();
     flushConsolePersistence();

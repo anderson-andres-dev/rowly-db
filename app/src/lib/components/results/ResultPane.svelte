@@ -192,7 +192,7 @@
 
   // Lo escrito con varias celdas seleccionadas: en todas, un solo paso de
   // deshacer (que vuelve hasta el rango entero).
-  function fillSelectedCells(ranges: RowRange[], value: CellValue) {
+  function fillSelectedCells(ranges: RowRange[], value: CellValue, hidden: ReadonlySet<number> | null) {
     if (!editInfo || ranges.length === 0) return;
     const at = {
       minRow: Math.min(...ranges.map((range) => range.minRow)),
@@ -200,7 +200,7 @@
       minCol: Math.min(...ranges.map((range) => range.minCol)),
       maxCol: Math.max(...ranges.map((range) => range.maxCol)),
     };
-    onedits(fillCells(edits, editInfo, rows, ranges, value), at);
+    onedits(fillCells(edits, editInfo, rows, ranges, value, hidden), at);
   }
 
   function addNewRow() {

@@ -6,11 +6,23 @@
   // monta su propio editor, y con la cache adentro volver a una pestaña
   // reanalizaba el documento entero en el backend. Otro catalogo u otro
   // motor, cache nueva.
-  let sharedAnalysis: { tables: unknown; engine: ModuleSqlProfile; cache: Map<string, unknown> } | null = null;
+  let sharedAnalysis: {
+    profileId: string | null;
+    tables: unknown;
+    engine: ModuleSqlProfile;
+    cache: Map<string, unknown>;
+  } | null = null;
 
-  function analysisCacheFor<Raw>(tables: unknown, engine: ModuleSqlProfile): Map<string, Raw> {
-    if (!sharedAnalysis || sharedAnalysis.tables !== tables || sharedAnalysis.engine !== engine) {
-      sharedAnalysis = { tables, engine, cache: new Map() };
+  // Por conexion tambien: dos conexiones del mismo motor con el catalogo
+  // todavia vacio no comparten resultados.
+  function analysisCacheFor<Raw>(profileId: string | null, tables: unknown, engine: ModuleSqlProfile): Map<string, Raw> {
+    if (
+      !sharedAnalysis ||
+      sharedAnalysis.profileId !== profileId ||
+      sharedAnalysis.tables !== tables ||
+      sharedAnalysis.engine !== engine
+    ) {
+      sharedAnalysis = { profileId, tables, engine, cache: new Map() };
     }
     return sharedAnalysis.cache as Map<string, Raw>;
   }
@@ -504,6 +516,7 @@
   analysis.markAllDirty();
   let analyzedTables: unknown = null;
   let analyzedEngine: SqlProfile | null = null;
+  let analyzedProfile: string | null | undefined = undefined;
 
   // --- Ventana de detalle ------------------------------------------------
   let popup = $state<{
@@ -835,10 +848,12 @@
     reconfigureCompletion();
     // Otro catalogo o dialecto: los nombres se vuelven a revisar (el efecto
     // tambien corre con otros cambios de la conexion; ahi no hace falta).
-    if (tables === analyzedTables && engine === analyzedEngine) return;
+    const analyzedFor = $connection.profileId ?? null;
+    if (tables === analyzedTables && engine === analyzedEngine && analyzedFor === analyzedProfile) return;
     analyzedTables = tables;
     analyzedEngine = engine;
-    analysis.useCache(analysisCacheFor(tables, engine));
+    analyzedProfile = analyzedFor;
+    analysis.useCache(analysisCacheFor(analyzedFor, tables, engine));
     analysis.markAllDirty();
     analysis.schedule();
   });

@@ -49,7 +49,8 @@
   import SchemaTree from "$lib/components/SchemaTree.svelte";
   import FileTree from "$lib/components/FileTree.svelte";
   import { installDialogMotion } from "$lib/dialogMotion";
-  import { openTableConsole } from "$lib/stores/queryConsoles";
+  import { flushConsolePersistence, flushConsoleTexts, openTableConsole } from "$lib/stores/queryConsoles";
+  import { flushQueryHistory } from "$lib/stores/queryHistory";
   import { openSqlFileWithDialog, pickSqlFolder } from "$lib/sqlFiles";
   import { MIN_FILE_PANEL_HEIGHT, setFilePanelHeight, setSqlFolder, sqlFolders } from "$lib/stores/sqlFolders";
   import { notifyError } from "$lib/stores/notifications";
@@ -160,6 +161,15 @@
     }
   }
   const appWindow = getCurrentWindow();
+
+  // Lo que se guarda con retraso (consolas, textos grandes, historial) sale
+  // antes de cerrar: no se depende de que el webview dispare pagehide.
+  function closeWindow() {
+    flushConsoleTexts();
+    flushConsolePersistence();
+    flushQueryHistory();
+    void appWindow.close();
+  }
 
   // "Recargar tablas" es, en la practica, volver a conectar al mismo
   // perfil activo: no hay pool vivo que reintrospectar (ver comentario de
@@ -418,7 +428,7 @@
         type="button"
         use:tooltip={$t("common.close")}
         aria-label={$t("common.close")}
-        onclick={() => appWindow.close()}
+        onclick={closeWindow}
       >
         <X size={15} aria-hidden="true" />
       </button>

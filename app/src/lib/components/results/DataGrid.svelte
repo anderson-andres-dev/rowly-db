@@ -64,8 +64,9 @@
     editBlockedReason?: string | null;
     edits?: PendingEdits;
     oncommitcell?: (row: number, col: number, value: CellValue) => void;
-    // Editar con varias celdas seleccionadas: el valor va a todas.
-    onfillcells?: (ranges: RowRange[], value: CellValue) => void;
+    // Editar con varias celdas seleccionadas: el valor va a todas (menos a
+    // las filas `hidden`, ocultas por "Filtrar filas").
+    onfillcells?: (ranges: RowRange[], value: CellValue, hidden: ReadonlySet<number> | null) => void;
     oneditblocked?: (reason: string) => void;
     onselectionchange?: (range: RowRange | null) => void;
     // Ctrl+C: formato para varias celdas (una sola se copia como su valor).
@@ -808,6 +809,19 @@
       requestEdit(row, col);
       return;
     }
+    // Tab / Shift+Tab: la celda siguiente de la fila y, al final, la primera
+    // de la fila siguiente (saltando las ocultas). A mano, no el Tab del
+    // navegador: con mas de GROUP_COLS columnas cada fila esta repartida en
+    // varias tablas (mosaicos) y el orden del DOM no es el de la fila. En el
+    // borde del grid, el Tab sale de el como siempre.
+    if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const target = neighborCell(row, col, event.shiftKey ? -1 : 1);
+      if (!target) return;
+      event.preventDefault();
+      selectCell(target.row, target.col);
+      void focusCellAt(target.row, target.col);
+      return;
+    }
     // Escribir sobre una celda empieza a editarla con esa tecla, como en una
     // planilla (y en todas las seleccionadas). El espacio sigue siendo
     // seleccionar.
@@ -819,6 +833,27 @@
     if (event.key !== " ") return;
     event.preventDefault();
     selectCell(row, col, event.shiftKey);
+  }
+
+  function neighborCell(row: number, col: number, step: -1 | 1): { row: number; col: number } | null {
+    let nextRow = row;
+    let nextCol = col + step;
+    for (;;) {
+      if (nextCol >= 0 && nextCol < columns.length) return { row: nextRow, col: nextCol };
+      nextRow += step;
+      nextCol = step === 1 ? 0 : columns.length - 1;
+      while (nextRow >= 0 && nextRow < rows.length && hiddenRows?.has(nextRow)) nextRow += step;
+      if (nextRow < 0 || nextRow >= totalRows) return null;
+    }
+  }
+
+  // Trae la celda a la vista (montando su mosaico si hacia falta) y le da el
+  // foco.
+  async function focusCellAt(row: number, col: number) {
+    await reveal({ minRow: row, maxRow: row, minCol: col, maxCol: col });
+    syncChunks();
+    await tick();
+    (cellElement(row, col) ?? gridEl)?.focus({ preventScroll: true });
   }
 
   function onBodyDoubleClick(event: MouseEvent) {
@@ -857,16 +892,24 @@
     void startEditing(row, col, typed);
   }
 
+  // Celdas visibles de los rangos (las filas ocultas por "Filtrar filas"
+  // no cuentan: no se tocan).
+  function visibleCells(ranges: readonly RowRange[]): number {
+    let total = 0;
+    for (const range of ranges) {
+      const last = Math.min(range.maxRow, totalRows - 1);
+      // visualRow ya descuenta las ocultas (y las filas nuevas nunca lo son).
+      const visibleRows = visualRow(last + 1) - visualRow(range.minRow);
+      total += Math.max(0, visibleRows) * (range.maxCol - range.minCol + 1);
+    }
+    return total;
+  }
+
   // Si al editar (row, col) el valor va a varias celdas: la seleccion tiene
-  // mas de una celda y la contiene. null: solo esa celda.
+  // mas de una celda visible y la contiene. null: solo esa celda.
   function fillRangesFor(row: number, col: number): RowRange[] | null {
     const ranges = allSelections.map(normalized);
-    const cells = ranges.reduce(
-      (total, range) =>
-        total + (Math.min(range.maxRow, totalRows - 1) - range.minRow + 1) * (range.maxCol - range.minCol + 1),
-      0,
-    );
-    if (cells <= 1) return null;
+    if (visibleCells(ranges) <= 1) return null;
     const inside = ranges.some(
       (range) => row >= range.minRow && row <= range.maxRow && col >= range.minCol && col <= range.maxCol,
     );
@@ -875,15 +918,12 @@
 
   // Celdas a las que va lo que se escribe (null: solo la que se edita).
   let fillTargets = $state<RowRange[] | null>(null);
-  const fillCount = $derived(
-    fillTargets
-      ? fillTargets.reduce(
-          (total, range) =>
-            total + (Math.min(range.maxRow, totalRows - 1) - range.minRow + 1) * (range.maxCol - range.minCol + 1),
-          0,
-        )
-      : 0,
-  );
+  const fillCount = $derived(fillTargets ? visibleCells(fillTargets) : 0);
+  // Como empezo la edicion: con una tecla (reemplaza) o con Enter/F2/doble
+  // clic y el valor que tenia. Sin escribir nada, confirmar no rellena las
+  // demas celdas (Enter para mirar una celda no puede pisar 500).
+  let editTyped = false;
+  let editStartValue = "";
 
   // `typed`: la tecla con la que se empezo a escribir; reemplaza el valor,
   // con el cursor al final. Sin ella (Enter, F2, doble clic), el valor
@@ -893,6 +933,8 @@
     fillTargets = fillRangesFor(row, col);
     editing = { row, col };
     editValue = typed ?? (value.kind === "text" ? value.value : "");
+    editTyped = typed !== undefined;
+    editStartValue = editValue;
     await tick();
     editInput?.focus({ preventScroll: true });
     if (typed === undefined) editInput?.select();
@@ -905,13 +947,10 @@
     editing = null;
     const targets = fillTargets;
     fillTargets = null;
-    if (commit && targets) {
-      onfillcells(targets, { kind: "text", value: editValue });
+    if (commit && targets && (editTyped || editValue !== editStartValue)) {
+      onfillcells(targets, { kind: "text", value: editValue }, hiddenRows);
       for (const range of targets) addEffect(range, "commit");
-      if (refocus) void tick().then(() => cellElement(current.row, current.col)?.focus({ preventScroll: true }));
-      return;
-    }
-    if (commit) {
+    } else if (commit) {
       const previous = valueAt(current.row, current.col);
       const unchanged = previous.kind === "text" ? previous.value === editValue : editValue === "";
       if (!unchanged) {
@@ -939,7 +978,7 @@
     const targets = fillTargets;
     fillTargets = null;
     if (targets) {
-      onfillcells(targets, { kind: "null" });
+      onfillcells(targets, { kind: "null" }, hiddenRows);
       for (const range of targets) addEffect(range, "commit");
     } else if (valueAt(current.row, current.col).kind !== "null") {
       oncommitcell(current.row, current.col, { kind: "null" });
@@ -1220,6 +1259,8 @@
 
   $effect(() => {
     edits;
+    // El motivo de las celdas en rojo, en el idioma nuevo.
+    $t;
     untrack(applyEditsToDom);
   });
 

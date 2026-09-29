@@ -892,7 +892,7 @@
     const state = editStateFor($resultEdits, consoleId);
     const result = executionForConsole($queryConsoles, consoleId).result;
     if (!state.info || result?.type !== "resultSet") return false;
-    const invalid = invalidCells(state.edits, state.info, result.rows, { requiredNulls: true });
+    const invalid = invalidCells(state.edits, state.info, result.rows);
     if (invalid.length === 0) return false;
     notifyError(
       $t(invalid.length === 1 ? "results.invalidValuesOne" : "results.invalidValuesOther", {

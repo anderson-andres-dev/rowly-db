@@ -47,6 +47,8 @@ describe("typeProblem", () => {
     expect(problem("numeric(5,2)", ".5")).toBeNull();
     expect(problem("numeric", "123456789012345678901234567890.5")).toBeNull();
     expect(problem("numeric", "NaN")).toBeNull();
+    expect(problem("numeric", "Infinity")).toBeNull();
+    expect(problem("numeric(5,2)", "-Infinity")).toBeNull();
     expect(problem("decimal(10,2)", "doce")).toBe("type.decimal");
     expect(problem("decimal(10,2)", "1,5")).toBe("type.decimal");
     expect(problem("decimal(10,2) unsigned", "-1")).toBe("type.unsigned");
@@ -73,8 +75,25 @@ describe("typeProblem", () => {
     expect(problem("date", "2024-02-29")).toBeNull();
     expect(problem("date", "2023-02-29")).toBe("type.date");
     expect(problem("date", "2024-13-01")).toBe("type.date");
-    expect(problem("date", "29/02/2024")).toBe("type.date");
     expect(problem("date", "ayer")).toBe("type.date");
+  });
+
+  it("formatos de fecha y hora que el servidor acepta no se marcan", () => {
+    // PostgreSQL: especiales, antes de Cristo, otros formatos.
+    for (const value of ["infinity", "-infinity", "epoch", "today", "0044-03-15 BC", "Jan 8 1999", "29/02/2024", "1999-01-08 04:05:06 PST"]) {
+      expect(problem("date", value)).toBeNull();
+      expect(problem("timestamp", value)).toBeNull();
+    }
+    // MySQL: fechas cero y otros separadores.
+    for (const value of ["0000-00-00", "2024-00-00", "2024-05-00", "2024/01/05", "20240105"]) expect(problem("date", value)).toBeNull();
+    expect(problem("datetime", "0000-00-00 00:00:00")).toBeNull();
+    // Mas de 6 decimales en los segundos (MySQL redondea).
+    expect(problem("datetime", "2024-05-01 10:30:00.1234567")).toBeNull();
+    // timetz y timestamptz con zonas de todo tipo.
+    for (const value of ["10:30:00+02", "10:30:00.123-05", "10:30:00 UTC", "allballs"]) expect(problem("time with time zone", value)).toBeNull();
+    for (const value of ["2024-05-01 12:00:00 +05", "2024-05-01 12:00:00 UTC", "1890-01-01 00:00:00-05:19:20"]) {
+      expect(problem("timestamp with time zone", value)).toBeNull();
+    }
   });
 
   it("horas", () => {
@@ -100,6 +119,8 @@ describe("typeProblem", () => {
 
   it("año de MySQL", () => {
     expect(problem("year", "2024")).toBeNull();
+    expect(problem("year", "24")).toBeNull();
+    expect(problem("year", "0")).toBeNull();
     expect(problem("year", "1800")).toBe("type.year");
     expect(problem("year", "24a")).toBe("type.year");
   });
@@ -107,6 +128,8 @@ describe("typeProblem", () => {
   it("uuid y json", () => {
     expect(problem("uuid", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")).toBeNull();
     expect(problem("uuid", "no-es-uuid")).toBe("type.uuid");
+    expect(problem("uuid", "{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}")).toBeNull();
+    expect(problem("uuid", "a0eebc999c0b4ef8bb6d6bb9bd380a11")).toBeNull();
     expect(problem("json", '{"a": [1, 2]}')).toBeNull();
     expect(problem("jsonb", "[1, 2")).toBe("type.json");
   });
@@ -117,6 +140,8 @@ describe("typeProblem", () => {
     expect(problem("varchar(5)", "hola!!")).toBe("type.length");
     expect(problem("character varying(3)", "ñña")).toBeNull();
     expect(problem("char(2)", "abc")).toBe("type.length");
+    // Los espacios del final los recortan los motores sin error.
+    expect(problem("varchar(3)", "abc  ")).toBeNull();
     expect(problem("text", "x".repeat(100_000))).toBeNull();
     expect(problem("varchar", "sin largo declarado")).toBeNull();
     expect(typeProblem(column("varchar(5)"), text("123456"))?.params).toEqual({ max: 5 });
@@ -126,6 +151,8 @@ describe("typeProblem", () => {
     expect(problem("enum('activo','inactivo')", "activo")).toBeNull();
     expect(problem("enum('activo','inactivo')", "borrado")).toBe("type.enum");
     expect(problem("enum('it''s','no')", "it's")).toBeNull();
+    // Sin distinguir mayusculas (collation _ci de MySQL).
+    expect(problem("enum('active','inactive')", "ACTIVE")).toBeNull();
     expect(typeProblem(column("enum('a','b')"), text("c"))?.params).toEqual({ values: "a, b" });
   });
 
@@ -184,16 +211,12 @@ describe("invalidCells", () => {
     expect(invalidCells(edits, info, rows)).toEqual([]);
   });
 
-  it("en una fila nueva, el NULL de una obligatoria solo cuenta al aplicar", () => {
+  it("en una fila nueva, el NULL de una obligatoria no cuenta (lo puede completar un trigger)", () => {
     const edits = {
       updates: new Map(),
       deleted: new Set<number>(),
       inserted: [[{ kind: "default" }, text("abc"), { kind: "null" }, { kind: "null" }]] as CellValue[][],
     };
-    expect(invalidCells(edits, info, rows).map((cell) => cell.problem.key)).toEqual(["type.integer"]);
-    expect(invalidCells(edits, info, rows, { requiredNulls: true }).map((cell) => [cell.row, cell.col, cell.problem.key])).toEqual([
-      [2, 1, "type.integer"],
-      [2, 2, "type.notNull"],
-    ]);
+    expect(invalidCells(edits, info, rows).map((cell) => [cell.row, cell.col, cell.problem.key])).toEqual([[2, 1, "type.integer"]]);
   });
 });

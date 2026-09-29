@@ -83,14 +83,16 @@ export function setCellValue(
 }
 
 // Escribir con varias celdas seleccionadas: el mismo valor en todas, en un
-// solo paso de deshacer. Se saltan las columnas de solo lectura o generadas
-// y las filas marcadas para eliminar (como al pegar).
+// solo paso de deshacer. Se saltan las columnas de solo lectura o generadas,
+// las filas marcadas para eliminar (como al pegar) y las `hidden` (ocultas
+// por "Filtrar filas": como al copiar, lo que no se ve no se toca).
 export function fillCells(
   edits: PendingEdits,
   info: ResultEditInfo,
   rows: readonly QueryRow[],
   ranges: readonly RowRange[],
   value: CellValue,
+  hidden: ReadonlySet<number> | null = null,
 ): PendingEdits {
   const updates = new Map<number, Map<number, CellValue>>(
     [...edits.updates].map(([row, cols]) => [row, new Map(cols)]),
@@ -100,7 +102,7 @@ export function fillCells(
   const total = base + inserted.length;
   for (const range of ranges) {
     for (let row = range.minRow; row <= Math.min(range.maxRow, total - 1); row++) {
-      if (row < base && edits.deleted.has(row)) continue;
+      if (row < base && (edits.deleted.has(row) || hidden?.has(row))) continue;
       for (let col = range.minCol; col <= Math.min(range.maxCol, info.columns.length - 1); col++) {
         const column = info.columns[col];
         if (!column || column.generated) continue;

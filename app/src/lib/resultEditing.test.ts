@@ -97,6 +97,11 @@ describe("fillCells: escribir con varias celdas seleccionadas", () => {
     expect(pendingCount(edits)).toBe(0);
   });
 
+  it("salta las filas ocultas por Filtrar filas (como al copiar)", () => {
+    const edits = fillCells(EMPTY_EDITS, info, rows, [{ minRow: 0, maxRow: 2, minCol: 1, maxCol: 1 }], value, new Set([1]));
+    expect([...edits.updates.keys()].sort()).toEqual([0, 2]);
+  });
+
   it("tambien en filas nuevas", () => {
     const withRow = addRow(EMPTY_EDITS, info);
     const edits = fillCells(withRow, info, rows, [{ minRow: 2, maxRow: 3, minCol: 1, maxCol: 1 }], value);

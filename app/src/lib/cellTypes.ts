@@ -11,7 +11,11 @@ import type { QueryRow } from "$lib/types";
 // ("int unsigned", "varchar(255)", "enum('a','b')", "tinyint(1)") y
 // format_type en PostgreSQL ("integer", "character varying(255)",
 // "numeric(10,2)", "timestamp without time zone"). Un tipo que no se
-// reconoce no se valida: mejor dejar pasar que rechazar algo valido.
+// reconoce no se valida: mejor dejar pasar que rechazar algo valido. Con
+// las fechas y horas, igual: cada motor entiende muchos formatos
+// (PostgreSQL: "Jan 8 1999", "infinity", "44-03-15 BC"; MySQL: 2024/01/05,
+// 20240105, fechas cero), asi que solo se marca lo que no puede ser una
+// fecha (sin ningun digito) o una fecha ISO imposible (2023-02-30).
 
 export type TypeProblemKey =
   | "type.integer"
@@ -66,41 +70,48 @@ const INTEGER_ALIASES: Record<string, string> = {
 
 const INTEGER = /^[+-]?\d+$/;
 const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
-const UUID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
-const DATE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
-const TIME = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?$/;
-// Con zona horaria (PostgreSQL): Z, +05, -03:00, +0530.
-const ZONE = /^(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+// Con llaves y sin guiones tambien (PostgreSQL los acepta).
+const UUID = /^\{?[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\}?$/i;
 const BOOLEAN = new Set(["true", "false", "t", "f", "yes", "no", "y", "n", "on", "off", "1", "0"]);
+// Valores especiales de fecha y hora de PostgreSQL.
+const SPECIAL_DATES = new Set(["infinity", "+infinity", "-infinity", "epoch", "now", "today", "tomorrow", "yesterday", "allballs"]);
+// Una fecha ISO (AAAA-MM-DD) al principio, y lo que siga.
+const ISO_DATE = /^(\d{4})-(\d{1,2})-(\d{1,2})(?![\d])/;
+// Una hora hh:mm[:ss] al principio (lo que siga: fraccion, zona...).
+const CLOCK = /^(\d{1,3}):(\d{1,2})(?::(\d{1,2}))?/;
 
-function validDate(text: string): boolean {
-  const match = DATE.exec(text);
+// Una fecha ISO con un mes o un dia que no existen (2023-02-30, mes 13).
+// El mes o el dia 0 son las fechas cero de MySQL, que se admiten.
+function impossibleIsoDate(text: string): boolean {
+  const match = ISO_DATE.exec(text);
   if (!match) return false;
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  if (month < 1 || month > 12 || day < 1) return false;
-  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month === 0 || day === 0) return false;
+  if (month > 12) return true;
+  return day > new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-function validTime(text: string): boolean {
-  const match = TIME.exec(text);
+// Una hora con minutos o segundos de mas (10:61, 10:30:75).
+function impossibleClock(text: string): boolean {
+  const match = CLOCK.exec(text.replace(/^-/, ""));
   if (!match) return false;
-  const [hours, minutes, seconds] = [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)];
-  return hours <= 24 && minutes <= 59 && seconds <= 59;
+  return Number(match[2]) > 59 || Number(match[3] ?? 0) > 60;
 }
 
-function validDateTime(text: string, withZone: boolean): boolean {
-  const trimmed = text.trim();
-  if (validDate(trimmed)) return true;
-  const match = /^(\S+)[ T](.+)$/.exec(trimmed);
-  if (!match || !validDate(match[1])) return false;
-  let time = match[2].trim();
-  if (withZone) {
-    const zone = /(Z|[+-]\d{2}(?::?\d{2})?)$/i.exec(time);
-    if (zone && ZONE.test(zone[1]) && /\d(?=[Z+-])/i.test(time.slice(0, zone.index + 1))) {
-      time = time.slice(0, zone.index).trim();
-    }
+// Para date, time, datetime y timestamp: solo lo que seguro no es.
+function temporalProblem(text: string, kind: "date" | "time" | "datetime"): boolean {
+  const trimmed = text.trim().toLowerCase();
+  if (SPECIAL_DATES.has(trimmed)) return false;
+  if (!/\d/.test(trimmed)) return true;
+  if (kind === "time") return impossibleClock(trimmed);
+  if (impossibleIsoDate(trimmed)) return true;
+  // La hora despues de la fecha ISO ("2024-05-01 10:61").
+  const iso = ISO_DATE.exec(trimmed);
+  if (kind === "datetime" && iso) {
+    const rest = trimmed.slice(iso[0].length).replace(/^[ t]+/, "");
+    return rest !== "" && impossibleClock(rest);
   }
-  return validTime(time);
+  return false;
 }
 
 // "enum('a','b''c')" -> ["a", "b'c"].
@@ -149,10 +160,13 @@ export function typeProblem(column: EditableColumn, value: CellValue): TypeProbl
 
   if (name === "decimal" || name === "numeric" || name === "dec" || name === "fixed") {
     const trimmed = text.trim();
-    if (!DECIMAL.test(trimmed) && !(name === "numeric" && /^nan$/i.test(trimmed))) return { key: "type.decimal" };
+    // numeric de PostgreSQL admite NaN e Infinity (14+).
+    if (!DECIMAL.test(trimmed) && !(name === "numeric" && /^[+-]?(nan|infinity|inf)$/i.test(trimmed))) {
+      return { key: "type.decimal" };
+    }
     if (unsigned && trimmed.startsWith("-")) return { key: "type.unsigned" };
     const [precision, scale = 0] = modifiers(type);
-    if (precision && !/e/i.test(trimmed)) {
+    if (precision && !/[en]/i.test(trimmed)) {
       const whole = trimmed.replace(/^[+-]/, "").split(".")[0].replace(/^0+(?=\d)/, "");
       const digits = whole === "0" ? 0 : whole.length;
       if (digits > precision - scale) return { key: "type.decimalDigits", params: { digits: precision - scale } };
@@ -172,26 +186,23 @@ export function typeProblem(column: EditableColumn, value: CellValue): TypeProbl
     return BOOLEAN.has(text.trim().toLowerCase()) ? null : { key: "type.boolean" };
   }
 
-  if (name === "date") return validDate(text.trim()) ? null : { key: "type.date" };
+  if (name === "date") return temporalProblem(text, "date") ? { key: "type.date" } : null;
 
-  if (name === "time" || name.startsWith("time without") || name.startsWith("time with")) {
-    const trimmed = text.trim();
-    // MySQL admite horas de mas de 24 ("838:59:59") y negativas.
-    const long = /^-?\d{1,3}:(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?$/.exec(trimmed);
-    if (long && Number(long[1]) <= 59 && Number(long[2] ?? 0) <= 59) return null;
-    return validTime(trimmed) ? null : { key: "type.time" };
+  // MySQL admite horas de mas de 24 ("838:59:59") y negativas; timetz, zona.
+  if (name === "time" || name === "timetz" || name.startsWith("time without") || name.startsWith("time with")) {
+    return temporalProblem(text, "time") ? { key: "type.time" } : null;
   }
 
   if (name === "datetime" || name === "timestamp" || name.startsWith("timestamp with") || name === "timestamptz") {
-    const withZone = name === "timestamptz" || name.startsWith("timestamp with time zone");
-    return validDateTime(text, withZone) ? null : { key: "type.datetime" };
+    return temporalProblem(text, "datetime") ? { key: "type.datetime" } : null;
   }
 
+  // YEAR de MySQL: 4 digitos (1901-2155), 2 digitos (00-99) o 0.
   if (name === "year") {
     const trimmed = text.trim();
-    if (!/^\d{4}$/.test(trimmed) && trimmed !== "0") return { key: "type.year" };
+    if (/^\d{1,2}$/.test(trimmed)) return null;
     const year = Number(trimmed);
-    return year === 0 || (year >= 1901 && year <= 2155) ? null : { key: "type.year" };
+    return /^\d{4}$/.test(trimmed) && (year === 0 || (year >= 1901 && year <= 2155)) ? null : { key: "type.year" };
   }
 
   if (name === "uuid") return UUID.test(text.trim()) ? null : { key: "type.uuid" };
@@ -207,14 +218,18 @@ export function typeProblem(column: EditableColumn, value: CellValue): TypeProbl
 
   if (name === "enum") {
     const values = enumValues(type);
-    if (!values || values.includes(text)) return null;
+    // Como MySQL con la collation de la columna (casi siempre _ci): sin
+    // distinguir mayusculas ni los espacios del final.
+    const wanted = text.trimEnd().toLowerCase();
+    if (!values || values.some((candidate) => candidate.trimEnd().toLowerCase() === wanted)) return null;
     return { key: "type.enum", params: { values: values.join(", ") } };
   }
 
   if (["varchar", "char", "character", "character varying", "nvarchar", "nchar", "varbinary", "binary"].includes(name)) {
     const [max] = modifiers(type);
-    // Largo en caracteres (no en unidades UTF-16).
-    if (max && [...text].length > max) return { key: "type.length", params: { max } };
+    // Largo en caracteres (no en unidades UTF-16), sin los espacios del
+    // final: los motores los recortan sin error.
+    if (max && [...text.trimEnd()].length > max) return { key: "type.length", params: { max } };
     return null;
   }
 
@@ -228,15 +243,10 @@ export interface InvalidCell {
 }
 
 // Los cambios pendientes que no encajan en su columna, en orden. En una
-// fila nueva, el NULL inicial de una columna obligatoria no se marca
-// mientras se completa la fila (seria todo rojo al crearla); con
-// `requiredNulls` (al aplicar) si cuenta: el servidor lo rechazaria.
-export function invalidCells(
-  edits: PendingEdits,
-  info: ResultEditInfo,
-  rows: readonly QueryRow[],
-  options: { requiredNulls?: boolean } = {},
-): InvalidCell[] {
+// fila nueva, un NULL en una columna obligatoria no cuenta: puede ser el
+// inicial mientras se completa la fila, o lo completa un trigger (el
+// servidor dira si no).
+export function invalidCells(edits: PendingEdits, info: ResultEditInfo, rows: readonly QueryRow[]): InvalidCell[] {
   const found: InvalidCell[] = [];
   const check = (row: number, col: number, value: CellValue) => {
     const column = info.columns[col];
@@ -250,7 +260,7 @@ export function invalidCells(
   }
   edits.inserted.forEach((values, index) => {
     values.forEach((value, col) => {
-      if (value.kind === "null" && !options.requiredNulls) return;
+      if (value.kind === "null") return;
       check(rows.length + index, col, value);
     });
   });

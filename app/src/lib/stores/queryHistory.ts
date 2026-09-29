@@ -94,6 +94,9 @@ if (browser) {
     persistTimer ??= setTimeout(writeHistory, PERSIST_DELAY_MS);
   });
   globalThis.addEventListener?.("pagehide", flushQueryHistory);
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushQueryHistory();
+  });
 }
 
 // La mas reciente primero. Repetir la misma consulta seguida no agrega otra
