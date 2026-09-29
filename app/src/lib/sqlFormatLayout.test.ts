@@ -201,3 +201,50 @@ describe("formatSqlText: varias consultas", () => {
     expect(result.text).toBe(sql);
   });
 });
+
+describe("alignColumnDefinitions", () => {
+  it("nombre, tipo y restricciones en columnas; claves sin tocar", async () => {
+    const { alignColumnDefinitions } = await import("./sqlFormatLayout");
+    const ddl = [
+      "CREATE TABLE tec_abonados (",
+      "  abon_ipv6 int NOT NULL DEFAULT '1',",
+      "  naps_num int DEFAULT NULL,",
+      "  abon_desc decimal(10,4) NOT NULL DEFAULT '0.0000',",
+      "  abon_sect int NOT NULL DEFAULT '0' COMMENT '1 Urbano / 2 Rural',",
+      "  ontd_snum varchar(45),",
+      "  PRIMARY KEY (abon_codi),",
+      "  KEY idx_x (naps_num)",
+      ") ENGINE=InnoDB",
+    ].join("\n");
+    expect(alignColumnDefinitions(ddl).split("\n")).toEqual([
+      "CREATE TABLE tec_abonados (",
+      "  abon_ipv6 int           NOT NULL DEFAULT '1',",
+      "  naps_num  int           DEFAULT NULL,",
+      "  abon_desc decimal(10,4) NOT NULL DEFAULT '0.0000',",
+      "  abon_sect int           NOT NULL DEFAULT '0' COMMENT '1 Urbano / 2 Rural',",
+      "  ontd_snum varchar(45),",
+      "  PRIMARY KEY (abon_codi),",
+      "  KEY idx_x (naps_num)",
+      ") ENGINE=InnoDB",
+    ]);
+  });
+
+  it("tipos de varias palabras (Postgres) y nombres entre comillas", async () => {
+    const { alignColumnDefinitions } = await import("./sqlFormatLayout");
+    const ddl = 'CREATE TABLE public.t (\n  id integer NOT NULL,\n  "Creado en" timestamp without time zone DEFAULT now(),\n  nota character varying(20)\n);';
+    expect(alignColumnDefinitions(ddl).split("\n")).toEqual([
+      "CREATE TABLE public.t (",
+      "  id          integer                     NOT NULL,",
+      '  "Creado en" timestamp without time zone DEFAULT now(),',
+      "  nota        character varying(20)",
+      ");",
+    ]);
+  });
+
+  it("un DEFAULT dentro de un COMMENT no corta el tipo; sin CREATE TABLE no cambia nada", async () => {
+    const { alignColumnDefinitions } = await import("./sqlFormatLayout");
+    const ddl = "CREATE TABLE t (\n  a int COMMENT 'DEFAULT x',\n  bb text NOT NULL\n)";
+    expect(alignColumnDefinitions(ddl)).toBe("CREATE TABLE t (\n  a  int  COMMENT 'DEFAULT x',\n  bb text NOT NULL\n)");
+    expect(alignColumnDefinitions("SELECT 1")).toBe("SELECT 1");
+  });
+});

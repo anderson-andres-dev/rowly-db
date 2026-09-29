@@ -11,6 +11,8 @@
   import { writeClipboardText } from "$lib/gridClipboard";
   import { t } from "$lib/i18n";
   import { fetchTableDefinition } from "$lib/tableDefinition";
+  import { alignColumnDefinitions } from "$lib/sqlFormatLayout";
+  import { editorSettings } from "$lib/stores/editorSettings";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
 
@@ -47,15 +49,23 @@
     return raw.replace(/`/g, "");
   }
 
+  // Lo que se ve (y se copia): con "Alineacion en columnas" (Ajustes >
+  // Editor), nombre, tipo y restricciones de cada columna en columnas.
+  const shownDdl = $derived.by(() => {
+    const clean = cleanDdl(ddl);
+    return $editorSettings.formatterAlignColumns ? alignColumnDefinitions(clean) : clean;
+  });
+
   // ddlContainer solo existe una vez que Svelte pinta la rama {:else} (tras
   // status pasar a "ok"); un effect que dependa de los dos re-corre apenas
   // el contenedor aparece, en vez de intentar montar el editor antes de que
   // el div exista en el DOM.
   $effect(() => {
     if (status !== "ok" || !ddlContainer) return;
+    const doc = shownDdl;
     ddlView?.destroy();
     ddlView = new EditorView({
-      doc: cleanDdl(ddl),
+      doc,
       parent: ddlContainer,
       extensions: [
         // Solo lectura pero enfocable: CodeMirror solo pinta las lineas a la
@@ -82,13 +92,13 @@
     selectAll(ddlView);
   }
 
-  // Copia el CREATE completo (el que se ve, sin backticks); el icono pasa a
-  // un check un momento.
+  // Copia el CREATE completo, tal como se ve; el icono pasa a un check un
+  // momento.
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   async function copyDdl() {
-    if (status !== "ok" || !(await writeClipboardText(cleanDdl(ddl)))) return;
+    if (status !== "ok" || !(await writeClipboardText(shownDdl))) return;
     copied = true;
     clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => (copied = false), 1500);

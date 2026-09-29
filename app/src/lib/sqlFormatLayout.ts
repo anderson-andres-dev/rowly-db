@@ -352,3 +352,43 @@ export function refineLayout(formatted: string, options: LayoutOptions): string 
   }
   return lines.join("\n");
 }
+
+// --- CREATE TABLE ------------------------------------------------------------
+// Las columnas de un CREATE TABLE en tres columnas: nombre, tipo y el resto
+// (NOT NULL, DEFAULT...). El tipo termina donde empieza la primera
+// restriccion, asi los de varias palabras de Postgres (timestamp without time
+// zone) quedan enteros. Las lineas de claves e indices quedan como estan.
+
+const NOT_A_COLUMN = /^(?:PRIMARY|KEY|UNIQUE|INDEX|CONSTRAINT|FOREIGN|CHECK|FULLTEXT|SPATIAL|EXCLUDE|LIKE|PERIOD)\b/i;
+const AFTER_TYPE =
+  /\s(?:NOT\s+NULL|NULL|DEFAULT|PRIMARY|REFERENCES|UNIQUE|CHECK|COLLATE|CHARACTER\s+SET|CHARSET|AUTO_INCREMENT|COMMENT|GENERATED|CONSTRAINT|ON\s+UPDATE|AS\s*\(|VIRTUAL|STORED|INVISIBLE|SRID|IDENTITY)\b/i;
+const COLUMN_NAME = /^(\s+)("(?:[^"]|"")*"|`(?:[^`]|``)*`|\S+)\s+(.*)$/;
+
+export function alignColumnDefinitions(ddl: string): string {
+  const lines = ddl.split("\n");
+  const start = lines.findIndex((line) => /^\s*CREATE\s+(?:\w+\s+)*TABLE\b.*\($/i.test(line));
+  if (start === -1) return ddl;
+  const rows: { at: number; indent: string; name: string; type: string; rest: string }[] = [];
+  for (let index = start + 1; index < lines.length; index++) {
+    const line = lines[index];
+    if (/^\s*\)/.test(line)) break;
+    const match = COLUMN_NAME.exec(line);
+    if (!match || NOT_A_COLUMN.test(match[2]) || hasComment(maskQuoted(line))) continue;
+    const [, indent, name, definition] = match;
+    // El corte, en lo enmascarado: un DEFAULT dentro de un COMMENT no cuenta.
+    const cut = maskQuoted(" " + definition).search(AFTER_TYPE);
+    const type = (cut === -1 ? definition : definition.slice(0, cut)).trimEnd().replace(/,$/, "");
+    // Sin restricciones, lo que queda es solo la coma: va pegada al tipo.
+    const rest = definition.slice(type.length).trim().replace(/^,$/, "");
+    rows.push({ at: index, indent, name, type, rest });
+  }
+  if (rows.length < 2) return ddl;
+  const nameWidth = Math.max(...rows.map((row) => row.name.length));
+  const typeWidth = Math.max(...rows.map((row) => row.type.length));
+  for (const row of rows) {
+    const trailing = row.rest === "" && lines[row.at].trimEnd().endsWith(",") ? "," : "";
+    const text = row.rest === "" ? `${row.name.padEnd(nameWidth)} ${row.type}${trailing}` : `${row.name.padEnd(nameWidth)} ${row.type.padEnd(typeWidth)} ${row.rest}`;
+    lines[row.at] = row.indent + text;
+  }
+  return lines.join("\n");
+}
