@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onePerFrame } from "$lib/onePerFrame";
   import { quoteIdentifier as quoteSqlIdentifier } from "$lib/filterBuilder";
   import { get } from "svelte/store";
   import { focusZoneAction } from "$lib/focusZones";
@@ -108,6 +109,7 @@
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { nextSort } from "$lib/gridSort";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
+  import { invalidCells } from "$lib/cellTypes";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -884,6 +886,22 @@
   let applyingChanges = $state(false);
   let applyError = $state<ChangeError | null>(null);
 
+  // Antes de aplicar (o de ver el SQL): si algun valor no encaja en su
+  // columna (cellTypes.ts), no se manda nada; las celdas ya estan en rojo.
+  function blockedByInvalidValues(consoleId: string): boolean {
+    const state = editStateFor($resultEdits, consoleId);
+    const result = executionForConsole($queryConsoles, consoleId).result;
+    if (!state.info || result?.type !== "resultSet") return false;
+    const invalid = invalidCells(state.edits, state.info, result.rows);
+    if (invalid.length === 0) return false;
+    notifyError(
+      $t(invalid.length === 1 ? "results.invalidValuesOne" : "results.invalidValuesOther", {
+        count: $numberFormat.format(invalid.length),
+      }),
+    );
+    return true;
+  }
+
   function currentChanges(consoleId: string): { target: EditTarget; changes: ResultChanges } | null {
     const state = editStateFor($resultEdits, consoleId);
     const result = executionForConsole($queryConsoles, consoleId).result;
@@ -898,6 +916,7 @@
   const PREVIEW_LINE_WIDTH = 78;
 
   async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
+    if (!error && blockedByInvalidValues(consoleId)) return;
     const current = currentChanges(consoleId);
     if (!current) return;
     try {
@@ -924,6 +943,7 @@
   // En produccion nada se aplica sin ver antes el SQL: el atajo o el boton
   // del grid abren la vista previa, y aplicar desde ella confirma.
   async function submitChanges(key: string, confirmed = false) {
+    if (blockedByInvalidValues(consoleOfKey(key))) return;
     if ($isProduction && !confirmed) {
       void openChangesPreview(key);
       return;
@@ -1321,16 +1341,21 @@
     const handle = event.currentTarget as HTMLElement;
     handle.setPointerCapture(event.pointerId);
 
+    // A lo sumo un cambio de tamaño por cuadro (ver onePerFrame); el
+    // rectangulo se mide una vez, no en cada pointermove.
+    const rect = workspaceBody?.getBoundingClientRect();
+    const live = onePerFrame((fraction: number) => (editorFraction = fraction));
+
     function onMove(moveEvent: PointerEvent) {
-      if (!workspaceBody) return;
-      const rect = workspaceBody.getBoundingClientRect();
+      if (!rect) return;
       const fraction = (moveEvent.clientY - rect.top) / rect.height;
-      editorFraction = Math.min(0.85, Math.max(0.15, fraction));
+      live.set(Math.min(0.85, Math.max(0.15, fraction)));
     }
 
     function onUp() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      live.flush();
     }
 
     window.addEventListener("pointermove", onMove);

@@ -20,6 +20,10 @@ export const MAX_HISTORY_ENTRIES = 500;
 // Una consulta enorme (un volcado pegado) no entra: llenaria el
 // almacenamiento, que es de unos pocos MB para toda la app.
 export const MAX_HISTORY_SQL_LENGTH = 20_000;
+// Y entre todas, a lo sumo esto por conexion: 500 consultas largas serian
+// ~10 MB, mas de lo que admite localStorage, reescritos en cada consulta.
+// Pasado el presupuesto salen las mas viejas.
+export const MAX_HISTORY_CHARS = 1_000_000;
 
 const STORAGE_KEY = "khipu:query-history:v1";
 const OUTCOMES = new Set<HistoryOutcome>(["ok", "error", "cancelled"]);
@@ -53,13 +57,45 @@ function load(): Record<string, HistoryEntry[]> {
 
 export const queryHistory = writable<Record<string, HistoryEntry[]>>(load());
 
+// Se guarda a lo sumo una vez por PERSIST_DELAY_MS (y al cerrar la
+// ventana): con cientos de consultas por hora, reescribir todo el historial
+// en cada una no hace falta.
+const PERSIST_DELAY_MS = 1000;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingValue: Record<string, HistoryEntry[]> | null = null;
+
+function writeHistory() {
+  persistTimer = null;
+  const value = pendingValue;
+  pendingValue = null;
+  if (!value) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Sin almacenamiento, el historial dura lo que dure la sesion.
+  }
+}
+
+// Lo pendiente se guarda ya (al cerrar la ventana; en las pruebas).
+export function flushQueryHistory(): void {
+  if (persistTimer !== null) clearTimeout(persistTimer);
+  writeHistory();
+}
+
 if (browser) {
+  let first = true;
   queryHistory.subscribe((value) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    } catch {
-      // Sin almacenamiento, el historial dura lo que dure la sesion.
+    // Lo recien leido no hace falta volver a escribirlo.
+    if (first) {
+      first = false;
+      return;
     }
+    pendingValue = value;
+    persistTimer ??= setTimeout(writeHistory, PERSIST_DELAY_MS);
+  });
+  globalThis.addEventListener?.("pagehide", flushQueryHistory);
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushQueryHistory();
   });
 }
 
@@ -70,7 +106,14 @@ export function withHistoryEntry(history: HistoryEntry[], entry: HistoryEntry): 
   if (sql === "" || sql.length > MAX_HISTORY_SQL_LENGTH) return history;
   const next = { ...entry, sql };
   const rest = history[0]?.sql === sql ? history.slice(1) : history;
-  return [next, ...rest].slice(0, MAX_HISTORY_ENTRIES);
+  const list = [next, ...rest].slice(0, MAX_HISTORY_ENTRIES);
+  let chars = 0;
+  for (let index = 0; index < list.length; index++) {
+    chars += list[index].sql.length;
+    // La recien agregada siempre queda.
+    if (chars > MAX_HISTORY_CHARS && index > 0) return list.slice(0, index);
+  }
+  return list;
 }
 
 export function recordQuery(profileId: string, entry: Omit<HistoryEntry, "id">): void {

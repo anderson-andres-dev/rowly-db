@@ -370,25 +370,69 @@ async function hydrateLargeTexts() {
   void invoke("prune_console_texts", { keep }).catch(() => {});
 }
 
+// Se guarda solo cuando cambia lo que se persiste, y a lo sumo una vez cada
+// PERSIST_DELAY_MS. executionByConsole (resultados, "ejecutando", orden,
+// conteo) cambia varias veces por consulta y nunca se guarda: antes cada uno
+// de esos cambios volvia a serializar todas las consolas con su texto, y con
+// muchas pestañas abiertas eso pesaba en cada consulta (uso de horas).
+const PERSIST_DELAY_MS = 300;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let lastPersisted: Pick<QueryConsoleState, "consoles" | "activeByProfile" | "nextOrdinal"> | null = null;
+
+function writeConsoles() {
+  persistTimer = null;
+  const { consoles, activeByProfile, nextOrdinal } = get(queryConsoles);
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ consoles: consoles.map(persistedConsole), activeByProfile, nextOrdinal }),
+    );
+  } catch {
+    // Una cuota llena no impide seguir editando durante esta sesion.
+    reportPersistFailure();
+  }
+  // La copia de los textos grandes de consolas que ya se cerraron no hace
+  // falta (sus archivos los borra prune_console_texts al abrir).
+  if (diskTexts.size > 0) {
+    const keep = new Set(consoles.flatMap((item) => [textKey(item.id, "sql"), textKey(item.id, "saved")]));
+    for (const key of diskTexts.keys()) if (!keep.has(key)) diskTexts.delete(key);
+  }
+}
+
+// Lo que esperaba su retraso se guarda ya (al cerrar la ventana; en las
+// pruebas, antes de leer localStorage).
+export function flushConsolePersistence(): void {
+  if (persistTimer === null) return;
+  clearTimeout(persistTimer);
+  writeConsoles();
+}
+
 if (browser) {
   queryConsoles.subscribe((state) => {
-    try {
-      // executionByConsole (resultados, "ejecutando", confirmaciones
-      // pendientes) es intencionalmente transitorio: nunca se guarda.
-      const { consoles, activeByProfile, nextOrdinal } = state;
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ consoles: consoles.map(persistedConsole), activeByProfile, nextOrdinal }),
-      );
-    } catch {
-      // Una cuota llena no impide seguir editando durante esta sesion.
-      reportPersistFailure();
+    const { consoles, activeByProfile, nextOrdinal } = state;
+    if (
+      lastPersisted &&
+      lastPersisted.consoles === consoles &&
+      lastPersisted.activeByProfile === activeByProfile &&
+      lastPersisted.nextOrdinal === nextOrdinal
+    ) {
+      return;
     }
+    lastPersisted = { consoles, activeByProfile, nextOrdinal };
+    persistTimer ??= setTimeout(writeConsoles, PERSIST_DELAY_MS);
   });
   if (pendingPersisted.size > 0) void hydrateLargeTexts();
-  // Al cerrar, lo que esperaba su retraso sale ya.
+  // Al cerrar, lo que esperaba su retraso sale ya. Tambien al ocultarse la
+  // ventana (minimizar, cambiar de escritorio): si el webview se destruye
+  // sin pagehide, lo ultimo ya quedo guardado.
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden") return;
+    flushConsoleTexts();
+    flushConsolePersistence();
+  });
   globalThis.addEventListener?.("pagehide", () => {
     flushConsoleTexts();
+    flushConsolePersistence();
     if (diskTimer !== null) {
       clearTimeout(diskTimer);
       writeDiskTexts();

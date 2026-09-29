@@ -157,7 +157,7 @@ describe("E'...' en el borde de un trozo", () => {
 describe("linea en blanco entre sentencias", () => {
   it("borrarla une las dos partes y volver a ponerla las separa", () => {
     lexical = ENGINES.mysql.lexical;
-    let state = create("SELECT *\n\nFROM users");
+    let state = create("SELECT *\n\nSELECT abc");
     expect(indexed(state)).toEqual([
       { from: 0, to: 8 },
       { from: 10, to: 20 },

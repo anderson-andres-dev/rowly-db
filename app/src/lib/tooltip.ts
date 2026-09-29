@@ -121,6 +121,23 @@ function hide(anchor?: HTMLElement) {
   if (supportsPopover && element.matches(":popover-open")) element.hidePopover();
 }
 
+// El mismo tooltip, pedido a mano: para lo que no pasa por Svelte (las
+// celdas del grid se arman como HTML, ver DataGrid.svelte). Sale con la
+// misma demora; `hideTooltipFor` lo quita si es de ese elemento.
+export function scheduleTooltipFor(anchor: HTMLElement, params: TooltipParams) {
+  const resolved = resolve(params);
+  if (!resolved) return;
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    timer = null;
+    if (anchor.isConnected) show(anchor, resolved);
+  }, SHOW_DELAY_MS);
+}
+
+export function hideTooltipFor(anchor: HTMLElement) {
+  hide(anchor);
+}
+
 export function tooltip(node: HTMLElement, params: TooltipParams) {
   let resolved = resolve(params);
   let ownAriaLabel = false;

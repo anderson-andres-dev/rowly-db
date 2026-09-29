@@ -64,6 +64,15 @@ export class AnalysisRunner<Raw> {
     this.generation += 1;
   }
 
+  // Los resultados guardados pasan a ser `cache` (compartida entre editores
+  // del mismo catalogo y motor: ver SqlEditor.svelte). Lo que estuviera en
+  // vuelo con la anterior no se guarda en esta.
+  useCache(cache: Map<string, Raw>): void {
+    if (cache === this.cache) return;
+    this.cache = cache;
+    this.generation += 1;
+  }
+
   // Un cambio del texto: lo sucio se mapea y se agrega lo tocado (y donde
   // cambiaron los limites de las sentencias, si el indice lo dice).
   noteChanges(changes: ChangeSet, statementsChanged: Region | null): void {

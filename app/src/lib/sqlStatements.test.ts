@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitStatements, statementAt } from "./sqlStatements";
+import { SCAN_OVERLAP, initialScanState, scanChunk, splitStatements, statementAt } from "./sqlStatements";
 import { ENGINES } from "./engines";
 
 const mysql = ENGINES.mysql.lexical;
@@ -126,7 +126,61 @@ describe("splitStatements - linea en blanco", () => {
     expect(texts("SELECT 1\n\n-- siguiente\nSELECT 2")).toEqual(["SELECT 1", "SELECT 2"]);
   });
 
-  it("SELECT * seguido de una linea en blanco tambien separa", () => {
-    expect(texts("SELECT *\n\nFROM users")).toEqual(["SELECT *", "FROM users"]);
+  it("una linea que no puede empezar una consulta sigue la de arriba", () => {
+    // El reporte: consultas largas con lineas en blanco en medio se
+    // ejecutaban hasta la primera.
+    const same = [
+      "SELECT *\n\nFROM users",
+      "SELECT a, b\nFROM t\n\nWHERE x = 1;",
+      "SELECT *\nFROM facturas f\n\nJOIN clientes c ON c.id = f.cliente_id\nWHERE f.total > 0;",
+      "SELECT\n  a,\n  b\n\nFROM t;",
+      "SELECT * FROM t WHERE x = 1\n\nORDER BY a DESC\n\nLIMIT 10;",
+      "SELECT 1\n\nUNION ALL\n\nSELECT 2;",
+      "SELECT * FROM t\nWHERE a = 1\n\n  and b = 2",
+      "SELECT * FROM t\n\nleft join u on u.id = t.id",
+      "SELECT a\nFROM t\n\nGROUP BY a\n\nHAVING count(*) > 1",
+      "SELECT count(*\n\n)",
+    ];
+    for (const text of same) expect(texts(text)).toEqual([text]);
   });
+
+  it("tras el ) de un WITH viene la consulta", () => {
+    const cte = "WITH x AS (\n  SELECT 1\n)\n\nSELECT * FROM x;";
+    expect(texts(cte)).toEqual([cte]);
+    // Sin WITH, un ")" al final no une nada.
+    expect(texts("SELECT (1)\n\nSELECT 2")).toEqual(["SELECT (1)", "SELECT 2"]);
+  });
+
+  it("lo que si puede empezar una consulta sigue separando", () => {
+    expect(texts("SELECT 1\n\nSELECT 2")).toEqual(["SELECT 1", "SELECT 2"]);
+    expect(texts("SELECT 1\n\nSET @a = 1")).toEqual(["SELECT 1", "SET @a = 1"]);
+    expect(texts("UPDATE t SET a = 1\n\nDELETE FROM t")).toEqual(["UPDATE t SET a = 1", "DELETE FROM t"]);
+    // Una palabra que solo empieza como FROM no es FROM.
+    expect(texts("SELECT 1\n\nfromage()")).toEqual(["SELECT 1", "fromage()"]);
+  });
+
+  it("igual si el texto llega por trozos", () => {
+    // El escaner por trozos (sqlStatementIndex) tiene que decidir lo mismo
+    // aunque la linea en blanco o la palabra que la sigue queden partidas
+    // entre dos trozos. Cada trozo trae SCAN_OVERLAP de margen, como alli.
+    const columns = Array.from({ length: 20 }, (_, index) => `columna_${index}`).join(", ");
+    const head = `SELECT ${columns} FROM t`;
+    const text = `${head}\n\nWHERE a = 1\n\nUNION ALL\n\nSELECT 2\n\nSELECT 3`;
+    const expected = [`${head}\n\nWHERE a = 1\n\nUNION ALL\n\nSELECT 2`, "SELECT 3"];
+    expect(texts(text)).toEqual(expected);
+    for (let cut = 1; cut < text.length; cut++) {
+      const state = initialScanState();
+      const out: { from: number; to: number; terminated: boolean }[] = [];
+      let pos = 0;
+      for (let limit = cut; ; limit = text.length) {
+        const chunk = text.slice(pos, Math.min(text.length, pos + (limit - pos) + SCAN_OVERLAP));
+        const final = pos + chunk.length === text.length;
+        const stop = scanChunk(chunk, pos, final ? chunk.length : limit - pos, final, state, out, mysql);
+        if (final) break;
+        pos += stop;
+      }
+      expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(expected);
+    }
+  });
+
 });

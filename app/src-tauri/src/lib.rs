@@ -6,13 +6,14 @@ mod export;
 mod result_editing;
 mod sql_files;
 mod updates;
+mod webkit_env;
 
 use khipu_driver_core::{
     ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
     QueryExecutionOptions, QueryExecutionResult, SchemaObjects, TlsStatus,
 };
 use khipu_engine::Dialect;
-use khipu_engine::catalog::CatalogTable;
+use khipu_engine::catalog::{CatalogTable, SchemaCatalog};
 use khipu_engine::execution_guard::{
     DestructiveClassification, DestructiveStatement, classify_sql,
 };
@@ -71,9 +72,28 @@ struct ActiveConnection {
     /// Schemas currently shown in the explorer. Always includes
     /// `default_schema`; the others come and go via `set_visible_schemas`.
     schemas: BTreeMap<String, SchemaObjects>,
+    /// `schemas` as the engine's catalog, built once each time they change
+    /// (`set_schemas`). `analyze_sql` runs after every typing pause: it used
+    /// to clone every table and column on each call, with the connections
+    /// lock held (so a query started meanwhile had to wait).
+    catalog: Arc<SchemaCatalog>,
+}
+
+fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<SchemaCatalog> {
+    Arc::new(catalog_adapter::tables_to_catalog(
+        schemas
+            .values()
+            .flat_map(|objects| objects.tables.iter().cloned()),
+    ))
 }
 
 impl ActiveConnection {
+    /// The only way to change `schemas`: keeps `catalog` in step.
+    fn set_schemas(&mut self, update: impl FnOnce(&mut BTreeMap<String, SchemaObjects>)) {
+        update(&mut self.schemas);
+        self.catalog = build_catalog(&self.schemas);
+    }
+
     fn explorer(&self) -> DatabaseExplorer {
         // El schema por defecto primero, el resto en orden alfabetico.
         let mut schemas: Vec<SchemaObjects> = Vec::with_capacity(self.schemas.len());
@@ -163,15 +183,7 @@ fn list_tables(window: tauri::Window, state: tauri::State<'_, AppState>) -> Vec<
         .lock()
         .expect("connections mutex poisoned")
         .get(window.label())
-        .map(|active| {
-            catalog_adapter::tables_to_catalog(
-                active
-                    .schemas
-                    .values()
-                    .flat_map(|objects| objects.tables.iter().cloned()),
-            )
-            .tables
-        })
+        .map(|active| active.catalog.tables.clone())
         .unwrap_or_default()
 }
 
@@ -252,10 +264,12 @@ async fn set_visible_schemas(
     if !Arc::ptr_eq(&active.connector, &connector) {
         return Err(Message::key("connectionChanged"));
     }
-    active.schemas.retain(|name, _| wanted.contains(name));
-    for objects in loaded {
-        active.schemas.insert(objects.schema.clone(), objects);
-    }
+    active.set_schemas(|schemas| {
+        schemas.retain(|name, _| wanted.contains(name));
+        for objects in loaded {
+            schemas.insert(objects.schema.clone(), objects);
+        }
+    });
     Ok(active.explorer())
 }
 
@@ -293,6 +307,7 @@ async fn connect(
     let table_count = connected.default_objects.tables.len();
     let mut schemas = BTreeMap::new();
     schemas.insert(connected.default_schema.clone(), connected.default_objects);
+    let catalog = build_catalog(&schemas);
 
     state
         .connections
@@ -309,6 +324,7 @@ async fn connect(
                 default_schema: connected.default_schema,
                 available_schemas: connected.available_schemas,
                 schemas,
+                catalog,
             },
         );
 
@@ -533,25 +549,28 @@ fn analyze_sql(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
-    with_active_connection(&window, &state, |active| {
-        let catalog = catalog_adapter::tables_to_catalog(
-            active
-                .schemas
-                .values()
-                .flat_map(|objects| objects.tables.iter().cloned()),
-        );
-        let view = khipu_engine::diagnostics::CatalogView {
-            tables: &catalog.tables,
-            loaded_schemas: active.schemas.keys().map(String::as_str).collect(),
-            default_schema: &active.default_schema,
-        };
-        Ok(statements
-            .iter()
-            .map(|statement| {
-                khipu_engine::diagnostics::analyze_statement(statement, active.dialect, Some(&view))
-            })
-            .collect())
-    })
+    // Solo lo necesario bajo el candado (el catalogo es compartido: no se
+    // copia); el analisis corre despues, sin bloquear execute_query.
+    let (catalog, dialect, default_schema, loaded_schemas) =
+        with_active_connection(&window, &state, |active| {
+            Ok((
+                Arc::clone(&active.catalog),
+                active.dialect,
+                active.default_schema.clone(),
+                active.schemas.keys().cloned().collect::<Vec<_>>(),
+            ))
+        })?;
+    let view = khipu_engine::diagnostics::CatalogView {
+        tables: &catalog.tables,
+        loaded_schemas: loaded_schemas.iter().map(String::as_str).collect(),
+        default_schema: &default_schema,
+    };
+    Ok(statements
+        .iter()
+        .map(|statement| {
+            khipu_engine::diagnostics::analyze_statement(statement, dialect, Some(&view))
+        })
+        .collect())
 }
 
 /// Interrupts the query started with `execution_id` (see `execute_query`).
@@ -867,6 +886,7 @@ async fn export_query_to_file(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    webkit_env::apply();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())

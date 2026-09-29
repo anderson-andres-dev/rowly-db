@@ -16,18 +16,23 @@ export interface LogEntry {
 }
 
 // Tope por consola: el registro se muestra entero y crece con cada
-// ejecucion; lo mas viejo se descarta.
-const MAX_ENTRIES = 1000;
+// ejecucion; lo mas viejo se descarta. Y el texto de cada entrada, hasta
+// MAX_TEXT: un script pegado de varios MB no queda entero en el registro
+// (con horas de uso, eso se acumulaba y se volvia a resaltar al mostrarlo).
+export const MAX_LOG_ENTRIES = 500;
+export const MAX_LOG_TEXT = 4000;
 
 let nextId = 1;
 
 export const executionLog = writable<Record<string, LogEntry[]>>({});
 
 export function appendLog(consoleId: string, entry: Omit<LogEntry, "id" | "at"> & { at?: number }): void {
-  const full: LogEntry = { id: nextId++, at: entry.at ?? Date.now(), ...entry };
+  const text = entry.text.length > MAX_LOG_TEXT ? `${entry.text.slice(0, MAX_LOG_TEXT)}…` : entry.text;
+  const full: LogEntry = { id: nextId++, at: entry.at ?? Date.now(), ...entry, text };
   executionLog.update((state) => {
     const current = state[consoleId] ?? [];
-    const next = current.length >= MAX_ENTRIES ? [...current.slice(-(MAX_ENTRIES - 1)), full] : [...current, full];
+    const next =
+      current.length >= MAX_LOG_ENTRIES ? [...current.slice(-(MAX_LOG_ENTRIES - 1)), full] : [...current, full];
     return { ...state, [consoleId]: next };
   });
 }
