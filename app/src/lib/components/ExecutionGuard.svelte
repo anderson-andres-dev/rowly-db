@@ -4,7 +4,10 @@
   import type { DestructiveStatement } from "$lib/types";
   import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
 
-  let { statement, script = null, production = false, oncancel, onconfirm }: {
+  let { sql, statement, script = null, production = false, oncancel, onconfirm }: {
+    // Lo que se va a ejecutar: se muestra para que se vea de que bloque se
+    // trata.
+    sql: string;
     statement: DestructiveStatement;
     // Script: todas las que piden confirmacion, para avisar de una vez.
     script?: (DestructiveStatement | null)[] | null;
@@ -16,6 +19,7 @@
 
   const pending = $derived(script ? script.filter((item) => item !== null) : [statement]);
   const kinds = $derived([...new Set(pending)]);
+  const preview = $derived(sql.replace(/\s+/g, " ").trim());
 </script>
 
 <div class="execution-guard" role="alert">
@@ -36,6 +40,7 @@
   {:else}
     <span class="message">{$t(`workspace.guard.${pending[0] ?? statement}`)}</span>
   {/if}
+  <code class="sql" title={sql}>{preview}</code>
   <div class="actions">
     <button type="button" class="secondary-action" onclick={oncancel}>{$t("common.cancel")}</button>
     <button type="button" class="danger-action" onclick={onconfirm}>
@@ -57,6 +62,32 @@
     background: color-mix(in srgb, var(--danger) 12%, var(--surface));
     color: var(--text-primary);
     font-size: 0.8125rem;
+    animation: guard-in 0.6s ease-out;
+  }
+
+  /* Cada confirmacion nueva entra con un destello (ver el {#key} en
+     Workspace): si ya habia un aviso, se nota que ahora es otro bloque. */
+  @keyframes guard-in {
+    from {
+      background: color-mix(in srgb, var(--danger) 38%, var(--surface));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .execution-guard {
+      animation: none;
+    }
+  }
+
+  .sql {
+    flex-basis: 100%;
+    order: 1;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .execution-guard :global(svg) {

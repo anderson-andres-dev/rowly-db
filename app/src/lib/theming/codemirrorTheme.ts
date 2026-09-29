@@ -210,7 +210,7 @@ function createCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
 				backgroundColor: 'transparent !important'
 			},
 			'.cm-activeStatement': {
-				width: 'calc(var(--cm-active-statement-width) + 0.5ch)',
+				width: 'max(calc(var(--cm-active-statement-width) + 0.5ch), calc(var(--cm-active-statement-measured, 0px) + 0.5ch))',
 				boxShadow: `inset 1px 0 ${palette.activeStatement}, inset -1px 0 ${palette.activeStatement}`
 			},
 			'.cm-activeStatement.cm-activeStatementStart': {

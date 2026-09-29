@@ -9,8 +9,10 @@
   import { t } from "$lib/i18n";
   import { detectJsonColumns, escapeHtml, highlightJson } from "$lib/jsonHighlight";
   import type { FindMatch } from "$lib/gridFind";
-  import { CHUNK_ROWS, GROUP_COLS, chunkWindow, groupWindow, type ChunkWindow } from "$lib/gridWindow";
+  import { CHUNK_ROWS, GROUP_COLS, chunkWindow, groupWindow, rowAtVisual, type ChunkWindow } from "$lib/gridWindow";
   import { onePerFrame } from "$lib/onePerFrame";
+  import { NAVIGATION_KEYS, navigationTarget, type GridBounds, type GridCell } from "$lib/gridNavigation";
+  import { numpadText } from "$lib/numpadKeys";
   import {
     parseClipboard,
     readClipboardText,
@@ -499,6 +501,8 @@
   }
 
   function onGridKeydown(event: KeyboardEvent) {
+    if (event.target === gridEl && !editing) onGridRootKeydown(event);
+    if (event.defaultPrevented) return;
     const mod = event.ctrlKey || event.metaKey;
     if (!mod || event.altKey || event.shiftKey || editing) return;
     const key = event.key.toLowerCase();
@@ -801,7 +805,10 @@
   }
 
   function onCellKeydown(event: KeyboardEvent, row: number, col: number) {
-    if ((event.key === "Enter" && !event.ctrlKey && !event.altKey && !event.metaKey) || event.key === "F2") {
+    const mod = event.ctrlKey || event.metaKey;
+    // Enter o F2 entran a editar la celda (otro Enter sale, ver
+    // onEditorKeydown).
+    if ((event.key === "Enter" || event.key === "F2") && !mod && !event.altKey) {
       event.preventDefault();
       // Con varias celdas seleccionadas se conserva la seleccion: lo que se
       // escriba va a todas (ver startEditing).
@@ -814,25 +821,80 @@
     // navegador: con mas de GROUP_COLS columnas cada fila esta repartida en
     // varias tablas (mosaicos) y el orden del DOM no es el de la fila. En el
     // borde del grid, el Tab sale de el como siempre.
-    if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (event.key === "Tab" && !mod && !event.altKey) {
       const target = neighborCell(row, col, event.shiftKey ? -1 : 1);
       if (!target) return;
       event.preventDefault();
-      selectCell(target.row, target.col);
-      void focusCellAt(target.row, target.col);
+      void moveTo(target, false);
       return;
     }
     // Escribir sobre una celda empieza a editarla con esa tecla, como en una
     // planilla (y en todas las seleccionadas). El espacio sigue siendo
-    // seleccionar.
-    if (event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+    // seleccionar. Backspace empieza con la celda vacia.
+    const typed = numpadText(event) ?? event.key;
+    if (typed.length === 1 && typed !== " " && !mod && !event.altKey && !event.isComposing) {
       event.preventDefault();
-      requestEdit(row, col, event.key);
+      requestEdit(row, col, typed);
+      return;
+    }
+    if (event.key === "Backspace" && !mod && !event.altKey) {
+      event.preventDefault();
+      if (!fillRangesFor(row, col)) selectCell(row, col);
+      requestEdit(row, col, "");
+      return;
+    }
+    // Flechas, Inicio/Fin y RePag/AvPag mueven la celda activa; con Ctrl,
+    // hasta el borde; con Shift, extienden la seleccion desde la activa.
+    if (NAVIGATION_KEYS.has(event.key) && !event.altKey) {
+      const from = event.shiftKey ? selectionEnd(row, col) : activeCell(row, col);
+      const target = navigationTarget(from, event.key, mod, navigationBounds());
+      if (!target) return;
+      event.preventDefault();
+      void moveTo(target, event.shiftKey);
       return;
     }
     if (event.key !== " ") return;
     event.preventDefault();
     selectCell(row, col, event.shiftKey);
+  }
+
+  // Con el foco en el grid y no en una celda (al llegar con Ctrl+W, o tras
+  // un clic en el encabezado), las teclas siguen como si estuviera en la
+  // celda activa. Sin seleccion, la primera flecha elige la primera celda a
+  // la vista.
+  function onGridRootKeydown(event: KeyboardEvent) {
+    if (totalRows === 0 || columns.length === 0) return;
+    if (selection) {
+      onCellKeydown(event, selection.startRow, selection.startCol);
+      return;
+    }
+    if (!NAVIGATION_KEYS.has(event.key) || event.altKey) return;
+    event.preventDefault();
+    const scrollTop = viewportEl?.scrollTop ?? 0;
+    const row = Math.min(rowAtVisual(Math.ceil(scrollTop / rowHeight), rows.length, hiddenBefore), totalRows - 1);
+    const scrollLeft = viewportEl?.scrollLeft ?? 0;
+    const col = Math.max(0, columnLefts.findIndex((left) => left >= scrollLeft));
+    void moveTo({ row, col }, false);
+  }
+
+  // La celda activa es donde empezo la seleccion; Shift+flecha mueve la
+  // otra punta. Sin seleccion, la celda con el foco.
+  function activeCell(row: number, col: number): GridCell {
+    return selection ? { row: selection.startRow, col: selection.startCol } : { row, col };
+  }
+
+  function selectionEnd(row: number, col: number): GridCell {
+    return selection ? { row: selection.endRow, col: selection.endCol } : { row, col };
+  }
+
+  function navigationBounds(): GridBounds {
+    const bodyHeight = (viewportEl?.clientHeight ?? 0) - headerHeight;
+    return {
+      rows: totalRows,
+      cols: columns.length,
+      pageRows: Math.max(1, Math.floor(bodyHeight / rowHeight) - 1),
+      isHidden: (row) => row < rows.length && !!hiddenRows?.has(row),
+    };
   }
 
   function neighborCell(row: number, col: number, step: -1 | 1): { row: number; col: number } | null {
@@ -847,13 +909,33 @@
     }
   }
 
-  // Trae la celda a la vista (montando su mosaico si hacia falta) y le da el
-  // foco.
-  async function focusCellAt(row: number, col: number) {
-    await reveal({ minRow: row, maxRow: row, minCol: col, maxCol: col });
+  // Lo justo para que la celda quede a la vista, sin animacion: al moverse
+  // con el teclado la vista acompana fila a fila, como en una planilla.
+  function scrollCellIntoView(row: number, col: number) {
+    const el = viewportEl;
+    if (!el) return;
+    const top = headerHeight + visualRow(row) * rowHeight;
+    let scrollTop = el.scrollTop;
+    if (top < el.scrollTop + headerHeight) scrollTop = top - headerHeight;
+    else if (top + rowHeight > el.scrollTop + el.clientHeight) scrollTop = top + rowHeight - el.clientHeight;
+    const left = rowNumberWidth + (columnLefts[col] ?? 0);
+    const right = left + (columnWidths[col] ?? 0);
+    let scrollLeft = el.scrollLeft;
+    if (left < el.scrollLeft + rowNumberWidth) scrollLeft = left - rowNumberWidth;
+    else if (right > el.scrollLeft + el.clientWidth) scrollLeft = right - el.clientWidth;
+    if (scrollTop !== el.scrollTop || scrollLeft !== el.scrollLeft) {
+      el.scrollTo({ top: Math.max(0, scrollTop), left: Math.max(0, scrollLeft) });
+    }
+  }
+
+  // Selecciona la celda (o extiende hasta ella), la trae a la vista
+  // (montando su mosaico si hacia falta) y le da el foco.
+  async function moveTo(target: GridCell, extend: boolean) {
+    selectCell(target.row, target.col, extend);
+    scrollCellIntoView(target.row, target.col);
     syncChunks();
     await tick();
-    (cellElement(row, col) ?? gridEl)?.focus({ preventScroll: true });
+    (cellElement(target.row, target.col) ?? gridEl)?.focus({ preventScroll: true });
   }
 
   function onBodyDoubleClick(event: MouseEvent) {
@@ -918,7 +1000,6 @@
 
   // Celdas a las que va lo que se escribe (null: solo la que se edita).
   let fillTargets = $state<RowRange[] | null>(null);
-  const fillCount = $derived(fillTargets ? visibleCells(fillTargets) : 0);
   // Como empezo la edicion: con una tecla (reemplaza) o con Enter/F2/doble
   // clic y el valor que tenia. Sin escribir nada, confirmar no rellena las
   // demas celdas (Enter para mirar una celda no puede pisar 500).
@@ -941,9 +1022,11 @@
     else editInput?.setSelectionRange(editValue.length, editValue.length);
   }
 
-  function finishEditing(commit: boolean, next: -1 | 0 | 1 = 0, refocus = true) {
+  // `move`: la celda a la que se pasa al confirmar (Enter, Tab, flechas).
+  function finishEditing(commit: boolean, move: GridCell | null = null, refocus = true) {
     const current = editing;
     if (!current) return;
+    clearFillPreview();
     editing = null;
     const targets = fillTargets;
     fillTargets = null;
@@ -958,15 +1041,9 @@
         addEffect({ minRow: current.row, maxRow: current.row, minCol: current.col, maxCol: current.col }, "commit");
       }
     }
-    if (next !== 0 && editInfo) {
-      // Tab / Shift+Tab: siguiente celda editable de la misma fila.
-      for (let col = current.col + next; col >= 0 && col < columns.length; col += next) {
-        if (!editableColumn(current.row, col)) {
-          selectCell(current.row, col);
-          void startEditing(current.row, col);
-          return;
-        }
-      }
+    if (move) {
+      void moveTo(move, false);
+      return;
     }
     if (refocus) void tick().then(() => cellElement(current.row, current.col)?.focus({ preventScroll: true }));
   }
@@ -974,6 +1051,7 @@
   function setEditingNull() {
     const current = editing;
     if (!current) return;
+    clearFillPreview();
     editing = null;
     const targets = fillTargets;
     fillTargets = null;
@@ -987,19 +1065,71 @@
     void tick().then(() => cellElement(current.row, current.col)?.focus({ preventScroll: true }));
   }
 
+  // Enter sale de la celda y se queda en ella: si se escribio algo queda
+  // como cambio pendiente; si no, solo se sale. Tab / Shift+Tab confirman y
+  // pasan a la derecha / izquierda. Si se empezo escribiendo, las flechas
+  // tambien confirman y se mueven (como en una planilla); con Enter, F2 o
+  // doble clic mueven el cursor dentro del texto.
   function onEditorKeydown(event: KeyboardEvent) {
     event.stopPropagation();
-    if (event.key === "Enter") {
+    const current = editing;
+    if (!current) return;
+    const mod = event.ctrlKey || event.metaKey || event.altKey;
+    if (event.key === "Enter" && !mod) {
       event.preventDefault();
       finishEditing(true);
     } else if (event.key === "Escape") {
       event.preventDefault();
       finishEditing(false);
-    } else if (event.key === "Tab") {
+    } else if (event.key === "Tab" && !mod) {
       event.preventDefault();
-      finishEditing(true, event.shiftKey ? -1 : 1);
+      finishEditing(true, neighborCell(current.row, current.col, event.shiftKey ? -1 : 1));
+    } else if (editTyped && !mod && !event.shiftKey && event.key.startsWith("Arrow")) {
+      event.preventDefault();
+      finishEditing(true, navigationTarget(current, event.key, false, navigationBounds()));
     }
   }
+
+  // Con varias celdas seleccionadas, lo que se escribe aparece al instante
+  // en todas, cada una con su cursor. Solo una clase y un data-fill en las
+  // celdas montadas (el texto lo pone el CSS), sin tocar su contenido: al
+  // terminar se quitan y la edicion real las pinta (o no, si se cancelo).
+  let fillPreview = new Set<HTMLTableCellElement>();
+
+  function paintFillPreview() {
+    const current = editing;
+    const targets = fillTargets;
+    if (!current || !targets) return;
+    for (const range of targets) {
+      const last = Math.min(range.maxRow, totalRows - 1);
+      for (let row = range.minRow; row <= last; row++) {
+        if (row < rows.length && hiddenRows?.has(row)) continue;
+        for (let col = range.minCol; col <= range.maxCol; col++) {
+          if (row === current.row && col === current.col) continue;
+          const td = cellElement(row, col);
+          if (!td || editableColumn(row, col)) continue;
+          td.classList.add("fill-preview");
+          td.dataset.fill = editValue;
+          fillPreview.add(td);
+        }
+      }
+    }
+  }
+
+  function clearFillPreview() {
+    for (const td of fillPreview) {
+      td.classList.remove("fill-preview");
+      delete td.dataset.fill;
+    }
+    fillPreview = new Set();
+  }
+
+  $effect(() => {
+    editing;
+    fillTargets;
+    editValue;
+    untrack(paintFillPreview);
+  });
 
   const editorRect = $derived.by(() => {
     if (!editing || !widthsLocked) return null;
@@ -1013,6 +1143,7 @@
   $effect(() => {
     rows;
     untrack(() => {
+      clearFillPreview();
       editing = null;
       fillTargets = null;
     });
@@ -1057,7 +1188,7 @@
   function onBodyPointerDown(event: PointerEvent) {
     // preventDefault en pointerdown tambien evita que el input pierda el
     // foco: la edicion en curso se confirma a mano antes de seleccionar.
-    if (editing) finishEditing(true, 0, false);
+    if (editing) finishEditing(true, null, false);
     clearNativeSelectionInGrid();
     const cell = cellFromEvent(event);
     if (cell) onCellPointerDown(event, cell.row, cell.col);
@@ -2153,11 +2284,6 @@
                 onkeydown={onEditorKeydown}
                 onblur={() => finishEditing(true)}
               />
-              {#if fillTargets}
-                <span class="fill-count" use:tooltip={$t("grid.edit.fillCount", { count: fillCount })}
-                  >×{fillCount}</span
-                >
-              {/if}
               <button
                 type="button"
                 class="null-chip"
@@ -2853,13 +2979,44 @@
     user-select: text;
   }
 
-  /* Cuantas celdas reciben lo que se escribe (varias seleccionadas). */
-  .fill-count {
-    flex-shrink: 0;
-    margin-right: 4px;
-    color: var(--text-secondary);
-    font-size: 0.6875rem;
-    font-variant-numeric: tabular-nums;
+  /* Las otras celdas que reciben lo que se escribe (ver paintFillPreview):
+     el mismo texto y un cursor que parpadea al final. */
+  .grid-body-table :global(td.fill-preview) {
+    font-size: 0;
+  }
+
+  .grid-body-table :global(td.fill-preview > *) {
+    display: none;
+  }
+
+  .grid-body-table :global(td.fill-preview::before) {
+    content: attr(data-fill);
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-style: normal;
+  }
+
+  .grid-body-table :global(td.fill-preview::after) {
+    content: "";
+    display: inline-block;
+    width: 1px;
+    height: 1.1em;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    background: var(--text-primary);
+    animation: fill-caret 1s steps(1) infinite;
+  }
+
+  @keyframes fill-caret {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .grid-body-table :global(td.fill-preview::after) {
+      animation: none;
+    }
   }
 
   .null-chip {
