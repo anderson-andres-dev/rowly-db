@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-desktop"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "keyring",
  "khipu-driver-core",
@@ -2529,7 +2529,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "serde",
@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-mysql"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2551,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-postgres"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2562,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-engine"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2571,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-lsp"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "khipu-engine",
  "serde_json",
