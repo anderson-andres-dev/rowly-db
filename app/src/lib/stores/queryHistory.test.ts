@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   filterHistory,
   groupHistoryByDay,
+  MAX_HISTORY_CHARS,
   MAX_HISTORY_ENTRIES,
+  MAX_HISTORY_SQL_LENGTH,
   withHistoryEntry,
   type HistoryEntry,
 } from "./queryHistory";
@@ -27,6 +29,20 @@ describe("withHistoryEntry", () => {
     expect(withHistoryEntry(full, entry("SELECT x"))).toHaveLength(MAX_HISTORY_ENTRIES);
     const same = [entry("SELECT 1")];
     expect(withHistoryEntry(same, entry("   "))).toBe(same);
+  });
+
+  it("no pasa del presupuesto de caracteres: salen las mas viejas", () => {
+    // Consultas largas (pero admitidas): muchas menos que el maximo de
+    // entradas ya llenan el presupuesto.
+    const long = (index: number) => entry(`SELECT ${index} ${"x".repeat(MAX_HISTORY_SQL_LENGTH - 20)}`);
+    let history: HistoryEntry[] = [];
+    for (let index = 0; index < 200; index++) history = withHistoryEntry(history, long(index));
+    const chars = history.reduce((total, item) => total + item.sql.length, 0);
+    expect(chars).toBeLessThanOrEqual(MAX_HISTORY_CHARS);
+    expect(history.length).toBeLessThan(MAX_HISTORY_ENTRIES);
+    // Quedan las mas recientes, en orden.
+    expect(history[0].sql.startsWith("SELECT 199 ")).toBe(true);
+    expect(history[1].sql.startsWith("SELECT 198 ")).toBe(true);
   });
 });
 

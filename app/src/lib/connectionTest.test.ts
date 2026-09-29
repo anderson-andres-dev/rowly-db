@@ -21,19 +21,27 @@ describe("summarizeReport", () => {
     ]);
   });
 
-  it("avisa cuando conecto sin cifrar y explica por que", () => {
+  it("sin cifrar sigue siendo exito: el aviso va solo en la linea del SSL", () => {
     const fellBack = summarizeReport({
       ...encrypted,
       tls: { encrypted: false, detail: null, fellBack: true },
     });
-    expect(fellBack.outcome).toBe("warning");
+    expect(fellBack).toMatchObject({ outcome: "success", title: "Conexión correcta" });
+    expect(fellBack.lines.at(-1)).toMatchObject({ label: "SSL", warning: true });
     expect(fellBack.lines.at(-1)?.value).toContain("MySQL 5.7");
+    // Solo esa linea.
+    expect(fellBack.lines.filter((line) => line.warning)).toHaveLength(1);
 
     const noTls = summarizeReport({
       ...encrypted,
       tls: { encrypted: false, detail: null, fellBack: false },
     });
-    expect(noTls.lines.at(-1)?.value).toBe("no: el servidor no tiene TLS habilitado");
+    expect(noTls.outcome).toBe("success");
+    expect(noTls.lines.at(-1)).toEqual({ label: "SSL", value: "no: el servidor no tiene TLS habilitado", warning: true });
+  });
+
+  it("cifrada: ninguna linea con aviso", () => {
+    expect(summarizeReport(encrypted).lines.some((line) => line.warning)).toBe(false);
   });
 
   it("omite el schema y la latencia que no se pudieron medir", () => {

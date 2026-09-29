@@ -8,14 +8,24 @@ import type { ConnectionFailure, TestConnectionReport, TlsStatus } from "$lib/ty
 // Los textos salen de `t`: el formulario pasa `$t` para que el resumen
 // cambie con el idioma; sin él se usa el idioma vigente al llamar.
 
-export type TestOutcome = "success" | "warning" | "error";
+// Conectar es exito aunque sea sin cifrar: el aviso va solo en la linea
+// del SSL (`warning`), no en el resultado entero. Un titulo de exito con un
+// icono de advertencia al lado se leia ambiguo.
+export type TestOutcome = "success" | "error";
+
+export interface TestLine {
+  label: string;
+  value: string;
+  // La linea pide atencion (SSL sin cifrar).
+  warning?: boolean;
+}
 
 export interface TestSummary {
   outcome: TestOutcome;
   title: string;
   // Texto corto junto al botón, p.ej. "MySQL 8.4.9".
   badge: string;
-  lines: { label: string; value: string }[];
+  lines: TestLine[];
 }
 
 function describeTls(tls: TlsStatus, t: Translate): string {
@@ -30,18 +40,18 @@ function describeTls(tls: TlsStatus, t: Translate): string {
 
 export function summarizeReport(report: TestConnectionReport, t: Translate = translate): TestSummary {
   const unencrypted = report.tls.encrypted === false;
-  const lines = [
+  const lines: TestLine[] = [
     { label: t("connections.test.server"), value: report.serverVersion },
     ...(report.defaultSchema ? [{ label: t("connections.test.schema"), value: report.defaultSchema }] : []),
     {
       label: t("connections.test.latency"),
       value: report.latencyMs === null ? "—" : t("connections.test.latencyValue", { ms: report.latencyMs }),
     },
-    { label: t("connections.test.ssl"), value: describeTls(report.tls, t) },
+    { label: t("connections.test.ssl"), value: describeTls(report.tls, t), ...(unencrypted ? { warning: true } : {}) },
   ];
   return {
-    outcome: unencrypted ? "warning" : "success",
-    title: unencrypted ? t("connections.test.unencrypted") : t("connections.test.success"),
+    outcome: "success",
+    title: t("connections.test.success"),
     badge: report.serverVersion,
     lines,
   };
@@ -51,7 +61,7 @@ export function summarizeReport(report: TestConnectionReport, t: Translate = tra
 // detalle crudo del driver, al final (tambien entra en "Copiar").
 export function summarizeError(failure: ConnectionFailure, target: ConnectionTarget, t: Translate = translate): TestSummary {
   const explained = explainConnectionFailure(failure, target, t);
-  const lines = [{ label: t("connections.test.target"), value: `${target.host}:${target.port}` }];
+  const lines: TestLine[] = [{ label: t("connections.test.target"), value: `${target.host}:${target.port}` }];
   if (explained.hint) lines.push({ label: t("connections.test.hint"), value: explained.hint });
   lines.push({
     label: explained.title ? t("connections.test.detail") : t("connections.test.error"),

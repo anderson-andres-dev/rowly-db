@@ -1,7 +1,25 @@
+<script module lang="ts">
+  import { highlightSql } from "$lib/sqlHighlight";
+  import type { LogEntry } from "$lib/stores/executionLog";
+
+  // El resaltado de cada sentencia, una sola vez por entrada: la pestaña se
+  // vuelve a montar cada vez que se muestra, y resaltar todo el registro de
+  // nuevo en cada una pesaba tras horas de uso. Las entradas no cambian;
+  // al descartarse, su resaltado se va con ellas.
+  const highlighted = new WeakMap<LogEntry, string>();
+
+  function highlightedSql(entry: LogEntry): string {
+    let html = highlighted.get(entry);
+    if (html === undefined) {
+      html = highlightSql(entry.text);
+      highlighted.set(entry, html);
+    }
+    return html;
+  }
+</script>
+
 <script lang="ts">
   import { tick, type Snippet } from "svelte";
-  import type { LogEntry } from "$lib/stores/executionLog";
-  import { highlightSql } from "$lib/sqlHighlight";
   import { t } from "$lib/i18n";
 
   // Pestaña "Salida": el registro de la consola, al estilo del Output de
@@ -52,7 +70,7 @@
     {#if entry.kind === "query"}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       <span class="text sql"
-        >{#if entry.schema}<span class="prompt">{entry.schema}&gt;</span> {/if}{@html highlightSql(entry.text)}</span
+        >{#if entry.schema}<span class="prompt">{entry.schema}&gt;</span> {/if}{@html highlightedSql(entry)}</span
       >
     {:else}
       <span class="text" class:error={entry.kind === "error"}>{entry.text}</span>

@@ -41,6 +41,7 @@
     pasteBlock,
     pendingCount,
     setCellValue,
+    fillCells,
     type CellValue,
     type PendingEdits,
     type ResultEditInfo,
@@ -187,6 +188,19 @@
 
   function commitCell(row: number, col: number, value: CellValue) {
     onedits(setCellValue(edits, rows, row, col, value), { minRow: row, maxRow: row, minCol: col, maxCol: col });
+  }
+
+  // Lo escrito con varias celdas seleccionadas: en todas, un solo paso de
+  // deshacer (que vuelve hasta el rango entero).
+  function fillSelectedCells(ranges: RowRange[], value: CellValue, hidden: ReadonlySet<number> | null) {
+    if (!editInfo || ranges.length === 0) return;
+    const at = {
+      minRow: Math.min(...ranges.map((range) => range.minRow)),
+      maxRow: Math.max(...ranges.map((range) => range.maxRow)),
+      minCol: Math.min(...ranges.map((range) => range.minCol)),
+      maxCol: Math.max(...ranges.map((range) => range.maxCol)),
+    };
+    onedits(fillCells(edits, editInfo, rows, ranges, value, hidden), at);
   }
 
   function addNewRow() {
@@ -713,6 +727,7 @@
             {editBlockedReason}
             {edits}
             oncommitcell={commitCell}
+            onfillcells={fillSelectedCells}
             oneditblocked={onnotice}
             onselectionchange={(range) => (gridSelection = range)}
             copyFormat={$copySettings.format}

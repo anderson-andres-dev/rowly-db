@@ -167,7 +167,26 @@ const wordClassHighlight = ViewPlugin.fromClass(
 	{ decorations: (plugin) => plugin.decorations }
 );
 
+// Un tema por paleta y esquema, reutilizado. Cada EditorView.theme y cada
+// HighlightStyle.define agrega sus reglas CSS al documento y no las quita
+// nunca; cada pestaña monta su propio editor, asi que armar el tema de nuevo
+// en cada una sumaba ~40 reglas por cambio de pestaña. Tras horas de uso
+// eran decenas de miles, y cada recalculo de estilos (mover el sidebar,
+// scrollear, pasar el mouse) se volvia mas lento. Con el mismo objeto,
+// CodeMirror no vuelve a montar sus reglas.
+const themes = new Map<string, Extension>();
+
 export function buildCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
+	const key = `${scheme}\u0000${JSON.stringify(palette)}`;
+	let theme = themes.get(key);
+	if (!theme) {
+		theme = createCmTheme(palette, scheme);
+		themes.set(key, theme);
+	}
+	return theme;
+}
+
+function createCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
 	const themeExtension = EditorView.theme(
 		{
 			'&': {

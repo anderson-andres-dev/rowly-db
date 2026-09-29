@@ -200,13 +200,13 @@ dialog[open] {
   transform: translateY(0) scale(1);
 }
 
-/* El desenfoque del fondo es fijo y solo se anima el color del velo:
-   animar blur() obliga a recalcular el desenfoque de toda la app en cada
-   cuadro (con un grid de cientos de filas detras, en WebKitGTK eso se nota
-   como tirones). La opacidad del velo, en cambio, es barata. */
+/* Sin desenfoque del fondo: aun fijo, backdrop-filter obliga a WebKitGTK a
+   volver a desenfocar toda la app detras del modal en cada cuadro que algo
+   se mueve (el modal mismo al entrar, un spinner detras), y con un
+   compositor que ya mezcla transparencias (Hyprland) se nota como tirones.
+   Solo el velo de color, que es barato de animar. */
 dialog::backdrop {
   background: rgb(0 0 0 / 0%);
-  backdrop-filter: blur(3px);
   transition:
     background-color var(--duration-fast) ease-out,
     display var(--duration-fast) allow-discrete,

@@ -112,7 +112,6 @@ export default defineMessages({
     "form.save": "Guardar",
 
     "test.success": "Conexión correcta",
-    "test.unencrypted": "Conectó sin cifrar",
     "test.failed": "No se pudo conectar",
     "test.failedBadge": "Falló",
     "test.server": "Servidor",
@@ -261,7 +260,6 @@ export default defineMessages({
     "form.save": "Save",
 
     "test.success": "Connection successful",
-    "test.unencrypted": "Connected without encryption",
     "test.failed": "Couldn’t connect",
     "test.failedBadge": "Failed",
     "test.server": "Server",
@@ -410,7 +408,6 @@ export default defineMessages({
     "form.save": "Salvar",
 
     "test.success": "Conexão bem-sucedida",
-    "test.unencrypted": "Conectou sem criptografia",
     "test.failed": "Não foi possível conectar",
     "test.failedBadge": "Falhou",
     "test.server": "Servidor",
@@ -560,7 +557,6 @@ export default defineMessages({
     "form.save": "Enregistrer",
 
     "test.success": "Connexion réussie",
-    "test.unencrypted": "Connecté sans chiffrement",
     "test.failed": "Connexion impossible",
     "test.failedBadge": "Échec",
     "test.server": "Serveur",
@@ -710,7 +706,6 @@ export default defineMessages({
     "form.save": "Speichern",
 
     "test.success": "Verbindung erfolgreich",
-    "test.unencrypted": "Unverschlüsselt verbunden",
     "test.failed": "Verbindung fehlgeschlagen",
     "test.failedBadge": "Fehlgeschlagen",
     "test.server": "Server",
