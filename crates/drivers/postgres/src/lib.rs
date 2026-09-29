@@ -27,6 +27,24 @@ pub struct PostgresConnector {
 /// (30 s) leaves the app hanging too long on a host that doesn't answer.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// sqlx sends `TimeZone=UTC` in the startup packet, and a client setting
+/// outranks postgresql.conf and `ALTER DATABASE/ROLE ... SET timezone`, so
+/// timestamptz values and now() came out in UTC whatever the server says.
+/// The session is put back on the server's zone, like psql: the most
+/// specific database/role setting (role+database, role, database), else
+/// the server's configured zone (`log_timezone`, which initdb sets to the
+/// same zone and a client can't override).
+const RESTORE_SERVER_TIME_ZONE: &str = "\
+    SELECT set_config('TimeZone', COALESCE(( \
+        SELECT substring(config FROM position('=' IN config) + 1) \
+        FROM pg_db_role_setting setting, unnest(setting.setconfig) config \
+        WHERE config ILIKE 'timezone=%' \
+          AND setting.setrole IN (0, (SELECT oid FROM pg_roles WHERE rolname = current_user)) \
+          AND setting.setdatabase IN (0, (SELECT oid FROM pg_database WHERE datname = current_database())) \
+        ORDER BY setting.setrole <> 0 AND setting.setdatabase <> 0 DESC, setting.setrole <> 0 DESC \
+        LIMIT 1 \
+    ), current_setting('log_timezone')), false)";
+
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, sqlx::Error> {
     let options = PgConnectOptions::new()
         .host(&config.host)
@@ -36,6 +54,16 @@ async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<PgPool, s
         .database(&config.database);
     PgPoolOptions::new()
         .acquire_timeout(CONNECT_TIMEOUT)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                // A server without these catalogs (a Postgres-compatible
+                // one) keeps sqlx's UTC rather than refusing to connect.
+                let _ = sqlx::query(RESTORE_SERVER_TIME_ZONE)
+                    .execute(&mut *conn)
+                    .await;
+                Ok(())
+            })
+        })
         .connect_with(tls::apply(
             options,
             mode,
@@ -580,6 +608,26 @@ mod tests {
             tls_mode: TlsMode::Auto,
             ca_certificate_path: None,
         }
+    }
+
+    // The session is back on the server's time zone, not sqlx's UTC (see
+    // RESTORE_SERVER_TIME_ZONE): what a client that sends no TimeZone (psql)
+    // gets. Set KHIPU_TEST_POSTGRES_TIME_ZONE to the zone the server (or an
+    // ALTER DATABASE/ROLE ... SET timezone) gives; without it, the server's
+    // configured zone.
+    #[tokio::test]
+    #[ignore = "requires database"]
+    async fn session_uses_the_server_time_zone() {
+        let connector = PostgresConnector::connect(&config_from_env())
+            .await
+            .expect("connect should succeed against a reachable Postgres instance");
+        let (time_zone, server_zone): (String, String) =
+            sqlx::query_as("SELECT current_setting('TimeZone'), current_setting('log_timezone')")
+                .fetch_one(&connector.pool)
+                .await
+                .expect("session time zone should be readable");
+        let expected = std::env::var("KHIPU_TEST_POSTGRES_TIME_ZONE").unwrap_or(server_zone);
+        assert_eq!(time_zone, expected);
     }
 
     #[tokio::test]

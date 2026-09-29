@@ -1189,12 +1189,14 @@
   }
 
   // Solicita una ejecucion nueva (Ctrl+Enter o el boton "Ejecutar"). No hace
-  // nada si esa consola ya esta ejecutando o tiene un guard visible —
-  // beginQueryExecution() ya contempla ambos casos, asi que repetir
-  // Ctrl+Enter mientras el guard esta arriba no dispara una segunda
-  // invocacion ni confirma nada por si solo.
+  // nada si esa consola ya esta ejecutando. Con un guard visible, la
+  // ejecucion nueva lo reemplaza: confirmar ejecuta siempre lo ultimo que se
+  // pidio, nunca un bloque anterior (y el guard se vuelve a mostrar, ver el
+  // {#key} de ExecutionGuard). Nada se confirma por si solo.
   async function requestExecution(consoleId: string, sql: string) {
-    if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
+    if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
+    cancelQueryConfirmation(consoleId);
+    if (!beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
     // Con las reglas del motor: las mismas con que el editor marca cada
@@ -1509,13 +1511,18 @@
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}
-      <ExecutionGuard
-        statement={liveExecution.pendingConfirmation.statement}
-        script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
-        production={$isProduction}
-        oncancel={() => cancelPendingExecution(activeConsole.id)}
-        onconfirm={() => confirmPendingExecution(activeConsole.id)}
-      />
+      <!-- Cada confirmacion nueva monta el guard otra vez: su entrada avisa
+           que ahora es otro bloque. -->
+      {#key liveExecution.pendingConfirmation}
+        <ExecutionGuard
+          sql={liveExecution.pendingConfirmation.sql}
+          statement={liveExecution.pendingConfirmation.statement}
+          script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
+          production={$isProduction}
+          oncancel={() => cancelPendingExecution(activeConsole.id)}
+          onconfirm={() => confirmPendingExecution(activeConsole.id)}
+        />
+      {/key}
     {/if}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

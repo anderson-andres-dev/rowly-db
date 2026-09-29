@@ -109,18 +109,53 @@ function statementDecorations(view: EditorView): DecorationSet {
   return Decoration.set(decorations, true);
 }
 
+// Contar caracteres no ve lo que no es texto (los hints de parametros, por
+// ejemplo): el ancho real de las lineas visibles del recuadro se mide en el
+// DOM y queda en el contenido como minimo del ancho.
+const MEASURED_WIDTH = "--cm-active-statement-measured";
+
+function measureStatementLines(view: EditorView): number {
+  let width = 0;
+  const range = document.createRange();
+  for (const line of view.contentDOM.querySelectorAll<HTMLElement>(".cm-activeStatement")) {
+    range.selectNodeContents(line);
+    const contentLeft = line.getBoundingClientRect().left + parseFloat(getComputedStyle(line).paddingLeft);
+    width = Math.max(width, range.getBoundingClientRect().right - contentLeft);
+  }
+  return Math.ceil(width);
+}
+
 export const activeStatementHighlight: Extension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    measuredWidth = -1;
 
-    constructor(view: EditorView) {
+    constructor(readonly view: EditorView) {
       this.decorations = statementDecorations(view);
+      this.requestMeasure();
     }
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
         this.decorations = statementDecorations(update.view);
       }
+      this.requestMeasure();
+    }
+
+    requestMeasure() {
+      this.view.requestMeasure({
+        key: this,
+        read: (view) => measureStatementLines(view),
+        write: (width, view) => {
+          if (width === this.measuredWidth) return;
+          this.measuredWidth = width;
+          view.contentDOM.style.setProperty(MEASURED_WIDTH, `${width}px`);
+        },
+      });
+    }
+
+    destroy() {
+      this.view.contentDOM.style.removeProperty(MEASURED_WIDTH);
     }
   },
   { decorations: (plugin) => plugin.decorations },
