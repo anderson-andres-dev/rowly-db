@@ -1,6 +1,7 @@
 <script lang="ts">
   import { activeEngine } from "$lib/stores/connection";
-  import { tooltip } from "$lib/tooltip";
+  import { hideTooltipFor, scheduleTooltipFor, tooltip } from "$lib/tooltip";
+  import { typeProblem } from "$lib/cellTypes";
   import { settleTransitions } from "$lib/settleTransitions";
   import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
@@ -8,6 +9,8 @@
   import { t } from "$lib/i18n";
   import { detectJsonColumns, escapeHtml, highlightJson } from "$lib/jsonHighlight";
   import type { FindMatch } from "$lib/gridFind";
+  import { CHUNK_ROWS, GROUP_COLS, chunkWindow, groupWindow, type ChunkWindow } from "$lib/gridWindow";
+  import { onePerFrame } from "$lib/onePerFrame";
   import {
     parseClipboard,
     readClipboardText,
@@ -35,6 +38,7 @@
     editBlockedReason = null,
     edits = EMPTY_EDITS,
     oncommitcell = () => {},
+    onfillcells = () => {},
     oneditblocked = () => {},
     onselectionchange = () => {},
     copyFormat = "tsv",
@@ -60,6 +64,8 @@
     editBlockedReason?: string | null;
     edits?: PendingEdits;
     oncommitcell?: (row: number, col: number, value: CellValue) => void;
+    // Editar con varias celdas seleccionadas: el valor va a todas.
+    onfillcells?: (ranges: RowRange[], value: CellValue) => void;
     oneditblocked?: (reason: string) => void;
     onselectionchange?: (range: RowRange | null) => void;
     // Ctrl+C: formato para varias celdas (una sola se copia como su valor).
@@ -129,10 +135,12 @@
   // sticky en vez de cientos, y sin translateZ/will-change: nada de eso hace
   // falta con esta estructura.
   //
-  // Tampoco hay virtualizacion de filas: 500 filas se montan una sola vez y
-  // el scroll no toca el DOM. Montar/desmontar filas durante el scroll era
-  // lo que se veia como "filas cargando lento" (incluso al volver hacia
-  // arriba): el scroll llega a pintarse antes que el re-render.
+  // Las filas se virtualizan por tramos (ver "Cuerpo virtualizado" abajo):
+  // en el DOM solo esta lo visible mas un margen amplio. Una version
+  // anterior montaba/desmontaba filas en el borde de la vista y se veia como
+  // "filas cargando lento" (el scroll llega a pintarse antes que el
+  // re-render); por eso lo visible se monta en el mismo evento de scroll y
+  // solo se desmonta muy lejos de la vista.
   //
   // El costo dominante medido, de todos modos, era otro: overflow:hidden en
   // cada td (ver la nota en la hoja de estilos).
@@ -695,7 +703,10 @@
   const clippedColumnsSelector = $derived(
     columnWidths
       .map((width, index) =>
-        width < (naturalWidths.body[index] ?? 0) ? `#${viewportId} .grid-body-table td:nth-child(${index + 1})` : null,
+        // Cada mosaico tiene solo las columnas de su grupo (ver mountTile).
+        width < (naturalWidths.body[index] ?? 0)
+          ? `#${viewportId} .grid-body-table table.g${Math.floor(index / GROUP_COLS)} td:nth-child(${(index % GROUP_COLS) + 1})`
+          : null,
       )
       .filter((selector) => selector !== null)
       .join(","),
@@ -711,14 +722,20 @@
     const target = event.currentTarget as HTMLElement;
     target.setPointerCapture(event.pointerId);
 
-    function onMove(moveEvent: PointerEvent) {
+    // A lo sumo un ancho nuevo por cuadro (ver onePerFrame).
+    const live = onePerFrame((width: number) => {
       const next = [...columnWidths];
-      next[columnIndex] = Math.round(Math.max(MIN_COLUMN_WIDTH, startWidth + (moveEvent.clientX - startX)));
+      next[columnIndex] = width;
       keptWidths = { signature: columnSignature, widths: next };
+    });
+
+    function onMove(moveEvent: PointerEvent) {
+      live.set(Math.round(Math.max(MIN_COLUMN_WIDTH, startWidth + (moveEvent.clientX - startX))));
     }
     function onUp() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      live.flush();
       // El ancho total cambia el rango del scrollbar horizontal.
       void tick().then(updateThumbs);
     }
@@ -785,8 +802,18 @@
   function onCellKeydown(event: KeyboardEvent, row: number, col: number) {
     if ((event.key === "Enter" && !event.ctrlKey && !event.altKey && !event.metaKey) || event.key === "F2") {
       event.preventDefault();
-      selectCell(row, col);
+      // Con varias celdas seleccionadas se conserva la seleccion: lo que se
+      // escriba va a todas (ver startEditing).
+      if (!fillRangesFor(row, col)) selectCell(row, col);
       requestEdit(row, col);
+      return;
+    }
+    // Escribir sobre una celda empieza a editarla con esa tecla, como en una
+    // planilla (y en todas las seleccionadas). El espacio sigue siendo
+    // seleccionar.
+    if (event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+      event.preventDefault();
+      requestEdit(row, col, event.key);
       return;
     }
     if (event.key !== " ") return;
@@ -821,28 +848,69 @@
     return null;
   }
 
-  function requestEdit(row: number, col: number) {
+  function requestEdit(row: number, col: number, typed?: string) {
     const blocked = editableColumn(row, col);
     if (blocked) {
       oneditblocked(blocked);
       return;
     }
-    startEditing(row, col);
+    void startEditing(row, col, typed);
   }
 
-  async function startEditing(row: number, col: number) {
+  // Si al editar (row, col) el valor va a varias celdas: la seleccion tiene
+  // mas de una celda y la contiene. null: solo esa celda.
+  function fillRangesFor(row: number, col: number): RowRange[] | null {
+    const ranges = allSelections.map(normalized);
+    const cells = ranges.reduce(
+      (total, range) =>
+        total + (Math.min(range.maxRow, totalRows - 1) - range.minRow + 1) * (range.maxCol - range.minCol + 1),
+      0,
+    );
+    if (cells <= 1) return null;
+    const inside = ranges.some(
+      (range) => row >= range.minRow && row <= range.maxRow && col >= range.minCol && col <= range.maxCol,
+    );
+    return inside ? ranges : null;
+  }
+
+  // Celdas a las que va lo que se escribe (null: solo la que se edita).
+  let fillTargets = $state<RowRange[] | null>(null);
+  const fillCount = $derived(
+    fillTargets
+      ? fillTargets.reduce(
+          (total, range) =>
+            total + (Math.min(range.maxRow, totalRows - 1) - range.minRow + 1) * (range.maxCol - range.minCol + 1),
+          0,
+        )
+      : 0,
+  );
+
+  // `typed`: la tecla con la que se empezo a escribir; reemplaza el valor,
+  // con el cursor al final. Sin ella (Enter, F2, doble clic), el valor
+  // actual seleccionado.
+  async function startEditing(row: number, col: number, typed?: string) {
     const value = valueAt(row, col);
+    fillTargets = fillRangesFor(row, col);
     editing = { row, col };
-    editValue = value.kind === "text" ? value.value : "";
+    editValue = typed ?? (value.kind === "text" ? value.value : "");
     await tick();
     editInput?.focus({ preventScroll: true });
-    editInput?.select();
+    if (typed === undefined) editInput?.select();
+    else editInput?.setSelectionRange(editValue.length, editValue.length);
   }
 
   function finishEditing(commit: boolean, next: -1 | 0 | 1 = 0, refocus = true) {
     const current = editing;
     if (!current) return;
     editing = null;
+    const targets = fillTargets;
+    fillTargets = null;
+    if (commit && targets) {
+      onfillcells(targets, { kind: "text", value: editValue });
+      for (const range of targets) addEffect(range, "commit");
+      if (refocus) void tick().then(() => cellElement(current.row, current.col)?.focus({ preventScroll: true }));
+      return;
+    }
     if (commit) {
       const previous = valueAt(current.row, current.col);
       const unchanged = previous.kind === "text" ? previous.value === editValue : editValue === "";
@@ -868,7 +936,12 @@
     const current = editing;
     if (!current) return;
     editing = null;
-    if (valueAt(current.row, current.col).kind !== "null") {
+    const targets = fillTargets;
+    fillTargets = null;
+    if (targets) {
+      onfillcells(targets, { kind: "null" });
+      for (const range of targets) addEffect(range, "commit");
+    } else if (valueAt(current.row, current.col).kind !== "null") {
       oncommitcell(current.row, current.col, { kind: "null" });
       addEffect({ minRow: current.row, maxRow: current.row, minCol: current.col, maxCol: current.col }, "commit");
     }
@@ -900,7 +973,10 @@
   // Un resultado nuevo (otra pagina, re-ejecucion) cierra la edicion.
   $effect(() => {
     rows;
-    untrack(() => (editing = null));
+    untrack(() => {
+      editing = null;
+      fillTargets = null;
+    });
   });
 
   // Un solo listener por tipo de evento en el <tbody> en vez de tres por
@@ -913,9 +989,12 @@
     if (!cell || !(row instanceof HTMLTableRowElement) || !(section instanceof HTMLTableSectionElement)) {
       return null;
     }
-    // Cada tanda es su propia tabla (ver renderBodyProgressively): el
-    // indice real es el de la primera fila de la tanda + la posicion adentro.
-    return { row: Number(section.dataset.firstRow ?? 0) + row.sectionRowIndex, col: cell.cellIndex };
+    // Cada mosaico es su propia tabla (ver mountTile): el indice real es el
+    // de su primera fila/columna + la posicion adentro.
+    return {
+      row: Number(section.dataset.firstRow ?? 0) + row.sectionRowIndex,
+      col: Number(section.dataset.firstCol ?? 0) + cell.cellIndex,
+    };
   }
 
   // selectstart es lo que dispara WebKit al empezar a seleccionar texto
@@ -951,6 +1030,23 @@
   function onBodyPointerOver(event: PointerEvent) {
     const cell = cellFromEvent(event);
     if (cell) onCellPointerEnter(cell.row, cell.col);
+    const td = event.target instanceof Element ? event.target.closest("td") : null;
+    if (td?.dataset.problem) {
+      problemTooltipCell = td;
+      scheduleTooltipFor(td, td.dataset.problem);
+    }
+  }
+
+  // El motivo de una celda en rojo (paintCell): el tooltip de la app, pedido
+  // a mano porque las celdas son HTML armado, no componentes.
+  let problemTooltipCell: HTMLTableCellElement | null = null;
+
+  function onBodyPointerOut(event: PointerEvent) {
+    const td = event.target instanceof Element ? event.target.closest("td") : null;
+    if (td && td === problemTooltipCell && !td.contains(event.relatedTarget as Node | null)) {
+      hideTooltipFor(td);
+      problemTooltipCell = null;
+    }
   }
 
   function onBodyKeydown(event: KeyboardEvent) {
@@ -988,13 +1084,14 @@
     return `<td tabindex="0" aria-label="${escapeHtml($t("grid.emptyString"))}"></td>`;
   }
 
-  function rowsHtml(from: number, to: number): string {
+  function rowsHtml(from: number, to: number, fromCol: number, toCol: number): string {
     const emptyCell = emptyCellHtml();
     const parts: string[] = [];
     for (let rowIndex = from; rowIndex < to; rowIndex++) {
       parts.push(rowIndex % 2 === 1 ? '<tr class="zebra-odd">' : "<tr>");
       const row = rows[rowIndex];
-      for (let columnIndex = 0; columnIndex < row.length; columnIndex++) {
+      const lastCol = Math.min(toCol, row.length);
+      for (let columnIndex = fromCol; columnIndex < lastCol; columnIndex++) {
         const value = row[columnIndex];
         if (value === "") {
           parts.push(emptyCell);
@@ -1025,25 +1122,57 @@
   let patchedCells = new Map<string, { row: number; col: number }>();
   let patchedRows = new Set<number>();
 
+  // null si su mosaico no esta montado: se parcha al montarlo (patchTile).
   function cellElement(row: number, col: number): HTMLTableCellElement | null {
-    const inBody = row < rows.length;
-    const container = inBody ? bodyEl : insertedEl;
-    if (!container) return null;
-    for (const tbody of container.querySelectorAll<HTMLTableSectionElement>("tbody")) {
-      const first = Number(tbody.dataset.firstRow ?? 0);
-      const index = row - first;
-      if (index >= 0 && index < tbody.rows.length) return tbody.rows[index].cells[col] ?? null;
+    if (row >= rows.length) {
+      const tbody = insertedEl?.querySelector("tbody");
+      return tbody?.rows[row - rows.length]?.cells[col] ?? null;
     }
-    return null;
+    const table = mountedTiles.get(Math.floor(row / CHUNK_ROWS))?.get(Math.floor(col / GROUP_COLS));
+    return table?.tBodies[0]?.rows[row % CHUNK_ROWS]?.cells[col % GROUP_COLS] ?? null;
   }
 
-  function rowElement(row: number): HTMLTableRowElement | null {
-    return (cellElement(row, 0)?.parentElement as HTMLTableRowElement | null) ?? null;
+  // La fila tiene un <tr> por cada mosaico montado de su tramo: las marcas
+  // de fila (eliminada, oculta) van en todos.
+  function rowElements(row: number): HTMLTableRowElement[] {
+    if (row >= rows.length) {
+      const tr = insertedEl?.querySelector("tbody")?.rows[row - rows.length];
+      return tr ? [tr] : [];
+    }
+    const tiles = mountedTiles.get(Math.floor(row / CHUNK_ROWS));
+    if (!tiles) return [];
+    const list: HTMLTableRowElement[] = [];
+    for (const table of tiles.values()) {
+      const tr = table.tBodies[0]?.rows[row % CHUNK_ROWS];
+      if (tr) list.push(tr);
+    }
+    return list;
+  }
+
+  // Por que un valor editado no encaja en su columna (cellTypes.ts), ya en
+  // el idioma de la app; null si encaja o si la columna no se conoce.
+  function problemFor(col: number, value: CellValue): string | null {
+    const column = editInfo?.columns[col];
+    const problem = column ? typeProblem(column, value) : null;
+    return problem ? $t(`grid.${problem.key}`, problem.params) : null;
+  }
+
+  // En una fila nueva, el NULL inicial de una columna obligatoria no se
+  // marca mientras se completa (se avisa al aplicar).
+  function insertedProblem(value: CellValue, col: number): string | null {
+    return value.kind === "text" ? problemFor(col, value) : null;
   }
 
   function paintCell(td: HTMLTableCellElement, value: CellValue, col: number, modified: boolean) {
     const parts = value.kind === "null" ? cellParts(null, col) : cellParts(value.kind === "text" ? value.value : "", col);
-    td.className = [parts.className, modified ? "cell-modified" : ""].filter(Boolean).join(" ");
+    // Un cambio que no encaja en su columna queda en rojo, con el motivo al
+    // pasar el mouse: no hace falta esperar el error del servidor.
+    const problem = modified ? problemFor(col, value) : null;
+    td.className = [parts.className, modified ? "cell-modified" : "", problem ? "cell-invalid" : ""]
+      .filter(Boolean)
+      .join(" ");
+    if (problem) td.dataset.problem = problem;
+    else delete td.dataset.problem;
     td.innerHTML = parts.html;
     // La etiqueta de cadena vacía sigue al valor: una celda vacía editada con
     // texto no debe seguir anunciándose como vacía, ni al revés.
@@ -1077,13 +1206,13 @@
     }
     for (const row of patchedRows) {
       if (edits.deleted.has(row)) continue;
-      rowElement(row)?.classList.remove("row-deleted");
+      for (const tr of rowElements(row)) tr.classList.remove("row-deleted");
       patchedRows.delete(row);
     }
     for (const row of edits.deleted) {
-      const tr = rowElement(row);
-      if (!tr) continue;
-      tr.classList.add("row-deleted");
+      const trs = rowElements(row);
+      if (trs.length === 0) continue;
+      for (const tr of trs) tr.classList.add("row-deleted");
       patchedRows.add(row);
     }
     if (findMatches.length > 0 || hiddenRows) applyFindToDom();
@@ -1119,10 +1248,10 @@
     const hidden = new Set<HTMLTableRowElement>();
     if (hiddenRows) {
       for (const row of hiddenRows) {
-        const tr = rowElement(row);
-        if (!tr) continue;
-        tr.classList.add("find-hidden");
-        hidden.add(tr);
+        for (const tr of rowElements(row)) {
+          tr.classList.add("find-hidden");
+          hidden.add(tr);
+        }
       }
     }
     for (const tr of hiddenPatched) if (!hidden.has(tr)) tr.classList.remove("find-hidden");
@@ -1170,66 +1299,316 @@
     return editInfo?.columns[col]?.generated ? "<generated>" : "<default>";
   }
 
-  // Aun con anchos fijos, el navegador tarda ~400ms (WebKitGTK, 500 x 43) en
-  // maquetar todas las celdas, y mientras tanto no pinta nada. Por eso las
-  // filas se insertan por tandas: la primera cubre de sobra la pantalla y se
-  // pinta enseguida; el resto se agrega en los frames siguientes. NO es
-  // virtualizacion: una fila insertada no se quita nunca, asi que volver
-  // hacia arriba no recarga nada. El alto total del scroll no cambia
-  // mientras se completan, porque la columna # (.row-gutter) ya tiene las
-  // 500 filas desde el principio.
+  // --- Cuerpo virtualizado por tramos -------------------------------------
+  // (docs/specs/v0.2-rendimiento.md, 21a.) Con la pagina entera en el DOM
+  // (500 x 43 = 21.500 celdas, hasta 10.000 filas) cualquier cambio de
+  // tamaño del area principal — mover el sidebar, el splitter — volvia a
+  // maquetar todas las celdas en cada frame.
   //
-  // Cada tanda es una <table> propia, apiladas una debajo de otra: agregar
-  // filas a UNA tabla obliga a re-maquetarla entera (medido: ~50ms por tanda
-  // sin importar su tamaño), mientras que una tabla nueva no toca las
-  // anteriores. Todas comparten los mismos anchos via variables CSS
-  // (--col-N, --table-width en .grid-body-rows), asi que ajustar una columna
-  // con el mouse las actualiza a todas sin tocar su HTML.
-  const FIRST_BATCH_ROWS = 80;
-  const BATCH_ROWS = 16;
+  // El cuerpo se divide en mosaicos: tramos de CHUNK_ROWS filas por grupos
+  // de GROUP_COLS columnas (gridWindow.ts; con pocas columnas, un solo
+  // grupo). Cada mosaico es una <table> propia, en absoluto en su posicion,
+  // dentro de un contenedor con el tamaño total (el scroll no cambia de
+  // largo). Una tabla por mosaico porque agregar filas a UNA tabla obliga a
+  // re-maquetarla entera; todas toman los anchos de las variables CSS
+  // (--col-N), y placeTile las recoloca si una columna cambia de ancho.
+  //
+  // Para que nunca se vea un tramo en blanco:
+  //   - lo que toca la vista se monta en el mismo evento de scroll, antes
+  //     de pintar;
+  //   - el margen (dos pantallas en vertical, una en horizontal) se completa
+  //     en los frames siguientes, un mosaico por frame;
+  //   - solo se desmonta lo que queda lejos (cuatro pantallas en vertical,
+  //     tres en horizontal): el scroll normal nunca monta ni desmonta en el
+  //     borde de la vista;
+  //   - el mosaico con el foco o en edicion no se desmonta (Ctrl+C/V siguen
+  //     llegando al grid).
   let bodyEl = $state<HTMLDivElement>();
 
   const columnWidthVars = $derived(
     [`--table-width:${tableWidth}px`, ...columnWidths.map((width, index) => `--col-${index}:${width}px`)].join(";"),
   );
 
-  function batchHtml(from: number, to: number): string {
-    const cols = columns.map((_, index) => `<col style="width:var(--col-${index})">`).join("");
+  function batchHtml(from: number, to: number, fromCol: number, toCol: number, className: string): string {
+    let cols = "";
+    for (let index = fromCol; index < toCol; index++) cols += `<col style="width:var(--col-${index})">`;
     return (
-      `<table class="body-batch"><colgroup>${cols}</colgroup>` +
-      `<tbody data-first-row="${from}">${rowsHtml(from, to)}</tbody></table>`
+      `<table class="${className}"><colgroup>${cols}</colgroup>` +
+      `<tbody data-first-row="${from}" data-first-col="${fromCol}">${rowsHtml(from, to, fromCol, toCol)}</tbody></table>`
     );
   }
-  let batchFrame: number | null = null;
 
-  function cancelBatches() {
-    if (batchFrame !== null) {
-      cancelAnimationFrame(batchFrame);
-      batchFrame = null;
+  // Tramo -> grupo de columnas -> su <table> (un "mosaico"). mountedChunks:
+  // los tramos con algun mosaico montado, en orden, para la columna # (que
+  // los dibuja Svelte).
+  let mountedTiles = new Map<number, Map<number, HTMLTableElement>>();
+  let mountedChunks = $state.raw<number[]>([]);
+  let viewportHeight = 0;
+  let viewportWidth = 0;
+  let fillFrame: number | null = null;
+
+  const bodyHeight = $derived(visualRow(rows.length) * rowHeight);
+
+  function chunkTop(chunk: number): number {
+    return visualRow(chunk * CHUNK_ROWS) * rowHeight;
+  }
+
+  function chunkRowIndexes(chunk: number): number[] {
+    const from = chunk * CHUNK_ROWS;
+    const to = Math.min(rows.length, from + CHUNK_ROWS);
+    return Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
+  }
+
+  function groupColumns(group: number): { from: number; to: number } {
+    const from = group * GROUP_COLS;
+    return { from, to: Math.min(columns.length, from + GROUP_COLS) };
+  }
+
+  // Posicion y ancho del mosaico: su tramo en vertical, su grupo en
+  // horizontal (los anchos de columna pueden cambiar con el mouse).
+  function placeTile(table: HTMLTableElement, chunk: number, group: number) {
+    const { from, to } = groupColumns(group);
+    const left = columnLefts[from] ?? 0;
+    const right = (columnLefts[to - 1] ?? 0) + (columnWidths[to - 1] ?? 0);
+    table.style.top = `${chunkTop(chunk)}px`;
+    table.style.left = `${left}px`;
+    table.style.width = `${Math.max(0, right - left)}px`;
+  }
+
+  function isMounted(chunk: number, group: number): boolean {
+    return mountedTiles.get(chunk)?.has(group) ?? false;
+  }
+
+  function mountTile(chunk: number, group: number) {
+    const container = bodyEl;
+    if (!container || isMounted(chunk, group)) return;
+    const from = chunk * CHUNK_ROWS;
+    const to = Math.min(rows.length, from + CHUNK_ROWS);
+    const cols = groupColumns(group);
+    if (from >= to || cols.from >= cols.to) return;
+    const template = document.createElement("template");
+    template.innerHTML = batchHtml(from, to, cols.from, cols.to, `body-batch body-chunk g${group}`);
+    const table = template.content.firstElementChild as HTMLTableElement;
+    placeTile(table, chunk, group);
+    // En orden en el DOM (tramo, luego grupo): Tab recorre de arriba hacia
+    // abajo.
+    const order = (c: number, g: number) => c * 65536 + g;
+    let next: HTMLTableElement | null = null;
+    let nextOrder = Infinity;
+    for (const [otherChunk, tiles] of mountedTiles) {
+      for (const [otherGroup, element] of tiles) {
+        const value = order(otherChunk, otherGroup);
+        if (value > order(chunk, group) && value < nextOrder) {
+          nextOrder = value;
+          next = element;
+        }
+      }
+    }
+    container.insertBefore(table, next);
+    let tiles = mountedTiles.get(chunk);
+    if (!tiles) mountedTiles.set(chunk, (tiles = new Map()));
+    tiles.set(group, table);
+    patchTile(chunk, group);
+  }
+
+  function unmountTile(chunk: number, group: number) {
+    const tiles = mountedTiles.get(chunk);
+    const table = tiles?.get(group);
+    if (!tiles || !table) return;
+    table.remove();
+    tiles.delete(group);
+    if (tiles.size === 0) mountedTiles.delete(chunk);
+    // Lo parchado en celdas/filas que ya no estan: al volver a montar el
+    // mosaico se parcha de nuevo desde los cambios pendientes.
+    for (const td of findPatched) if (table.contains(td)) findPatched.delete(td);
+    for (const tr of hiddenPatched) if (table.contains(tr)) hiddenPatched.delete(tr);
+  }
+
+  // Cambios pendientes, busqueda y filas ocultas sobre un mosaico recien
+  // montado (el resto ya los tiene).
+  function patchTile(chunk: number, group: number) {
+    const table = mountedTiles.get(chunk)?.get(group);
+    const body = table?.tBodies[0];
+    if (!body) return;
+    const from = chunk * CHUNK_ROWS;
+    const to = Math.min(rows.length, from + CHUNK_ROWS);
+    const cols = groupColumns(group);
+    for (let row = from; row < to; row++) {
+      const tr = body.rows[row - from];
+      if (!tr) continue;
+      const updates = edits.updates.get(row);
+      if (updates) {
+        for (const [col, value] of updates) {
+          if (col < cols.from || col >= cols.to) continue;
+          const td = tr.cells[col - cols.from];
+          if (!td) continue;
+          paintCell(td, value, col, true);
+          patchedCells.set(`${row}:${col}`, { row, col });
+        }
+      }
+      if (edits.deleted.has(row)) {
+        tr.classList.add("row-deleted");
+        patchedRows.add(row);
+      }
+      if (hiddenRows?.has(row)) {
+        tr.classList.add("find-hidden");
+        hiddenPatched.add(tr);
+      }
+    }
+    if (findMatches.length === 0) return;
+    const current = findMatches[findCurrent];
+    for (const match of findMatches) {
+      if (match.row < from || match.row >= to || match.col < cols.from || match.col >= cols.to) continue;
+      const td = body.rows[match.row - from]?.cells[match.col - cols.from];
+      if (!td) continue;
+      td.classList.add("find-match");
+      td.classList.toggle("find-current", match === current);
+      findPatched.add(td);
     }
   }
 
-  function renderBodyProgressively(container: HTMLDivElement) {
-    cancelBatches();
-    let rendered = Math.min(rows.length, FIRST_BATCH_ROWS);
-    container.innerHTML = batchHtml(0, rendered);
+  // Mosaicos que no se desmontan: el de la celda con el foco y el de la
+  // celda en edicion.
+  function pinnedTiles(): Set<number> {
+    const pinned = new Set<number>();
+    const key = (row: number, col: number) => Math.floor(row / CHUNK_ROWS) * 65536 + Math.floor(col / GROUP_COLS);
+    const active = document.activeElement;
+    const tbody = active instanceof Element && bodyEl?.contains(active) ? active.closest("tbody") : null;
+    if (tbody) pinned.add(key(Number(tbody.dataset.firstRow ?? 0), Number(tbody.dataset.firstCol ?? 0)));
+    if (editing && editing.row < rows.length) pinned.add(key(editing.row, editing.col));
+    return pinned;
+  }
+
+  function currentWindow(): { rows: ChunkWindow; groups: ChunkWindow } | null {
+    const el = viewportEl;
+    if (!el) return null;
+    const height = Math.max(0, (viewportHeight || el.clientHeight) - headerHeight);
+    const screen = Math.max(height, rowHeight * CHUNK_ROWS);
+    const rowRange = chunkWindow({
+      top: el.scrollTop,
+      height,
+      rowHeight,
+      rowCount: rows.length,
+      hiddenBefore,
+      margin: screen * 2,
+      keep: screen * 4,
+    });
+    // En horizontal: lo visible a la derecha de la columna # (sticky).
+    const width = Math.max(0, (viewportWidth || el.clientWidth) - rowNumberWidth);
+    const groupRange = groupWindow({
+      left: el.scrollLeft,
+      width,
+      lefts: columnLefts,
+      widths: columnWidths,
+      margin: width,
+      keep: width * 3,
+    });
+    return rowRange && groupRange ? { rows: rowRange, groups: groupRange } : null;
+  }
+
+  function publishMounted() {
+    const list = [...mountedTiles.keys()].sort((a, b) => a - b);
+    if (list.length !== mountedChunks.length || list.some((chunk, index) => chunk !== mountedChunks[index])) {
+      mountedChunks = list;
+    }
+  }
+
+  // Monta lo visible ya y agenda el margen. Se llama en cada evento de
+  // scroll: si nada cambia (lo normal), no toca el DOM.
+  function syncChunks() {
+    if (!bodyEl) return;
+    const range = currentWindow();
+    const pinned = pinnedTiles();
+    for (const [chunk, tiles] of [...mountedTiles]) {
+      for (const group of [...tiles.keys()]) {
+        const far =
+          !range ||
+          chunk < range.rows.kept.from ||
+          chunk > range.rows.kept.to ||
+          group < range.groups.kept.from ||
+          group > range.groups.kept.to;
+        if (far && !pinned.has(chunk * 65536 + group)) unmountTile(chunk, group);
+      }
+    }
+    if (range) {
+      for (let chunk = range.rows.visible.from; chunk <= range.rows.visible.to; chunk++) {
+        for (let group = range.groups.visible.from; group <= range.groups.visible.to; group++) mountTile(chunk, group);
+      }
+    }
+    publishMounted();
+    scheduleFill();
+  }
+
+  // El margen, un mosaico por frame, empezando por el mas cercano a la vista.
+  function scheduleFill() {
+    if (fillFrame !== null) return;
+    const range = currentWindow();
+    if (!range || nextMissing(range) === null) return;
+    fillFrame = requestAnimationFrame(() => {
+      fillFrame = null;
+      const current = currentWindow();
+      const tile = current ? nextMissing(current) : null;
+      if (tile === null) return;
+      mountTile(tile.chunk, tile.group);
+      publishMounted();
+      scheduleFill();
+    });
+  }
+
+  // Primero todo el ancho visible de los tramos mas cercanos, luego el
+  // margen horizontal.
+  function nextMissing(range: { rows: ChunkWindow; groups: ChunkWindow }): { chunk: number; group: number } | null {
+    const missingIn = (chunk: number, groups: { from: number; to: number }) => {
+      for (let group = groups.from; group <= groups.to; group++) if (!isMounted(chunk, group)) return group;
+      return null;
+    };
+    for (const groups of [range.groups.visible, range.groups.wanted]) {
+      const { visible, wanted } = range.rows;
+      for (let distance = 0; ; distance++) {
+        const below = visible.to + distance;
+        const above = visible.from - distance;
+        if (below > wanted.to && above < wanted.from) break;
+        if (below <= wanted.to) {
+          const group = missingIn(below, groups);
+          if (group !== null) return { chunk: below, group };
+        }
+        if (above >= wanted.from) {
+          const group = missingIn(above, groups);
+          if (group !== null) return { chunk: above, group };
+        }
+      }
+    }
+    return null;
+  }
+
+  function cancelFill() {
+    if (fillFrame !== null) {
+      cancelAnimationFrame(fillFrame);
+      fillFrame = null;
+    }
+  }
+
+  // Resultado nuevo: el DOM anterior se tira entero.
+  function resetChunks() {
+    cancelFill();
+    if (bodyEl) bodyEl.textContent = "";
+    mountedTiles = new Map();
     // DOM nuevo: nada de lo parchado sigue ahi.
     patchedCells = new Map();
     patchedRows = new Set();
     findPatched = new Set();
     hiddenPatched = new Set();
-    applyEditsToDom();
-    const appendNextBatch = () => {
-      batchFrame = null;
-      const next = Math.min(rows.length, rendered + BATCH_ROWS);
-      container.insertAdjacentHTML("beforeend", batchHtml(rendered, next));
-      rendered = next;
-      if (edits.updates.size > 0 || edits.deleted.size > 0) applyEditsToDom();
-      else if (findMatches.length > 0 || hiddenRows) applyFindToDom();
-      if (rendered < rows.length) batchFrame = requestAnimationFrame(appendNextBatch);
-    };
-    if (rendered < rows.length) batchFrame = requestAnimationFrame(appendNextBatch);
+    syncChunks();
   }
+
+  // Otro alto de fila, filas ocultas distintas u otros anchos de columna
+  // mueven cada mosaico.
+  function repositionChunks() {
+    for (const [chunk, tiles] of mountedTiles) {
+      for (const [group, table] of tiles) placeTile(table, chunk, group);
+    }
+  }
+
 
   $effect(() => {
     function onGlobalPointerUp() {
@@ -1267,8 +1646,12 @@
   function measureFixedRegions() {
     headerHeight = cornerEl?.getBoundingClientRect().height ?? 0;
     rowNumberWidth = cornerEl?.getBoundingClientRect().width ?? 0;
-    const firstBodyRow = bodyEl?.querySelector("tr");
-    if (firstBodyRow) rowHeight = firstBodyRow.getBoundingClientRect().height;
+    viewportHeight = viewportEl?.clientHeight ?? 0;
+    viewportWidth = viewportEl?.clientWidth ?? 0;
+    // Una fila oculta (Filtrar filas) mide 0: no sirve para medir.
+    const firstBodyRow = bodyEl?.querySelector("tr:not(.find-hidden)");
+    const height = firstBodyRow?.getBoundingClientRect().height ?? 0;
+    if (height > 0) rowHeight = height;
   }
 
   function getTracks(el: HTMLDivElement) {
@@ -1336,8 +1719,14 @@
     // Los eventos nativos de scroll pueden llegar varias veces dentro del
     // mismo frame. Agruparlos evita repetir lecturas de layout y escrituras
     // reactivas que no podrian llegar a pintarse entre un evento y el otro.
-    // Lo unico que se actualiza al scrollear son los dos thumbs.
+    // Al scrollear se actualizan los dos thumbs y, solo si la vista llega a
+    // un tramo sin montar, el cuerpo (en este mismo evento, antes de pintar).
+    syncChunks();
     scheduleThumbUpdate();
+    if (problemTooltipCell) {
+      hideTooltipFor(problemTooltipCell);
+      problemTooltipCell = null;
+    }
   }
 
   let resultLayoutGeneration = 0;
@@ -1392,12 +1781,24 @@
     // bodyEl exista). Adentro se leen los cambios pendientes para pintarlos
     // (applyEditsToDom); sin untrack, cada edicion o fila nueva volvia a
     // generar el cuerpo entero — parpadeo en blanco y seleccion perdida.
-    const body = bodyEl;
-    if (body) untrack(() => renderBodyProgressively(body));
+    if (bodyEl) untrack(resetChunks);
     void tick().then(() => {
       if (generation !== resultLayoutGeneration) return;
       measureFixedRegions();
+      // Ya con el alto de fila y de la vista medidos (el efecto de abajo
+      // recoloca si cambio el alto).
+      syncChunks();
       updateThumbs();
+    });
+  });
+
+  $effect(() => {
+    rowHeight;
+    hiddenBefore;
+    columnLefts;
+    untrack(() => {
+      repositionChunks();
+      syncChunks();
     });
   });
 
@@ -1416,6 +1817,8 @@
     if (!viewportEl) return;
     const observer = new ResizeObserver(() => {
       measureFixedRegions();
+      // Una vista mas alta puede necesitar mas tramos.
+      syncChunks();
       scheduleThumbUpdate();
     });
     observer.observe(viewportEl);
@@ -1425,7 +1828,7 @@
   $effect(() => {
     return () => {
       resultLayoutGeneration += 1;
-      cancelBatches();
+      cancelFill();
       if (thumbAnimationFrame !== null) {
         cancelAnimationFrame(thumbAnimationFrame);
         thumbAnimationFrame = null;
@@ -1622,18 +2025,25 @@
 
       <div class="grid-body">
         <div class="row-gutter">
-          {#each rows as _, rowIndex (rowIndex)}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="row-number"
-              class:deleted={edits.deleted.has(rowIndex)}
-              class:find-hidden={hiddenRows?.has(rowIndex)}
-              onclick={(event) => selectRow(rowIndex, event)}
-            >
-              {rowOffset + rowIndex + 1}
-            </div>
-          {/each}
+          <!-- Los mismos tramos que el cuerpo, en las mismas posiciones. -->
+          <div class="gutter-rows" style:height={`${bodyHeight}px`}>
+            {#each mountedChunks as chunk (chunk)}
+              <div class="gutter-chunk" style:top={`${chunkTop(chunk)}px`}>
+                {#each chunkRowIndexes(chunk) as rowIndex (rowIndex)}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div
+                    class="row-number"
+                    class:deleted={edits.deleted.has(rowIndex)}
+                    class:find-hidden={hiddenRows?.has(rowIndex)}
+                    onclick={(event) => selectRow(rowIndex, event)}
+                  >
+                    {rowOffset + rowIndex + 1}
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          </div>
           {#each edits.inserted as _, index (index)}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1646,10 +2056,12 @@
         <div class="grid-body-table" style={columnWidthVars}>
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="grid-body-rows"
+            class="grid-body-rows chunked"
+            style:height={`${bodyHeight}px`}
             bind:this={bodyEl}
             onpointerdown={onBodyPointerDown}
             onpointerover={onBodyPointerOver}
+            onpointerout={onBodyPointerOut}
             onkeydown={onBodyKeydown}
             ondblclick={onBodyDoubleClick}
           ></div>
@@ -1673,7 +2085,13 @@
                   {#each edits.inserted as values, index (index)}
                     <tr class="row-inserted">
                       {#each values as value, col (col)}
-                        <td tabindex="0" class:placeholder-value={value.kind !== "text"}>{insertedLabel(value, col)}</td>
+                        {@const problem = insertedProblem(value, col)}
+                        <td
+                          tabindex="0"
+                          class:placeholder-value={value.kind !== "text"}
+                          class:cell-invalid={problem !== null}
+                          use:tooltip={problem}>{insertedLabel(value, col)}</td
+                        >
                       {/each}
                     </tr>
                   {/each}
@@ -1694,6 +2112,11 @@
                 onkeydown={onEditorKeydown}
                 onblur={() => finishEditing(true)}
               />
+              {#if fillTargets}
+                <span class="fill-count" use:tooltip={$t("grid.edit.fillCount", { count: fillCount })}
+                  >×{fillCount}</span
+                >
+              {/if}
               <button
                 type="button"
                 class="null-chip"
@@ -1872,6 +2295,16 @@
     background: var(--surface);
   }
 
+  .gutter-rows {
+    position: relative;
+  }
+
+  .gutter-chunk {
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
   .row-number {
     box-sizing: border-box;
     height: var(--row-height);
@@ -1961,6 +2394,19 @@
     border-collapse: separate;
     border-spacing: 0;
     width: var(--table-width);
+  }
+
+  /* Cuerpo por mosaicos (ver mountTile): el contenedor tiene el alto y el
+     ancho de todo (los mosaicos van en absoluto y no le dan tamaño). */
+  .grid-body-rows.chunked {
+    position: relative;
+    width: var(--table-width);
+  }
+
+  .grid-body-table :global(table.body-chunk) {
+    position: absolute;
+    top: 0;
+    left: 0;
   }
 
   /* Las celdas del cuerpo se insertan como HTML (ver rowsHtml en el script) y no
@@ -2190,6 +2636,13 @@
     background: color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
+  /* Un cambio que no encaja en su columna (ver paintCell): rojo, como una
+     fila a eliminar, con un borde para leerse aunque la fila sea nueva. */
+  .grid-body-table :global(td.cell-invalid) {
+    background: color-mix(in srgb, var(--danger-solid) 24%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger-solid) 70%, transparent);
+  }
+
   .grid-body-table :global(tr.row-inserted) {
     background: color-mix(in srgb, var(--success) 20%, transparent);
   }
@@ -2357,6 +2810,15 @@
     font: inherit;
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  /* Cuantas celdas reciben lo que se escribe (varias seleccionadas). */
+  .fill-count {
+    flex-shrink: 0;
+    margin-right: 4px;
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
   }
 
   .null-chip {

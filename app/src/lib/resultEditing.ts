@@ -82,6 +82,43 @@ export function setCellValue(
   return { ...edits, updates };
 }
 
+// Escribir con varias celdas seleccionadas: el mismo valor en todas, en un
+// solo paso de deshacer. Se saltan las columnas de solo lectura o generadas
+// y las filas marcadas para eliminar (como al pegar).
+export function fillCells(
+  edits: PendingEdits,
+  info: ResultEditInfo,
+  rows: readonly QueryRow[],
+  ranges: readonly RowRange[],
+  value: CellValue,
+): PendingEdits {
+  const updates = new Map<number, Map<number, CellValue>>(
+    [...edits.updates].map(([row, cols]) => [row, new Map(cols)]),
+  );
+  const inserted = edits.inserted.map((values) => [...values]);
+  const base = rows.length;
+  const total = base + inserted.length;
+  for (const range of ranges) {
+    for (let row = range.minRow; row <= Math.min(range.maxRow, total - 1); row++) {
+      if (row < base && edits.deleted.has(row)) continue;
+      for (let col = range.minCol; col <= Math.min(range.maxCol, info.columns.length - 1); col++) {
+        const column = info.columns[col];
+        if (!column || column.generated) continue;
+        if (row >= base) {
+          inserted[row - base][col] = value;
+          continue;
+        }
+        const rowUpdates = updates.get(row) ?? new Map<number, CellValue>();
+        if (sameValue(value, originalValue(rows[row][col]))) rowUpdates.delete(col);
+        else rowUpdates.set(col, value);
+        if (rowUpdates.size === 0) updates.delete(row);
+        else updates.set(row, rowUpdates);
+      }
+    }
+  }
+  return { updates, deleted: edits.deleted, inserted };
+}
+
 // Valor inicial de cada columna en una fila nueva: lo que DataGrip muestra
 // como <generated>, <default> o <null>.
 export function newRowValues(info: ResultEditInfo): CellValue[] {

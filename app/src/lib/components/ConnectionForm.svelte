@@ -664,8 +664,6 @@
           >
             {#if testSummary.outcome === "success"}
               <CircleCheck size={14} aria-hidden="true" />
-            {:else if testSummary.outcome === "warning"}
-              <TriangleAlert size={14} aria-hidden="true" />
             {:else}
               <CircleAlert size={14} aria-hidden="true" />
             {/if}
@@ -696,7 +694,12 @@
             <dl>
               {#each testSummary.lines as line (line.label)}
                 <dt>{line.label}</dt>
-                <dd>{line.value}</dd>
+                <dd class:line-warning={line.warning}>
+                  {#if line.warning}
+                    <TriangleAlert size={13} aria-hidden="true" />
+                  {/if}
+                  {line.value}
+                </dd>
               {/each}
             </dl>
           </div>
@@ -1216,11 +1219,6 @@
     color: var(--text-primary);
   }
 
-  .test-badge.warning,
-  .test-popover.warning {
-    --outcome: var(--warning);
-  }
-
   .test-badge.error,
   .test-popover.error {
     --outcome: var(--danger);
@@ -1296,6 +1294,17 @@
     margin: 0;
     color: var(--text-primary);
     overflow-wrap: anywhere;
+  }
+
+  /* Una linea que pide atencion (SSL sin cifrar): el resultado sigue siendo
+     exito, solo esa linea va en el color de advertencia. */
+  dd.line-warning {
+    color: var(--warning);
+  }
+
+  dd.line-warning :global(svg) {
+    margin-right: 4px;
+    vertical-align: -2px;
   }
 
   .primary-actions {

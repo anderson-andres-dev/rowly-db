@@ -1,3 +1,21 @@
+<script module lang="ts">
+  import type { SqlProfile as ModuleSqlProfile } from "$lib/engines";
+
+  // Los resultados del analisis (analyze_sql) por texto de sentencia, para
+  // el catalogo y el motor vigentes. Viven fuera del editor: cada pestaña
+  // monta su propio editor, y con la cache adentro volver a una pestaña
+  // reanalizaba el documento entero en el backend. Otro catalogo u otro
+  // motor, cache nueva.
+  let sharedAnalysis: { tables: unknown; engine: ModuleSqlProfile; cache: Map<string, unknown> } | null = null;
+
+  function analysisCacheFor<Raw>(tables: unknown, engine: ModuleSqlProfile): Map<string, Raw> {
+    if (!sharedAnalysis || sharedAnalysis.tables !== tables || sharedAnalysis.engine !== engine) {
+      sharedAnalysis = { tables, engine, cache: new Map() };
+    }
+    return sharedAnalysis.cache as Map<string, Raw>;
+  }
+</script>
+
 <script lang="ts">
   import { splitStatements } from "$lib/sqlStatements";
   import {
@@ -820,7 +838,7 @@
     if (tables === analyzedTables && engine === analyzedEngine) return;
     analyzedTables = tables;
     analyzedEngine = engine;
-    analysis.clearCache();
+    analysis.useCache(analysisCacheFor(tables, engine));
     analysis.markAllDirty();
     analysis.schedule();
   });

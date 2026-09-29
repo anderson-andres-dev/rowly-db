@@ -7,6 +7,7 @@ import {
   addRow,
   buildChanges,
   deleteRows,
+  fillCells,
   pendingCount,
   revert,
   setCellValue,
@@ -65,5 +66,41 @@ describe("resultEditing", () => {
     expect(edits.deleted.size).toBe(0);
     expect(pendingCount(edits)).toBe(1);
     expect(pendingCount(revert(edits, rows.length, null))).toBe(0);
+  });
+});
+
+describe("fillCells: escribir con varias celdas seleccionadas", () => {
+  const value = { kind: "text" as const, value: "high" };
+
+  it("pone el mismo valor en todas las celdas de todos los rangos", () => {
+    const edits = fillCells(EMPTY_EDITS, info, rows, [
+      { minRow: 0, maxRow: 1, minCol: 1, maxCol: 1 },
+      { minRow: 2, maxRow: 2, minCol: 1, maxCol: 1 },
+    ], value);
+    expect([0, 1, 2].map((row) => edits.updates.get(row)?.get(1))).toEqual([value, value, value]);
+  });
+
+  it("salta las columnas de solo lectura o generadas y las filas a eliminar", () => {
+    const deleted = deleteRows(EMPTY_EDITS, rows.length, { minRow: 1, maxRow: 1, minCol: 0, maxCol: 2 });
+    const edits = fillCells(deleted, info, rows, [{ minRow: 0, maxRow: 2, minCol: 0, maxCol: 2 }], value);
+    // id (generada) y la columna calculada no se tocan; la fila 1 tampoco.
+    expect([...edits.updates.keys()].sort()).toEqual([0, 2]);
+    expect([...edits.updates.get(0)!.keys()]).toEqual([1]);
+    expect(edits.deleted.has(1)).toBe(true);
+  });
+
+  it("volver al valor original no deja un cambio pendiente", () => {
+    const edits = fillCells(EMPTY_EDITS, info, rows, [{ minRow: 0, maxRow: 2, minCol: 1, maxCol: 1 }], {
+      kind: "text",
+      value: "critical",
+    });
+    expect(pendingCount(edits)).toBe(0);
+  });
+
+  it("tambien en filas nuevas", () => {
+    const withRow = addRow(EMPTY_EDITS, info);
+    const edits = fillCells(withRow, info, rows, [{ minRow: 2, maxRow: 3, minCol: 1, maxCol: 1 }], value);
+    expect(edits.updates.get(2)?.get(1)).toEqual(value);
+    expect(edits.inserted[0][1]).toEqual(value);
   });
 });

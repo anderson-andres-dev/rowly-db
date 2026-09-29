@@ -130,11 +130,31 @@ describe("queryConsoles: estado de ejecucion por consola", () => {
     mod.requireQueryConfirmation(id, { sql: "DELETE FROM users", statement: "deleteWithoutWhere" });
     mod.finishQueryExecution(id, "DELETE FROM users", { type: "error", message: "boom" });
 
+    mod.flushConsolePersistence();
     const raw = localStorage.getItem("khipu:query-consoles:v1");
     expect(raw).not.toBeNull();
     const persisted = JSON.parse(raw as string);
     expect(persisted).not.toHaveProperty("executionByConsole");
     expect(Object.keys(persisted).sort()).toEqual(["activeByProfile", "consoles", "nextOrdinal"]);
+  });
+
+  it("ejecutar consultas no vuelve a guardar las consolas (solo cambia lo transitorio)", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("profile-a");
+    mod.flushConsolePersistence();
+    const setItem = vi.spyOn(localStorage, "setItem");
+    for (let run = 0; run < 20; run++) {
+      mod.beginQueryExecution(id);
+      mod.finishQueryExecution(id, "SELECT 1", { type: "error", message: "boom" });
+    }
+    mod.flushConsolePersistence();
+    expect(setItem.mock.calls.filter(([key]) => key === "khipu:query-consoles:v1")).toHaveLength(0);
+    // Un cambio de verdad si se guarda, una sola vez aunque sean varios seguidos.
+    mod.updateQueryConsoleSql(id, "SELECT 2");
+    mod.updateQueryConsoleSql(id, "SELECT 3");
+    mod.flushConsolePersistence();
+    expect(setItem.mock.calls.filter(([key]) => key === "khipu:query-consoles:v1")).toHaveLength(1);
+    setItem.mockRestore();
   });
 
   it("beginQueryExecution no inicia una segunda ejecucion mientras la consola ya esta ocupada", async () => {
@@ -250,6 +270,7 @@ describe("queryConsoles: reordenar", () => {
 
     const ids = get(mod.queryConsoles).consoles.map((item) => item.id);
     expect(ids).toEqual([c, other, a, b]);
+    mod.flushConsolePersistence();
     const persisted = JSON.parse(localStorage.getItem("khipu:query-consoles:v1") ?? "{}");
     expect(persisted.consoles.map((item: { id: string }) => item.id)).toEqual([c, other, a, b]);
   });
@@ -275,6 +296,7 @@ describe("queryConsoles: pestañas de tabla", () => {
     // Nunca queda "sin guardar": no tiene texto propio.
     expect(mod.isQueryConsoleDirty(item)).toBe(false);
 
+    mod.flushConsolePersistence();
     const persisted = JSON.parse(localStorage.getItem("khipu:query-consoles:v1") ?? "{}");
     expect(persisted.consoles.find((candidate: { id: string }) => candidate.id === first).table.where).toBe(
       "estado = 'activo'",
@@ -285,6 +307,7 @@ describe("queryConsoles: pestañas de tabla", () => {
     const mod = await freshQueryConsoles();
     const id = mod.openTableConsole("p1", "core", "t");
     mod.setTableFilters(id, { where: "a = 1", conditions: [] });
+    mod.flushConsolePersistence();
     const stored = localStorage.getItem("khipu:query-consoles:v1");
 
     vi.resetModules();
@@ -358,10 +381,12 @@ describe("queryConsoles: textos grandes fuera de localStorage", () => {
     const big = "SELECT 1;\n".repeat(mod.LARGE_TEXT / 5);
     mod.updateQueryConsoleSql(id, big);
 
+    mod.flushConsolePersistence();
     const persisted = JSON.parse(localStorage.getItem("khipu:query-consoles:v1") ?? "{}");
     const item = persisted.consoles.find((candidate: { id: string }) => candidate.id === id);
     expect(item.sql).toBeUndefined();
     expect(item.sqlOnDisk).toBe(true);
+    mod.flushConsolePersistence();
     expect(localStorage.getItem("khipu:query-consoles:v1")!.length).toBeLessThan(1000);
 
     expect(invoke).not.toHaveBeenCalled();
@@ -397,6 +422,7 @@ describe("queryConsoles: textos grandes fuera de localStorage", () => {
     expect(pending.textPending).toBe(true);
     // Mientras tanto se vuelve a guardar igual: la marca no se pierde.
     mod.renameQueryConsole("c1", "grande");
+    mod.flushConsolePersistence();
     expect(JSON.parse(storage.get("khipu:query-consoles:v1")!).consoles[0].sqlOnDisk).toBe(true);
 
     release(big);

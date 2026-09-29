@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
   import { onMount, onDestroy, tick } from "svelte";
+  import { onePerFrame } from "$lib/onePerFrame";
   import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
   import { registerCommands } from "$lib/commands";
   import { installKeybindings } from "$lib/keybindings";
@@ -121,15 +122,17 @@
     const startY = event.clientY;
     const startHeight = clampFilePanelHeight($sqlFolders.panelHeight);
     dragFilePanelHeight = startHeight;
+    const live = onePerFrame((height: number) => (dragFilePanelHeight = height));
 
     function onMove(moveEvent: PointerEvent) {
-      dragFilePanelHeight = clampFilePanelHeight(startHeight - (moveEvent.clientY - startY));
+      live.set(clampFilePanelHeight(startHeight - (moveEvent.clientY - startY)));
     }
 
     function onUp() {
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onUp);
+      live.flush();
       if (dragFilePanelHeight !== null) setFilePanelHeight(dragFilePanelHeight);
       dragFilePanelHeight = null;
     }
@@ -210,6 +213,16 @@
   // en que el width pasa a 0, asi que el panel anima lo que le falta desde
   // donde lo dejo el mouse. $sidebarWidth no se toca: al reabrir vuelve al
   // ultimo ancho util.
+  //
+  // Abrir y cerrar animan el ancho con el panel en el flujo del grid: el
+  // area principal va pegada a su borde y por encima, asi su fondo tapa
+  // cualquier cosa del panel que WebKitGTK recorte un cuadro tarde. (Se
+  // probo deslizar el panel por encima del area principal con transform, y
+  // luego recortandolo: en ambos el texto del arbol quedaba un instante
+  // sobre la consola.) Maquetar el area principal en cada cuadro de la
+  // animacion es barato desde que el grid esta virtualizado.
+  //
+  // El ancho del arrastre se aplica a lo sumo una vez por cuadro.
   function startSidebarResize(event: PointerEvent) {
     if (event.button !== 0 || !sidebar) return;
     event.preventDefault();
@@ -217,15 +230,17 @@
     handle.setPointerCapture(event.pointerId);
     const left = sidebar.getBoundingClientRect().left;
     dragWidth = $sidebarWidth;
+    const live = onePerFrame((width: number) => (dragWidth = width));
 
     function onMove(moveEvent: PointerEvent) {
-      dragWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(0, moveEvent.clientX - left));
+      live.set(Math.min(MAX_SIDEBAR_WIDTH, Math.max(0, moveEvent.clientX - left)));
     }
 
     function onUp() {
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onUp);
+      live.flush();
       const release = releaseSidebarDrag(dragWidth ?? $sidebarWidth);
       if (release.collapse) sidebarCollapsed = true;
       else sidebarWidth.set(release.width);
@@ -868,11 +883,17 @@
     user-select: none;
   }
 
+  /* Posicionada y con fondo opaco: va despues del sidebar en el DOM, asi
+     que se pinta por encima de el. Si WebKitGTK recorta el contenido del
+     sidebar un cuadro tarde al animar su ancho (el arbol tiene su propia
+     capa por el scroll), lo que asoma queda debajo de la consola. */
   .main {
+    position: relative;
     grid-area: main;
     overflow: hidden;
     min-width: 0;
     min-height: 0;
+    background: var(--surface);
   }
 
   .route-content {
