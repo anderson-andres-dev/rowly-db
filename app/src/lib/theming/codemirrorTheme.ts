@@ -196,6 +196,25 @@ function createCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
 			'.cm-content': {
 				caretColor: palette.caret
 			},
+			// Barras propias en vez de las nativas: WebKitGTK pinta las nativas
+			// (flotantes) por encima de los dialogos abiertos, atravesando el
+			// modal. Con estilo propio se pintan como parte de la pagina.
+			'.cm-scroller::-webkit-scrollbar': {
+				width: '10px',
+				height: '10px'
+			},
+			'.cm-scroller::-webkit-scrollbar-thumb': {
+				border: '2px solid transparent',
+				borderRadius: '6px',
+				backgroundColor: 'var(--scrollbar-thumb)',
+				backgroundClip: 'padding-box'
+			},
+			'.cm-scroller::-webkit-scrollbar-thumb:hover': {
+				backgroundColor: 'var(--scrollbar-thumb-hover)'
+			},
+			'.cm-scroller::-webkit-scrollbar-track, .cm-scroller::-webkit-scrollbar-corner': {
+				backgroundColor: 'transparent'
+			},
 			'.cm-gutters': {
 				backgroundColor: palette.background,
 				color: palette.lineNumber
