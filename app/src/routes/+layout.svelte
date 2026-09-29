@@ -5,6 +5,7 @@
   import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
   import { registerCommands } from "$lib/commands";
   import { installKeybindings } from "$lib/keybindings";
+  import { installNumpadFix } from "$lib/numpadKeys";
   import type { Snippet } from "svelte";
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
@@ -288,6 +289,7 @@
 
   let cleanupFocusZones: (() => void) | undefined;
   let cleanupKeybindings: (() => void) | undefined;
+  let cleanupNumpadFix: (() => void) | undefined;
   let cleanupCommands: (() => void) | undefined;
 
   onMount(() => {
@@ -301,6 +303,9 @@
     // Los atajos se apagan con cualquier modal abierto; en Ajustes, ademas,
     // se pueden estar capturando combinaciones nuevas.
     const shortcutsBlocked = () => settingsOpen || !!document.querySelector("dialog[open]");
+    // Antes que todo: el teclado numerico que llega como flechas no puede
+    // mover zonas ni disparar atajos.
+    cleanupNumpadFix = installNumpadFix();
     // Primero las zonas: sus flechas del modo mover van antes que los atajos.
     cleanupFocusZones = installFocusZones(shortcutsBlocked);
     cleanupKeybindings = installKeybindings(shortcutsBlocked);
@@ -328,6 +333,7 @@
     cleanupLocaleEffects?.();
     cleanupCommands?.();
     cleanupKeybindings?.();
+    cleanupNumpadFix?.();
     cleanupFocusZones?.();
     setSidebarRevealer(null);
 
