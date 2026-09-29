@@ -27,15 +27,48 @@ pub struct MySqlConnector {
 /// (30 s) leaves the app hanging too long on a host that doesn't answer.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The session is left as the server configures it, like any other MySQL
+/// client: sqlx by default forces `utf8mb4_unicode_ci`, which breaks `=`
+/// between a `utf8mb4_0900_ai_ci` column and a literal (error 1267), sets
+/// the time zone to UTC (NOW() and TIMESTAMP values shifted) and adds
+/// PIPES_AS_CONCAT to sql_mode. `SET NAMES utf8mb4` without COLLATE keeps
+/// the UTF-8 the driver needs, with the server's default collation (see
+/// SESSION_DEFAULTS).
+fn session_options(options: MySqlConnectOptions) -> MySqlConnectOptions {
+    options
+        .set_names(false)
+        .timezone(None)
+        .pipes_as_concat(false)
+        .no_engine_substitution(false)
+}
+
+/// Run on every new connection. sqlx also always asks for CLIENT_IGNORE_SPACE
+/// in the handshake, which adds IGNORE_SPACE to the session's sql_mode
+/// (function names become reserved words): it is taken out again unless the
+/// server's own sql_mode has it. The rest of the session sql_mode (including
+/// what init_connect set) is left alone.
+const SESSION_DEFAULTS: &str = "SET NAMES utf8mb4, sql_mode = IF( \
+    FIND_IN_SET('IGNORE_SPACE', @@global.sql_mode), \
+    @@session.sql_mode, \
+    TRIM(BOTH ',' FROM REPLACE(CONCAT(',', @@session.sql_mode, ','), ',IGNORE_SPACE,', ',')))";
+
 async fn open_pool(config: &ConnectionConfig, mode: TlsMode) -> Result<MySqlPool, sqlx::Error> {
-    let options = MySqlConnectOptions::new()
-        .host(&config.host)
-        .port(config.port)
-        .username(&config.username)
-        .password(&config.password)
-        .database(&config.database);
+    let options = session_options(
+        MySqlConnectOptions::new()
+            .host(&config.host)
+            .port(config.port)
+            .username(&config.username)
+            .password(&config.password)
+            .database(&config.database),
+    );
     MySqlPoolOptions::new()
         .acquire_timeout(CONNECT_TIMEOUT)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                Executor::execute(&mut *conn, SESSION_DEFAULTS).await?;
+                Ok(())
+            })
+        })
         .connect_with(tls::apply(
             options,
             mode,
@@ -602,6 +635,45 @@ mod tests {
             tls_mode: TlsMode::Auto,
             ca_certificate_path: None,
         }
+    }
+
+    // The session keeps the server's collation, time zone and sql_mode (see
+    // session_options): a literal compared with a utf8mb4_0900_ai_ci column
+    // must not fail with error 1267.
+    #[tokio::test]
+    #[ignore = "requires database"]
+    async fn session_matches_the_server_defaults() {
+        let connector = MySqlConnector::connect(&config_from_env())
+            .await
+            .expect("connect should succeed against a reachable MySQL instance");
+        // MySQL 8 has its own variable for utf8mb4's default; before it (and
+        // on MariaDB), the character set's default collation.
+        let expected_collation = if connector.version.flavor == version::Flavor::MySql
+            && connector.version.major >= 8
+        {
+            "SELECT @@collation_connection, @@default_collation_for_utf8mb4"
+        } else {
+            "SELECT @@collation_connection, DEFAULT_COLLATE_NAME FROM information_schema.CHARACTER_SETS \
+             WHERE CHARACTER_SET_NAME = 'utf8mb4'"
+        };
+        let (collation, expected_collation): (String, String) = sqlx::query_as(expected_collation)
+            .fetch_one(&connector.pool)
+            .await
+            .expect("session collation should be readable");
+        assert_eq!(collation, expected_collation);
+        let (time_zone, global_time_zone, sql_mode, global_sql_mode): (
+            String,
+            String,
+            String,
+            String,
+        ) = sqlx::query_as(
+            "SELECT @@session.time_zone, @@global.time_zone, @@session.sql_mode, @@global.sql_mode",
+        )
+        .fetch_one(&connector.pool)
+        .await
+        .expect("session settings should be readable");
+        assert_eq!(time_zone, global_time_zone);
+        assert_eq!(sql_mode, global_sql_mode);
     }
 
     #[tokio::test]
