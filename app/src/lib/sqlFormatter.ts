@@ -1,4 +1,6 @@
 import type { SqlProfile } from "$lib/engines";
+import { refineLayout, upperOperatorWords } from "$lib/sqlFormatLayout";
+import { splitStatements } from "$lib/sqlStatements";
 
 type Quote = "'" | '"' | "`" | "]";
 
@@ -167,16 +169,30 @@ function scanFormattedSql(sql: string): SqlScanResult {
   return { compact: compact.trim(), hasComment: false };
 }
 
-export async function formatSqlBlock(
+// Hasta donde los retoques de sqlFormatLayout.ts juntan lineas o alinean los
+// AS: el ancho configurado, pero nunca menos que esto (con 60, una condicion
+// normal entre parentesis ya no entraria en una linea).
+const MIN_LAYOUT_WIDTH = 80;
+
+export type FormatResult =
+  | { ok: true; text: string }
+  // El parser del formateador no entendio la consulta: donde se trabo, si lo
+  // dijo (linea dentro del texto formateado, desde 1).
+  | { ok: false; token?: string; line?: number };
+
+// `alignAliases`: alineacion en columnas (Ajustes > Editor, sqlFormatLayout.ts).
+export async function tryFormatSqlBlock(
   sql: string,
   engine: SqlProfile,
   lineWidth: number,
-): Promise<string> {
-  if (!sql.trim()) return sql;
+  alignAliases = true,
+): Promise<FormatResult> {
+  if (!sql.trim()) return { ok: true, text: sql };
 
+  const formatter = await import("sql-formatter");
+  let formatted: string;
   try {
-    const formatter = await import("sql-formatter");
-    const formatted = formatter.formatDialect(sql, {
+    formatted = formatter.formatDialect(sql, {
       dialect: formatter[engine.formatterDialect],
       keywordCase: "upper",
       dataTypeCase: "upper",
@@ -186,14 +202,97 @@ export async function formatSqlBlock(
       expressionWidth: lineWidth,
       linesBetweenQueries: 1,
       logicalOperatorNewline: "before",
+      // Los parametros con nombre (:nombre, sqlParameters.ts): sin esto el
+      // parser no los entiende y la consulta queda sin formatear.
+      paramTypes: { named: [":"] },
     });
-    const scanned = scanFormattedSql(formatted);
-    return !scanned.hasComment && scanned.compact.length <= lineWidth
-      ? scanned.compact
-      : compactStructuredLayout(formatted);
-  } catch {
-    // Una consulta incompleta sigue siendo editable; no se destruye texto si
-    // el parser del formateador aun no puede entenderla.
-    return sql;
+  } catch (error) {
+    // "Parse error at token: ORDER BY at line 45 column 1"
+    const message = error instanceof Error ? error.message : String(error);
+    const at = /at token: (.+?) at line (\d+)/.exec(message);
+    return at ? { ok: false, token: at[1], line: Number(at[2]) } : { ok: false };
   }
+  const scanned = scanFormattedSql(formatted);
+  return {
+    ok: true,
+    text:
+      !scanned.hasComment && scanned.compact.length <= lineWidth
+        ? upperOperatorWords(scanned.compact)
+        : refineLayout(compactStructuredLayout(formatted), {
+            width: Math.max(lineWidth, MIN_LAYOUT_WIDTH),
+            alignAliases,
+          }),
+  };
+}
+
+export interface FormatFailure {
+  // Linea (desde 1, dentro del texto pedido) donde se trabo el parser o,
+  // si no lo dijo, donde empieza la consulta.
+  line: number;
+  token?: string;
+}
+
+export interface FormatTextResult {
+  text: string;
+  // Consultas formateadas y las que no se pudieron.
+  formatted: number;
+  failures: FormatFailure[];
+}
+
+function lineAt(text: string, offset: number): number {
+  let line = 1;
+  for (let index = text.indexOf("\n"); index !== -1 && index < offset; index = text.indexOf("\n", index + 1)) line += 1;
+  return line;
+}
+
+// Varias consultas (una seleccion): cada una por separado. Las que el
+// parser entiende se formatean, la que tiene un error queda tal cual (con
+// una sola mala no se pierde el formato de las demas). Entre consultas, una
+// linea en blanco; lo que habia entre ellas que no sea espacio (un
+// comentario) se conserva.
+export async function formatSqlText(
+  sql: string,
+  engine: SqlProfile,
+  lineWidth: number,
+  alignAliases = true,
+): Promise<FormatTextResult> {
+  const ranges = splitStatements(sql, engine.lexical);
+  if (ranges.length <= 1) {
+    const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases);
+    return result.ok
+      ? { text: result.text, formatted: 1, failures: [] }
+      : { text: sql, formatted: 0, failures: [{ line: result.line ?? 1, token: result.token }] };
+  }
+  let text = "";
+  let last = 0;
+  let formatted = 0;
+  const failures: FormatFailure[] = [];
+  for (const range of ranges) {
+    const gap = sql.slice(last, range.from);
+    text += last === 0 || gap.trim() !== "" ? gap : "\n\n";
+    const statement = sql.slice(range.from, range.to);
+    const result = await tryFormatSqlBlock(statement, engine, lineWidth, alignAliases);
+    if (result.ok) {
+      text += result.text;
+      formatted += 1;
+    } else {
+      text += statement;
+      failures.push({ line: lineAt(sql, range.from) + (result.line ?? 1) - 1, token: result.token });
+    }
+    last = range.to;
+  }
+  // Si ninguna se pudo formatear, ni el espacio entre ellas cambia.
+  return { text: formatted === 0 ? sql : text + sql.slice(last), formatted, failures };
+}
+
+// Una consulta incompleta sigue siendo editable: si el parser del
+// formateador aun no puede entenderla, el texto queda tal cual.
+export async function formatSqlBlock(
+  sql: string,
+  engine: SqlProfile,
+  lineWidth: number,
+  alignAliases = true,
+): Promise<string> {
+  const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases);
+  return result.ok ? result.text : sql;
 }

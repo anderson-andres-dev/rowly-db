@@ -5,6 +5,10 @@ import { defineMessages } from "../define";
 // frases propias de CodeMirror (EditorState.phrases).
 export default defineMessages({
   es: {
+    "format.partialOne": "Se formatearon {formatted} consultas; la de la línea {line} tiene un error y quedó igual.",
+    "format.partialOther": "Se formatearon {formatted} consultas; {count} tienen errores y quedaron igual (la primera, en la línea {line}).",
+    "format.failedAt": "No se pudo formatear: la consulta tiene un error cerca de «{token}» (línea {line}).",
+    "format.failed": "No se pudo formatear: la consulta tiene un error de sintaxis.",
     "diagnostics.label": "Detalle del error",
     "diagnostics.serverDetail": "Detalle del servidor",
     "diagnostics.copy": "Copiar",
@@ -116,6 +120,10 @@ export default defineMessages({
     "cm.close": "cerrar",
   },
   en: {
+    "format.partialOne": "Formatted {formatted} queries; the one at line {line} has an error and was left as is.",
+    "format.partialOther": "Formatted {formatted} queries; {count} have errors and were left as is (the first at line {line}).",
+    "format.failedAt": "Couldn't format: the query has an error near “{token}” (line {line}).",
+    "format.failed": "Couldn't format: the query has a syntax error.",
     "diagnostics.label": "Error details",
     "diagnostics.serverDetail": "Server detail",
     "diagnostics.copy": "Copy",
@@ -227,6 +235,10 @@ export default defineMessages({
     "cm.close": "close",
   },
   "pt-BR": {
+    "format.partialOne": "{formatted} consultas formatadas; a da linha {line} tem um erro e ficou igual.",
+    "format.partialOther": "{formatted} consultas formatadas; {count} têm erros e ficaram iguais (a primeira na linha {line}).",
+    "format.failedAt": "Não foi possível formatar: a consulta tem um erro perto de “{token}” (linha {line}).",
+    "format.failed": "Não foi possível formatar: a consulta tem um erro de sintaxe.",
     "diagnostics.label": "Detalhe do erro",
     "diagnostics.serverDetail": "Detalhe do servidor",
     "diagnostics.copy": "Copiar",
@@ -338,6 +350,10 @@ export default defineMessages({
     "cm.close": "fechar",
   },
   fr: {
+    "format.partialOne": "{formatted} requêtes mises en forme ; celle de la ligne {line} contient une erreur et reste inchangée.",
+    "format.partialOther": "{formatted} requêtes mises en forme ; {count} contiennent des erreurs et restent inchangées (la première ligne {line}).",
+    "format.failedAt": "Mise en forme impossible : la requête contient une erreur près de « {token} » (ligne {line}).",
+    "format.failed": "Mise en forme impossible : la requête contient une erreur de syntaxe.",
     "diagnostics.label": "Détail de l’erreur",
     "diagnostics.serverDetail": "Détail du serveur",
     "diagnostics.copy": "Copier",
@@ -449,6 +465,10 @@ export default defineMessages({
     "cm.close": "fermer",
   },
   de: {
+    "format.partialOne": "{formatted} Abfragen formatiert; die in Zeile {line} hat einen Fehler und bleibt unverändert.",
+    "format.partialOther": "{formatted} Abfragen formatiert; {count} haben Fehler und bleiben unverändert (die erste in Zeile {line}).",
+    "format.failedAt": "Formatieren nicht möglich: Die Abfrage hat einen Fehler bei „{token}“ (Zeile {line}).",
+    "format.failed": "Formatieren nicht möglich: Die Abfrage hat einen Syntaxfehler.",
     "diagnostics.label": "Fehlerdetails",
     "diagnostics.serverDetail": "Details vom Server",
     "diagnostics.copy": "Kopieren",
