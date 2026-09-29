@@ -46,3 +46,24 @@ describe("navigationTarget", () => {
     expect(navigationTarget({ row: 0, col: 0 }, "a", false, bounds())).toBeNull();
   });
 });
+
+describe("navigationTarget: bordes", () => {
+  it("un grid vacio no navega", () => {
+    expect(navigationTarget({ row: 0, col: 0 }, "ArrowDown", false, { ...bounds(), rows: 0 })).toBeNull();
+    expect(navigationTarget({ row: 0, col: 0 }, "ArrowDown", false, { ...bounds(), cols: 0 })).toBeNull();
+  });
+
+  it("una pagina de 0 filas avanza al menos una", () => {
+    expect(navigationTarget({ row: 2, col: 0 }, "PageDown", false, { ...bounds(), pageRows: 0 })).toEqual({ row: 3, col: 0 });
+  });
+
+  it("si todas las de abajo estan ocultas, se queda donde esta", () => {
+    const filtered = bounds([5, 6, 7, 8, 9]);
+    expect(navigationTarget({ row: 4, col: 1 }, "ArrowDown", false, filtered)).toEqual({ row: 4, col: 1 });
+    expect(navigationTarget({ row: 4, col: 1 }, "End", true, filtered)).toEqual({ row: 4, col: 4 });
+  });
+
+  it("Ctrl+Arriba salta a la primera visible aunque la 0 este oculta", () => {
+    expect(navigationTarget({ row: 7, col: 2 }, "ArrowUp", true, bounds([0, 1]))).toEqual({ row: 2, col: 2 });
+  });
+});

@@ -403,6 +403,12 @@
 /* Capa encima del contenido de la zona (focusZones.ts): el editor y los
    encabezados del grid llegan de borde a borde y taparian un contorno
    propio del contenedor. */
+/* Ancla de la marca de cada zona. :where() no suma especificidad: si una
+   zona tuviera su propio position, gana el de su clase. */
+:where([data-focus-zone]) {
+  position: relative;
+}
+
 [data-focus-zone].zone-current::after {
   content: "";
   position: absolute;
