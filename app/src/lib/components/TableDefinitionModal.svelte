@@ -2,11 +2,17 @@
   import { onMount } from "svelte";
   import { get } from "svelte/store";
   import { EditorView } from "codemirror";
+  import { drawSelection, keymap } from "@codemirror/view";
+  import { selectAll } from "@codemirror/commands";
   import { EditorState } from "@codemirror/state";
   import { sql, MySQL } from "@codemirror/lang-sql";
-  import { X } from "@lucide/svelte";
+  import { Check, Copy, X } from "@lucide/svelte";
+  import { tooltip } from "$lib/tooltip";
+  import { writeClipboardText } from "$lib/gridClipboard";
   import { t } from "$lib/i18n";
   import { fetchTableDefinition } from "$lib/tableDefinition";
+  import { alignColumnDefinitions } from "$lib/sqlFormatLayout";
+  import { editorSettings } from "$lib/stores/editorSettings";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
 
@@ -43,25 +49,60 @@
     return raw.replace(/`/g, "");
   }
 
+  // Lo que se ve (y se copia): con "Alineacion en columnas" (Ajustes >
+  // Editor), nombre, tipo y restricciones de cada columna en columnas.
+  const shownDdl = $derived.by(() => {
+    const clean = cleanDdl(ddl);
+    return $editorSettings.formatterAlignColumns ? alignColumnDefinitions(clean) : clean;
+  });
+
   // ddlContainer solo existe una vez que Svelte pinta la rama {:else} (tras
   // status pasar a "ok"); un effect que dependa de los dos re-corre apenas
   // el contenedor aparece, en vez de intentar montar el editor antes de que
   // el div exista en el DOM.
   $effect(() => {
     if (status !== "ok" || !ddlContainer) return;
+    const doc = shownDdl;
     ddlView?.destroy();
     ddlView = new EditorView({
-      doc: cleanDdl(ddl),
+      doc,
       parent: ddlContainer,
       extensions: [
-        EditorView.editable.of(false),
+        // Solo lectura pero enfocable: CodeMirror solo pinta las lineas a la
+        // vista, asi que la seleccion y la copia tienen que ser las suyas
+        // (sobre el documento entero), no las nativas del navegador.
         EditorState.readOnly.of(true),
+        drawSelection(),
+        keymap.of([{ key: "Mod-a", run: selectAll }]),
         sql({ dialect: MySQL }),
         buildCmTheme(get(editorPalette), get(effectiveScheme)),
-        EditorView.lineWrapping,
       ],
     });
   });
+
+  // Ctrl+A selecciona todo el SQL, no el texto del dialogo, aunque el foco
+  // este fuera del editor (en el boton de cerrar, por ejemplo). Dentro del
+  // editor lo resuelve su keymap; despues, Ctrl+C copia todo.
+  function onKeydown(event: KeyboardEvent) {
+    const mod = event.ctrlKey || event.metaKey;
+    if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== "a" || !ddlView) return;
+    if (ddlView.dom.contains(event.target as Node)) return;
+    event.preventDefault();
+    ddlView.focus();
+    selectAll(ddlView);
+  }
+
+  // Copia el CREATE completo, tal como se ve; el icono pasa a un check un
+  // momento.
+  let copied = $state(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copyDdl() {
+    if (status !== "ok" || !(await writeClipboardText(shownDdl))) return;
+    copied = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = false), 1500);
+  }
 
   async function load() {
     status = "loading";
@@ -80,6 +121,7 @@
   class="table-definition-modal"
   bind:this={dialogEl}
   onclose={onclose}
+  onkeydown={onKeydown}
   oncancel={(event) => {
     event.preventDefault();
     dialogEl?.close();
@@ -87,6 +129,16 @@
 >
   <div class="dialog-heading">
     <h2>{table}</h2>
+    <button
+      type="button"
+      class="dialog-close copy"
+      disabled={status !== "ok"}
+      aria-label={$t("workspace.definition.copy")}
+      use:tooltip={$t(copied ? "workspace.definition.copied" : "workspace.definition.copy")}
+      onclick={() => void copyDdl()}
+    >
+      {#if copied}<Check size={15} aria-hidden="true" />{:else}<Copy size={15} aria-hidden="true" />{/if}
+    </button>
     <button type="button" class="dialog-close" aria-label={$t("common.close")} onclick={() => dialogEl?.close()}>
       <X size={15} aria-hidden="true" />
     </button>
@@ -165,7 +217,17 @@
     cursor: pointer;
   }
 
-  .dialog-close:hover {
+  /* Copiar va a la derecha, antes de cerrar. */
+  .dialog-close.copy {
+    margin-left: auto;
+  }
+
+  .dialog-close:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .dialog-close:hover:not(:disabled) {
     background: var(--surface);
     color: var(--text-primary);
   }
@@ -203,10 +265,14 @@
     white-space: nowrap;
   }
 
+  /* Sin ajuste de linea: el CREATE se lee como lo formatea el motor y el
+     desplazamiento (vertical y horizontal) es el del editor, con sus barras
+     propias (codemirrorTheme.ts). */
   .ddl-region {
+    display: flex;
     min-height: 0;
     margin-top: var(--space-4);
-    overflow: auto;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface-content);
@@ -231,7 +297,17 @@
     min-height: 0;
   }
 
+  .ddl {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+  }
+
   .ddl :global(.cm-editor) {
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
     font-size: 0.8125rem;
   }
 

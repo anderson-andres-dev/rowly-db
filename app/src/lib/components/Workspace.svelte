@@ -24,12 +24,15 @@
   import { extractFromContext } from "$lib/sqlSchema";
   import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
-  import { splitStatements, STANDARD_LEXICAL } from "$lib/sqlStatements";
+  import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
+  import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
+  import { parameterColumns, type ParameterColumn } from "$lib/sqlParameterTypes";
   import { engineFor } from "$lib/engines";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import ParametersDialog from "$lib/components/ParametersDialog.svelte";
   import ChangesPreview from "$lib/components/results/ChangesPreview.svelte";
   import ExportDialog, { type ExportSummary } from "$lib/components/results/ExportDialog.svelte";
   import TableFilters from "$lib/components/results/TableFilters.svelte";
@@ -1193,15 +1196,18 @@
   // ejecucion nueva lo reemplaza: confirmar ejecuta siempre lo ultimo que se
   // pidio, nunca un bloque anterior (y el guard se vuelve a mostrar, ver el
   // {#key} de ExecutionGuard). Nada se confirma por si solo.
-  async function requestExecution(consoleId: string, sql: string) {
+  async function requestExecution(consoleId: string, requested: string) {
     if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
     cancelQueryConfirmation(consoleId);
-    if (!beginQueryExecution(consoleId)) return;
-    // Consulta nueva: arranca sin el orden de los encabezados.
-    setQuerySort(consoleId, []);
     // Con las reglas del motor: las mismas con que el editor marca cada
     // sentencia del script.
     const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
+    // Lo que se ejecuta (y queda en la Salida y el historial) es la consulta
+    // con los valores de sus parametros.
+    const sql = await fillParameters(requested, lexical);
+    if (sql === null || !beginQueryExecution(consoleId)) return;
+    // Consulta nueva: arranca sin el orden de los encabezados.
+    setQuerySort(consoleId, []);
     const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
     if (statements.length > 1) {
       await startScript(consoleId, sql, statements);
@@ -1209,6 +1215,32 @@
     }
     await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
+  }
+
+  // Parametros con nombre (:nombre, sqlParameters.ts): se piden antes de
+  // ejecutar, cada uno con el tipo de la columna con que se compara
+  // (sqlParameterTypes.ts, del catalogo ya cargado), y se reemplazan en el
+  // texto. null: se cancelo el dialogo.
+  let parametersPrompt = $state<{
+    parameters: { name: string; column: ParameterColumn | null }[];
+    lexical: SqlLexical;
+    resolve: (values: Map<string, string> | null) => void;
+  } | null>(null);
+
+  function fillParameters(sql: string, lexical: SqlLexical): Promise<string | null> {
+    const parameters = findParameters(sql, lexical);
+    if (parameters.length === 0) return Promise.resolve(sql);
+    const columns = parameterColumns(sql, parameters, lexical, $catalogTables);
+    return new Promise((resolve) => {
+      parametersPrompt = {
+        parameters: parameterNames(parameters).map((name) => ({ name, column: columns.get(name) ?? null })),
+        lexical,
+        resolve: (values) => {
+          parametersPrompt = null;
+          resolve(values ? substituteParameters(sql, parameters, values) : null);
+        },
+      };
+    });
   }
 
   // --- Scripts -------------------------------------------------------------
@@ -1626,6 +1658,16 @@
     y={tabMenu.y}
     items={tabMenuItems}
     onclose={() => (tabMenu = null)}
+  />
+{/if}
+
+{#if parametersPrompt}
+  {@const prompt = parametersPrompt}
+  <ParametersDialog
+    parameters={prompt.parameters}
+    lexical={prompt.lexical}
+    onconfirm={(values) => prompt.resolve(values)}
+    oncancel={() => prompt.resolve(null)}
   />
 {/if}
 

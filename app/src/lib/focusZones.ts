@@ -141,9 +141,10 @@ export function moveFocus(direction: Direction): void {
 
 // Accion para marcar un contenedor como zona.
 export function focusZoneAction(node: HTMLElement, params: { zone: Zone; focusDefault?: (zone: HTMLElement) => boolean | void }) {
+  // La capa del destello se ubica respecto de la zona: el position:relative
+  // lo pone controls.css por este atributo, no un estilo en linea (el panel
+  // del editor reescribe su style al mover el divisor y lo borraba).
   node.dataset.focusZone = params.zone;
-  // La capa del destello se ubica respecto de la zona.
-  if (getComputedStyle(node).position === "static") node.style.position = "relative";
   zones.set(params.zone, { element: node, focusDefault: params.focusDefault });
   return {
     update(next: { zone: Zone; focusDefault?: (zone: HTMLElement) => boolean | void }) {

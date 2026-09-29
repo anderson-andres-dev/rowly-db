@@ -50,7 +50,14 @@
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { numberFormat, t } from "$lib/i18n";
-  import { tick, type Snippet } from "svelte";
+  import { tick, untrack, type Snippet } from "svelte";
+  import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
+  import {
+    columnValueCounts,
+    rowsHiddenByFilters,
+    withColumnFilter,
+    type ColumnFilters,
+  } from "$lib/columnFilters";
 
   let {
     isExecuting,
@@ -375,13 +382,52 @@
 
   // "Filtrar filas": se ocultan las filas de la pagina sin coincidencias
   // (las nuevas siempre se ven).
-  const hiddenRows = $derived.by(() => {
+  const findHiddenRows = $derived.by(() => {
     if (!findOpen || !findFilter || findQuery === "" || findResult.error) return null;
     const matched = new Set(findResult.matches.map((match) => match.row));
     const hidden = new Set<number>();
     for (let row = 0; row < rows.length; row++) if (!matched.has(row)) hidden.add(row);
     return hidden;
   });
+
+  // --- Filtro local por columna (columnFilters.ts) ----------------------
+  // Sobre las filas cargadas, sin volver a consultar; se suma a "Filtrar
+  // filas". Otro resultado (otras columnas) empieza sin filtros; otra
+  // pagina de la misma consulta los conserva.
+  let columnFilters = $state<ColumnFilters>(new Map());
+  let filterPopover = $state<{ column: number; position: { left: number; top: number } } | null>(null);
+  const columnSignature = $derived(result?.type === "resultSet" ? result.columns.map((column) => column.name).join("\u0000") : "");
+
+  $effect(() => {
+    void columnSignature;
+    untrack(() => {
+      columnFilters = new Map();
+      filterPopover = null;
+    });
+  });
+
+  const filterHiddenRows = $derived(rowsHiddenByFilters(rows, columnFilters));
+  const filteredColumns = $derived(new Set(columnFilters.keys()));
+
+  const hiddenRows = $derived.by(() => {
+    if (filterHiddenRows.size === 0) return findHiddenRows;
+    if (!findHiddenRows) return filterHiddenRows;
+    return new Set([...findHiddenRows, ...filterHiddenRows]);
+  });
+
+  // Los conteos solo mientras el filtro de una columna esta abierto.
+  const filterValues = $derived(
+    filterPopover ? columnValueCounts(rows, filterPopover.column, columnFilters, findHiddenRows) : [],
+  );
+
+  function openColumnFilter(column: number, position: { left: number; top: number }) {
+    filterPopover = filterPopover?.column === column ? null : { column, position };
+  }
+
+  function closeColumnFilter() {
+    filterPopover = null;
+    void tick().then(() => gridScroll?.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
+  }
 
   // --- Formato de copia ---------------------------------------------------
   let formatMenuOpen = $state(false);
@@ -640,6 +686,18 @@
           onclose={closeFind}
         />
       {/if}
+      {#if filterPopover && result?.type === "resultSet"}
+        {@const column = filterPopover.column}
+        <ColumnFilterPopover
+          column={result.columns[column]?.name ?? ""}
+          values={filterValues}
+          excluded={columnFilters.get(column) ?? new Set()}
+          matches={rows.length - (hiddenRows?.size ?? 0)}
+          position={filterPopover.position}
+          onchange={(excluded) => (columnFilters = withColumnFilter(columnFilters, column, excluded))}
+          onclose={closeColumnFilter}
+        />
+      {/if}
       {#if formatMenuOpen}
         <div
           class="ui-menu format-menu"
@@ -737,6 +795,8 @@
             findMatches={findOpen ? findResult.matches : []}
             findCurrent={findOpen ? findCurrent : -1}
             {hiddenRows}
+            {filteredColumns}
+            onfilter={openColumnFilter}
             {sort}
             sortable={page?.sortable === true && !isExecuting}
             {onsort}

@@ -3,7 +3,7 @@
   import { hideTooltipFor, scheduleTooltipFor, tooltip } from "$lib/tooltip";
   import { typeProblem } from "$lib/cellTypes";
   import { settleTransitions } from "$lib/settleTransitions";
-  import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Key } from "@lucide/svelte";
+  import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Filter, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
   import type { ColumnCatalogInfo, QueryColumn, QueryRow, SortKey } from "$lib/types";
   import { t } from "$lib/i18n";
@@ -53,6 +53,8 @@
     sort = [],
     sortable = false,
     onsort = () => {},
+    filteredColumns = null,
+    onfilter = () => {},
   }: {
     columns: QueryColumn[];
     rows: QueryRow[];
@@ -91,6 +93,11 @@
     sort?: SortKey[];
     sortable?: boolean;
     onsort?: (column: number, additive: boolean) => void;
+    // Filtro local por columna (columnFilters.ts, lo maneja ResultPane): las
+    // columnas con valores desmarcados y el clic en el embudo, con donde
+    // abrir el filtro.
+    filteredColumns?: ReadonlySet<number> | null;
+    onfilter?: (column: number, anchor: { left: number; top: number }) => void;
   } = $props();
 
   // --- Posicion visible de cada fila ------------------------------------
@@ -583,6 +590,8 @@
   const HEADER_ICON_WIDTH = 12 + 4;
   // Boton de orden del encabezado (icono + numero de prioridad + margen).
   const HEADER_SORT_WIDTH = 26;
+  // El embudo del filtro local (siempre esta).
+  const HEADER_FILTER_WIDTH = 20;
 
   let textMeasureContext: CanvasRenderingContext2D | null = null;
 
@@ -668,6 +677,7 @@
         context.measureText(column.name).width +
           HEADER_ICON_WIDTH +
           (sortable ? HEADER_SORT_WIDTH : 0) +
+          HEADER_FILTER_WIDTH +
           CELL_CHROME_WIDTH,
       ),
     );
@@ -2177,6 +2187,20 @@
                         {/if}
                       </button>
                     {/if}
+                    <button
+                      type="button"
+                      class="sort-button filter-button"
+                      class:active={filteredColumns?.has(columnIndex) ?? false}
+                      aria-label={$t("grid.filter.open", { column: column.name })}
+                      use:tooltip={$t(filteredColumns?.has(columnIndex) ? "grid.filter.active" : "grid.filter.tooltip")}
+                      onclick={(event) => {
+                        event.stopPropagation();
+                        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                        onfilter(columnIndex, { left: rect.left, top: rect.bottom + 4 });
+                      }}
+                    >
+                      <Filter size={11} aria-hidden="true" />
+                    </button>
                   </span>
                   <!-- svelte-ignore a11y_click_events_have_key_events -->
                   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -2678,6 +2702,11 @@
   .sort-button.active {
     color: var(--accent);
     opacity: 1;
+  }
+
+  /* Junto al de orden, sin empujar hacia el borde de nuevo. */
+  .sort-button + .filter-button {
+    margin-left: 0;
   }
 
   .sort-priority {
