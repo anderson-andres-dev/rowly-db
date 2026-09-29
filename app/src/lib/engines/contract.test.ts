@@ -5,6 +5,7 @@ import { ENGINES, standardSql, type SqlProfile } from "$lib/engines";
 import type { ConnectionDriver } from "$lib/connections";
 import type { ExecutionError } from "$lib/sqlDiagnostics";
 import { splitStatements } from "$lib/sqlStatements";
+import { normalizePastedSql } from "$lib/sqlPaste";
 import { sqlTokens } from "$lib/sqlContext";
 import { aliasFor } from "$lib/sqlRelations";
 import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/sqlSchema";
@@ -70,6 +71,20 @@ describe.each(PROFILES)("perfil %s", (_name, engine) => {
   const split = (text: string) =>
     splitStatements(text, engine.lexical).map((range) => text.slice(range.from, range.to));
   const tricky = "a;b 'c' \"d\" `e` [f] \\ g";
+
+  it("al pegar, lo invisible del codigo se normaliza y lo de sus comillas y comentarios queda", () => {
+    const nbsp = String.fromCharCode(0xa0);
+    const zwsp = String.fromCharCode(0x200b);
+    const paste = (text: string) => normalizePastedSql(text, engine.lexical);
+    expect(paste(`SELECT${nbsp}id,${zwsp} name${nbsp}FROM t`)).toBe("SELECT id, name FROM t");
+    expect(paste(`SELECT${nbsp}'a${nbsp}b'`)).toBe(`SELECT 'a${nbsp}b'`);
+    expect(paste(`SELECT 'it''s${nbsp}x'${nbsp}AS a`)).toBe(`SELECT 'it''s${nbsp}x' AS a`);
+    expect(paste(`SELECT 1 -- a${nbsp}b\n/* c${nbsp}d */${nbsp}FROM t`)).toBe(`SELECT 1 -- a${nbsp}b\n/* c${nbsp}d */ FROM t`);
+    for (const quote of engine.lexical.identifierQuotes) {
+      const close = quote === "[" ? "]" : quote;
+      expect(paste(`SELECT ${quote}a${nbsp}b${close}${nbsp}FROM t`)).toBe(`SELECT ${quote}a${nbsp}b${close} FROM t`);
+    }
+  });
 
   it("un ; dentro de sus comillas o comentarios no corta", () => {
     for (const quote of engine.lexical.identifierQuotes) {

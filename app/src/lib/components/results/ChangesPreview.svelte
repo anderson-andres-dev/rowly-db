@@ -115,6 +115,19 @@
   function close() {
     if (!applying) dialog?.close();
   }
+
+  // Enter aplica, como el boton primario/de peligro del pie: el uso a
+  // teclado del modal no debe depender del mouse. Si el foco ya esta en un
+  // boton (p. ej. "Cancelar"), se deja que el navegador lo active a el, no
+  // este atajo. Solo Enter solo y recien presionado: el Ctrl+Enter que abrio
+  // el modal, mantenido, no debe aplicar (en produccion) por autorrepeticion.
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key !== "Enter" || applying || event.repeat || event.isComposing) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if ((event.target as HTMLElement | null)?.tagName === "BUTTON") return;
+    event.preventDefault();
+    onapply();
+  }
 </script>
 
 <dialog
@@ -126,6 +139,7 @@
     close();
   }}
   onclose={onclose}
+  onkeydown={onKeydown}
 >
   <!-- Titulo y, debajo, una pastilla por tipo de sentencia: la palabra SQL
        (igual en cualquier idioma) y la cantidad en su bolita. El mismo color

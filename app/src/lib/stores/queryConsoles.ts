@@ -1,4 +1,5 @@
 import { isFilterOperator, type FilterCondition } from "$lib/filterBuilder";
+import { DEFAULT_TEXT_ENCODING, isTextEncoding, type TextEncoding } from "$lib/textEncoding";
 import { browser } from "$app/environment";
 import { get, writable } from "svelte/store";
 import { translate, type Translate } from "$lib/i18n";
@@ -22,6 +23,12 @@ export interface QueryConsole {
   // recargar; la pestaña marca cambios mientras difieren. En una consola no
   // se usa.
   savedSql: string;
+  // El encoding con el que se guarda (sqlFiles.ts): en un archivo, el que se
+  // detecto al abrirlo; en una consola, el de su primer guardado.
+  // `savedEncoding`, el que el archivo tiene hoy en disco: cambiar el de
+  // guardar deja el archivo con cambios. Sin valor, UTF-8.
+  encoding?: TextEncoding;
+  savedEncoding?: TextEncoding;
   // Al arrancar, el texto de una consola grande todavia se esta leyendo del
   // disco (ver hydrateLargeTexts): no se monta el editor hasta tenerlo.
   textPending?: boolean;
@@ -184,6 +191,8 @@ function parseConsole(value: unknown): QueryConsole | null {
     filePath: typeof candidate.filePath === "string" ? candidate.filePath : null,
     table: parseTableTab(candidate.table),
     savedSql: typeof candidate.savedSql === "string" && !candidate.savedSame ? candidate.savedSql : sql,
+    ...(isTextEncoding(candidate.encoding) ? { encoding: candidate.encoding } : {}),
+    ...(isTextEncoding(candidate.savedEncoding) ? { savedEncoding: candidate.savedEncoding } : {}),
     ...(pending ? { textPending: true } : {}),
   };
 }
@@ -655,7 +664,22 @@ export function updateQueryConsoleSql(id: string, sql: string): void {
 export function isQueryConsoleDirty(item: QueryConsole): boolean {
   // Una pestaña de tabla no tiene texto que guardar.
   if (item.table) return false;
-  return item.filePath !== null ? item.sql !== item.savedSql : item.sql.trim() !== "";
+  if (item.filePath === null) return item.sql.trim() !== "";
+  return item.sql !== item.savedSql || fileEncoding(item) !== (item.savedEncoding ?? DEFAULT_TEXT_ENCODING);
+}
+
+// El encoding con que se guarda la pestaña.
+export function fileEncoding(item: QueryConsole): TextEncoding {
+  return item.encoding ?? DEFAULT_TEXT_ENCODING;
+}
+
+// Elegir otro encoding para guardar el archivo: queda con cambios hasta
+// guardarlo.
+export function setQueryConsoleEncoding(id: string, encoding: TextEncoding): void {
+  queryConsoles.update((state) => ({
+    ...state,
+    consoles: state.consoles.map((item) => (item.id === id ? { ...item, encoding } : item)),
+  }));
 }
 
 // Doble clic en una tabla del explorador: la abre en su pestaña (o activa la
@@ -706,11 +730,13 @@ export function fileNameFromPath(path: string): string {
 // (el que efectivamente se escribio, que puede ser anterior al texto actual
 // si el usuario siguio tecleando mientras se guardaba). Una consola pasa a
 // ser un archivo y toma el nombre de este.
-export function markQueryConsoleSaved(id: string, filePath: string, sql: string): void {
+export function markQueryConsoleSaved(id: string, filePath: string, sql: string, encoding: TextEncoding): void {
   queryConsoles.update((state) => ({
     ...state,
     consoles: state.consoles.map((item) =>
-      item.id === id ? { ...item, filePath, savedSql: sql, title: fileNameFromPath(filePath) } : item,
+      item.id === id
+        ? { ...item, filePath, savedSql: sql, encoding, savedEncoding: encoding, title: fileNameFromPath(filePath) }
+        : item,
     ),
   }));
 }
@@ -738,7 +764,12 @@ export function detachQueryConsoleFile(path: string): void {
 
 // Abre un .sql como pestaña. Si ya estaba abierto en esta conexion, solo lo
 // activa (sin pisar lo que se este editando).
-export function openSqlFileConsole(profileId: string, filePath: string, contents: string): string {
+export function openSqlFileConsole(
+  profileId: string,
+  filePath: string,
+  contents: string,
+  encoding: TextEncoding = DEFAULT_TEXT_ENCODING,
+): string {
   const state = get(queryConsoles);
   const existing = state.consoles.find((item) => item.profileId === profileId && item.filePath === filePath);
   if (existing) {
@@ -752,6 +783,8 @@ export function openSqlFileConsole(profileId: string, filePath: string, contents
     sql: contents,
     filePath,
     savedSql: contents,
+    encoding,
+    savedEncoding: encoding,
     table: null,
   };
   queryConsoles.set({

@@ -2,9 +2,11 @@ import { invoke } from "$lib/backend";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { get } from "svelte/store";
 import { translate } from "$lib/i18n";
+import type { TextEncoding } from "$lib/textEncoding";
 import {
   consoleDisplayTitle,
   currentQueryConsole,
+  fileEncoding,
   detachQueryConsoleFile,
   fileNameFromPath,
   markQueryConsoleSaved,
@@ -36,8 +38,9 @@ async function writeFile(item: QueryConsole, path: string): Promise<void> {
   // escribiendo mientras tanto, esos cambios quedan como pendientes.
   // El editor manda su texto con un retraso: se pide el de ahora.
   const contents = currentQueryConsole(item.id)?.sql ?? item.sql;
-  await invoke("write_sql_file", { path, contents });
-  markQueryConsoleSaved(item.id, path, contents);
+  const encoding = fileEncoding(item);
+  await invoke("write_sql_file", { path, contents, encoding });
+  markQueryConsoleSaved(item.id, path, contents, encoding);
 }
 
 export async function saveConsoleAs(item: QueryConsole): Promise<boolean> {
@@ -64,8 +67,13 @@ export async function openSqlFileAtPath(profileId: string, path: string): Promis
   const alreadyOpen = get(queryConsoles).consoles.some(
     (item) => item.profileId === profileId && item.filePath === path,
   );
-  const contents = alreadyOpen ? "" : await invoke<string>("read_sql_file", { path });
-  openSqlFileConsole(profileId, path, contents);
+  if (alreadyOpen) {
+    openSqlFileConsole(profileId, path, "");
+    return;
+  }
+  // El encoding detectado (text_encoding.rs): se guarda en el mismo.
+  const file = await invoke<{ contents: string; encoding: TextEncoding }>("read_sql_file", { path });
+  openSqlFileConsole(profileId, path, file.contents, file.encoding);
 }
 
 export async function openSqlFileWithDialog(profileId: string): Promise<boolean> {

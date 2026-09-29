@@ -5,6 +5,7 @@ mod drivers;
 mod export;
 mod result_editing;
 mod sql_files;
+mod text_encoding;
 mod updates;
 mod webkit_env;
 
@@ -546,6 +547,9 @@ fn check_statement(statement: &str, dialect: Dialect, production: bool) -> State
 #[tauri::command]
 fn analyze_sql(
     statements: Vec<String>,
+    // Lo que crea el documento (CREATE [TEMPORARY] TABLE/VIEW): ver
+    // `CatalogView::created`.
+    created: Option<Vec<String>>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
@@ -564,6 +568,7 @@ fn analyze_sql(
         tables: &catalog.tables,
         loaded_schemas: loaded_schemas.iter().map(String::as_str).collect(),
         default_schema: &default_schema,
+        created: created.iter().flatten().map(String::as_str).collect(),
     };
     Ok(statements
         .iter()
@@ -710,13 +715,23 @@ async fn prune_console_texts(app: tauri::AppHandle, keep: Vec<String>) -> Result
 }
 
 #[tauri::command]
-async fn read_sql_file(path: String) -> Result<String, Message> {
+async fn read_sql_file(path: String) -> Result<sql_files::SqlFileText, Message> {
     sql_files::read(path).await
 }
 
+/// Sin `encoding` (una consola que se guarda por primera vez), UTF-8.
 #[tauri::command]
-async fn write_sql_file(path: String, contents: String) -> Result<(), Message> {
-    sql_files::write(path, contents).await
+async fn write_sql_file(
+    path: String,
+    contents: String,
+    encoding: Option<text_encoding::TextEncoding>,
+) -> Result<(), Message> {
+    sql_files::write(
+        path,
+        contents,
+        encoding.unwrap_or(text_encoding::TextEncoding::Utf8),
+    )
+    .await
 }
 
 #[tauri::command]

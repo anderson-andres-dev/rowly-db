@@ -171,39 +171,61 @@
   opacity: 0.4;
 }
 
+/* Alcance "en la seleccion" (DataGrip): un clic vuelve a todo el documento. */
+.kh-search-scope {
+  flex-shrink: 0;
+  height: 1.375rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) ease;
+}
+
+.kh-search-scope:hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 .kh-search-newline-button {
   color: var(--text-secondary);
 }
 
 /* --- En el editor ---------------------------------------------------------
-   Coincidencias claramente visibles (tono calido, como la busqueda del
-   grid) y la actual mas intensa con contorno. Tres clases de
-   especificidad para ganarle al tema base de CodeMirror. */
+   Coincidencias en el color primario del tema y la actual mas intensa con
+   contorno. Tres clases de especificidad para ganarle al tema base de
+   CodeMirror. */
 .cm-editor .cm-scroller .cm-searchMatch {
   border-radius: 2px;
-  background: color-mix(in srgb, var(--warning) 30%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .cm-editor .cm-scroller .cm-searchMatch-selected,
 .cm-editor .cm-scroller .cm-searchMatch.cm-searchMatch-selected {
-  background: color-mix(in srgb, var(--warning) 60%, transparent);
-  box-shadow: 0 0 0 1px var(--warning);
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-/* El salto de linea que es parte de una coincidencia: un ⏎ brillante al
-   final de la linea, asi se ve que tambien se reemplaza. */
+/* El salto de linea que es parte de una coincidencia: una flecha de retorno
+   de trazo fino al final de la linea, en el color primario pero tenue y
+   sin caja. Mascara SVG: nitida a cualquier zoom y toma el color del tema. */
 .cm-editor .kh-search-newline {
   display: inline-block;
-  margin-left: 1px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--warning) 45%, transparent);
-  box-shadow: 0 0 0 1px var(--warning);
-  color: var(--text-primary);
-  font-size: 0.85em;
-  line-height: 1.2;
-  vertical-align: baseline;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: 3px;
+  vertical-align: -0.1em;
+  background-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 10 4 15 9 20'/%3E%3Cpath d='M20 4v7a4 4 0 0 1-4 4H4'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 10 4 15 9 20'/%3E%3Cpath d='M20 4v7a4 4 0 0 1-4 4H4'/%3E%3C/svg%3E")
+    center / contain no-repeat;
   pointer-events: none;
 }
 
@@ -218,7 +240,7 @@
   transition: transform var(--duration-fast) ease;
 }
 
-.kh-search-panel.expanded .kh-search-expand svg {
+.kh-search-panel[data-mode="replace"] .kh-search-expand svg {
   transform: rotate(90deg);
 }
 

@@ -9,12 +9,15 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-/// Which database engine to connect to. Serializable so the frontend can pass
-/// it straight through `invoke`.
+/// The engine to connect to: the same values as the frontend's
+/// `ConnectionDriver` ("mysql", "mariadb", "postgres"), so it crosses
+/// `invoke` as is. Which driver speaks to it is decided here, not in the
+/// frontend: MySQL and MariaDB share one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseKind {
     MySql,
+    MariaDb,
     Postgres,
 }
 
@@ -22,6 +25,7 @@ impl DatabaseKind {
     pub fn dialect(self) -> Dialect {
         match self {
             DatabaseKind::MySql => Dialect::MySql,
+            DatabaseKind::MariaDb => Dialect::MariaDb,
             DatabaseKind::Postgres => Dialect::Postgres,
         }
     }
@@ -59,7 +63,9 @@ pub async fn test_connection(
     config: &ConnectionConfig,
 ) -> Result<TestConnectionReport, DriverError> {
     match kind {
-        DatabaseKind::MySql => report(MySqlConnector::connect(config).await?).await,
+        DatabaseKind::MySql | DatabaseKind::MariaDb => {
+            report(MySqlConnector::connect(config).await?).await
+        }
         DatabaseKind::Postgres => report(PostgresConnector::connect(config).await?).await,
     }
 }
@@ -88,7 +94,9 @@ pub async fn connect(
     config: &ConnectionConfig,
 ) -> Result<ConnectedDatabase, DriverError> {
     match kind {
-        DatabaseKind::MySql => open(MySqlConnector::connect(config).await?).await,
+        DatabaseKind::MySql | DatabaseKind::MariaDb => {
+            open(MySqlConnector::connect(config).await?).await
+        }
         DatabaseKind::Postgres => open(PostgresConnector::connect(config).await?).await,
     }
 }
@@ -115,4 +123,24 @@ async fn open<C: DbConnector + 'static>(connector: C) -> Result<ConnectedDatabas
         available_schemas,
         default_objects,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DatabaseKind;
+    use khipu_engine::Dialect;
+
+    /// Los nombres que manda el frontend (`ConnectionDriver`, en
+    /// app/src/lib/connections.ts), cada uno con su motor propio.
+    #[test]
+    fn cada_motor_del_frontend_llega_como_el_suyo() {
+        for (name, dialect) in [
+            ("mysql", Dialect::MySql),
+            ("mariadb", Dialect::MariaDb),
+            ("postgres", Dialect::Postgres),
+        ] {
+            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(kind.dialect(), dialect, "{name}");
+        }
+    }
 }

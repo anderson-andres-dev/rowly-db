@@ -64,12 +64,12 @@ If one is missing, the test stops and tells you which. `EXPECT_TLS` is what the 
 
 Everything that changes from one engine to another lives in the `Dialect` enum in `crates/engine/src/lib.rs` and in the engine profile in `app/src/lib/engines/`. Nothing falls back to another engine, so if something is missing, the build fails and tells you what.
 
-1. **Driver.** Create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace.
-2. **Rust.** Add the engine to `DatabaseKind` in `app/src-tauri/src/drivers.rs`, and to `Dialect` and its `ALL` list in `crates/engine/src/lib.rs`. The compiler points at each decision left.
+1. **Driver.** Create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace. An engine that speaks the protocol of one already supported (MariaDB and MySQL) reuses its driver.
+2. **Rust.** Add the engine to `DatabaseKind` in `app/src-tauri/src/drivers.rs`, which picks its driver, and to `Dialect` and its `ALL` list in `crates/engine/src/lib.rs`. The compiler points at each decision left. The engine has the same name in `DatabaseKind`, `Dialect` and the frontend's `ConnectionDriver`.
 3. **Frontend.** Add it to `app/src/lib/connections.ts` with its name, logo and default port, and write its profile in `app/src/lib/engines/<engine>.ts`.
-4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts` and run both test suites.
+4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts`, decide its answer in each `PerEngine` case of the contract in `crates/engine/src/diagnostics.rs` (the compiler lists them), and run both test suites. The shared cases run on the new engine without writing anything.
 
-With that, autocomplete, JOINs by foreign key, diagnostics and large files work on the new engine. If `sqlparser` has no dialect for it, open an issue before you start.
+With that, autocomplete, JOINs by foreign key, diagnostics, pasting and large files work on the new engine. If `sqlparser` has no dialect for it, use the closest one, as MariaDB uses MySQL's, and list the valid syntax that parser rejects in `Dialect::unparsed_syntax`, so it is not flagged as an error.
 
 ## Releasing
 

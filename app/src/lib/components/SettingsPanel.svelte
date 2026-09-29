@@ -23,6 +23,7 @@
     setTableAliases,
     type TableAliasMode,
   } from "$lib/stores/editorSettings";
+  import { GRID_ROW_STYLES, gridSettings, setGridRowStyle } from "$lib/stores/gridSettings";
 
   // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
   // (styles/controls.css). Cada fila es un texto corto y su control; nada de
@@ -239,6 +240,21 @@
                   >
                     <Icon size={14} aria-hidden="true" />
                     {$t(`settings.scheme.${option.value}`)}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            <div class="set-row">
+              <span class="set-label">{$t("settings.appearance.rows")}</span>
+              <div class="ui-segmented" role="radiogroup" aria-label={$t("settings.appearance.rows")}>
+                {#each GRID_ROW_STYLES as style (style)}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={$gridSettings.rowStyle === style}
+                    onclick={() => setGridRowStyle(style)}
+                  >
+                    {$t(`settings.appearance.rows.${style}`)}
                   </button>
                 {/each}
               </div>
