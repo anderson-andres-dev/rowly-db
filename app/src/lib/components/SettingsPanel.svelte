@@ -17,6 +17,7 @@
     MIN_FORMATTER_LINE_WIDTH,
     editorSettings,
     setAutoUppercaseKeywords,
+    setFormatterAlignColumns,
     setFormatterLineWidth,
     setTabNavigatesCompletion,
     setTableAliases,
@@ -373,6 +374,22 @@
                 aria-checked={$editorSettings.autoUppercaseKeywords}
                 aria-labelledby="uppercase-label"
                 onclick={() => setAutoUppercaseKeywords(!$editorSettings.autoUppercaseKeywords)}
+              >
+                <span></span>
+              </button>
+            </div>
+            <div class="set-row">
+              <div class="set-text">
+                <span class="set-label" id="align-columns-label">{$t("settings.editor.alignColumns")}</span>
+                <span class="set-desc">{$t("settings.editor.alignColumns.description")}</span>
+              </div>
+              <button
+                class="ui-switch"
+                type="button"
+                role="switch"
+                aria-checked={$editorSettings.formatterAlignColumns}
+                aria-labelledby="align-columns-label"
+                onclick={() => setFormatterAlignColumns(!$editorSettings.formatterAlignColumns)}
               >
                 <span></span>
               </button>

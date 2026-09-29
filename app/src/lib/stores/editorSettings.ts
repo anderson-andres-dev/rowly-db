@@ -14,6 +14,9 @@ const TABLE_ALIAS_MODES: readonly TableAliasMode[] = ["always", "multiple", "nev
 export interface EditorSettings {
   formatterLineWidth: number;
   autoUppercaseKeywords: boolean;
+  // Formatear alineando en columnas: alias, ON de los JOIN y operadores de
+  // las condiciones (sqlFormatLayout.ts).
+  formatterAlignColumns: boolean;
   tabNavigatesCompletion: boolean;
   tableAliases: TableAliasMode;
 }
@@ -31,6 +34,7 @@ function defaultEditorSettings(): EditorSettings {
   return {
     formatterLineWidth: DEFAULT_FORMATTER_LINE_WIDTH,
     autoUppercaseKeywords: true,
+    formatterAlignColumns: true,
     tabNavigatesCompletion: true,
     tableAliases: "always",
   };
@@ -46,6 +50,7 @@ function loadEditorSettings(): EditorSettings {
     return {
       formatterLineWidth: normalizeLineWidth(parsed.formatterLineWidth),
       autoUppercaseKeywords: parsed.autoUppercaseKeywords !== false,
+      formatterAlignColumns: parsed.formatterAlignColumns !== false,
       tabNavigatesCompletion: parsed.tabNavigatesCompletion !== false,
       tableAliases: normalizeTableAliases(parsed.tableAliases),
     };
@@ -64,6 +69,7 @@ if (browser) {
         JSON.stringify({
           formatterLineWidth: normalizeLineWidth(settings.formatterLineWidth),
           autoUppercaseKeywords: settings.autoUppercaseKeywords,
+          formatterAlignColumns: settings.formatterAlignColumns,
           tabNavigatesCompletion: settings.tabNavigatesCompletion,
           tableAliases: settings.tableAliases,
         }),
@@ -83,6 +89,10 @@ export function setFormatterLineWidth(value: number): void {
 
 export function setAutoUppercaseKeywords(enabled: boolean): void {
   editorSettings.update((settings) => ({ ...settings, autoUppercaseKeywords: enabled }));
+}
+
+export function setFormatterAlignColumns(enabled: boolean): void {
+  editorSettings.update((settings) => ({ ...settings, formatterAlignColumns: enabled }));
 }
 
 export function setTabNavigatesCompletion(enabled: boolean): void {

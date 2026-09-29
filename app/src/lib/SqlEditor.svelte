@@ -63,7 +63,7 @@
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
   import { sql } from "@codemirror/lang-sql";
-  import { autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
+  import { acceptCompletion, autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
   import { keymap } from "@codemirror/view";
   import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
@@ -82,7 +82,8 @@
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
-  import { formatSqlBlock } from "$lib/sqlFormatter";
+  import { formatSqlText } from "$lib/sqlFormatter";
+  import { notifyError } from "$lib/stores/notifications";
   import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
   import {
     executionMarker,
@@ -276,10 +277,27 @@
     const originalDoc = view.state.doc;
     const source = view.state.sliceDoc(range.from, range.to);
     const originalCursor = view.state.selection.main.head;
-    void formatSqlBlock(source, engine, get(editorSettings).formatterLineWidth).then((formatted) => {
+    const settings = get(editorSettings);
+    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns).then((result) => {
       // La primera ejecución carga el formateador bajo demanda. Si el usuario
       // escribió durante esos milisegundos, no se reemplaza una versión vieja.
       if (!view || view.state.doc !== originalDoc) return;
+      // Lo que el parser no entiende queda igual y se dice por que (antes no
+      // pasaba nada y parecia que el formato no se aplicaba). Con varias
+      // consultas, las demas si se formatean.
+      const firstLine = view.state.doc.lineAt(range.from).number;
+      const failure = result.failures[0];
+      if (failure) {
+        const line = firstLine + failure.line - 1;
+        const params = { token: failure.token ?? "", line, count: result.failures.length, formatted: result.formatted };
+        notifyError(
+          result.formatted === 0
+            ? $t(failure.token ? "editor.format.failedAt" : "editor.format.failed", params)
+            : $t(result.failures.length === 1 ? "editor.format.partialOne" : "editor.format.partialOther", params),
+        );
+        if (result.formatted === 0) return;
+      }
+      const formatted = result.text;
       if (formatted === source) {
         view.focus();
         return;
@@ -361,14 +379,18 @@
     "apply-quick-fix": whenFocused(applyFirstFix),
   });
 
-  // moveCompletionSelection() es un no-op (devuelve false) si el tooltip de
-  // autocompletado no esta abierto, asi que Tab/Shift-Tab caen al
-  // comportamiento normal (salir del editor) el resto del tiempo - esto solo
-  // intercepta la tecla mientras hay sugerencias visibles.
-  function buildTabCompletionKeymap(enabled: boolean) {
-    if (!enabled) return [];
+  // Con sugerencias visibles, Tab las recorre (Shift-Tab hacia atras) o, con
+  // "Navegar sugerencias con Tab" apagado, acepta la elegida, como DataGrip.
+  // moveCompletionSelection() y acceptCompletion() no hacen nada (devuelven
+  // false) sin el tooltip abierto, asi que el resto del tiempo Tab sigue su
+  // comportamiento normal.
+  function buildTabCompletionKeymap(navigates: boolean) {
     return Prec.highest(
-      keymap.of([{ key: "Tab", run: moveCompletionSelection(true), shift: moveCompletionSelection(false) }]),
+      keymap.of([
+        navigates
+          ? { key: "Tab", run: moveCompletionSelection(true), shift: moveCompletionSelection(false) }
+          : { key: "Tab", run: acceptCompletion },
+      ]),
     );
   }
 
