@@ -94,7 +94,7 @@ Updates are signed with the key stored in the `TAURI_SIGNING_PRIVATE_KEY` and `T
 
 ## Website
 
-The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `site/index.html` and Spanish at `site/es/index.html`. Keep both in sync. Every push to `main` that touches `site/` publishes it to GitHub Pages. To try it locally, run `python3 -m http.server --directory site`.
+The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `site/index.html` and Spanish at `site/es/index.html`. Keep both in sync. Pages are templates: `{{version}}` and `{{site}}` are filled in by `.github/scripts/render-site.py` with the latest published release and the site address (the `SITE_URL` repository variable, GitHub Pages by default). GitHub Pages republishes the site on every push to `main` that touches `site/` and after each Release run. To try it locally, run `python3 .github/scripts/render-site.py _site && python3 -m http.server --directory _site`. Screenshots live in `site/assets/img/shots/`, in light and dark, taken from the real app with sample data.
 
 ## Style
 

@@ -94,7 +94,7 @@ Las actualizaciones se firman con la clave guardada en los secrets `TAURI_SIGNIN
 
 ## Sitio web
 
-La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés en `site/index.html` y en español en `site/es/index.html`. Mantén las dos al día. Cada push a `main` que toque `site/` la publica en GitHub Pages. Para verla en local, ejecuta `python3 -m http.server --directory site`.
+La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés en `site/index.html` y en español en `site/es/index.html`. Mantén las dos al día. Las páginas son plantillas: `.github/scripts/render-site.py` rellena `{{version}}` y `{{site}}` con la última release publicada y la dirección del sitio (la variable `SITE_URL` del repositorio; sin ella, la de GitHub Pages). GitHub Pages la vuelve a publicar con cada push a `main` que toque `site/` y después de cada Release. Para verla en local, ejecuta `python3 .github/scripts/render-site.py _site && python3 -m http.server --directory _site`. Las capturas están en `site/assets/img/shots/`, en claro y en oscuro, tomadas de la app real con datos de ejemplo.
 
 ## Estilo
 
