@@ -1,9 +1,10 @@
 // Landing de Rowly DB. Todo lo de aquí es una mejora: sin JavaScript los
-// enlaces de descarga, las cuatro funciones y los comandos se ven igual.
+// enlaces de descarga y los comandos se ven igual.
 
 // --- Sistema sugerido -------------------------------------------------------
-// Solo sugiere el sistema; la arquitectura no se adivina. En móviles o si no
-// está claro, el botón sigue diciendo "View downloads".
+// Solo sugiere el sistema; la arquitectura no se adivina y ningún paquete se
+// presenta como preferido. En móviles o si no está claro, los botones siguen
+// diciendo "Download".
 function detectPlatform() {
   const ua = navigator.userAgent;
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
@@ -16,23 +17,18 @@ function detectPlatform() {
 }
 
 const detected = detectPlatform();
-const cta = document.querySelector("[data-cta]");
 
-if (detected && cta) {
-  cta.querySelector("[data-cta-label]").textContent = cta.dataset[`label${detected[0].toUpperCase()}${detected.slice(1)}`];
-  const meta = document.querySelector("[data-cta-meta]");
-  if (meta) meta.textContent = cta.dataset[`meta${detected[0].toUpperCase()}${detected.slice(1)}`];
-  // Windows tiene un solo instalador recomendado: el botón lo descarga.
-  // macOS y Linux piden elegir chip o paquete, así que llevan a la lista.
-  if (detected === "windows") {
-    const exe = document.querySelector('[data-download="windows-exe"]');
-    if (exe) cta.href = exe.href;
-  }
+if (detected) {
+  const key = `label${detected[0].toUpperCase()}${detected.slice(1)}`;
+  document.querySelectorAll("[data-cta]").forEach((cta) => {
+    if (cta.dataset[key]) cta.querySelector("[data-cta-label]").textContent = cta.dataset[key];
+  });
   document.querySelector(`[data-platform="${detected}"]`)?.classList.add("is-suggested");
 }
 
 // --- Pestañas accesibles ----------------------------------------------------
-// Flechas, Inicio y Fin mueven el foco y activan la pestaña (patrón WAI-ARIA).
+// Las de la terminal. Flechas, Inicio y Fin mueven el foco y activan la pestaña
+// (patrón WAI-ARIA).
 function setupTabs(list) {
   const tabs = [...list.querySelectorAll('[role="tab"]')];
   const panels = tabs.map((tab) => document.getElementById(tab.getAttribute("aria-controls")));
