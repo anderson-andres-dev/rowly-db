@@ -10,6 +10,7 @@
 
 <p>
   <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/anderson-andres-dev/rowly-db?style=for-the-badge&amp;label=download&amp;labelColor=00AFAF&amp;color=283640"></a>
+  <a href="https://rowlydb.com/"><img alt="Website: rowlydb.com" src="https://img.shields.io/badge/website-rowlydb.com-283640?style=for-the-badge&amp;labelColor=00AFAF"></a>
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-283640?style=for-the-badge">
   <br>
   <sub><b>English</b> &nbsp;·&nbsp; <a href="README.es.md">Español</a></sub>
