@@ -1,139 +1,251 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rowly DB · Free & Open Source SQL Client</title>
-<meta name="description" content="A free and open source SQL client for Windows, macOS and Linux. Install it in one command.">
-<meta name="theme-color" content="#070b0c">
-<link rel="canonical" href="https://anderson-andres-dev.github.io/rowly-db/">
-<link rel="alternate" hreflang="en" href="https://anderson-andres-dev.github.io/rowly-db/">
-<link rel="alternate" hreflang="es" href="https://anderson-andres-dev.github.io/rowly-db/es/">
-<link rel="alternate" hreflang="x-default" href="https://anderson-andres-dev.github.io/rowly-db/">
+<title>Rowly DB · Free &amp; Open Source SQL Client</title>
+<meta name="description" content="Rowly DB is a free and open source SQL client for Windows, macOS and Linux. Write queries, edit results and review every change as SQL before it runs.">
+<link rel="canonical" href="{{site}}">
+<link rel="alternate" hreflang="en" href="{{site}}">
+<link rel="alternate" hreflang="es" href="{{site}}es/">
+<link rel="alternate" hreflang="x-default" href="{{site}}">
+<meta name="theme-color" content="#fafbfa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#070c12" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Rowly DB · Free & Open Source SQL Client">
-<meta property="og:description" content="A free and open source SQL client for Windows, macOS and Linux. Install it in one command.">
-<meta property="og:url" content="https://anderson-andres-dev.github.io/rowly-db/">
-<meta property="og:image" content="https://anderson-andres-dev.github.io/rowly-db/assets/img/og.png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
+<meta property="og:site_name" content="Rowly DB">
+<meta property="og:title" content="Rowly DB · Free &amp; Open Source SQL Client">
+<meta property="og:description" content="Write queries, edit results and review every change before it runs. For Windows, macOS and Linux.">
+<meta property="og:url" content="{{site}}">
+<meta property="og:image" content="{{site}}assets/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rowly DB with a SQL query and its results">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="assets/img/icon.svg">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&amp;display=swap">
+<link rel="preload" href="assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.className = "js";</script>
 <script src="assets/main.js" defer></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Rowly DB",
+  "description": "A free and open source SQL client for Windows, macOS and Linux.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
+  "softwareVersion": "{{version}}",
+  "url": "{{site}}",
+  "downloadUrl": "https://github.com/anderson-andres-dev/rowly-db/releases/latest",
+  "license": "https://github.com/anderson-andres-dev/rowly-db/blob/main/LICENSE",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 </head>
 <body>
-<canvas id="field" aria-hidden="true"></canvas>
-<div class="light" aria-hidden="true"></div>
+<a class="skip" href="#main">Skip to content</a>
 
 <header class="topbar">
-  <div class="wrap nav">
-    <a class="logo" href="./"><img src="assets/img/icon.svg" alt="" width="26" height="26">rowly db</a>
-    <nav class="nav-links" aria-label="Main">
-      <a href="#install">install</a>
-      <a class="optional" href="#about">about</a>
-      <a class="optional" href="https://github.com/anderson-andres-dev/rowly-db">source</a>
-      <a href="es/" hreflang="es">ES</a>
-      <a class="btn btn-accent btn-small" href="#install">Install</a>
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Rowly DB home">
+      <img class="logo-light" src="assets/img/logo-light.svg" alt="" width="94" height="28">
+      <img class="logo-dark" src="assets/img/logo-dark.svg" alt="" width="94" height="28">
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#downloads">Downloads</a>
+      <a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentation</a>
+      <a href="https://github.com/anderson-andres-dev/rowly-db">GitHub</a>
     </nav>
+    <div class="topbar-actions">
+      <a class="lang" href="es/" hreflang="es" lang="es">Español</a>
+      <a class="btn btn-accent btn-small" href="#downloads">Download</a>
+      <details class="menu">
+        <summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8h16"/><path d="M4 16h16"/></svg></summary>
+        <nav aria-label="Main">
+          <a href="#features">Features</a>
+          <a href="#downloads">Downloads</a>
+          <a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentation</a>
+          <a href="https://github.com/anderson-andres-dev/rowly-db">GitHub</a>
+        </nav>
+      </details>
+    </div>
   </div>
 </header>
 
-<main class="wrap">
-  <section class="hero">
-    <a class="notice" href="https://github.com/anderson-andres-dev/rowly-db/releases/latest">Rowly DB <span data-version>0.2.1</span> is out<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
-    <canvas id="bird" width="416" height="416" data-src="assets/img/icon.svg" role="img" aria-label="Rowly DB"></canvas>
-    <h1>Free &amp; open source SQL client</h1>
-    <p class="lead">For Windows, macOS and Linux. No account, no Pro edition. Install it and start querying.</p>
+<main id="main">
+  <section class="hero wrap">
+    <a class="notice" href="https://github.com/anderson-andres-dev/rowly-db/releases/tag/v{{version}}">Rowly DB {{version}} is here<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+    <h1>Free &amp; Open Source SQL Client</h1>
+    <p class="lead">Write queries. Edit results. Review every change before it runs.</p>
     <div class="actions">
-      <a class="btn btn-accent" href="#install" data-primary data-label-windows="Install on Windows" data-label-macos="Install on macOS" data-label-linux="Install on Linux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span data-primary-label>Install</span></a>
-      <a class="btn btn-dark" href="https://github.com/anderson-andres-dev/rowly-db">Source on GitHub</a>
+      <a class="btn btn-accent btn-large" href="#downloads" data-cta data-label-windows="Download for Windows" data-label-macos="Download for macOS" data-label-linux="Download for Linux" data-meta-windows="Windows 10 or 11, x64" data-meta-macos="Apple Silicon and Intel" data-meta-linux="x86_64 · deb, rpm, Arch, AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span data-cta-label>View downloads</span></a>
+      <a class="btn btn-ghost btn-large" href="https://github.com/anderson-andres-dev/rowly-db">View on GitHub</a>
     </div>
+    <p class="meta"><span data-cta-meta>Windows, macOS and Linux</span> · <a href="#downloads">All downloads</a></p>
+    <picture class="shot">
+      <source media="(prefers-color-scheme: dark)" srcset="assets/img/shots/hero-dark-1200.webp 1200w, assets/img/shots/hero-dark.webp 2400w" sizes="(min-width: 1248px) 1200px, calc(100vw - 32px)">
+      <img src="assets/img/shots/hero-light.webp" srcset="assets/img/shots/hero-light-1200.webp 1200w, assets/img/shots/hero-light.webp 2400w" sizes="(min-width: 1248px) 1200px, calc(100vw - 32px)" alt="Rowly DB with a query in the editor, the schema explorer and the result grid" width="2400" height="1500" fetchpriority="high">
+    </picture>
   </section>
 
-  <div class="shot">
-    <img src="assets/img/app.webp" alt="Rowly DB editor with a query and its results" width="2400" height="1509" fetchpriority="high">
-  </div>
-
-  <section id="install" class="section">
-    <span class="label">// install</span>
-    <h2>One command and you are in.</h2>
-    <p>Pick your system. Commands point at the latest release.</p>
-    <div class="term">
-      <div class="term-bar"><i></i><i></i><i></i><span>~/install</span></div>
-      <div class="tabs" role="tablist" aria-label="install"><button class="tab" type="button" role="tab" data-tab="debian" aria-selected="true">debian · ubuntu</button><button class="tab" type="button" role="tab" data-tab="fedora" aria-selected="false">fedora</button><button class="tab" type="button" role="tab" data-tab="arch" aria-selected="false">arch</button><button class="tab" type="button" role="tab" data-tab="appimage" aria-selected="false">appimage</button><button class="tab" type="button" role="tab" data-tab="macos" aria-selected="false">macos</button><button class="tab" type="button" role="tab" data-tab="windows" aria-selected="false">windows</button></div>
-        <div class="panel" data-panel="debian" role="tabpanel" aria-label="Debian, Ubuntu">
-          <pre class="cmd"><span class="line"><span class="p">$ </span><span class="k">curl</span> -LO <span class="v" data-url="deb">https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_amd64.deb</span></span>
-<span class="line"><span class="p">$ </span><span class="k">sudo</span> apt install ./<span data-file="deb">Rowly.DB_0.2.1_amd64.deb</span></span><button class="btn btn-dark btn-small copy" type="button" data-copy data-done="copied">copy</button></pre>
-          <p class="hint">Debian, Ubuntu, Mint, Pop!_OS and friends.</p>
+  <section id="features" class="section wrap" aria-labelledby="features-title">
+    <h2 id="features-title">Made for the way<br><span class="soft">you write SQL.</span></h2>
+    <div class="showcase">
+      <div class="tabs" role="tablist" aria-label="Features">
+        <button class="tab" type="button" role="tab" id="tab-autocomplete" aria-controls="panel-autocomplete" aria-selected="true"><span class="tab-title">Autocomplete that knows your schema</span><span class="tab-text">Tables, columns and whole JOINs, built from your foreign keys.</span></button>
+        <button class="tab" type="button" role="tab" id="tab-diagnostics" aria-controls="panel-diagnostics" aria-selected="false" tabindex="-1"><span class="tab-title">Mistakes caught as you type</span><span class="tab-text">Unknown tables and columns are marked before you run anything.</span></button>
+        <button class="tab" type="button" role="tab" id="tab-edit" aria-controls="panel-edit" aria-selected="false" tabindex="-1"><span class="tab-title">Edit results in place</span><span class="tab-text">Change cells, add rows or remove them, right in the grid.</span></button>
+        <button class="tab" type="button" role="tab" id="tab-review" aria-controls="panel-review" aria-selected="false" tabindex="-1"><span class="tab-title">Review before it runs</span><span class="tab-text">Every pending change becomes the exact SQL you approve.</span></button>
+      </div>
+      <div class="stage">
+        <div class="panel" id="panel-autocomplete" role="tabpanel" aria-labelledby="tab-autocomplete">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/img/shots/autocomplete-dark-800.webp 800w, assets/img/shots/autocomplete-dark.webp 1440w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)">
+            <img src="assets/img/shots/autocomplete-light.webp" srcset="assets/img/shots/autocomplete-light-800.webp 800w, assets/img/shots/autocomplete-light.webp 1440w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)" alt="Autocomplete suggesting a JOIN on customers with its ON condition" width="1440" height="900" loading="lazy">
+          </picture>
+          <div class="panel-caption"><h3>Autocomplete that knows your schema</h3><p>Tables, columns and whole JOINs, built from your foreign keys.</p></div>
         </div>
-        <div class="panel" data-panel="fedora" role="tabpanel" aria-label="Fedora" hidden>
-          <pre class="cmd"><span class="line"><span class="p">$ </span><span class="k">sudo</span> dnf install <span class="v" data-url="rpm">https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB-0.2.1-1.x86_64.rpm</span></span><button class="btn btn-dark btn-small copy" type="button" data-copy data-done="copied">copy</button></pre>
-          <p class="hint">Fedora, RHEL, openSUSE.</p>
+        <div class="panel" id="panel-diagnostics" role="tabpanel" aria-labelledby="tab-diagnostics">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/img/shots/diagnostics-dark-800.webp 800w, assets/img/shots/diagnostics-dark.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)">
+            <img src="assets/img/shots/diagnostics-light.webp" srcset="assets/img/shots/diagnostics-light-800.webp 800w, assets/img/shots/diagnostics-light.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)" alt="The editor marking a misspelled column and suggesting the right name" width="1520" height="950" loading="lazy">
+          </picture>
+          <div class="panel-caption"><h3>Mistakes caught as you type</h3><p>Unknown tables and columns are marked before you run anything.</p></div>
         </div>
-        <div class="panel" data-panel="arch" role="tabpanel" aria-label="Arch" hidden>
-          <pre class="cmd"><span class="line"><span class="p">$ </span><span class="k">curl</span> -LO <span class="v" data-url="arch">https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/rowly-db_0.2.1_x86_64.pkg.tar.zst</span></span>
-<span class="line"><span class="p">$ </span><span class="k">sudo</span> pacman -U ./<span data-file="arch">rowly-db_0.2.1_x86_64.pkg.tar.zst</span></span><button class="btn btn-dark btn-small copy" type="button" data-copy data-done="copied">copy</button></pre>
-          <p class="hint">Arch, Manjaro, EndeavourOS, Omarchy.</p>
+        <div class="panel" id="panel-edit" role="tabpanel" aria-labelledby="tab-edit">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/img/shots/edit-dark-800.webp 800w, assets/img/shots/edit-dark.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)">
+            <img src="assets/img/shots/edit-light.webp" srcset="assets/img/shots/edit-light-800.webp 800w, assets/img/shots/edit-light.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)" alt="The result grid with two edited cells and a row marked for deletion" width="1520" height="950" loading="lazy">
+          </picture>
+          <div class="panel-caption"><h3>Edit results in place</h3><p>Change cells, add rows or remove them, right in the grid.</p></div>
         </div>
-        <div class="panel" data-panel="appimage" role="tabpanel" aria-label="AppImage" hidden>
-          <pre class="cmd"><span class="line"><span class="p">$ </span><span class="k">curl</span> -LO <span class="v" data-url="appimage">https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_amd64.AppImage</span></span>
-<span class="line"><span class="p">$ </span><span class="k">chmod</span> +x <span data-file="appimage">Rowly.DB_0.2.1_amd64.AppImage</span></span>
-<span class="line"><span class="p">$ </span>./<span data-file="appimage">Rowly.DB_0.2.1_amd64.AppImage</span></span><button class="btn btn-dark btn-small copy" type="button" data-copy data-done="copied">copy</button></pre>
-          <p class="hint">Any distro. No install, just run it.</p>
+        <div class="panel" id="panel-review" role="tabpanel" aria-labelledby="tab-review">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/img/shots/review-dark-800.webp 800w, assets/img/shots/review-dark.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)">
+            <img src="assets/img/shots/review-light.webp" srcset="assets/img/shots/review-light-800.webp 800w, assets/img/shots/review-light.webp 1520w" sizes="(min-width: 1248px) 760px, (min-width: 1000px) calc(100vw - 488px), calc(100vw - 56px)" alt="Pending changes shown as DELETE, UPDATE and INSERT statements before they are applied" width="1520" height="950" loading="lazy">
+          </picture>
+          <div class="panel-caption"><h3>Review before it runs</h3><p>Every pending change becomes the exact SQL you approve.</p></div>
         </div>
-        <div class="panel" data-panel="macos" role="tabpanel" aria-label="macOS" hidden>
-          <div class="files"><a class="btn btn-dark" href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_aarch64.dmg" data-url="mac-arm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>Apple Silicon</span><span>.dmg</span></a><a class="btn btn-dark" href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_x64.dmg" data-url="mac-intel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>Intel</span><span>.dmg</span></a></div>
-          <p class="hint">Open the .dmg and drag Rowly DB to Applications.</p>
-        </div>
-        <div class="panel" data-panel="windows" role="tabpanel" aria-label="Windows" hidden>
-          <div class="files"><a class="btn btn-dark" href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_x64-setup.exe" data-url="exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>Installer</span><span>.exe</span></a><a class="btn btn-dark" href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v0.2.1/Rowly.DB_0.2.1_x64_en-US.msi" data-url="msi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>MSI</span><span>.msi</span></a></div>
-          <p class="hint">Run the installer. Both work the same.</p>
-        </div>
-    </div>
-    <p class="hint" style="margin-top: 14px;">Already installed? New versions show up in Settings → Updates.</p>
-  </section>
-
-  <section id="about" class="section">
-    <span class="label">// about</span>
-    <h2>What you get</h2>
-    <div class="fetch">
-      <img src="assets/img/icon.svg" alt="" width="180" height="180">
-      <div>
-        <div class="who">rowly@db</div>
-        <div class="rule">--------</div>
-        <dl>
-            <dt>version</dt><dd><span data-version>0.2.1</span></dd>
-            <dt>license</dt><dd>MIT or Apache-2.0</dd>
-            <dt>platforms</dt><dd>windows · macos · linux</dd>
-            <dt>engines</dt><dd>mysql · mariadb · postgresql</dd>
-            <dt>installer</dt><dd>4 – 7 MB</dd>
-            <dt>account</dt><dd>not required</dd>
-            <dt>updates</dt><dd>signed, installed from settings</dd>
-            <dt>source</dt><dd><a href="https://github.com/anderson-andres-dev/rowly-db">github.com/anderson-andres-dev/rowly-db</a></dd>
-            <dt>theme</dt><dd><span data-theme-name>rowly</span> · press <kbd>T</kbd></dd>
-        </dl>
-        <div class="swatches" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <ul class="inside"><li>an editor that knows your schema</li><li>results you edit in place</li><li>changes reviewed as SQL before they run</li><li>passwords in the system keyring</li><li>keyboard first, F1 lists every shortcut</li><li>eight themes, light and dark</li></ul>
       </div>
     </div>
   </section>
 
-  <footer>
-    <span>Rowly DB · MIT or Apache-2.0</span>
-    <nav aria-label="Footer">
-      <a href="https://github.com/anderson-andres-dev/rowly-db">github</a>
-      <a href="https://github.com/anderson-andres-dev/rowly-db/releases">releases</a>
-      <a href="https://github.com/anderson-andres-dev/rowly-db/blob/main/CONTRIBUTING.md">contributing</a>
-      <a href="es/" hreflang="es">ES</a>
-    </nav>
-  </footer>
+  <section class="section wrap" aria-label="Why Rowly DB">
+    <ul class="points">
+      <li><strong>Free, for real.</strong><span>MIT or Apache-2.0. No account, no Pro edition.</span></li>
+      <li><strong>Keyboard first.</strong><span>Every action has a shortcut. Press <kbd>F1</kbd> to see them all.</span></li>
+      <li><strong>Passwords stay yours.</strong><span>Kept in the system keyring, never in a plain file.</span></li>
+    </ul>
+  </section>
+
+  <section id="downloads" class="section wrap" aria-labelledby="downloads-title">
+    <div class="downloads-head">
+      <h2 id="downloads-title">Get Rowly DB.</h2>
+      <p>Version {{version}} · <a href="https://github.com/anderson-andres-dev/rowly-db/releases/tag/v{{version}}">Release notes</a> · <a href="https://github.com/anderson-andres-dev/rowly-db/releases/latest">All files on GitHub</a></p>
+    </div>
+
+    <div class="platforms">
+      <article class="platform" data-platform="macos" aria-labelledby="dl-macos">
+        <div>
+          <div class="platform-head"><h3 id="dl-macos">macOS</h3><span class="suggested">Suggested</span></div>
+          <p class="requirement">Pick the chip your Mac has. Apple menu → About This Mac shows it.</p>
+        </div>
+        <ul class="files">
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_aarch64.dmg" data-download="macos-arm64"><span class="file-name"><b>Apple Silicon</b><small>M-series chip · <code>.dmg</code></small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_x64.dmg" data-download="macos-x64"><span class="file-name"><b>Intel</b><small>x64 · <code>.dmg</code></small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+        </ul>
+        <p class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><span>Not notarized by Apple yet, so macOS blocks the first launch. Open System Settings → Privacy &amp; Security and choose Open Anyway.</span></p>
+      </article>
+
+      <article class="platform" data-platform="windows" aria-labelledby="dl-windows">
+        <div>
+          <div class="platform-head"><h3 id="dl-windows">Windows</h3><span class="suggested">Suggested</span></div>
+          <p class="requirement">Windows 10 or 11, 64-bit.</p>
+        </div>
+        <ul class="files">
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_x64-setup.exe" data-download="windows-exe"><span class="file-name"><b>Installer</b><small>x64 · <code>.exe</code> · recommended</small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_x64_en-US.msi" data-download="windows-msi"><span class="file-name"><b>MSI package</b><small>x64 · <code>.msi</code> · managed installs</small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+        </ul>
+        <p class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><span>Not code-signed yet. If SmartScreen says “Windows protected your PC”, choose More info → Run anyway. If WebView2 is missing, the installer downloads it.</span></p>
+      </article>
+
+      <article class="platform" data-platform="linux" aria-labelledby="dl-linux">
+        <div>
+          <div class="platform-head"><h3 id="dl-linux">Linux</h3><span class="suggested">Suggested</span></div>
+          <p class="requirement">x86_64. Needs WebKitGTK 4.1, which your package manager installs.</p>
+        </div>
+        <ul class="files">
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_amd64.deb" data-download="linux-deb"><span class="file-name"><b>Debian, Ubuntu</b><small>x86_64 · <code>.deb</code></small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB-{{version}}-1.x86_64.rpm" data-download="linux-rpm"><span class="file-name"><b>Fedora</b><small>x86_64 · <code>.rpm</code></small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/rowly-db_{{version}}_x86_64.pkg.tar.zst" data-download="linux-arch"><span class="file-name"><b>Arch Linux</b><small>x86_64 · <code>.pkg.tar.zst</code></small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+          <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_amd64.AppImage" data-download="linux-appimage"><span class="file-name"><b>AppImage</b><small>x86_64 · <code>.AppImage</code> · no install</small></span><span class="file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span></a></li>
+        </ul>
+        <p class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><span>No ARM builds yet. Updates come from the app, not from your package manager.</span></p>
+      </article>
+    </div>
+
+    <details class="terminal">
+      <summary>Install from the terminal (Linux)<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="terminal-body">
+        <div class="pm-tabs" role="tablist" aria-label="Package">
+          <button class="pm-tab" type="button" role="tab" id="pm-tab-deb" aria-controls="pm-deb" aria-selected="true">apt</button>
+          <button class="pm-tab" type="button" role="tab" id="pm-tab-rpm" aria-controls="pm-rpm" aria-selected="false" tabindex="-1">dnf</button>
+          <button class="pm-tab" type="button" role="tab" id="pm-tab-arch" aria-controls="pm-arch" aria-selected="false" tabindex="-1">pacman</button>
+          <button class="pm-tab" type="button" role="tab" id="pm-tab-appimage" aria-controls="pm-appimage" aria-selected="false" tabindex="-1">AppImage</button>
+        </div>
+        <div class="cmd" id="pm-deb" role="tabpanel" aria-labelledby="pm-tab-deb">
+          <h3>Debian, Ubuntu (apt)</h3>
+          <div class="cmd-box"><pre>curl -LO https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_amd64.deb
+sudo apt install ./Rowly.DB_{{version}}_amd64.deb</pre><button class="btn btn-small copy" type="button" data-copy>Copy</button></div>
+          <p class="cmd-note">apt installs the libraries it needs.</p>
+        </div>
+        <div class="cmd" id="pm-rpm" role="tabpanel" aria-labelledby="pm-tab-rpm">
+          <h3>Fedora (dnf)</h3>
+          <div class="cmd-box"><pre>sudo dnf install https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB-{{version}}-1.x86_64.rpm</pre><button class="btn btn-small copy" type="button" data-copy>Copy</button></div>
+          <p class="cmd-note">dnf downloads the package and its dependencies.</p>
+        </div>
+        <div class="cmd" id="pm-arch" role="tabpanel" aria-labelledby="pm-tab-arch">
+          <h3>Arch Linux (pacman)</h3>
+          <div class="cmd-box"><pre>curl -LO https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/rowly-db_{{version}}_x86_64.pkg.tar.zst
+sudo pacman -U ./rowly-db_{{version}}_x86_64.pkg.tar.zst</pre><button class="btn btn-small copy" type="button" data-copy>Copy</button></div>
+          <p class="cmd-note">pacman installs the libraries it needs.</p>
+        </div>
+        <div class="cmd" id="pm-appimage" role="tabpanel" aria-labelledby="pm-tab-appimage">
+          <h3>AppImage</h3>
+          <div class="cmd-box"><pre>curl -LO https://github.com/anderson-andres-dev/rowly-db/releases/download/v{{version}}/Rowly.DB_{{version}}_amd64.AppImage
+chmod +x Rowly.DB_{{version}}_amd64.AppImage
+./Rowly.DB_{{version}}_amd64.AppImage</pre><button class="btn btn-small copy" type="button" data-copy>Copy</button></div>
+          <p class="cmd-note">Nothing to install. Keep the file wherever you want to run it from.</p>
+        </div>
+        <span class="live" aria-live="polite" data-copied="Commands copied to the clipboard." data-failed="Could not copy. Select the text and copy it by hand."></span>
+      </div>
+    </details>
+    <p class="after">Already installed? New versions arrive in Settings → Updates, and update packages are signed. You can also <a href="https://github.com/anderson-andres-dev/rowly-db#install">build it from source</a>.</p>
+  </section>
+
+  <div class="wrap">
+    <ul class="help">
+      <li><a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentation</a><span>Install and first steps.</span></li>
+      <li><a href="https://github.com/anderson-andres-dev/rowly-db/releases">Release notes</a><span>What changed in each version.</span></li>
+      <li><a href="https://github.com/anderson-andres-dev/rowly-db/issues/new">Report a bug</a><span>Open an issue on GitHub.</span></li>
+      <li><a href="https://github.com/anderson-andres-dev/rowly-db/blob/main/CONTRIBUTING.md">Contribute</a><span>Code, ideas and translations.</span></li>
+    </ul>
+  </div>
 </main>
 
-<button class="theme-hint" type="button" data-theme-toggle><kbd>T</kbd>change the theme · <b data-theme-name>rowly</b></button>
+<footer class="footer wrap">
+  <img src="assets/img/icon.svg" alt="" width="22" height="22">
+  <span>Rowly DB · MIT or Apache-2.0</span>
+  <nav aria-label="Footer">
+    <a href="https://github.com/anderson-andres-dev/rowly-db">GitHub</a>
+    <a href="https://github.com/anderson-andres-dev/rowly-db/blob/main/LICENSE">License</a>
+    <a href="https://github.com/anderson-andres-dev/rowly-db/issues">Issues</a>
+    <a href="es/" hreflang="es" lang="es">Español</a>
+  </nav>
+</footer>
 </body>
 </html>
