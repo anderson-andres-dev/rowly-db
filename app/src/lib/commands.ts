@@ -31,6 +31,9 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Alt+1" },
   // Busca en la zona activa: cada zona registra su propio handler.
   { id: "find", zone: "global", group: "general", defaultKeys: "Ctrl+F" },
+  // Como en DataGrip: buscar y reemplazar son atajos separados, no un
+  // toggle dentro de buscar.
+  { id: "replace", zone: "editor", group: "editor", defaultKeys: "Ctrl+R" },
   // Ctrl+/ (lo habitual en otras apps) es comentar linea en el editor.
   { id: "shortcut-sheet", zone: "global", group: "general", defaultKeys: "F1" },
   { id: "new-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+Q" },

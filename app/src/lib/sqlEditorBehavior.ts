@@ -93,11 +93,17 @@ function statementDecorations(view: EditorView): DecorationSet {
 
   const decorations = [];
   const style = `--cm-active-statement-width: ${statementColumns}ch`;
+  // Si el borde real de la sentencia esta scrolleado fuera de la vista, el
+  // recuadro queda "abierto" de ese lado (sin cm-activeStatementStart ni
+  // -End en ninguna linea visible). Se cierra en la linea visible mas
+  // cercana a ese borde, para que el recuadro siempre se vea completo.
+  const topVisible = visible[0].from;
+  const bottomVisible = visible[visible.length - 1].to;
   for (const range of visible) {
     for (let lineNumber = range.from; lineNumber <= range.to; lineNumber += 1) {
       const classes = ["cm-activeStatement"];
-      if (lineNumber === firstLine) classes.push("cm-activeStatementStart");
-      if (lineNumber === lastLine) classes.push("cm-activeStatementEnd");
+      if (lineNumber === firstLine || lineNumber === topVisible) classes.push("cm-activeStatementStart");
+      if (lineNumber === lastLine || lineNumber === bottomVisible) classes.push("cm-activeStatementEnd");
       decorations.push(
         Decoration.line({
           class: classes.join(" "),

@@ -10,25 +10,35 @@
     profileId: string | null;
     tables: unknown;
     engine: ModuleSqlProfile;
+    created: string;
     cache: Map<string, unknown>;
   } | null = null;
 
   // Por conexion tambien: dos conexiones del mismo motor con el catalogo
-  // todavia vacio no comparten resultados.
-  function analysisCacheFor<Raw>(profileId: string | null, tables: unknown, engine: ModuleSqlProfile): Map<string, Raw> {
+  // todavia vacio no comparten resultados. Y por las tablas que crea el
+  // documento (`created`): con otras, lo que se dijo de una sentencia cambia.
+  function analysisCacheFor<Raw>(
+    profileId: string | null,
+    tables: unknown,
+    engine: ModuleSqlProfile,
+    created: string,
+  ): Map<string, Raw> {
     if (
       !sharedAnalysis ||
       sharedAnalysis.profileId !== profileId ||
       sharedAnalysis.tables !== tables ||
-      sharedAnalysis.engine !== engine
+      sharedAnalysis.engine !== engine ||
+      sharedAnalysis.created !== created
     ) {
-      sharedAnalysis = { profileId, tables, engine, cache: new Map() };
+      sharedAnalysis = { profileId, tables, engine, created, cache: new Map() };
     }
     return sharedAnalysis.cache as Map<string, Raw>;
   }
 </script>
 
 <script lang="ts">
+  import { Check, ChevronDown, ChevronUp, CircleX } from "@lucide/svelte";
+  import { tooltip } from "$lib/tooltip";
   import { splitStatements } from "$lib/sqlStatements";
   import {
     sqlLexical,
@@ -38,6 +48,7 @@
     statementTextAt,
   } from "$lib/sqlStatementIndex";
   import { AnalysisRunner } from "$lib/sqlAnalysis";
+  import { createdTables } from "$lib/sqlCreatedTables";
   import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
   import { parameterHintConfig, parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
@@ -47,6 +58,8 @@
     clearDiagnosticsIn,
     diagnosticAt,
     jumpToDiagnostic,
+    visibleDiagnosticCount,
+    diagnosticsField,
     lineColumnToOffset,
     diagnosticUnder,
     sqlDiagnostics,
@@ -99,9 +112,10 @@
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { writeClipboard as copyToClipboard } from "$lib/clipboard";
+  import { normalizePastedSql } from "$lib/sqlPaste";
   import "$lib/sqlEditorIcons.css";
   import "$lib/styles/editorSearch.css";
-  import { editorSearch, toggleSearchPanel } from "$lib/editorSearchPanel";
+  import { editorSearch, openReplacePanel, toggleSearchPanel } from "$lib/editorSearchPanel";
   import { locale, t, translate, type MessageKey } from "$lib/i18n";
 
   // Frases propias de CodeMirror (plegado, anuncios de lector de pantalla,
@@ -232,8 +246,10 @@
   async function pasteClipboard() {
     if (!view) return;
     try {
-      const text = await navigator.clipboard.readText();
-      view.dispatch(view.state.replaceSelection(text));
+      // Mismo filtro que Ctrl+V (clipboardInputFilter), que este camino no
+      // pasa.
+      const text = normalizePastedSql(await navigator.clipboard.readText(), view.state.facet(sqlLexical));
+      view.dispatch({ ...view.state.replaceSelection(text), userEvent: "input.paste", scrollIntoView: true });
       view.focus();
     } catch {
       // El permiso del portapapeles puede estar bloqueado por el sistema.
@@ -432,6 +448,11 @@
     if (view) toggleSearchPanel(view);
   }
 
+  // Para el comando replace (Ctrl+R): buscar y reemplazar, separado de find.
+  export function toggleReplace() {
+    if (view) openReplacePanel(view);
+  }
+
   // Un error de la base, ubicado en la sentencia [from, to) que lo produjo
   // (sqlDiagnostics.ts). Sin pista de donde, la sentencia entera.
   function diagnosticFor(from: number, to: number, result: QueryExecutionResult): SqlDiagnostic[] {
@@ -491,6 +512,26 @@
     "diagnostic.unknownQualifier",
   ]);
 
+  // Lo que falta cerrar mientras se escribe: no es un error todavia.
+  const UNFINISHED_KEYS: ReadonlySet<string> = new Set([
+    "diagnostic.incomplete",
+    "diagnostic.unclosedParen",
+    "diagnostic.unclosedCase",
+    "diagnostic.unterminatedString",
+    "diagnostic.unterminatedIdentifier",
+    "diagnostic.unterminatedDollarQuote",
+    "diagnostic.unterminatedComment",
+  ]);
+  // Lo mismo, pero solo si es lo ultimo de la sentencia (`SELECT a,` o
+  // `WHERE a =` a medio escribir).
+  const UNFINISHED_AT_END_KEYS: ReadonlySet<string> = new Set([
+    "diagnostic.trailingComma",
+    "diagnostic.extraComma",
+    "diagnostic.missingValue",
+  ]);
+
+  const samePosition = (a: AnalysisPosition, b: AnalysisPosition) => a.line === b.line && a.column === b.column;
+
   // Lo que dijo el backend de una sentencia que empieza en `start`.
   function analysisDiagnostics(start: number, statement: string, found: AnalysisDiagnostic[]): SqlDiagnostic[] {
     const at = (position: AnalysisPosition) => start + lineColumnToOffset(statement, position.line, position.column);
@@ -500,15 +541,17 @@
       const message = backendText(item.message);
       const suggestions = item.suggestions ?? [];
       const key = typeof item.message === "object" ? item.message.key : "";
-      // "¿Quisiste decir…?" al final, salvo que el mensaje ya lo diga.
+      // Un nombre que no existe: "¿Quisiste decir…?" con el mas parecido.
       const hint =
-        suggestions[0] && suggestions[0].replacement && !["diagnostic.didYouMean", "diagnostic.trailingComma"].includes(key)
+        UNRESOLVED_KEYS.has(key) && suggestions[0]?.replacement
           ? ` ${$t("editor.diagnostics.didYouMean", { name: suggestions[0].replacement })}`
           : "";
       const fixes: QuickFix[] = suggestions.map((suggestion) => ({
-        label: suggestion.replacement
-          ? $t("editor.diagnostics.fix.replace", { text: suggestion.replacement })
-          : $t("editor.diagnostics.fix.delete"),
+        label: !suggestion.replacement
+          ? $t("editor.diagnostics.fix.delete")
+          : samePosition(suggestion.start, suggestion.end)
+            ? $t("editor.diagnostics.fix.insert", { text: suggestion.replacement })
+            : $t("editor.diagnostics.fix.replace", { text: suggestion.replacement }),
         from: at(suggestion.start),
         to: at(suggestion.end),
         insert: suggestion.replacement,
@@ -516,8 +559,7 @@
       // Lo que solo dice que falta terminar: no se muestra mientras se
       // escribe en esa sentencia (sqlDiagnostics.ts, typing).
       const incomplete =
-        key === "diagnostic.unexpectedEnd" ||
-        (key === "diagnostic.trailingComma" && statement.slice(to - start).trim() === "");
+        UNFINISHED_KEYS.has(key) || (UNFINISHED_AT_END_KEYS.has(key) && statement.slice(to - start).trim() === "");
       return {
         from,
         to,
@@ -530,10 +572,25 @@
     });
   }
 
+  // Las tablas que crea el documento (sqlCreatedTables.ts), para que el
+  // analisis no las de por inexistentes. Se vuelven a buscar en cada ronda.
+  let createdNames: string[] = [];
+  let createdKey = "";
+
   const analysis = new AnalysisRunner<AnalysisDiagnostic[]>({
     view: () => view,
-    analyze: (statements) => invoke<AnalysisDiagnostic[][]>("analyze_sql", { statements }),
+    analyze: (statements) => invoke<AnalysisDiagnostic[][]>("analyze_sql", { statements, created: createdNames }),
     toDiagnostics: analysisDiagnostics,
+    prepare: () => {
+      if (!view) return;
+      const names = createdTables(view.state.doc);
+      const key = names.join(",");
+      if (key === createdKey) return;
+      createdNames = names;
+      createdKey = key;
+      analysis.useCache(analysisCacheFor(analyzedProfile ?? null, analyzedTables, engine, createdKey));
+      analysis.markAllDirty();
+    },
   });
   analysis.markAllDirty();
   let analyzedTables: unknown = null;
@@ -632,6 +689,48 @@
     return true;
   }
 
+  // --- Contador de errores (abajo a la derecha) ---------------------------
+  // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
+  // que recorre F2.
+  let diagnosticCount = $state(0);
+  let scrollbarWidth = $state(0);
+  let scrollbarHeight = $state(0);
+  // El fondo del editor (cambia con el tema): el contador lo toma para leerse
+  // sobre una linea larga.
+  let editorBackground = $state("");
+
+  function shortcutKeys(id: string): string {
+    return $shortcuts.find((shortcut) => shortcut.id === id)?.keys ?? "";
+  }
+
+  function goToDiagnostic(direction: 1 | -1) {
+    if (!view) return;
+    jump(view, direction);
+    view.focus();
+  }
+
+  function measureChrome() {
+    if (!view) return;
+    scrollbarWidth = view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth;
+    scrollbarHeight = view.scrollDOM.offsetHeight - view.scrollDOM.clientHeight;
+    editorBackground = getComputedStyle(view.dom).backgroundColor;
+  }
+
+  // Se cuenta una vez por cuadro, y solo si cambiaron los errores o el
+  // cursor (lo que se oculta mientras se escribe depende de el).
+  let countFrame = 0;
+  const diagnosticCounter = EditorView.updateListener.of((update) => {
+    const changed =
+      update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField) || update.selectionSet;
+    if (!changed && !update.geometryChanged) return;
+    cancelAnimationFrame(countFrame);
+    countFrame = requestAnimationFrame(() => {
+      if (!view) return;
+      diagnosticCount = visibleDiagnosticCount(view.state);
+      measureChrome();
+    });
+  });
+
   // F2 sin errores: un aviso breve en vez de no hacer nada.
   function jump(current: EditorView, direction: 1 | -1): boolean {
     if (jumpToDiagnostic(current, direction)) return true;
@@ -714,20 +813,24 @@
       parent: container,
       extensions: [
         basicSetup,
-        // Barra de busqueda propia (Ctrl+F toggle) en vez del panel por
-        // defecto de basicSetup.
+        // Buscar (Ctrl+F) y reemplazar (Ctrl+R) propios en vez del panel
+        // por defecto de basicSetup.
         editorSearch(),
         sqlCompartment.of(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
         lexicalCompartment.of(sqlLexical.of(engine.lexical)),
+        // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
+        // como escribe el SQL el motor de la conexion (sqlPaste.ts).
+        EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
         statementIndex,
         hintsCompartment.of(parameterHintConfig.of(hintConfig())),
         parameterHints,
         activeStatementHighlight,
         executionMarker,
         sqlDiagnostics,
+        diagnosticCounter,
         diagnosticHover,
         // Al salir del editor, el texto al dia (la pestaña marca cambios).
         EditorView.domEventHandlers({
@@ -875,12 +978,13 @@
     analyzedTables = tables;
     analyzedEngine = engine;
     analyzedProfile = analyzedFor;
-    analysis.useCache(analysisCacheFor(analyzedFor, tables, engine));
+    analysis.useCache(analysisCacheFor(analyzedFor, tables, engine, createdKey));
     analysis.markAllDirty();
     analysis.schedule();
   });
 
   onDestroy(() => {
+    cancelAnimationFrame(countFrame);
     flushText();
     unregisterTextFlush();
     unregisterCommands();
@@ -891,13 +995,66 @@
   });
 </script>
 
-<div
-  class="sql-editor"
-  role="group"
-  aria-label={$t("editor.label")}
-  bind:this={container}
-  oncontextmenu={openContextMenu}
-></div>
+<div class="editor-frame">
+  <div
+    class="sql-editor"
+    role="group"
+    aria-label={$t("editor.label")}
+    bind:this={container}
+    oncontextmenu={openContextMenu}
+  ></div>
+  <div
+    class="problems"
+    class:clean={diagnosticCount === 0}
+    style:bottom={`${scrollbarHeight + 6}px`}
+    style:right={`${scrollbarWidth + 10}px`}
+    style:--problems-background={editorBackground || undefined}
+  >
+    {#if diagnosticCount > 0}
+      <span
+        class="problems-count"
+        role="status"
+        use:tooltip={{
+          label: $t(diagnosticCount === 1 ? "editor.diagnostics.countOne" : "editor.diagnostics.countOther", {
+            count: diagnosticCount,
+          }),
+          placement: "above",
+        }}
+      >
+        <CircleX size={13} aria-hidden="true" />
+        {diagnosticCount}
+        <span class="visually-hidden">
+          {$t(diagnosticCount === 1 ? "editor.diagnostics.countOne" : "editor.diagnostics.countOther", {
+            count: diagnosticCount,
+          })}
+        </span>
+      </span>
+      <button
+        class="problems-nav"
+        type="button"
+        aria-label={$t("shortcuts.previous-diagnostic.label")}
+        use:tooltip={{ label: $t("shortcuts.previous-diagnostic.label"), shortcut: shortcutKeys("previous-diagnostic"), placement: "above" }}
+        onclick={() => goToDiagnostic(-1)}
+      >
+        <ChevronUp size={14} aria-hidden="true" />
+      </button>
+      <button
+        class="problems-nav"
+        type="button"
+        aria-label={$t("shortcuts.next-diagnostic.label")}
+        use:tooltip={{ label: $t("shortcuts.next-diagnostic.label"), shortcut: shortcutKeys("next-diagnostic"), placement: "above" }}
+        onclick={() => goToDiagnostic(1)}
+      >
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+    {:else}
+      <span class="problems-count" role="status" use:tooltip={{ label: $t("editor.diagnostics.noErrors"), placement: "above" }}>
+        <Check size={13} aria-hidden="true" />
+        <span class="visually-hidden">{$t("editor.diagnostics.noErrors")}</span>
+      </span>
+    {/if}
+  </div>
+</div>
 
 {#if popup}
   <DiagnosticPopup
@@ -921,9 +1078,76 @@
 {/if}
 
 <style>
+  .editor-frame {
+    position: relative;
+    height: 100%;
+  }
+
   .sql-editor {
     text-align: left;
     height: 100%;
+  }
+
+  /* Flota sobre el texto: fondo del editor para leerse sobre una linea
+     larga, y apenas visible hasta que se lo mira. */
+  .problems {
+    position: absolute;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 2px 1px 6px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--problems-background, var(--surface-content)) 88%, transparent);
+    color: var(--danger);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .problems.clean {
+    padding-right: 6px;
+    color: var(--success);
+    opacity: 0.7;
+  }
+
+  .problems-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 2px;
+  }
+
+  .problems-nav {
+    display: inline-flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .problems-nav:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .problems-nav:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .sql-editor :global(.cm-editor) {

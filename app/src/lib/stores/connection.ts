@@ -5,7 +5,7 @@ import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
 import { toConnectionFailure } from "$lib/connectionErrors";
 import { forgetQueryHistory } from "./queryHistory";
-import { getDriver } from "$lib/connections";
+import { getDriver, type ConnectionDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
 import { connectionProfiles, removeConnectionProfile, type ConnectionProfile } from "./connectionProfiles";
 import { forgetProfileConsoles } from "./queryConsoles";
@@ -127,8 +127,9 @@ export interface ConnectionConfig {
   caCertificatePath?: string;
 }
 
+// `kind`: el motor tal cual (el backend decide que driver le habla).
 export async function connect(
-  kind: "mysql" | "postgres",
+  kind: ConnectionDriver,
   config: ConnectionConfig,
   production = false,
 ): Promise<number | null> {
@@ -205,7 +206,7 @@ export async function connectToProfile(profile: ConnectionProfile): Promise<Conn
   if (password === null) return { ok: false, reason: "no-password" };
 
   const driver = getDriver(profile.driver);
-  const tableCount = await connect(driver.backendKind, {
+  const tableCount = await connect(driver.id, {
     host: profile.host,
     port: profile.port,
     database: profile.database,
@@ -242,7 +243,7 @@ export const pendingEdit = writable<{ profile: ConnectionProfile; error: Connect
 // Version del servidor, schema, latencia y TLS negociado: lo que muestra (y
 // copia) el popover de "Probar conexion".
 export async function testConnection(
-  kind: "mysql" | "postgres",
+  kind: ConnectionDriver,
   config: ConnectionConfig,
 ): Promise<TestConnectionReport> {
   return await invoke<TestConnectionReport>("test_connection", { kind, config });

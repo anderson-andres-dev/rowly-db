@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EncodingPicker from "$lib/components/EncodingPicker.svelte";
+  import type { TextEncoding } from "$lib/textEncoding";
+  import { formatDecimal, type SelectionSummary } from "$lib/gridSelectionSummary";
   import { tooltip } from "$lib/tooltip";
   import { settleTransitions } from "$lib/settleTransitions";
   import {
@@ -85,6 +88,8 @@
     onpreview = () => {},
     onsubmit = () => {},
     onnotice = () => {},
+    fileEncoding = null,
+    onencodingchange = () => {},
     outputLog = [],
     consoleRunning = false,
     oncancelquery,
@@ -131,6 +136,10 @@
     onpreview?: () => void;
     onsubmit?: () => void;
     onnotice?: (message: string) => void;
+    // Una pestaña de texto (consola o archivo): su encoding, abajo a la
+    // derecha de todo. Una de tabla no lo tiene (null).
+    fileEncoding?: TextEncoding | null;
+    onencodingchange?: (encoding: TextEncoding) => void;
     // Registro de la pestaña Salida.
     outputLog?: LogEntry[];
     // Hay una ejecucion nueva en curso en la consola (indicador de la Salida).
@@ -180,6 +189,8 @@
   // --- Edicion ---------------------------------------------------------
   let grid = $state<ReturnType<typeof DataGrid>>();
   let gridSelection = $state<RowRange | null>(null);
+  // Filas, celdas y suma de lo seleccionado, a la derecha de la barra.
+  let selectionSummary = $state<SelectionSummary | null>(null);
 
   const rows = $derived(result?.type === "resultSet" ? result.rows : []);
   const pending = $derived(pendingCount(edits));
@@ -788,6 +799,7 @@
             onfillcells={fillSelectedCells}
             oneditblocked={onnotice}
             onselectionchange={(range) => (gridSelection = range)}
+            onselectionsummary={(summary) => (selectionSummary = summary)}
             copyFormat={$copySettings.format}
             copyHeaders={$copySettings.headers}
             copyTableName={editInfo ? `${editInfo.target.schema}.${editInfo.target.table}` : (sourceLabel ?? "")}
@@ -813,13 +825,16 @@
            centrada en el panel (grid de tres columnas: el centro no se
            corre aunque cambie el ancho del texto de los costados). -->
       <div class="status-bar">
+        <!-- Segun el ancho de la barra (@container, abajo): las columnas y el
+             tiempo se van cayendo; las filas quedan siempre. -->
         <span class="stats">
           {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
             count: $numberFormat.format(result.rows.length),
-          })} ·
-          {$t(result.columns.length === 1 ? "results.stats.columnsOne" : "results.stats.columnsOther", {
-            count: result.columns.length,
-          })} · {result.executionTimeMs} ms
+          })}<span class="wide-only">
+            · {$t(result.columns.length === 1 ? "results.stats.columnsOne" : "results.stats.columnsOther", {
+              count: result.columns.length,
+            })}</span
+          ><span class="not-narrow"> · {result.executionTimeMs} ms</span>
           {#if result.truncated && !page?.pageable}
             <span class="truncated" use:tooltip={$t("results.stats.truncatedTitle")}>
               · {$t("results.stats.truncated")}
@@ -840,6 +855,37 @@
             {oncount}
           />
         {/if}
+        <!-- A la derecha: con mas de una celda, cuantas filas y celdas y, si
+             hay numeros en columnas numericas, su suma exacta; y el encoding
+             de la pestaña al final. -->
+        <div class="status-right">
+          {#if selectionSummary && selectionSummary.cells > 1}
+            {@const cells = $t("results.selection.cells", { count: $numberFormat.format(selectionSummary.cells) })}
+            {@const sum = selectionSummary.sum === null ? null : formatDecimal(selectionSummary.sum, $numberFormat)}
+            <!-- Tres versiones, de la completa a la minima: se ve la que cabe
+                 (@container, abajo). La suma es lo ultimo que se va. -->
+            <span class="selection-summary wide-only">
+              {$t(selectionSummary.rows === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
+                count: $numberFormat.format(selectionSummary.rows),
+              })} · {cells}{#if sum !== null}
+                · {$t("results.selection.sum", { value: sum })}{/if}
+            </span>
+            <span class="selection-summary medium-only">{cells}{#if sum !== null} · Σ {sum}{/if}</span>
+            <span class="selection-summary narrow-only">{sum !== null ? `Σ ${sum}` : cells}</span>
+          {/if}
+          {#if fileEncoding}
+            <EncodingPicker value={fileEncoding} onchange={onencodingchange} />
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+  <!-- Sin un resultado con su barra, el encoding igual queda en la misma
+       esquina. -->
+  {#if fileEncoding && !(showingResult && result?.type === "resultSet")}
+    <div class="status-bar minimal">
+      <div class="status-right">
+        <EncodingPicker value={fileEncoding} onchange={onencodingchange} />
       </div>
     </div>
   {/if}
@@ -1187,6 +1233,68 @@
     background: var(--surface);
     color: var(--text-secondary);
     font-size: 0.75rem;
+  }
+
+  /* Siempre en la tercera columna, aunque no haya paginacion en el centro.
+     Ocupa su columna y nada mas: lo que no cabe se recorta, nunca se monta
+     sobre la paginacion. */
+  .status-right {
+    display: flex;
+    grid-column: 3;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .status-right :global(.encoding) {
+    flex-shrink: 0;
+  }
+
+  /* Prioridades por el ancho de la barra: amplio, todo; medio, lo esencial;
+     angosto, lo minimo. La paginacion y el encoding se ven siempre. */
+  .status-bar {
+    container-type: inline-size;
+  }
+
+  .medium-only,
+  .narrow-only {
+    display: none;
+  }
+
+  @container (max-width: 52rem) {
+    .wide-only {
+      display: none;
+    }
+
+    .medium-only {
+      display: inline;
+    }
+  }
+
+  @container (max-width: 38rem) {
+    .medium-only,
+    .not-narrow {
+      display: none;
+    }
+
+    .narrow-only {
+      display: inline;
+    }
+  }
+
+  .status-bar.minimal {
+    min-height: 1.75rem;
+  }
+
+  .selection-summary {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .stats {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { summarizeSelection, type SelectionSummary } from "$lib/gridSelectionSummary";
+  import { gridSettings } from "$lib/stores/gridSettings";
   import { activeEngine } from "$lib/stores/connection";
   import { hideTooltipFor, scheduleTooltipFor, tooltip } from "$lib/tooltip";
   import { typeProblem } from "$lib/cellTypes";
@@ -43,6 +45,7 @@
     onfillcells = () => {},
     oneditblocked = () => {},
     onselectionchange = () => {},
+    onselectionsummary = () => {},
     copyFormat = "tsv",
     copyHeaders = false,
     copyTableName = "",
@@ -73,6 +76,9 @@
     onfillcells?: (ranges: RowRange[], value: CellValue, hidden: ReadonlySet<number> | null) => void;
     oneditblocked?: (reason: string) => void;
     onselectionchange?: (range: RowRange | null) => void;
+    // Filas, celdas y suma de la seleccion (gridSelectionSummary.ts), para
+    // la barra del resultado. null sin seleccion.
+    onselectionsummary?: (summary: SelectionSummary | null) => void;
     // Ctrl+C: formato para varias celdas (una sola se copia como su valor).
     copyFormat?: CopyFormat;
     copyHeaders?: boolean;
@@ -278,6 +284,32 @@
   $effect(() => {
     const range = selection ? normalized(selection) : null;
     untrack(() => onselectionchange(range));
+  });
+
+  // El resumen se calcula una vez por cuadro: arrastrar sobre miles de filas
+  // no recorre la seleccion en cada movimiento del mouse.
+  let summaryFrame = 0;
+  $effect(() => {
+    const ranges = allSelections.map(normalized);
+    edits;
+    hiddenRows;
+    totalRows;
+    columns;
+    cancelAnimationFrame(summaryFrame);
+    summaryFrame = requestAnimationFrame(() => {
+      onselectionsummary(
+        ranges.length === 0
+          ? null
+          : summarizeSelection({
+              ranges,
+              columnTypes: columns.map((column) => column.type),
+              totalRows,
+              value: valueAt,
+              hidden: (row) => row < rows.length && !!hiddenRows?.has(row),
+            }),
+      );
+    });
+    return () => cancelAnimationFrame(summaryFrame);
   });
 
   // Quitar filas nuevas achica el total: una seleccion que apuntaba mas alla
@@ -1268,7 +1300,9 @@
     const emptyCell = emptyCellHtml();
     const parts: string[] = [];
     for (let rowIndex = from; rowIndex < to; rowIndex++) {
-      parts.push(rowIndex % 2 === 1 ? '<tr class="zebra-odd">' : "<tr>");
+      // La franja va por la posicion visible: con "Filtrar filas", dos filas
+      // seguidas en pantalla no quedan del mismo tono.
+      parts.push(visualRow(rowIndex) % 2 === 1 ? '<tr class="zebra-odd">' : "<tr>");
       const row = rows[rowIndex];
       const lastCol = Math.min(toCol, row.length);
       for (let columnIndex = fromCol; columnIndex < lastCol; columnIndex++) {
@@ -1446,11 +1480,27 @@
     untrack(applyFindToDom);
   });
 
-  // Filtrar cambia el alto del contenido: los thumbs se recalculan.
+  // Las franjas de lo ya montado, por la posicion visible (ver rowsHtml).
+  function syncZebra() {
+    for (const [chunk, tiles] of mountedTiles) {
+      const from = chunk * CHUNK_ROWS;
+      for (const table of tiles.values()) {
+        const body = table.tBodies[0];
+        if (!body) continue;
+        for (let index = 0; index < body.rows.length; index++) {
+          body.rows[index].classList.toggle("zebra-odd", visualRow(from + index) % 2 === 1);
+        }
+      }
+    }
+  }
+
+  // Filtrar cambia el alto del contenido (los thumbs se recalculan) y que
+  // fila queda debajo de cual (las franjas tambien).
   $effect(() => {
     hiddenRows;
     untrack(() => {
       applyFindToDom();
+      syncZebra();
       void tick().then(updateThumbs);
     });
   });
@@ -2078,6 +2128,7 @@
      las dos a la vez. Un solo listener para todo el grid. -->
 <div
   class="data-grid"
+  class:striped={$gridSettings.rowStyle === "striped"}
   role="grid"
   aria-label={$t("grid.label")}
   tabindex="-1"
@@ -2762,8 +2813,10 @@
   }
 
   /* Pintar una sola superficie por fila evita repetir el fondo en cada td.
-     Las celdas de datos son transparentes y dejan ver este fondo. */
-  .grid-body-table :global(tr.zebra-odd) {
+     Las celdas de datos son transparentes y dejan ver este fondo. Las
+     franjas se pueden apagar en Ajustes (gridSettings): la clase zebra-odd
+     queda en las filas y solo deja de pintarse. */
+  .data-grid.striped .grid-body-table :global(tr.zebra-odd) {
     background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   }
 

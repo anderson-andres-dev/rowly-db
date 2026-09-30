@@ -107,6 +107,8 @@
     setQueryTotalRows,
     takeQueryConfirmation,
     updateQueryConsoleSql,
+    fileEncoding,
+    setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
   import { openSqlFileWithDialog, renameConsoleFile, saveConsole, saveConsoleAs } from "$lib/sqlFiles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
@@ -683,9 +685,14 @@
     const cleanupResults = registerCommand("find", "results", () => {
       resultPane?.toggleFind();
     });
+    const cleanupReplace = registerCommand("replace", "editor", () => {
+      if (!sqlEditor) return false;
+      sqlEditor.toggleReplace();
+    });
     return () => {
       cleanupEditor();
       cleanupResults();
+      cleanupReplace();
     };
   });
 
@@ -1521,17 +1528,20 @@
       <!-- Una consola grande cuyo texto todavia se lee del disco (al
            arrancar) no monta el editor hasta tenerlo. -->
       {#if activeConsole && !activeConsole.textPending}
-        {#key activeConsole.id}
-          <SqlEditor
-            bind:this={sqlEditor}
-            value={activeConsole.sql}
-            onchange={(sql) => updateQueryConsoleSql(activeConsole.id, sql)}
-            onexecute={(sql) => requestExecution(activeConsole.id, sql)}
-            executing={liveExecution.isExecuting}
-            result={liveExecution.result}
-            onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
-          />
-        {/key}
+        <div class="editor-host">
+          {#key activeConsole.id}
+            <SqlEditor
+              bind:this={sqlEditor}
+              value={activeConsole.sql}
+              onchange={(sql) => updateQueryConsoleSql(activeConsole.id, sql)}
+              onexecute={(sql) => requestExecution(activeConsole.id, sql)}
+              executing={liveExecution.isExecuting}
+              result={liveExecution.result}
+              onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
+            />
+          {/key}
+        </div>
+
         {#if historyOpen}
           <QueryHistory
             entries={historyEntries}
@@ -1610,6 +1620,8 @@
         onclosetab={(key) => void closeResultTab(key)}
         onexport={() => (exportFor = viewKey)}
         onpin={() => activeConsole && pinCurrentResult(activeConsole.id)}
+        fileEncoding={activeConsole && !activeConsole.table ? fileEncoding(activeConsole) : null}
+        onencodingchange={(encoding) => activeConsole && setQueryConsoleEncoding(activeConsole.id, encoding)}
         onunpin={() => unpinTab(viewKey)}
         onrepin={() => {
           const id = pinnedIdOf(viewKey);
@@ -2034,10 +2046,21 @@
   }
 
   .editor-pane {
+    position: relative;
+    display: flex;
     min-height: 0;
+    flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
   }
+
+  .editor-host {
+    position: relative;
+    min-height: 0;
+    flex: 1;
+  }
+
+
 
   /* Una franja de 6px para agarrar comodo con el mouse, pero solo pinta una
      linea de 1px centrada adentro (no un bloque con borde arriba y abajo:

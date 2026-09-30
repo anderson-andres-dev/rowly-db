@@ -457,3 +457,21 @@
   inherits: false;
   initial-value: 0px;
 }
+
+/* Iconos que giran mientras algo carga (class="spin" en un icono de lucide).
+   Global: el componente que lo usa puede montarse sin ningun otro. */
+.spin {
+  animation: ui-spin 0.7s linear infinite;
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

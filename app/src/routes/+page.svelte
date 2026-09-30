@@ -9,6 +9,8 @@
   import type { ConnectionDriver } from "$lib/connections";
   import type { ConnectionFailure } from "$lib/types";
   import ConnectionLanding from "$lib/components/ConnectionLanding.svelte";
+  import UpdatePrompt from "$lib/components/UpdatePrompt.svelte";
+  import { updatePrompt } from "$lib/stores/updates";
   import DriverPicker from "$lib/components/DriverPicker.svelte";
   import ConnectionForm from "$lib/components/ConnectionForm.svelte";
   import Workspace from "$lib/components/Workspace.svelte";
@@ -137,6 +139,12 @@
 
   {#if !$connection.connected && choosingDriver}
     <DriverPicker onselect={selectDriver} oncancel={() => (choosingDriver = false)} />
+  {/if}
+
+  <!-- Una version nueva al abrir: solo en la pantalla principal, nunca dentro
+       de una conexion ni encima de otro modal. -->
+  {#if !$connection.connected && $updatePrompt && !deletingProfile && !choosingDriver && !selectedDriver}
+    <UpdatePrompt release={$updatePrompt} />
   {/if}
 
   {#if !$connection.connected && selectedDriver}

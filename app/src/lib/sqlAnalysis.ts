@@ -25,6 +25,9 @@ export interface AnalysisRunnerOptions<Raw> {
   // Lo que devuelve el backend para una sentencia, a diagnosticos del
   // editor (`from`: donde empieza la sentencia).
   toDiagnostics: (from: number, statement: string, raw: Raw) => SqlDiagnostic[];
+  // Antes de cada ronda: lo que depende del documento entero (las tablas que
+  // crea) puede cambiar la cache o marcar todo para revisar.
+  prepare?: () => void;
   delayMs?: number;
 }
 
@@ -110,6 +113,7 @@ export class AnalysisRunner<Raw> {
     if (this.running) return;
     this.running = true;
     try {
+      this.options.prepare?.();
       while (!this.destroyed && this.dirty.length > 0) {
         // Se esta escribiendo: se retoma tras la pausa.
         if (performance.now() - this.lastEdit < this.delay) {

@@ -546,20 +546,13 @@
     cursor: not-allowed;
   }
 
-  .action.spinning :global(svg),
-  :global(.spin) {
-    animation: explorer-spin 0.7s linear infinite;
-  }
-
-  @keyframes explorer-spin {
-    to {
-      transform: rotate(360deg);
-    }
+  /* .spin (el icono que gira) es global, en styles/controls.css. */
+  .action.spinning :global(svg) {
+    animation: ui-spin 0.7s linear infinite;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .action.spinning :global(svg),
-    :global(.spin) {
+    .action.spinning :global(svg) {
       animation: none;
     }
   }

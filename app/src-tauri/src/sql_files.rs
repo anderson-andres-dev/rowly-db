@@ -4,6 +4,7 @@
 //! abrir/guardar), asi que estos comandos solo aceptan archivos con
 //! extension `.sql`: no sirven para leer ni pisar otros archivos del disco.
 
+use crate::text_encoding::TextEncoding;
 use khipu_driver_core::Message;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -136,18 +137,44 @@ pub async fn trash(path: String) -> Result<(), Message> {
     .map_err(|error| Message::from(error.to_string()))?
 }
 
-pub async fn read(path: String) -> Result<String, Message> {
-    let path = sql_path(&path)?;
-    tokio::fs::read_to_string(&path)
-        .await
-        .map_err(|error| io_failure("files.readFailed", &path, error))
+/// El texto de un .sql y el encoding en que estaba (text_encoding.rs).
+#[derive(Debug, Serialize)]
+pub struct SqlFileText {
+    pub contents: String,
+    pub encoding: TextEncoding,
 }
 
-pub async fn write(path: String, contents: String) -> Result<(), Message> {
+pub async fn read(path: String) -> Result<SqlFileText, Message> {
     let path = sql_path(&path)?;
-    tokio::fs::write(&path, contents)
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|error| io_failure("files.readFailed", &path, error))?;
+    let (contents, encoding) = crate::text_encoding::decode(&bytes);
+    Ok(SqlFileText { contents, encoding })
+}
+
+/// Guarda en el encoding del archivo. Un caracter que no tiene lugar en el
+/// (un emoji en Windows-1252) no se guarda a medias: se avisa cual es.
+pub async fn write(path: String, contents: String, encoding: TextEncoding) -> Result<(), Message> {
+    let path = sql_path(&path)?;
+    let bytes = crate::text_encoding::encode(&contents, encoding).map_err(|character| {
+        Message::key("files.unencodable")
+            .with("character", character)
+            .with("encoding", encoding_label(encoding))
+    })?;
+    tokio::fs::write(&path, bytes)
         .await
         .map_err(|error| io_failure("files.saveFailed", &path, error))
+}
+
+fn encoding_label(encoding: TextEncoding) -> &'static str {
+    match encoding {
+        TextEncoding::Utf8 => "UTF-8",
+        TextEncoding::Utf8Bom => "UTF-8 BOM",
+        TextEncoding::Utf16Le => "UTF-16 LE",
+        TextEncoding::Utf16Be => "UTF-16 BE",
+        TextEncoding::Windows1252 => "Windows-1252",
+    }
 }
 
 /// Renombra el archivo dentro de su misma carpeta y devuelve la ruta nueva.

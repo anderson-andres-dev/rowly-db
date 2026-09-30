@@ -234,7 +234,7 @@
     testPopoverOpen = false;
 
     try {
-      testResult = { kind: "report", report: await testConnection(driverDefinition.backendKind, config) };
+      testResult = { kind: "report", report: await testConnection(driverDefinition.id, config) };
     } catch (error) {
       testResult = {
         kind: "error",
@@ -258,7 +258,7 @@
     attempted = true;
     persistenceError = null;
     testPopoverOpen = false;
-    const tableCount = await connect(driverDefinition.backendKind, config, environment === "production");
+    const tableCount = await connect(driverDefinition.id, config, environment === "production");
     if (tableCount === null) return;
 
     saving = true;

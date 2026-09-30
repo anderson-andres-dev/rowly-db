@@ -21,6 +21,7 @@ use sqlparser::ast::{
     JoinOperator, ObjectName, ObjectNamePart, OrderByKind, Query, Select, SelectItem, SetExpr,
     Statement, TableFactor, TableWithJoins,
 };
+use sqlparser::dialect::Dialect as SqlparserDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::{Location, Token, TokenWithSpan, Tokenizer};
@@ -97,41 +98,573 @@ pub struct CatalogView<'a> {
     /// desconocido no es un error (no se sabe).
     pub loaded_schemas: Vec<&'a str>,
     pub default_schema: &'a str,
+    /// Tablas y vistas que crea el mismo documento (`CREATE [TEMPORARY]
+    /// TABLE tmp ...`): existen aunque el catalogo no las tenga, y no se sabe
+    /// que columnas tienen.
+    pub created: Vec<&'a str>,
 }
 
+/// Cuantos arreglos se prueban para seguir buscando errores.
+const MAX_REPAIRS: usize = 10;
+
+/// Todos los errores de la sentencia, no solo el primero: el parser se
+/// detiene en uno, asi que cada error con un arreglo seguro (la coma que
+/// falta, la que sobra, `WHER` por `WHERE`) se aplica a una copia y se vuelve
+/// a leer. Cuando la copia ya se lee, se revisa contra el catalogo. Un error
+/// sin arreglo seguro (un parentesis sin cerrar) corta ahi: lo que siga seria
+/// consecuencia suya. Las posiciones son siempre las del texto original.
 pub fn analyze_statement(
     sql: &str,
     dialect: Dialect,
     catalog: Option<&CatalogView>,
 ) -> Vec<Diagnostic> {
+    // Lo que el parser rechaza o lee mal no es del usuario.
+    if has_unparsed_syntax(sql, dialect) {
+        return Vec::new();
+    }
     let sqlparser_dialect = dialect.as_sqlparser_dialect();
-    match Parser::parse_sql(&*sqlparser_dialect, sql) {
-        Ok(statements) => match catalog {
-            Some(catalog) => {
-                let mut checker = Checker {
-                    catalog,
-                    dialect,
-                    diagnostics: Vec::new(),
-                };
-                for statement in &statements {
-                    checker.statement(statement);
+    let mut copy = Repaired::new(sql);
+    let mut found: Vec<Diagnostic> = Vec::new();
+    for _ in 0..MAX_REPAIRS {
+        match Parser::parse_sql(&*sqlparser_dialect, &copy.text) {
+            Ok(statements) => {
+                if let Some(catalog) = catalog {
+                    let mut checker = Checker {
+                        catalog,
+                        dialect,
+                        diagnostics: Vec::new(),
+                        ctes: Vec::new(),
+                    };
+                    for statement in &statements {
+                        checker.statement(statement);
+                    }
+                    found.extend(
+                        checker
+                            .diagnostics
+                            .into_iter()
+                            .map(|diagnostic| copy.to_original(diagnostic)),
+                    );
                 }
-                checker.diagnostics
+                break;
             }
-            None => Vec::new(),
-        },
-        Err(error) => {
-            // Una sentencia que el parser no conoce (DO, VACUUM…): sin
-            // diagnostico (ver STATEMENT_STARTERS).
-            if unknown_statement(&error.to_string()) {
-                return Vec::new();
+            Err(error) => {
+                let error = error.to_string();
+                // Una sentencia que el parser no conoce (DO, VACUUM…): sin
+                // diagnostico (ver STATEMENT_STARTERS).
+                if unknown_statement(&error) {
+                    break;
+                }
+                let errors = syntax_errors(&copy.text, &*sqlparser_dialect, &error);
+                let fix =
+                    errors
+                        .iter()
+                        .find_map(|diagnostic| match diagnostic.suggestions.as_slice() {
+                            [only] => Some(only.clone()),
+                            _ => None,
+                        });
+                for diagnostic in errors {
+                    let diagnostic = copy.to_original(diagnostic);
+                    let repeated = found.iter().any(|seen| {
+                        seen.start == diagnostic.start && seen.message == diagnostic.message
+                    });
+                    if !repeated {
+                        found.push(diagnostic);
+                    }
+                }
+                match fix {
+                    Some(fix) => copy.apply(&fix),
+                    None => break,
+                }
             }
-            let tokens = Tokenizer::new(&*sqlparser_dialect, sql)
-                .tokenize_with_location()
-                .unwrap_or_default();
-            vec![syntax_diagnostic(&error.to_string(), &tokens)]
         }
     }
+    found.sort_by_key(|diagnostic| diagnostic.start);
+    found
+}
+
+/// La sentencia con los arreglos aplicados, y como volver de sus posiciones
+/// a las del texto original.
+struct Repaired<'a> {
+    original: &'a str,
+    text: String,
+    /// (byte donde se cambio, bytes quitados, bytes puestos), en orden.
+    edits: Vec<(usize, usize, usize)>,
+}
+
+impl<'a> Repaired<'a> {
+    fn new(original: &'a str) -> Self {
+        Self {
+            original,
+            text: original.to_string(),
+            edits: Vec::new(),
+        }
+    }
+
+    fn apply(&mut self, fix: &Suggestion) {
+        let from = offset_at(&self.text, fix.start);
+        let to = offset_at(&self.text, fix.end).max(from);
+        self.text.replace_range(from..to, &fix.replacement);
+        self.edits.push((from, to - from, fix.replacement.len()));
+    }
+
+    fn to_original(&self, mut diagnostic: Diagnostic) -> Diagnostic {
+        if self.edits.is_empty() {
+            return diagnostic;
+        }
+        let back = |position: Position| {
+            let mut at = offset_at(&self.text, position);
+            for &(from, removed, inserted) in self.edits.iter().rev() {
+                at = if at >= from + inserted {
+                    at - inserted + removed
+                } else {
+                    at.min(from)
+                };
+            }
+            position_at(self.original, at)
+        };
+        diagnostic.start = back(diagnostic.start);
+        diagnostic.end = back(diagnostic.end);
+        for suggestion in &mut diagnostic.suggestions {
+            suggestion.start = back(suggestion.start);
+            suggestion.end = back(suggestion.end);
+        }
+        diagnostic
+    }
+}
+
+fn offset_at(text: &str, position: Position) -> usize {
+    byte_offset(
+        text,
+        Location {
+            line: position.line,
+            column: position.column,
+        },
+    )
+    .unwrap_or(text.len())
+}
+
+fn position_at(text: &str, offset: usize) -> Position {
+    let before = &text[..offset.min(text.len())];
+    let line = before.matches('\n').count() as u64 + 1;
+    let column = before.rsplit('\n').next().unwrap_or("").chars().count() as u64 + 1;
+    Position { line, column }
+}
+
+/// La sentencia usa SQL valido en el motor que su parser rechaza o lee mal
+/// (`Dialect::unparsed_syntax`): lo que diga el parser no es del usuario.
+fn has_unparsed_syntax(sql: &str, dialect: Dialect) -> bool {
+    let known = dialect.unparsed_syntax();
+    if known.is_empty() {
+        return false;
+    }
+    let words: Vec<String> = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .map(|token| match token {
+            Token::Word(word) if word.quote_style.is_none() => word.value.to_uppercase(),
+            other => other.to_string(),
+        })
+        .collect();
+    known
+        .iter()
+        .any(|pattern| contains_pattern(&words, pattern))
+}
+
+/// Las palabras del patron, en orden; cada tramo entre `...` seguido.
+fn contains_pattern(words: &[String], pattern: &[&str]) -> bool {
+    let mut rest = words;
+    for segment in pattern.split(|word| *word == "...") {
+        if segment.is_empty() {
+            continue;
+        }
+        let found = rest.windows(segment.len()).position(|window| {
+            window
+                .iter()
+                .zip(segment)
+                .all(|(word, wanted)| word == wanted)
+        });
+        match found {
+            Some(index) => rest = &rest[index + segment.len()..],
+            None => return false,
+        }
+    }
+    true
+}
+
+/// Los errores de sintaxis, en este orden: los que la estructura de los
+/// tokens dice sin lugar a dudas (`structural_errors`, todos, en su lugar
+/// exacto); si no hay, el de una subconsulta, analizada sola; y si no, el que
+/// da sqlparser, afinado.
+fn syntax_errors(sql: &str, dialect: &dyn SqlparserDialect, error: &str) -> Vec<Diagnostic> {
+    let tokens = Tokenizer::new(dialect, sql)
+        .tokenize_with_location()
+        .unwrap_or_default();
+    let significant: Vec<&TokenWithSpan> = tokens
+        .iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let structural = structural_errors(&significant);
+    if !structural.is_empty() {
+        return structural;
+    }
+    subquery_errors(sql, dialect, error, &tokens)
+        .unwrap_or_else(|| vec![syntax_diagnostic(error, &tokens)])
+}
+
+// --- Errores de estructura ---------------------------------------------------
+// Solo cuando el parser ya rechazo la sentencia: patrones de tokens que no son
+// validos en ningun motor, marcados donde estan. sqlparser, al retroceder,
+// suele reportar otro lugar (la primera columna de un SELECT anidado).
+
+fn span_of(token: &TokenWithSpan) -> (Position, Position) {
+    (
+        Position::from(token.span.start),
+        Position::from(token.span.end),
+    )
+}
+
+fn at_token(token: &TokenWithSpan, message: DiagnosticMessage) -> Diagnostic {
+    let (start, end) = span_of(token);
+    Diagnostic {
+        start,
+        end,
+        message,
+        suggestions: Vec::new(),
+    }
+}
+
+fn keyword_of(token: &TokenWithSpan) -> Keyword {
+    match &token.token {
+        Token::Word(word) if word.quote_style.is_none() => word.keyword,
+        _ => Keyword::NoKeyword,
+    }
+}
+
+fn is_value(token: &Token) -> bool {
+    matches!(token, Token::Number(..) | Token::SingleQuotedString(_))
+}
+
+/// Tras un operador de comparacion, lo que dice que falta el valor.
+const AFTER_MISSING_VALUE: [Keyword; 14] = [
+    Keyword::AND,
+    Keyword::OR,
+    Keyword::WHERE,
+    Keyword::FROM,
+    Keyword::GROUP,
+    Keyword::ORDER,
+    Keyword::HAVING,
+    Keyword::LIMIT,
+    Keyword::THEN,
+    Keyword::ELSE,
+    Keyword::END,
+    Keyword::WHEN,
+    Keyword::UNION,
+    Keyword::JOIN,
+];
+
+/// Tras FROM o JOIN, lo que dice que falta la tabla.
+const AFTER_MISSING_TABLE: [Keyword; 8] = [
+    Keyword::WHERE,
+    Keyword::GROUP,
+    Keyword::ORDER,
+    Keyword::HAVING,
+    Keyword::LIMIT,
+    Keyword::JOIN,
+    Keyword::ON,
+    Keyword::USING,
+];
+
+/// Los errores de estructura, en el orden en que se leen.
+fn structural_errors(tokens: &[&TokenWithSpan]) -> Vec<Diagnostic> {
+    let mut found: Vec<Diagnostic> = Vec::new();
+    // Una sentencia con cuerpo (CREATE FUNCTION/PROCEDURE/TRIGGER, DO,
+    // BEGIN) usa END para otras cosas.
+    let has_body = matches!(
+        tokens.first().map(|token| keyword_of(token)),
+        Some(Keyword::CREATE | Keyword::DO | Keyword::BEGIN | Keyword::DECLARE)
+    );
+
+    // Parentesis y CASE ... END, con su pila.
+    let mut parens: Vec<&TokenWithSpan> = Vec::new();
+    let mut cases: Vec<(&TokenWithSpan, usize)> = Vec::new();
+    for token in tokens {
+        match token.token {
+            Token::LParen => parens.push(token),
+            Token::RParen => {
+                if parens.pop().is_none() {
+                    found.push(at_token(
+                        token,
+                        DiagnosticMessage::key("diagnostic.unmatchedClose"),
+                    ));
+                    break;
+                }
+                // Un CASE abierto dentro del parentesis que se cierra.
+                if let Some(&(case, depth)) = cases.last() {
+                    if depth > parens.len() && !has_body {
+                        found.push(at_token(
+                            case,
+                            DiagnosticMessage::key("diagnostic.unclosedCase"),
+                        ));
+                        cases.pop();
+                    }
+                }
+            }
+            _ => match keyword_of(token) {
+                Keyword::CASE => cases.push((token, parens.len())),
+                Keyword::END => {
+                    cases.pop();
+                }
+                _ => {}
+            },
+        }
+    }
+    if let Some(open) = parens.last() {
+        found.push(at_token(
+            open,
+            DiagnosticMessage::key("diagnostic.unclosedParen"),
+        ));
+    }
+    if let (Some((case, _)), false) = (cases.last(), has_body) {
+        found.push(at_token(
+            case,
+            DiagnosticMessage::key("diagnostic.unclosedCase"),
+        ));
+    }
+
+    for (index, token) in tokens.iter().enumerate() {
+        let previous = index.checked_sub(1).map(|at| tokens[at]);
+        let next = tokens.get(index + 1).copied();
+
+        // Coma de mas: `a,, b`, `(, a`, `a, )` o al final.
+        if token.token == Token::Comma {
+            let doubled =
+                next.is_some_and(|next| matches!(next.token, Token::Comma | Token::RParen));
+            let opening = previous.is_some_and(|previous| previous.token == Token::LParen);
+            if doubled || opening || next.is_none() {
+                let (start, end) = span_of(token);
+                found.push(Diagnostic {
+                    start,
+                    end,
+                    message: DiagnosticMessage::key("diagnostic.extraComma"),
+                    suggestions: vec![Suggestion {
+                        start,
+                        end,
+                        replacement: String::new(),
+                    }],
+                });
+            }
+        }
+
+        // Dos valores seguidos: `IN (1, 2 3)`, `VALUES (1 'a')`. Dos cadenas
+        // seguidas si valen (el motor las concatena).
+        if let Some(previous) = previous {
+            let both_strings = matches!(
+                (&previous.token, &token.token),
+                (Token::SingleQuotedString(_), Token::SingleQuotedString(_))
+            );
+            if is_value(&previous.token) && is_value(&token.token) && !both_strings {
+                let (_, gap) = span_of(previous);
+                let (start, end) = span_of(token);
+                found.push(Diagnostic {
+                    start,
+                    end,
+                    message: DiagnosticMessage::key("diagnostic.missingComma")
+                        .with("before", previous.token.to_string())
+                        .with("after", token.token.to_string()),
+                    suggestions: vec![Suggestion {
+                        start: gap,
+                        end: gap,
+                        replacement: ",".to_string(),
+                    }],
+                });
+            }
+        }
+
+        // Un operador de comparacion sin valor: `a = AND ...`, `a = )`.
+        if matches!(
+            token.token,
+            Token::Eq | Token::Neq | Token::Lt | Token::Gt | Token::LtEq | Token::GtEq
+        ) {
+            let missing = match next {
+                None => true,
+                Some(next) => {
+                    matches!(next.token, Token::RParen | Token::Comma)
+                        || AFTER_MISSING_VALUE.contains(&keyword_of(next))
+                }
+            };
+            if missing {
+                found.push(at_token(
+                    token,
+                    DiagnosticMessage::key("diagnostic.missingValue")
+                        .with("operator", token.token.to_string()),
+                ));
+            }
+        }
+
+        // GROUP u ORDER sin BY (WITHIN GROUP (...) es otra cosa).
+        let keyword = keyword_of(token);
+        if matches!(keyword, Keyword::GROUP | Keyword::ORDER)
+            && next.is_none_or(|next| keyword_of(next) != Keyword::BY)
+            && previous.is_none_or(|previous| keyword_of(previous) != Keyword::WITHIN)
+        {
+            found.push(at_token(
+                token,
+                DiagnosticMessage::key("diagnostic.missingBy").with("keyword", keyword_text(token)),
+            ));
+        }
+
+        // FROM o JOIN sin tabla: `FROM WHERE ...`, `JOIN ON ...`.
+        if matches!(keyword, Keyword::FROM | Keyword::JOIN)
+            && next.is_none_or(|next| AFTER_MISSING_TABLE.contains(&keyword_of(next)))
+        {
+            found.push(at_token(
+                token,
+                DiagnosticMessage::key("diagnostic.missingTable")
+                    .with("keyword", keyword_text(token)),
+            ));
+        }
+    }
+
+    found.sort_by_key(|diagnostic| diagnostic.start);
+    found
+}
+
+/// Palabras que no terminan una expresion ni nombran una columna o funcion.
+const STRUCTURAL: [Keyword; 26] = [
+    Keyword::SELECT,
+    Keyword::FROM,
+    Keyword::WHERE,
+    Keyword::AS,
+    Keyword::AND,
+    Keyword::OR,
+    Keyword::NOT,
+    Keyword::ON,
+    Keyword::BY,
+    Keyword::DISTINCT,
+    Keyword::CASE,
+    Keyword::WHEN,
+    Keyword::THEN,
+    Keyword::ELSE,
+    Keyword::IN,
+    Keyword::IS,
+    Keyword::LIKE,
+    Keyword::BETWEEN,
+    Keyword::JOIN,
+    Keyword::SET,
+    Keyword::VALUES,
+    Keyword::INTO,
+    Keyword::HAVING,
+    Keyword::GROUP,
+    Keyword::ORDER,
+    Keyword::EXISTS,
+];
+
+/// Un nombre sin comillas que puede ser una columna, tabla o funcion.
+fn is_plain_name(token: &TokenWithSpan) -> bool {
+    matches!(&token.token, Token::Word(word) if word.quote_style.is_none())
+        && !STRUCTURAL.contains(&keyword_of(token))
+}
+
+/// Lo que puede cerrar una expresion: un nombre, un valor o un `)`.
+fn ends_expression(token: &TokenWithSpan) -> bool {
+    match &token.token {
+        Token::Word(word) => word.quote_style.is_some() || !STRUCTURAL.contains(&word.keyword),
+        Token::RParen => true,
+        other => is_value(other),
+    }
+}
+
+fn keyword_text(token: &TokenWithSpan) -> String {
+    token_text(&token.token).to_uppercase()
+}
+
+/// Con un error dentro de `IN (SELECT ...)`, sqlparser retrocede, prueba la
+/// lista de valores y reporta "falta )" en la primera columna del SELECT,
+/// lejos del error real. En ese caso se analiza la subconsulta sola y su
+/// error se lleva a su lugar en la sentencia.
+fn subquery_errors(
+    sql: &str,
+    dialect: &dyn SqlparserDialect,
+    error: &str,
+    tokens: &[TokenWithSpan],
+) -> Option<Vec<Diagnostic>> {
+    let message = error.strip_prefix("sql parser error: ").unwrap_or(error);
+    let at = split_location(message).1?;
+    let significant: Vec<&TokenWithSpan> = tokens
+        .iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let index = significant
+        .iter()
+        .position(|token| Position::from(token.span.start) >= at)?;
+    let select = significant[index.checked_sub(1)?];
+    let open = index.checked_sub(2)?;
+    let is_select = matches!(&select.token, Token::Word(word) if word.keyword == Keyword::SELECT);
+    if significant[open].token != Token::LParen || !is_select {
+        return None;
+    }
+    let mut depth = 0usize;
+    let close = significant[open..].iter().find(|token| {
+        match token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth -= 1,
+            _ => {}
+        }
+        depth == 0
+    });
+    let start = byte_offset(sql, select.span.start)?;
+    let end = match close {
+        Some(close) => byte_offset(sql, close.span.start)?,
+        None => sql.len(),
+    };
+    let inner = &sql[start..end];
+    let inner_error = Parser::parse_sql(dialect, inner).err()?.to_string();
+    let origin: Position = select.span.start.into();
+    Some(
+        syntax_errors(inner, dialect, &inner_error)
+            .into_iter()
+            .map(|diagnostic| shifted(diagnostic, origin))
+            .collect(),
+    )
+}
+
+/// Posiciones relativas a un trozo que empieza en `origin`, llevadas a la
+/// sentencia entera.
+fn shifted(mut diagnostic: Diagnostic, origin: Position) -> Diagnostic {
+    let shift = |position: Position| Position {
+        line: position.line + origin.line - 1,
+        column: if position.line == 1 {
+            position.column + origin.column - 1
+        } else {
+            position.column
+        },
+    };
+    diagnostic.start = shift(diagnostic.start);
+    diagnostic.end = shift(diagnostic.end);
+    for suggestion in &mut diagnostic.suggestions {
+        suggestion.start = shift(suggestion.start);
+        suggestion.end = shift(suggestion.end);
+    }
+    diagnostic
+}
+
+/// Linea y columna (1-based, en caracteres, como las del tokenizer) a byte.
+fn byte_offset(sql: &str, at: Location) -> Option<usize> {
+    let (mut line, mut column) = (1, 1);
+    for (offset, character) in sql.char_indices() {
+        if line == at.line && column == at.column {
+            return Some(offset);
+        }
+        if character == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+    (line == at.line && column == at.column).then_some(sql.len())
 }
 
 /// Las sentencias que el parser conoce, por su primera palabra: un error de
@@ -266,18 +799,12 @@ fn syntax_diagnostic(message: &str, tokens: &[TokenWithSpan]) -> Diagnostic {
                 column: at.column + 1,
                 ..at
             },
-            message: DiagnosticMessage::Raw(text.to_string()),
+            message: friendly_syntax(text),
             suggestions: Vec::new(),
         };
     };
     let token = significant[index];
     let previous = index.checked_sub(1).map(|position| significant[position]);
-    let span_of = |token: &TokenWithSpan| {
-        (
-            Position::from(token.span.start),
-            Position::from(token.span.end),
-        )
-    };
 
     // Coma de mas: `SELECT a, b, FROM t`.
     if let (Token::Word(word), Some(previous)) = (&token.token, previous) {
@@ -297,6 +824,40 @@ fn syntax_diagnostic(message: &str, tokens: &[TokenWithSpan]) -> Diagnostic {
         }
     }
 
+    // Falta una coma entre dos columnas que sqlparser tomo por columna y
+    // alias: `SELECT a COUNT(*)` (error en el parentesis) o `a.x b.y` (en
+    // el punto). Un alias nunca va seguido de `(` ni de `.`.
+    if matches!(token.token, Token::LParen | Token::Period) && index >= 2 {
+        let name = significant[index - 1];
+        let before = significant[index - 2];
+        if is_plain_name(name) && ends_expression(before) {
+            let (start, end) = span_of(name);
+            // `n.ntcr_esta`, no solo `n`.
+            let member = match (
+                &token.token,
+                significant.get(index + 1).map(|next| &next.token),
+            ) {
+                (Token::Period, Some(Token::Word(member))) => Some(&member.value),
+                _ => None,
+            };
+            let written = match member {
+                Some(member) => format!("{}.{member}", token_text(&name.token)),
+                None => token_text(&name.token),
+            };
+            return Diagnostic {
+                start,
+                end,
+                message: DiagnosticMessage::key("diagnostic.missingCommaBefore")
+                    .with("name", written),
+                suggestions: vec![Suggestion {
+                    start: span_of(before).1,
+                    end: span_of(before).1,
+                    replacement: ",".to_string(),
+                }],
+            };
+        }
+    }
+
     // Una palabra clave mal escrita: la del error (`SLECT id`) o la anterior,
     // si sqlparser la tomo por un alias (`FROM pedidos WHER estado = 1`).
     if let Token::Word(word) = &token.token {
@@ -309,11 +870,26 @@ fn syntax_diagnostic(message: &str, tokens: &[TokenWithSpan]) -> Diagnostic {
     }
     if let Some(Token::Word(word)) = previous.map(|previous| &previous.token) {
         if word.quote_style.is_none() && word.keyword == Keyword::NoKeyword {
-            if let Some(keyword) = closest_keyword(&word.value, &CLAUSE_KEYWORDS) {
+            // Justo despues de `(`, lo que abre una subconsulta: `IN (SELCT`.
+            let opens_subquery = index >= 2 && significant[index - 2].token == Token::LParen;
+            let candidates: &[&'static str] = if opens_subquery {
+                &["SELECT", "WITH"]
+            } else {
+                &CLAUSE_KEYWORDS
+            };
+            if let Some(keyword) = closest_keyword(&word.value, candidates) {
                 let (start, end) = span_of(previous.expect("hay token anterior"));
                 return typo(start, end, &word.value, keyword);
             }
         }
+    }
+
+    // Se acabo la sentencia sin terminar: se nombra lo ultimo que hay.
+    if location.is_none() && expected_found(text).is_some_and(|(_, found)| found == "EOF") {
+        return at_token(
+            token,
+            DiagnosticMessage::key("diagnostic.incomplete").with("after", token_text(&token.token)),
+        );
     }
 
     let (start, end) = span_of(token);
@@ -378,24 +954,51 @@ fn token_text(token: &Token) -> String {
 /// queda tal cual.
 fn friendly_syntax(text: &str) -> DiagnosticMessage {
     let Some((expected, found)) = expected_found(text) else {
-        return DiagnosticMessage::Raw(text.to_string());
+        return unterminated(text).unwrap_or_else(|| DiagnosticMessage::Raw(text.to_string()));
     };
-    if found == "EOF" {
-        return DiagnosticMessage::key("diagnostic.unexpectedEnd").with("expected", expected);
-    }
     let key = match expected {
-        "end of statement" => "diagnostic.expectedEnd",
         "an SQL statement" => "diagnostic.expectedStatement",
         "an expression" => "diagnostic.expectedExpression",
         "identifier" => "diagnostic.expectedIdentifier",
         ")" => "diagnostic.expectedClose",
-        _ => {
+        // Lo que se esperaba se nombra solo si es una palabra clave o un
+        // signo (`THEN`, `=`): las frases de sqlparser son en ingles.
+        _ if is_simple_token(expected) => {
             return DiagnosticMessage::key("diagnostic.expected")
                 .with("expected", expected)
                 .with("found", found);
         }
+        _ => "diagnostic.unexpected",
     };
     DiagnosticMessage::key(key).with("found", found)
+}
+
+fn is_simple_token(text: &str) -> bool {
+    let keyword = !text.is_empty() && text.chars().all(|c| c.is_ascii_uppercase() || c == '_');
+    let sign =
+        !text.is_empty() && text.len() <= 2 && text.chars().all(|c| c.is_ascii_punctuation());
+    keyword || sign
+}
+
+/// Lo que el tokenizer no pudo cerrar: una cadena, un identificador citado,
+/// un bloque $tag$ o un comentario. Mismo texto en todos los motores.
+fn unterminated(text: &str) -> Option<DiagnosticMessage> {
+    if text.starts_with("Unterminated dollar-quoted") {
+        return Some(DiagnosticMessage::key("diagnostic.unterminatedDollarQuote"));
+    }
+    if text.starts_with("Unterminated") && text.contains("string literal") {
+        return Some(DiagnosticMessage::key("diagnostic.unterminatedString"));
+    }
+    if let Some(rest) = text.strip_prefix("Expected close delimiter '") {
+        let quote = rest.split('\'').next().unwrap_or_default();
+        return Some(
+            DiagnosticMessage::key("diagnostic.unterminatedIdentifier").with("quote", quote),
+        );
+    }
+    if text.starts_with("Unexpected EOF while in a multi-line comment") {
+        return Some(DiagnosticMessage::key("diagnostic.unterminatedComment"));
+    }
+    None
 }
 
 // --- Parecidos ------------------------------------------------------------
@@ -433,6 +1036,11 @@ fn max_distance(word: &str) -> usize {
 }
 
 fn closest_keyword(word: &str, keywords: &[&'static str]) -> Option<&'static str> {
+    // Una o dos letras son casi siempre un alias o un nombre (`f(a b)`): a
+    // esa distancia cualquiera "se parece" a BY, ON, OR o AS.
+    if word.chars().count() < 3 {
+        return None;
+    }
     if keywords
         .iter()
         .any(|keyword| keyword.eq_ignore_ascii_case(word))
@@ -488,18 +1096,66 @@ const PSEUDO_COLUMNS: [&str; 13] = [
     "rowid",
 ];
 
+/// De donde salen las columnas de una tabla de la consulta.
+#[derive(Clone)]
+enum Source<'a> {
+    /// Del catalogo.
+    Table(&'a CatalogTable),
+    /// Las que devuelve una subconsulta del FROM o un CTE (sin `*`).
+    Derived(Vec<String>),
+    /// Existe, pero no se sabe que columnas tiene: una subconsulta o un CTE
+    /// con `*`, una tabla creada en el documento, de un schema no cargado o
+    /// del sistema, una funcion (`generate_series`), o una que no existe (ya
+    /// marcada). Con una asi en la consulta, una columna sin calificar puede
+    /// ser suya: no se marca.
+    Opaque,
+}
+
+/// Una tabla de la consulta, con el nombre (alias) con que se la nombra, en
+/// minusculas. Vacio: una funcion del FROM sin alias.
+#[derive(Clone)]
 struct Scope<'a> {
-    /// Alias (o nombre) con que se nombra en la consulta, en minusculas.
     name: String,
-    table: &'a CatalogTable,
+    source: Source<'a>,
+}
+
+impl Scope<'_> {
+    /// Sus columnas, si se saben.
+    fn columns(&self) -> Option<Vec<&str>> {
+        match &self.source {
+            Source::Table(table) => Some(
+                table
+                    .columns
+                    .iter()
+                    .map(|column| column.name.as_str())
+                    .collect(),
+            ),
+            Source::Derived(columns) => Some(columns.iter().map(String::as_str).collect()),
+            Source::Opaque => None,
+        }
+    }
+
+    /// Como se la nombra en un mensaje.
+    fn display_name(&self) -> &str {
+        match &self.source {
+            Source::Table(table) => &table.name,
+            _ => &self.name,
+        }
+    }
 }
 
 struct Checker<'a, 'b> {
     catalog: &'b CatalogView<'a>,
     dialect: Dialect,
     diagnostics: Vec<Diagnostic>,
+    /// Los CTE visibles (`WITH x AS (...)`), con sus columnas si se saben.
+    ctes: Vec<(String, Option<Vec<String>>)>,
 }
 
+// Cada consulta se revisa con sus tablas mas las de las consultas que la
+// contienen (`visible`, las de afuera primero): una subconsulta correlacionada
+// nombra columnas de afuera. Cada subconsulta (IN, EXISTS, escalar, del FROM,
+// LATERAL, CTE) se revisa en su nivel.
 impl<'a> Checker<'a, '_> {
     /// El nombre escrito es el del catalogo, como lo resuelve el motor: donde
     /// lo que no va entre comillas se lee en minusculas (Postgres), `Users`
@@ -517,72 +1173,106 @@ impl<'a> Checker<'a, '_> {
 
     fn statement(&mut self, statement: &Statement) {
         match statement {
-            Statement::Query(query) => self.query(query),
+            Statement::Query(query) => self.query(query, &[]),
             Statement::Update {
-                table, selection, ..
+                table,
+                from,
+                selection,
+                ..
             } => {
-                if let Some(scope) = self.scope_of(std::slice::from_ref(table)) {
-                    if let Some(selection) = selection {
-                        self.expr(selection, &scope, &[]);
-                    }
+                // `UPDATE a SET ... FROM c WHERE c.x = a.x` (Postgres): las
+                // tablas del FROM tambien son de la consulta.
+                let mut tables = vec![table.clone()];
+                if let Some(
+                    sqlparser::ast::UpdateTableFromKind::BeforeSet(from)
+                    | sqlparser::ast::UpdateTableFromKind::AfterSet(from),
+                ) = from
+                {
+                    tables.extend(from.iter().cloned());
+                }
+                let visible = self.scope_of(&tables, &[]);
+                if let Some(selection) = selection {
+                    self.expr(selection, &visible, &[]);
                 }
             }
             Statement::Delete(delete) => {
-                let tables = match &delete.from {
+                let mut tables = match &delete.from {
                     sqlparser::ast::FromTable::WithFromKeyword(tables)
-                    | sqlparser::ast::FromTable::WithoutKeyword(tables) => tables,
+                    | sqlparser::ast::FromTable::WithoutKeyword(tables) => tables.clone(),
                 };
-                if let Some(scope) = self.scope_of(tables) {
-                    if let Some(selection) = &delete.selection {
-                        self.expr(selection, &scope, &[]);
-                    }
+                // `DELETE FROM a USING c WHERE ...` (Postgres).
+                tables.extend(delete.using.iter().flatten().cloned());
+                let visible = self.scope_of(&tables, &[]);
+                if let Some(selection) = &delete.selection {
+                    self.expr(selection, &visible, &[]);
                 }
             }
             _ => {}
         }
     }
 
-    fn query(&mut self, query: &Query) {
-        // Con CTE, los nombres de la consulta pueden ser del WITH: no se
-        // revisa nada (no se sabe que columnas tienen).
-        if query.with.is_some() {
-            return;
-        }
-        match query.body.as_ref() {
-            SetExpr::Select(select) => {
-                let Some(scope) = self.scope_of(&select.from) else {
-                    return;
+    fn query(&mut self, query: &Query, outer: &[Scope<'a>]) {
+        let visible_ctes = self.ctes.len();
+        if let Some(with) = &query.with {
+            // Los nombres primero: un CTE recursivo se nombra a si mismo, y
+            // cada uno ve los anteriores.
+            for cte in &with.cte_tables {
+                let columns = if cte.alias.columns.is_empty() {
+                    output_columns(&cte.query)
+                } else {
+                    Some(
+                        cte.alias
+                            .columns
+                            .iter()
+                            .map(|column| column.name.value.to_lowercase())
+                            .collect(),
+                    )
                 };
+                self.ctes
+                    .push((cte.alias.name.value.to_lowercase(), columns));
+            }
+            for cte in &with.cte_tables {
+                self.query(&cte.query, outer);
+            }
+        }
+        self.set_expr(&query.body, outer, query.order_by.as_ref());
+        self.ctes.truncate(visible_ctes);
+    }
+
+    fn set_expr(
+        &mut self,
+        body: &SetExpr,
+        outer: &[Scope<'a>],
+        order_by: Option<&sqlparser::ast::OrderBy>,
+    ) {
+        match body {
+            SetExpr::Select(select) => {
+                let visible = self.scope_of(&select.from, outer);
                 let aliases = select_aliases(select);
-                self.select(select, &scope, &aliases);
+                self.select(select, &visible, &aliases);
                 if let Some(OrderByKind::Expressions(items)) =
-                    query.order_by.as_ref().map(|order_by| &order_by.kind)
+                    order_by.map(|order_by| &order_by.kind)
                 {
                     for item in items {
-                        self.expr(&item.expr, &scope, &aliases);
+                        self.expr(&item.expr, &visible, &aliases);
                     }
                 }
             }
+            // El ORDER BY de un UNION nombra las columnas del resultado.
             SetExpr::SetOperation { left, right, .. } => {
-                for side in [left, right] {
-                    if let SetExpr::Select(select) = side.as_ref() {
-                        if let Some(scope) = self.scope_of(&select.from) {
-                            let aliases = select_aliases(select);
-                            self.select(select, &scope, &aliases);
-                        }
-                    }
-                }
+                self.set_expr(left, outer, None);
+                self.set_expr(right, outer, None);
             }
-            SetExpr::Query(inner) => self.query(inner),
+            SetExpr::Query(inner) => self.query(inner, outer),
             _ => {}
         }
     }
 
-    fn select(&mut self, select: &Select, scope: &[Scope<'a>], aliases: &[String]) {
+    fn select(&mut self, select: &Select, visible: &[Scope<'a>], aliases: &[String]) {
         for item in &select.projection {
             match item {
                 SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-                    self.expr(expr, scope, &[]);
+                    self.expr(expr, visible, &[]);
                 }
                 _ => {}
             }
@@ -590,67 +1280,107 @@ impl<'a> Checker<'a, '_> {
         for from in &select.from {
             for join in &from.joins {
                 if let Some(JoinConstraint::On(on)) = join_constraint(&join.join_operator) {
-                    self.expr(on, scope, &[]);
+                    self.expr(on, visible, &[]);
                 }
             }
         }
         if let Some(selection) = &select.selection {
-            self.expr(selection, scope, &[]);
+            self.expr(selection, visible, &[]);
         }
         if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
             for expr in exprs {
-                self.expr(expr, scope, aliases);
+                self.expr(expr, visible, aliases);
             }
         }
         if let Some(having) = &select.having {
-            self.expr(having, scope, aliases);
+            self.expr(having, visible, aliases);
         }
     }
 
-    /// Las tablas del FROM. None si alguna no se puede resolver con
-    /// seguridad: entonces no se revisan columnas (pero si se avisa de las
-    /// tablas que no existen).
-    fn scope_of(&mut self, from: &[TableWithJoins]) -> Option<Vec<Scope<'a>>> {
-        let mut scope = Vec::new();
-        let mut complete = true;
-        let factors = from.iter().flat_map(|item| {
-            std::iter::once(&item.relation).chain(item.joins.iter().map(|join| &join.relation))
-        });
-        for factor in factors {
-            match factor {
-                TableFactor::Table {
-                    name,
-                    alias,
-                    args: None,
-                    ..
-                } => match self.table(name) {
-                    Some(table) => {
-                        let name = alias
-                            .as_ref()
-                            .map(|alias| alias.name.value.to_lowercase())
-                            .unwrap_or_else(|| table.name.to_lowercase());
-                        scope.push(Scope { name, table });
-                    }
-                    None => complete = false,
-                },
-                TableFactor::Derived {
-                    lateral: false,
-                    subquery,
-                    ..
-                } => {
-                    // Su propio alcance; sus columnas no se conocen aca.
-                    self.query(subquery);
-                    complete = false;
-                }
-                _ => complete = false,
+    /// Las tablas de afuera mas las del FROM de esta consulta.
+    fn scope_of(&mut self, from: &[TableWithJoins], outer: &[Scope<'a>]) -> Vec<Scope<'a>> {
+        let mut visible = outer.to_vec();
+        for item in from {
+            self.factor(&item.relation, &mut visible, outer);
+            for join in &item.joins {
+                self.factor(&join.relation, &mut visible, outer);
             }
         }
-        complete.then_some(scope)
+        visible
     }
 
-    /// La tabla del catalogo, o None si no se sabe (schema no cargado) o no
-    /// existe (y entonces queda el diagnostico).
-    fn table(&mut self, name: &ObjectName) -> Option<&'a CatalogTable> {
+    fn factor(&mut self, factor: &TableFactor, visible: &mut Vec<Scope<'a>>, outer: &[Scope<'a>]) {
+        let alias_name = |alias: &Option<sqlparser::ast::TableAlias>| {
+            alias.as_ref().map(|alias| alias.name.value.to_lowercase())
+        };
+        match factor {
+            TableFactor::Table {
+                name, alias, args, ..
+            } => {
+                let written = name
+                    .0
+                    .last()
+                    .map(|part| match part {
+                        ObjectNamePart::Identifier(ident) => ident.value.to_lowercase(),
+                    })
+                    .unwrap_or_default();
+                let source = if args.is_some() {
+                    Source::Opaque
+                } else {
+                    self.table_source(name)
+                };
+                visible.push(Scope {
+                    name: alias_name(alias).unwrap_or(written),
+                    source,
+                });
+            }
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
+                // LATERAL ve lo anterior del FROM; si no, solo lo de afuera.
+                let sees: Vec<Scope<'a>> = if *lateral {
+                    visible.clone()
+                } else {
+                    outer.to_vec()
+                };
+                self.query(subquery, &sees);
+                let columns = match alias {
+                    Some(alias) if !alias.columns.is_empty() => Some(
+                        alias
+                            .columns
+                            .iter()
+                            .map(|column| column.name.value.to_lowercase())
+                            .collect(),
+                    ),
+                    _ => output_columns(subquery),
+                };
+                visible.push(Scope {
+                    name: alias_name(alias).unwrap_or_default(),
+                    source: columns.map(Source::Derived).unwrap_or(Source::Opaque),
+                });
+            }
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
+                self.factor(&table_with_joins.relation, visible, outer);
+                for join in &table_with_joins.joins {
+                    self.factor(&join.relation, visible, outer);
+                }
+            }
+            // Funciones de tabla, UNNEST, JSON_TABLE...: sus columnas no se
+            // saben.
+            _ => visible.push(Scope {
+                name: String::new(),
+                source: Source::Opaque,
+            }),
+        }
+    }
+
+    /// De donde salen las columnas de la tabla nombrada. La que no existe
+    /// queda marcada y se sigue como opaca.
+    fn table_source(&mut self, name: &ObjectName) -> Source<'a> {
         let parts: Vec<&Ident> = name
             .0
             .iter()
@@ -659,17 +1389,38 @@ impl<'a> Checker<'a, '_> {
             })
             .collect();
         let (schema, table) = match parts.as_slice() {
-            [table] => (self.catalog.default_schema.to_string(), *table),
-            [.., schema, table] => (schema.value.clone(), *table),
-            [] => return None,
+            [table] => (None, *table),
+            [.., schema, table] => (Some(schema.value.clone()), *table),
+            [] => return Source::Opaque,
         };
+        if schema.is_none() {
+            let wanted = table.value.to_lowercase();
+            if let Some((_, columns)) = self.ctes.iter().rev().find(|(cte, _)| *cte == wanted) {
+                return columns
+                    .clone()
+                    .map(Source::Derived)
+                    .unwrap_or(Source::Opaque);
+            }
+            if self.dialect.is_system_table(&table.value) {
+                return Source::Opaque;
+            }
+        }
+        if self
+            .catalog
+            .created
+            .iter()
+            .any(|created| self.same_name(table, created))
+        {
+            return Source::Opaque;
+        }
+        let schema = schema.unwrap_or_else(|| self.catalog.default_schema.to_string());
         if !self
             .catalog
             .loaded_schemas
             .iter()
             .any(|loaded| loaded.eq_ignore_ascii_case(&schema))
         {
-            return None;
+            return Source::Opaque;
         }
         let in_schema = || {
             self.catalog
@@ -678,7 +1429,12 @@ impl<'a> Checker<'a, '_> {
                 .filter(|candidate| candidate.schema.eq_ignore_ascii_case(&schema))
         };
         if let Some(found) = in_schema().find(|candidate| self.same_name(table, &candidate.name)) {
-            return Some(found);
+            // Sin columnas en el catalogo (una vista que MySQL no pudo
+            // describir, sin permisos): existe, pero no se sabe cuales tiene.
+            if found.columns.is_empty() {
+                return Source::Opaque;
+            }
+            return Source::Table(found);
         }
         let suggestions = closest_names(
             &table.value,
@@ -690,18 +1446,30 @@ impl<'a> Checker<'a, '_> {
             DiagnosticMessage::key("diagnostic.unknownTable").with("table", &table.value),
             suggestions,
         );
-        None
+        Source::Opaque
     }
 
-    fn expr(&mut self, expr: &Expr, scope: &[Scope<'a>], aliases: &[String]) {
+    fn expr(&mut self, expr: &Expr, visible: &[Scope<'a>], aliases: &[String]) {
         match expr {
-            Expr::Identifier(ident) => self.column(ident, None, scope, aliases),
+            Expr::Identifier(ident) => self.column(ident, None, visible, aliases),
             Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
-                self.column(&parts[1], Some(&parts[0]), scope, aliases);
+                self.column(&parts[1], Some(&parts[0]), visible, aliases);
             }
-            Expr::BinaryOp { left, right, .. } => {
-                self.expr(left, scope, aliases);
-                self.expr(right, scope, aliases);
+            Expr::BinaryOp { left, right, .. }
+            | Expr::AnyOp { left, right, .. }
+            | Expr::AllOp { left, right, .. }
+            | Expr::IsDistinctFrom(left, right)
+            | Expr::IsNotDistinctFrom(left, right)
+            | Expr::Position {
+                expr: left,
+                r#in: right,
+            }
+            | Expr::AtTimeZone {
+                timestamp: left,
+                time_zone: right,
+            } => {
+                self.expr(left, visible, aliases);
+                self.expr(right, visible, aliases);
             }
             Expr::UnaryOp { expr, .. }
             | Expr::Nested(expr)
@@ -709,23 +1477,60 @@ impl<'a> Checker<'a, '_> {
             | Expr::IsNotNull(expr)
             | Expr::IsTrue(expr)
             | Expr::IsFalse(expr)
-            | Expr::Cast { expr, .. } => self.expr(expr, scope, aliases),
+            | Expr::Cast { expr, .. }
+            | Expr::Collate { expr, .. }
+            | Expr::Extract { expr, .. }
+            | Expr::Ceil { expr, .. }
+            | Expr::Floor { expr, .. } => self.expr(expr, visible, aliases),
+            // Subconsultas: cada una en su nivel, viendo las tablas de esta.
+            Expr::Subquery(query)
+            | Expr::Exists {
+                subquery: query, ..
+            } => self.query(query, visible),
+            Expr::InSubquery { expr, subquery, .. } => {
+                self.expr(expr, visible, aliases);
+                self.set_expr(subquery, visible, None);
+            }
             Expr::InList { expr, list, .. } => {
-                self.expr(expr, scope, aliases);
+                self.expr(expr, visible, aliases);
                 for item in list {
-                    self.expr(item, scope, aliases);
+                    self.expr(item, visible, aliases);
+                }
+            }
+            Expr::Tuple(items) => {
+                for item in items {
+                    self.expr(item, visible, aliases);
                 }
             }
             Expr::Between {
                 expr, low, high, ..
             } => {
-                self.expr(expr, scope, aliases);
-                self.expr(low, scope, aliases);
-                self.expr(high, scope, aliases);
+                self.expr(expr, visible, aliases);
+                self.expr(low, visible, aliases);
+                self.expr(high, visible, aliases);
             }
             Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                self.expr(expr, scope, aliases);
-                self.expr(pattern, scope, aliases);
+                self.expr(expr, visible, aliases);
+                self.expr(pattern, visible, aliases);
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                self.expr(expr, visible, aliases);
+                for part in [substring_from, substring_for].into_iter().flatten() {
+                    self.expr(part, visible, aliases);
+                }
+            }
+            Expr::Trim {
+                expr, trim_what, ..
+            } => {
+                self.expr(expr, visible, aliases);
+                if let Some(what) = trim_what {
+                    self.expr(what, visible, aliases);
+                }
             }
             Expr::Case {
                 operand,
@@ -733,14 +1538,14 @@ impl<'a> Checker<'a, '_> {
                 else_result,
             } => {
                 if let Some(operand) = operand {
-                    self.expr(operand, scope, aliases);
+                    self.expr(operand, visible, aliases);
                 }
                 for when in conditions {
-                    self.expr(&when.condition, scope, aliases);
-                    self.expr(&when.result, scope, aliases);
+                    self.expr(&when.condition, visible, aliases);
+                    self.expr(&when.result, visible, aliases);
                 }
                 if let Some(else_result) = else_result {
-                    self.expr(else_result, scope, aliases);
+                    self.expr(else_result, visible, aliases);
                 }
             }
             Expr::Function(function) => {
@@ -754,12 +1559,15 @@ impl<'a> Checker<'a, '_> {
                         else {
                             continue;
                         };
-                        self.expr(inner, scope, aliases);
+                        self.expr(inner, visible, aliases);
                     }
                 }
+                // `f((SELECT ...))`, `COALESCE((SELECT ...), 0)`.
+                if let FunctionArguments::Subquery(query) = &function.args {
+                    self.query(query, visible);
+                }
             }
-            // Subconsultas y el resto: no se revisan (pueden nombrar
-            // columnas de otro alcance).
+            // El resto no se revisa.
             _ => {}
         }
     }
@@ -768,23 +1576,30 @@ impl<'a> Checker<'a, '_> {
         &mut self,
         column: &Ident,
         qualifier: Option<&Ident>,
-        scope: &[Scope<'a>],
+        visible: &[Scope<'a>],
         aliases: &[String],
     ) {
         let name = column.value.to_lowercase();
-        if column.quote_style == Some('\'') || PSEUDO_COLUMNS.contains(&name.as_str()) {
+        // Una variable (`@total`, `@@sql_mode` en MySQL), no una columna.
+        if column.quote_style == Some('\'')
+            || name.starts_with('@')
+            || PSEUDO_COLUMNS.contains(&name.as_str())
+        {
             return;
         }
-        let tables: Vec<&Scope> = match qualifier {
+        let candidates: Vec<&Scope> = match qualifier {
             Some(qualifier) => {
                 let wanted = qualifier.value.to_lowercase();
-                let matching: Vec<&Scope> =
-                    scope.iter().filter(|item| item.name == wanted).collect();
-                if matching.is_empty() {
-                    // `x.col` con un x que no es tabla ni alias de la consulta.
+                // La mas cercana: la de adentro tapa a la de afuera.
+                let Some(scope) = visible.iter().rev().find(|item| item.name == wanted) else {
+                    // Una funcion del FROM sin alias puede llamarse de
+                    // cualquier forma: ahi no se sabe.
+                    if visible.iter().any(|item| item.name.is_empty()) {
+                        return;
+                    }
                     let suggestions = closest_names(
                         &qualifier.value,
-                        scope.iter().map(|item| item.name.as_str()),
+                        visible.iter().map(|item| item.name.as_str()),
                         false,
                     );
                     self.push_ident(
@@ -794,42 +1609,44 @@ impl<'a> Checker<'a, '_> {
                         suggestions,
                     );
                     return;
-                }
-                matching
+                };
+                vec![scope]
             }
             None => {
                 if aliases.contains(&name) {
                     return;
                 }
-                scope.iter().collect()
+                visible.iter().collect()
             }
         };
-        if tables.is_empty() {
+        if candidates.is_empty()
+            || candidates
+                .iter()
+                .any(|item| matches!(item.source, Source::Opaque))
+        {
             return;
         }
-        let exists = tables.iter().any(|item| {
-            item.table
-                .columns
-                .iter()
-                .any(|candidate| self.same_name(column, &candidate.name))
+        let exists = candidates.iter().any(|item| {
+            item.columns().is_some_and(|columns| {
+                columns
+                    .iter()
+                    .any(|candidate| self.same_name(column, candidate))
+            })
         });
         if exists {
             return;
         }
         let suggestions = closest_names(
             &column.value,
-            tables.iter().flat_map(|item| {
-                item.table
-                    .columns
-                    .iter()
-                    .map(|candidate| candidate.name.as_str())
-            }),
+            candidates
+                .iter()
+                .flat_map(|item| item.columns().unwrap_or_default()),
             self.dialect.folds_unquoted_to_lowercase(),
         );
-        let message = match tables.as_slice() {
+        let message = match candidates.as_slice() {
             [single] => DiagnosticMessage::key("diagnostic.unknownColumn")
                 .with("column", &column.value)
-                .with("table", &single.table.name),
+                .with("table", single.display_name()),
             _ => {
                 DiagnosticMessage::key("diagnostic.unknownColumnAny").with("column", &column.value)
             }
@@ -867,6 +1684,33 @@ impl<'a> Checker<'a, '_> {
                 .collect(),
         });
     }
+}
+
+/// Las columnas que devuelve una consulta, si se saben: todas con nombre
+/// (alias o columna); con `*` o una expresion sin alias, no.
+fn output_columns(query: &Query) -> Option<Vec<String>> {
+    let mut body = query.body.as_ref();
+    let select = loop {
+        match body {
+            SetExpr::Select(select) => break select,
+            // Un UNION devuelve las columnas de su primer SELECT.
+            SetExpr::SetOperation { left, .. } => body = left,
+            SetExpr::Query(inner) => body = inner.body.as_ref(),
+            _ => return None,
+        }
+    };
+    select
+        .projection
+        .iter()
+        .map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.to_lowercase()),
+            SelectItem::UnnamedExpr(Expr::Identifier(ident)) => Some(ident.value.to_lowercase()),
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => {
+                parts.last().map(|part| part.value.to_lowercase())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn select_aliases(select: &Select) -> Vec<String> {
@@ -931,6 +1775,7 @@ mod tests {
             tables: &tables,
             loaded_schemas: vec!["ventas"],
             default_schema: "ventas",
+            created: vec![],
         };
         analyze_statement(sql, Dialect::MySql, Some(&catalog))
     }
@@ -976,6 +1821,95 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_comma_between_values() {
+        for (sql, start, before, after) in [
+            ("SELECT * FROM t WHERE x IN (1, 2 3)", at(1, 34), "2", "3"),
+            ("INSERT INTO t (a, b) VALUES (1 'x')", at(1, 32), "1", "'x'"),
+            ("SELECT * FROM t WHERE x IN ('a' 2)", at(1, 33), "'a'", "2"),
+        ] {
+            for dialect in Dialect::ALL {
+                let found = analyze_statement(sql, dialect, None);
+                assert_eq!(key(&found[0]), "diagnostic.missingComma", "{sql}");
+                assert_eq!(found[0].start, start, "{sql}");
+                let DiagnosticMessage::Key { params, .. } = &found[0].message else {
+                    panic!("{sql}");
+                };
+                assert_eq!(
+                    (params["before"].as_str(), params["after"].as_str()),
+                    (before, after)
+                );
+                // La correccion inserta la coma justo despues del primero.
+                let fix = &found[0].suggestions[0];
+                assert_eq!(
+                    (fix.start, fix.end, fix.replacement.as_str()),
+                    (fix.start, fix.start, ",")
+                );
+            }
+        }
+        // Dos cadenas seguidas son validas (se concatenan): no es esto.
+        assert!(analyze_statement("SELECT 'a' 'b'", Dialect::MySql, None).is_empty());
+    }
+
+    #[test]
+    fn an_error_inside_an_in_subquery_is_reported_where_it_is() {
+        // El caso real: la coma que falta en la linea 4, no "falta )" en la
+        // primera columna del SELECT de la linea 1.
+        let sql = "SELECT * FROM core.com_clientes WHERE clie_codi IN (SELECT clie_codi FROM core.tec_abonados WHERE abon_codi IN (\n    201152,\n    201170\n    201171\n));";
+        for dialect in Dialect::ALL {
+            let found = analyze_statement(sql, dialect, None);
+            assert_eq!(key(&found[0]), "diagnostic.missingComma");
+            assert_eq!((found[0].start, found[0].end), (at(4, 5), at(4, 11)));
+            assert_eq!(found[0].suggestions[0].start, at(3, 11));
+        }
+        // Otro error cualquiera adentro, en la primera linea: la columna se
+        // lleva a la de la sentencia.
+        let found =
+            analyze("SELECT id FROM usuarios WHERE id IN (SELECT id FROM pedidos WHER total > 1)");
+        assert_eq!(key(&found[0]), "diagnostic.didYouMean");
+        assert_eq!(found[0].start, at(1, 61));
+        assert_eq!(found[0].suggestions[0].replacement, "WHERE");
+        // Anidada dos veces.
+        let found = analyze_statement(
+            "SELECT 1 FROM a WHERE x IN (SELECT y FROM b WHERE y IN (SELECT z FROM c WHERE z IN (1 2)))",
+            Dialect::MySql,
+            None,
+        );
+        assert_eq!(key(&found[0]), "diagnostic.missingComma");
+        assert_eq!(found[0].start, at(1, 87));
+    }
+
+    #[test]
+    fn one_or_two_letters_are_not_a_misspelled_keyword() {
+        let found = analyze_statement("SELECT f(a b) FROM t", Dialect::MySql, None);
+        assert_ne!(key(&found[0]), "diagnostic.didYouMean");
+        let found = analyze_statement("SELECT * FROM t WHERE a = 1 b = 2", Dialect::MySql, None);
+        assert_ne!(key(&found[0]), "diagnostic.didYouMean");
+    }
+
+    #[test]
+    fn a_view_without_described_columns_flags_none() {
+        let mut tables = tables();
+        tables.push(CatalogTable {
+            schema: "ventas".to_string(),
+            name: "vista_rota".to_string(),
+            columns: vec![],
+            foreign_keys: vec![],
+        });
+        let catalog = CatalogView {
+            tables: &tables,
+            loaded_schemas: vec!["ventas"],
+            default_schema: "ventas",
+            created: vec![],
+        };
+        let found = analyze_statement(
+            "SELECT fecha, usuaNombre FROM vista_rota WHERE fecha = '2026-09-27' ORDER BY usuaNombre",
+            Dialect::MySql,
+            Some(&catalog),
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
     fn unknown_names_get_suggestions() {
         let found = analyze("SELECT id, fcha_nacimiento FROM usuarios");
         assert_eq!(key(&found[0]), "diagnostic.unknownColumn");
@@ -1012,7 +1946,7 @@ mod tests {
     #[test]
     fn syntax_without_catalog_still_works() {
         let found = analyze_statement("SELECT (1", Dialect::Postgres, None);
-        assert_eq!(key(&found[0]), "diagnostic.unexpectedEnd");
+        assert_eq!(key(&found[0]), "diagnostic.unclosedParen");
         assert!(analyze_statement("SELECT nada FROM nadie", Dialect::Postgres, None).is_empty());
     }
 
@@ -1072,6 +2006,7 @@ mod tests {
             tables: &tables,
             loaded_schemas: vec!["public"],
             default_schema: "public",
+            created: vec![],
         };
         analyze_statement(sql, dialect, Some(&catalog))
     }
@@ -1094,5 +2029,397 @@ mod tests {
     fn mysql_no_distingue_mayusculas() {
         assert!(analyze_mixed_case("SELECT id FROM users", Dialect::MySql).is_empty());
         assert!(analyze_mixed_case("SELECT `Id` FROM `Users`", Dialect::MySql).is_empty());
+    }
+}
+
+/// El contrato de los diagnosticos (docs/specs/v0.2-perfiles-de-motor.md,
+/// §5): cada caso corre en todos los motores de `Dialect::ALL`. Lo comun se
+/// escribe una vez (`Same`) y un motor nuevo ya lo cumple o falla aca; donde
+/// un motor difiere, el caso lo dice con un `match` exhaustivo (`PerEngine`):
+/// un motor nuevo no compila hasta decidir cada diferencia.
+#[cfg(test)]
+mod contract {
+    use super::*;
+    use crate::catalog::CatalogColumn;
+
+    #[derive(Debug, Clone, Copy)]
+    enum Expect {
+        /// Sin diagnosticos.
+        Clean,
+        /// El primero, con esta clave y este inicio.
+        Error(&'static str, Position),
+        /// Algun error de sintaxis (el motor no acepta esto; el mensaje exacto
+        /// lo prueba el caso comun que lo produce).
+        Rejected,
+        /// Todos estos, en orden: una sentencia con varios errores.
+        All(&'static [(&'static str, Position)]),
+    }
+    use Expect::*;
+
+    enum Rule {
+        Same(Expect),
+        PerEngine(fn(Dialect) -> Expect),
+    }
+    use Rule::*;
+
+    const fn at(line: u64, column: u64) -> Position {
+        Position { line, column }
+    }
+
+    fn check(sql: &str, rule: &Rule, analyze: impl Fn(&str, Dialect) -> Vec<Diagnostic>) {
+        for dialect in Dialect::ALL {
+            let expect = match rule {
+                Same(expect) => *expect,
+                PerEngine(decide) => decide(dialect),
+            };
+            let found = analyze(sql, dialect);
+            let first = found.first().map(|diagnostic| {
+                let key = match &diagnostic.message {
+                    DiagnosticMessage::Key { key, .. } => key.as_str(),
+                    DiagnosticMessage::Raw(text) => text.as_str(),
+                };
+                (key, diagnostic.start)
+            });
+            let all: Vec<(&str, Position)> = found
+                .iter()
+                .map(|diagnostic| match &diagnostic.message {
+                    DiagnosticMessage::Key { key, .. } => (key.as_str(), diagnostic.start),
+                    DiagnosticMessage::Raw(text) => (text.as_str(), diagnostic.start),
+                })
+                .collect();
+            let ok = match expect {
+                All(expected) => all == expected,
+                Clean => first.is_none(),
+                Error(key, start) => first == Some((key, start)),
+                Rejected => first.is_some_and(|(key, _)| key.starts_with("diagnostic.")),
+            };
+            assert!(
+                ok,
+                "{dialect:?}: {sql}\n  esperado {expect:?}\n  obtenido {all:?}"
+            );
+        }
+    }
+
+    /// Sintaxis, sin catalogo.
+    fn syntax_cases() -> Vec<(&'static str, Rule)> {
+        vec![
+            // Lo valido en todos.
+            ("SELECT 1", Same(Clean)),
+            (
+                "SELECT a, b FROM t WHERE x IN (1, 2) ORDER BY a",
+                Same(Clean),
+            ),
+            ("WITH c AS (SELECT 1 AS a) SELECT a FROM c", Same(Clean)),
+            ("UPDATE t SET a = 1 WHERE b = 2", Same(Clean)),
+            ("DELETE FROM t WHERE id IN (SELECT id FROM u)", Same(Clean)),
+            ("INSERT INTO t (a) VALUES (1) RETURNING a", Same(Clean)),
+            ("SELECT \"a\" FROM t", Same(Clean)),
+            // Dos cadenas seguidas se concatenan: no falta una coma.
+            ("SELECT 'a' 'b'", Same(Clean)),
+            // Sentencias que el parser no conoce: no se marcan.
+            ("VACUUM t", Same(Clean)),
+            ("OPTIMIZE TABLE t", Same(Clean)),
+            // Los errores comunes, con el mismo mensaje y lugar en todos.
+            (
+                "SELECT * FROM t WHERE x IN (1, 2 3)",
+                Same(Error("diagnostic.missingComma", at(1, 34))),
+            ),
+            (
+                "SELECT * FROM a WHERE x IN (SELECT y FROM b WHERE y IN (\n  1,\n  2\n  3\n))",
+                Same(Error("diagnostic.missingComma", at(4, 3))),
+            ),
+            (
+                "SELECT id, nombre, FROM t",
+                Same(Error("diagnostic.trailingComma", at(1, 18))),
+            ),
+            ("SLECT 1", Same(Error("diagnostic.didYouMean", at(1, 1)))),
+            (
+                "SELECT * FROM t WHER a = 1",
+                Same(Error("diagnostic.didYouMean", at(1, 17))),
+            ),
+            (
+                "SELECT (1",
+                Same(Error("diagnostic.unclosedParen", at(1, 8))),
+            ),
+            (
+                "SELECT f(a b) FROM t",
+                Same(Error("diagnostic.expectedClose", at(1, 12))),
+            ),
+            (
+                "SELECT 'abc",
+                Same(Error("diagnostic.unterminatedString", at(1, 8))),
+            ),
+            // Cada error en su lugar, aunque sqlparser, al retroceder, diga
+            // otro.
+            (
+                "SELECT * FROM t WHERE (a = 1))",
+                Same(Error("diagnostic.unmatchedClose", at(1, 30))),
+            ),
+            (
+                "SELECT * FROM a WHERE x IN (\n  SELECT y FROM b WHERE y IN (\n    SELECT z FROM c\n",
+                Same(Error("diagnostic.unclosedParen", at(2, 30))),
+            ),
+            (
+                "SELECT COALESCE(a, 'x' FROM t",
+                Same(Error("diagnostic.unclosedParen", at(1, 16))),
+            ),
+            (
+                "SELECT * FROM t WHERE x IN (SELCT y FROM u)",
+                Same(Error("diagnostic.didYouMean", at(1, 29))),
+            ),
+            (
+                "SELECT * FROM t WHERE a = 1 AND",
+                Same(Error("diagnostic.incomplete", at(1, 29))),
+            ),
+            (
+                "SELECT * FROM t WHERE a = AND b = 1",
+                Same(Error("diagnostic.missingValue", at(1, 25))),
+            ),
+            (
+                "SELECT a,, b FROM t",
+                Same(Error("diagnostic.extraComma", at(1, 9))),
+            ),
+            (
+                "SELECT * FROM t ORDER BY a,",
+                Same(Error("diagnostic.extraComma", at(1, 27))),
+            ),
+            (
+                "SELECT CASE WHEN a = 1 THEN 'x' ELSE 'y' FROM t",
+                Same(Error("diagnostic.unclosedCase", at(1, 8))),
+            ),
+            (
+                "SELECT a, count(*) FROM t GROUP a",
+                Same(Error("diagnostic.missingBy", at(1, 27))),
+            ),
+            (
+                "SELECT * FROM t ORDER a",
+                Same(Error("diagnostic.missingBy", at(1, 17))),
+            ),
+            (
+                "SELECT a COUNT(*) FROM t",
+                Same(Error("diagnostic.missingCommaBefore", at(1, 10))),
+            ),
+            (
+                "SELECT x.a x.b FROM t x",
+                Same(Error("diagnostic.missingCommaBefore", at(1, 12))),
+            ),
+            (
+                "SELECT * FROM t JOIN ON t.a = 1",
+                Same(Error("diagnostic.missingTable", at(1, 17))),
+            ),
+            // Todos los errores, no solo el primero.
+            (
+                "SELECT * FROM t WHER a IN (SELECT b FROM u WHERE c IN (\n  1,\n  2\n  3,\n  4\n  5\n))",
+                Same(All(&[
+                    (
+                        "diagnostic.didYouMean",
+                        Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    ),
+                    ("diagnostic.missingComma", Position { line: 4, column: 3 }),
+                    ("diagnostic.missingComma", Position { line: 6, column: 3 }),
+                ])),
+            ),
+            (
+                "SELECT a,, b FROM t WHERE c IN (1 2) ORDER BY a,",
+                Same(All(&[
+                    ("diagnostic.extraComma", Position { line: 1, column: 9 }),
+                    (
+                        "diagnostic.missingComma",
+                        Position {
+                            line: 1,
+                            column: 35,
+                        },
+                    ),
+                    (
+                        "diagnostic.extraComma",
+                        Position {
+                            line: 1,
+                            column: 48,
+                        },
+                    ),
+                ])),
+            ),
+            (
+                // Un error sin arreglo seguro corta: lo que sigue podria ser
+                // consecuencia suya.
+                "SELECT * FROM t WHERE (a = 1 AND b IN (1 2)",
+                Same(All(&[
+                    (
+                        "diagnostic.unclosedParen",
+                        Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    ),
+                    (
+                        "diagnostic.missingComma",
+                        Position {
+                            line: 1,
+                            column: 42,
+                        },
+                    ),
+                ])),
+            ),
+            (
+                "SELECT 1 /* nota",
+                Same(Error("diagnostic.unterminatedComment", at(1, 17))),
+            ),
+            // Lo que cambia de un motor a otro.
+            (
+                "SELECT `a` FROM t",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MySql | Dialect::MariaDb => Clean,
+                    Dialect::Postgres => Rejected,
+                }),
+            ),
+            (
+                // La barra invertida escapa la comilla en MySQL y MariaDB; en
+                // Postgres es un caracter mas y la cadena queda abierta.
+                "SELECT 'a\\'b'",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MySql | Dialect::MariaDb => Clean,
+                    Dialect::Postgres => Error("diagnostic.unterminatedString", at(1, 13)),
+                }),
+            ),
+            (
+                "SELECT * FROM t LIMIT 1, 2",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MySql | Dialect::MariaDb => Clean,
+                    Dialect::Postgres => Rejected,
+                }),
+            ),
+            (
+                "INSERT INTO t () VALUES ()",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MySql | Dialect::MariaDb => Clean,
+                    Dialect::Postgres => Rejected,
+                }),
+            ),
+            (
+                "SELECT NEXT VALUE FOR s",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MariaDb => Clean,
+                    Dialect::MySql | Dialect::Postgres => Rejected,
+                }),
+            ),
+            (
+                "SELECT * FROM t FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01'",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MariaDb => Clean,
+                    Dialect::MySql | Dialect::Postgres => Rejected,
+                }),
+            ),
+            (
+                // MySQL 8 no tiene IF NOT EXISTS en ADD COLUMN; MariaDB y
+                // Postgres si.
+                "ALTER TABLE t ADD COLUMN IF NOT EXISTS b INT",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MariaDb | Dialect::Postgres => Clean,
+                    Dialect::MySql => Rejected,
+                }),
+            ),
+        ]
+    }
+
+    #[test]
+    fn la_sintaxis_en_cada_motor() {
+        for (sql, rule) in syntax_cases() {
+            check(sql, &rule, |sql, dialect| {
+                analyze_statement(sql, dialect, None)
+            });
+        }
+    }
+
+    fn column(name: &str) -> CatalogColumn {
+        CatalogColumn {
+            name: name.to_string(),
+            data_type: "int".to_string(),
+            nullable: true,
+            is_primary_key: false,
+            comment: None,
+        }
+    }
+
+    /// Contra un catalogo: `app.usuarios (id, nombre)`, como lo guarda el
+    /// motor (en minusculas).
+    fn with_catalog(sql: &str, dialect: Dialect) -> Vec<Diagnostic> {
+        let tables = vec![CatalogTable {
+            schema: "app".to_string(),
+            name: "usuarios".to_string(),
+            columns: vec![column("id"), column("nombre")],
+            foreign_keys: vec![],
+        }];
+        let catalog = CatalogView {
+            tables: &tables,
+            loaded_schemas: vec!["app"],
+            default_schema: "app",
+            created: vec![],
+        };
+        analyze_statement(sql, dialect, Some(&catalog))
+    }
+
+    fn catalog_cases() -> Vec<(&'static str, Rule)> {
+        vec![
+            ("SELECT id, nombre FROM usuarios", Same(Clean)),
+            (
+                "SELECT nombr FROM usuarios",
+                Same(Error("diagnostic.unknownColumn", at(1, 8))),
+            ),
+            (
+                "SELECT id FROM usuario",
+                Same(Error("diagnostic.unknownTable", at(1, 16))),
+            ),
+            // Sin comillas, las mayusculas dan igual en todos (Postgres las
+            // pasa a minusculas, MySQL y MariaDB no distinguen).
+            ("SELECT ID FROM USUARIOS", Same(Clean)),
+            // En cada nivel: subconsultas, correlaciones, derivadas y CTE.
+            (
+                "SELECT * FROM usuarios u WHERE u.id IN (SELECT x.id FROM usuarios x WHERE x.nombr = 'a')",
+                Same(Error("diagnostic.unknownColumn", at(1, 77))),
+            ),
+            (
+                "SELECT * FROM usuarios u WHERE EXISTS (SELECT 1 FROM usuarios x WHERE x.id = uu.id)",
+                Same(Error("diagnostic.unknownQualifier", at(1, 78))),
+            ),
+            (
+                "SELECT * FROM usuarios u WHERE EXISTS (SELECT 1 FROM usuarios x WHERE x.id = u.id AND nombre = 'a')",
+                Same(Clean),
+            ),
+            (
+                "SELECT m.nombr FROM (SELECT id, nombre FROM usuarios) m",
+                Same(Error("diagnostic.unknownColumn", at(1, 10))),
+            ),
+            (
+                "SELECT m.lo_que_sea FROM (SELECT * FROM usuarios) m",
+                Same(Clean),
+            ),
+            (
+                "WITH r (codigo) AS (SELECT id FROM usuarios) SELECT r.codig FROM r",
+                Same(Error("diagnostic.unknownColumn", at(1, 55))),
+            ),
+            (
+                "WITH r AS (SELECT * FROM usuarios) SELECT r.x FROM r",
+                Same(Clean),
+            ),
+            (
+                // Citado: en Postgres "Id" no es id; en MySQL y MariaDB "Id"
+                // es una cadena, no una columna.
+                "SELECT \"Id\" FROM usuarios",
+                PerEngine(|dialect| match dialect {
+                    Dialect::MySql | Dialect::MariaDb => Clean,
+                    Dialect::Postgres => Error("diagnostic.unknownColumn", at(1, 8)),
+                }),
+            ),
+        ]
+    }
+
+    #[test]
+    fn el_catalogo_en_cada_motor() {
+        for (sql, rule) in catalog_cases() {
+            check(sql, &rule, with_catalog);
+        }
     }
 }

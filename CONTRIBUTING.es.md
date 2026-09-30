@@ -64,12 +64,12 @@ Si falta alguna, la prueba se detiene y te dice cuál. `EXPECT_TLS` es lo que el
 
 Todo lo que cambia de un motor a otro vive en el enum `Dialect` de `crates/engine/src/lib.rs` y en el perfil del motor en `app/src/lib/engines/`. Ningún motor usa lo de otro por defecto, así que si falta algo, la compilación falla y te dice qué.
 
-1. **Driver.** Crea `crates/drivers/<motor>`, implementa `DbConnector` de `khipu-driver-core` y agrega el crate al workspace.
-2. **Rust.** Agrega el motor a `DatabaseKind` en `app/src-tauri/src/drivers.rs`, y a `Dialect` y su lista `ALL` en `crates/engine/src/lib.rs`. El compilador marca cada decisión pendiente.
+1. **Driver.** Crea `crates/drivers/<motor>`, implementa `DbConnector` de `khipu-driver-core` y agrega el crate al workspace. Un motor que habla el protocolo de otro ya soportado (MariaDB y MySQL) reutiliza su driver.
+2. **Rust.** Agrega el motor a `DatabaseKind` en `app/src-tauri/src/drivers.rs`, que elige su driver, y a `Dialect` y su lista `ALL` en `crates/engine/src/lib.rs`. El compilador marca cada decisión pendiente. El motor se llama igual en `DatabaseKind`, en `Dialect` y en `ConnectionDriver` del frontend.
 3. **Frontend.** Agrégalo a `app/src/lib/connections.ts` con su nombre, logo y puerto por defecto, y escribe su perfil en `app/src/lib/engines/<motor>.ts`.
-4. **Contrato.** Completa sus `FIXTURES` en `app/src/lib/engines/contract.test.ts` y ejecuta las dos suites de pruebas.
+4. **Contrato.** Completa sus `FIXTURES` en `app/src/lib/engines/contract.test.ts`, decide su respuesta en cada caso `PerEngine` del contrato de `crates/engine/src/diagnostics.rs` (el compilador los marca) y ejecuta las dos suites de pruebas. Los casos comunes corren en el motor nuevo sin escribir nada.
 
-Con eso, el autocompletado, los JOIN por clave foránea, los diagnósticos y los archivos grandes funcionan con el motor nuevo. Si `sqlparser` no tiene un dialecto para él, abre un issue antes de empezar.
+Con eso, el autocompletado, los JOIN por clave foránea, los diagnósticos, el pegado y los archivos grandes funcionan con el motor nuevo. Si `sqlparser` no tiene un dialecto para él, usa el más cercano, como MariaDB usa el de MySQL, y anota en `Dialect::unparsed_syntax` la sintaxis válida que ese parser rechaza, para que no se marque como error.
 
 ## Publicar una versión
 

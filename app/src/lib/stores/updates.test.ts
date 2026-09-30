@@ -24,18 +24,18 @@ describe("updates", () => {
       release("0.2.0-beta.1", "older", true),
       release("0.1.0", "older"),
     ]);
-    updatePrefs.set({ autoCheck: true, includePrereleases: false });
+    updatePrefs.set({ autoCheck: true, includePrereleases: false, skippedTag: null });
     expect(get(visibleReleases).map((item) => item.version)).toEqual(["0.2.0", "0.1.0"]);
     expect(get(newerRelease)).toBeNull();
 
-    updatePrefs.set({ autoCheck: true, includePrereleases: true });
+    updatePrefs.set({ autoCheck: true, includePrereleases: true, skippedTag: null });
     expect(get(visibleReleases)).toHaveLength(4);
     expect(get(newerRelease)?.version).toBe("0.3.0-rc.1");
   });
 
   it("la instalada se muestra aunque sea preliminar", () => {
     releases.set([release("0.3.0-rc.1", "current", true), release("0.2.0", "older")]);
-    updatePrefs.set({ autoCheck: true, includePrereleases: false });
+    updatePrefs.set({ autoCheck: true, includePrereleases: false, skippedTag: null });
     expect(get(visibleReleases).map((item) => item.version)).toEqual(["0.3.0-rc.1", "0.2.0"]);
   });
 

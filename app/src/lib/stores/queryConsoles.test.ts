@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 
 // El store real gatea localStorage detras de `browser` (ver
@@ -32,8 +32,23 @@ function createMemoryStorage() {
 async function freshQueryConsoles() {
   vi.resetModules();
   vi.stubGlobal("localStorage", createMemoryStorage());
-  return await import("./queryConsoles");
+  return await importQueryConsoles();
 }
+
+// Cada instancia guarda con un retraso: sin vaciarla al terminar el test, su
+// guardado dispara durante el siguiente y escribe en el localStorage de ese
+// (pisaba el estado que un test preparaba antes de importar).
+const imported: { flushConsolePersistence: () => void }[] = [];
+
+async function importQueryConsoles() {
+  const mod = await import("./queryConsoles");
+  imported.push(mod);
+  return mod;
+}
+
+afterEach(() => {
+  for (const mod of imported.splice(0)) mod.flushConsolePersistence();
+});
 
 describe("queryConsoles: estado de ejecucion por consola", () => {
   beforeEach(() => {
@@ -190,6 +205,50 @@ describe("queryConsoles: archivos .sql", () => {
     vi.unstubAllGlobals();
   });
 
+  it("el encoding del archivo: se abre con el detectado, cambiarlo deja cambios y guardar los limpia", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.openSqlFileConsole("p1", "/home/u/viejo.sql", "SELECT 'Año';", "windows-1252");
+    const item = () => get(mod.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
+    expect(mod.fileEncoding(item())).toBe("windows-1252");
+    expect(mod.isQueryConsoleDirty(item())).toBe(false);
+
+    mod.setQueryConsoleEncoding(id, "utf-8");
+    expect(mod.isQueryConsoleDirty(item())).toBe(true);
+    mod.setQueryConsoleEncoding(id, "windows-1252");
+    expect(mod.isQueryConsoleDirty(item())).toBe(false);
+
+    mod.setQueryConsoleEncoding(id, "utf-8");
+    mod.markQueryConsoleSaved(id, "/home/u/viejo.sql", "SELECT 'Año';", "utf-8");
+    expect(mod.isQueryConsoleDirty(item())).toBe(false);
+    expect(mod.fileEncoding(item())).toBe("utf-8");
+  });
+
+  it("el encoding sobrevive a recargar la app", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.openSqlFileConsole("p1", "/home/u/viejo.sql", "SELECT 1;", "windows-1252");
+    mod.flushConsolePersistence();
+    const stored = localStorage.getItem("khipu:query-consoles:v1");
+
+    vi.resetModules();
+    const storage = new Map([["khipu:query-consoles:v1", stored ?? ""]]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    });
+    const reloaded = await importQueryConsoles();
+    const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
+    expect(reloaded.fileEncoding(item)).toBe("windows-1252");
+    expect(reloaded.isQueryConsoleDirty(item)).toBe(false);
+  });
+
+  it("una consola, o un archivo guardado antes del encoding, es UTF-8", async () => {
+    const mod = await freshQueryConsoles();
+    const id = mod.createQueryConsole("p1");
+    const item = get(mod.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
+    expect(mod.fileEncoding(item)).toBe("utf-8");
+  });
+
   it("una consola con texto queda sin guardar hasta guardarla como archivo", async () => {
     const mod = await freshQueryConsoles();
     const id = mod.createQueryConsole("profile-a");
@@ -198,7 +257,7 @@ describe("queryConsoles: archivos .sql", () => {
     mod.updateQueryConsoleSql(id, "SELECT 1");
     expect(mod.isQueryConsoleDirty(item())).toBe(true);
 
-    mod.markQueryConsoleSaved(id, "/home/u/ventas.sql", "SELECT 1");
+    mod.markQueryConsoleSaved(id, "/home/u/ventas.sql", "SELECT 1", "utf-8");
     expect(item().title).toBe("ventas.sql");
     expect(mod.isQueryConsoleDirty(item())).toBe(false);
 
@@ -317,7 +376,7 @@ describe("queryConsoles: pestañas de tabla", () => {
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
     });
-    const reloaded = await import("./queryConsoles");
+    const reloaded = await importQueryConsoles();
     const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === id)!;
     // Un WHERE que no salio del constructor no se restaura.
     expect(item.table?.where).toBe("");
@@ -337,7 +396,7 @@ describe("queryConsoles: pestañas de tabla", () => {
         setItem: (key: string, value: string) => storage.set(key, value),
         removeItem: (key: string) => storage.delete(key),
       });
-      const reloaded = await import("./queryConsoles");
+      const reloaded = await importQueryConsoles();
       const item = get(reloaded.queryConsoles).consoles.find((candidate) => candidate.id === "t1");
       expect(item?.table?.where).toBe("");
     }
@@ -417,7 +476,7 @@ describe("queryConsoles: textos grandes fuera de localStorage", () => {
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
     });
-    const mod = await import("./queryConsoles");
+    const mod = await importQueryConsoles();
     const pending = get(mod.queryConsoles).consoles[0];
     expect(pending.textPending).toBe(true);
     // Mientras tanto se vuelve a guardar igual: la marca no se pierde.

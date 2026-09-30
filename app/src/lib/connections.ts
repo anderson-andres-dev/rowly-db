@@ -5,8 +5,9 @@ import mysqlWordmark from "devicon/icons/mysql/mysql-plain-wordmark.svg?url";
 import mariaDbWordmark from "devicon/icons/mariadb/mariadb-original-wordmark.svg?url";
 import postgresWordmark from "devicon/icons/postgresql/postgresql-plain-wordmark.svg?url";
 
+// El motor: los mismos valores que `DatabaseKind` y `Dialect` en Rust
+// (app/src-tauri/src/drivers.rs). Que driver le habla lo decide el backend.
 export type ConnectionDriver = "mysql" | "mariadb" | "postgres";
-export type BackendKind = "mysql" | "postgres";
 
 export interface DriverDefinition {
   id: ConnectionDriver;
@@ -14,7 +15,6 @@ export interface DriverDefinition {
   icon: string;
   wordmark: string;
   defaultPort: number;
-  backendKind: BackendKind;
 }
 
 export const connectionDrivers: DriverDefinition[] = [
@@ -24,7 +24,6 @@ export const connectionDrivers: DriverDefinition[] = [
     icon: mysqlIcon,
     wordmark: mysqlWordmark,
     defaultPort: 3306,
-    backendKind: "mysql",
   },
   {
     id: "mariadb",
@@ -32,7 +31,6 @@ export const connectionDrivers: DriverDefinition[] = [
     icon: mariaDbIcon,
     wordmark: mariaDbWordmark,
     defaultPort: 3306,
-    backendKind: "mysql",
   },
   {
     id: "postgres",
@@ -40,7 +38,6 @@ export const connectionDrivers: DriverDefinition[] = [
     icon: postgresIcon,
     wordmark: postgresWordmark,
     defaultPort: 5432,
-    backendKind: "postgres",
   },
 ];
 

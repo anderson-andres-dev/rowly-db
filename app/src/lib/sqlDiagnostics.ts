@@ -45,8 +45,8 @@ export interface SqlDiagnostic {
   source: "server" | "analysis";
   code?: string;
   fixes?: QuickFix[];
-  // Un nombre que no existe (tabla, columna, alias): se pinta el nombre en
-  // rojo, como DataGrip con lo que no resuelve, en vez de subrayarlo.
+  // Un nombre que no existe (tabla, columna, alias): ademas del subrayado,
+  // el nombre en rojo, como DataGrip con lo que no resuelve.
   unresolved?: boolean;
   // Solo dice que la sentencia no esta terminada ("termina antes de
   // tiempo", una coma al final): no se muestra mientras se escribe en ella.
@@ -377,6 +377,11 @@ export function diagnosticsIn(state: EditorState, from: number, to: number): Sql
     .sort(byPosition);
 }
 
+// Cuantos errores se ven en el documento: los mismos que recorre F2.
+export function visibleDiagnosticCount(state: EditorState): number {
+  return diagnosticsIn(state, 0, state.doc.length).length;
+}
+
 // Lo que no se muestra mientras se escribe en `typing` (ver typingSpan).
 function whileTyping(item: SqlDiagnostic, typing: DiagnosticsState["typing"], head: number): boolean {
   if (!typing || item.source !== "analysis" || item.to < typing.from || item.from > typing.to) return false;
@@ -473,8 +478,12 @@ function diagnosticDecorations(view: EditorView): DecorationSet {
       if (seen.has(item)) continue;
       seen.add(item);
       const range = visibleRange(state, item);
+      // Todo error lleva la onda; lo que no existe, ademas, en rojo.
       ranges.push(
-        Decoration.mark({ class: item.unresolved ? "cm-unresolved" : "cm-diagnostic-error" }).range(range.from, range.to),
+        Decoration.mark({ class: item.unresolved ? "cm-diagnostic-error cm-unresolved" : "cm-diagnostic-error" }).range(
+          range.from,
+          range.to,
+        ),
       );
       // Por linea: el mensaje del primer error (o del elegido con F2). El
       // fondo lo pinta lensBands.
@@ -605,7 +614,7 @@ const diagnosticsTheme = EditorView.baseTheme({
     maskSize: "6px 4px",
     WebkitMaskSize: "6px 4px",
   },
-  // Lo que no existe, en rojo (como DataGrip).
+  // Lo que no existe, ademas de la onda, en rojo (como DataGrip).
   "&.cm-editor .cm-unresolved, &.cm-editor .cm-unresolved *": { color: "var(--danger) !important" },
   ".cm-lensBand": { backgroundColor: "color-mix(in srgb, var(--danger) 9%, transparent)" },
   ".cm-lensMessage": {
