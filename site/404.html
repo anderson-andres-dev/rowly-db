@@ -14,8 +14,10 @@
 <header class="topbar">
   <div class="wrap">
     <a class="brand" href="{{base}}" aria-label="Rowly DB home">
-      <img class="logo-light" src="{{base}}assets/img/logo-light.svg" alt="" width="94" height="28">
-      <img class="logo-dark" src="{{base}}assets/img/logo-dark.svg" alt="" width="94" height="28">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="{{base}}assets/img/logo-dark.svg">
+        <img src="{{base}}assets/img/logo-light.svg" alt="" width="94" height="28">
+      </picture>
     </a>
   </div>
 </header>
@@ -30,9 +32,8 @@
   <p lang="es">¿Buscas la versión en español? <a href="{{base}}es/">Rowly DB en español</a>.</p>
 </main>
 <footer class="footer wrap">
-  <img src="{{base}}assets/img/icon.svg" alt="" width="22" height="22">
-  <span>Rowly DB · MIT or Apache-2.0</span>
-  <nav aria-label="Footer"><a href="https://github.com/anderson-andres-dev/rowly-db/issues/new">Report a broken link</a></nav>
+  <div class="footer-brand"><img src="{{base}}assets/img/icon.svg" alt="" width="22" height="22"><span>Rowly DB</span></div>
+  <p class="footer-about">MIT or Apache-2.0 · <a href="https://github.com/anderson-andres-dev/rowly-db/issues/new">Report a broken link</a></p>
 </footer>
 </body>
 </html>
