@@ -1,14 +1,21 @@
 name: Pages
 
-# Publica la landing (site/) en GitHub Pages cada vez que cambia en main.
-# Con un dominio propio, se agrega site/CNAME con el dominio.
+# Publica la landing (site/) en GitHub Pages. Se genera con la versión de la
+# última release publicada, así que también se vuelve a publicar cuando
+# termina el workflow Release: los enlaces apuntan siempre a archivos que ya
+# existen. Con un dominio propio, basta con la variable SITE_URL del
+# repositorio (por ejemplo https://ejemplo.com/); el CNAME se genera solo.
 
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
+      - ".github/scripts/render-site.py"
       - ".github/workflows/pages.yml"
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -22,15 +29,28 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: main
+      - name: Versión de la última release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)" >> "$GITHUB_OUTPUT"
+      - name: Generar el sitio
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: python3 .github/scripts/render-site.py _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
