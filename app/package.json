@@ -1,6 +1,6 @@
 {
   "name": "khipu-app",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Rowly DB: free & open source SQL client (Tauri + Svelte, Khipu engine)",
   "license": "MIT OR Apache-2.0",
   "type": "module",
