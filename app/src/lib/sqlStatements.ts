@@ -110,6 +110,7 @@ export interface ScanState {
   blockClosed: boolean;
   declaring: boolean;
   handlerPending: boolean;
+  afterDot: boolean;
   // Los comentarios /*!...*/ llevan SQL ejecutable en MySQL.
   versionedComment: boolean;
   // Cuerpo de funcion SQL de Postgres, con o sin LANGUAGE antes de AS.
@@ -135,6 +136,7 @@ const DIRECTIVE = 5;
 
 const SEMICOLON = 59;
 const COLON = 58;
+const DOT = 46;
 // Lo que puede empezar el cuerpo de una sola sentencia (MySQL / MariaDB).
 const BODY_WORDS: ReadonlySet<string> = new Set(["RETURN", "SET", "INSERT", "UPDATE", "DELETE", "SELECT", "CALL"]);
 // La accion de un DECLARE ... HANDLER FOR <condicion> es una sentencia.
@@ -340,6 +342,7 @@ export function initialScanState(): ScanState {
     blockClosed: false,
     declaring: false,
     handlerPending: false,
+    afterDot: false,
     versionedComment: false,
     bodyComplete: false,
     languagePending: false,
@@ -450,7 +453,7 @@ export function scanChunk(
   // que mas cuesta en un documento de 30 MB.
   let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen,
     delimiter, sqlWord, createHead, objectKind, blockDepth, caseDepth, pendingEnd, versionedComment,
-    stmtStart, lastWordStarted, exprCases, softEnd, bodyArmed, bodyKeyword, blockClosed, declaring, handlerPending,
+    stmtStart, lastWordStarted, exprCases, softEnd, bodyArmed, bodyKeyword, blockClosed, declaring, handlerPending, afterDot,
     bodyComplete, languagePending, languageValueSeen, directiveText, awaitingBodyQuote, bodyQuote,
     commentDepth } = state;
   let index = start;
@@ -496,6 +499,13 @@ export function scanChunk(
       } else if (["TABLE", "VIEW", "INDEX", "DATABASE", "SCHEMA", "TYPE", "MATERIALIZED"].includes(upper)) createHead = false;
     }
     if (!objectKind) return;
+    // Tras un punto, una palabra reservada es un nombre (`t.case`).
+    if (afterDot) {
+      afterDot = false;
+      stmtStart = false;
+      lastWordStarted = false;
+      return;
+    }
     const handlerAction = handlerPending && HANDLER_ACTIONS.has(upper);
     const atStart = stmtStart || handlerAction;
     if (handlerAction) handlerPending = false;
@@ -539,6 +549,7 @@ export function scanChunk(
     if (code === COLON && lastWordStarted) stmtStart = true;
     else stmtStart = false;
     lastWordStarted = false;
+    afterDot = code === DOT;
   };
   const feed = (from: number, to: number) => {
     for (let at = from; at < to; at += 1) {
@@ -582,6 +593,7 @@ export function scanChunk(
     blockClosed = false;
     declaring = false;
     handlerPending = false;
+    afterDot = false;
     sqlWord = "";
     bodyComplete = false;
     languagePending = false;
@@ -1053,6 +1065,7 @@ export function scanChunk(
   state.blockClosed = blockClosed;
   state.declaring = declaring;
   state.handlerPending = handlerPending;
+  state.afterDot = afterDot;
   state.versionedComment = versionedComment;
   state.bodyComplete = bodyComplete;
   state.languagePending = languagePending;

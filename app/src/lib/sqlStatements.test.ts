@@ -189,6 +189,7 @@ describe("splitStatements", () => {
     [2, "Postgres $$ con lineas en blanco", postgres, "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 2;\nEND; $$ LANGUAGE plpgsql;\nSELECT 3;"],
     [3, "begin como alias y columna", mysql, "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; SELECT begin FROM t; END;\nSELECT 2;\nSELECT 3;"],
     [2, "begin como columna en RETURN", mysql, "CREATE FUNCTION f() RETURNS INT RETURN (SELECT begin FROM t);\nSELECT 2;"],
+    [2, "palabras reservadas tras un punto son nombres", mysql, "CREATE PROCEDURE p() BEGIN SELECT t.case, t.end, t.begin, t.then FROM t; END;\nSELECT 2;"],
     [2, "CASE de expresion y columnas start, end", mysql, "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN 1 ELSE 0 END, start, end FROM t; END;\nSELECT 2;"],
     [2, "THEN begin dentro de un CASE de expresion", mysql, "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN begin ELSE 0 END; END;\nSELECT 2;"],
     [2, "handler con bloque", mysql, "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; SELECT 1; END;\nSELECT 2;"],

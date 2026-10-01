@@ -49,17 +49,38 @@ pub fn classify_sql(
     production: bool,
 ) -> Result<DestructiveClassification, ParserError> {
     let expanded = expand_executable_comments(sql, dialect)?;
-    match classify_text(&expanded, dialect, production) {
+    let Cow::Owned(with_comments) = expanded else {
+        return classify_text(sql, dialect, production);
+    };
+    // El servidor solo ejecuta /*!NNNNN ... */ si su version llega a NNNNN, y
+    // no se sabe cual es: se clasifica con el contenido y sin el, y gana la
+    // lectura que pide mas cuidado.
+    let with = classify_text(&with_comments, dialect, production);
+    let without = classify_text(sql, dialect, production);
+    match (with, without) {
+        (Ok(with), Ok(without)) => Ok(stricter(with, without)),
+        (Ok(with), Err(_)) => Ok(with),
         // sqlparser no conoce todo lo que MySQL acepta dentro de un comentario
-        // ejecutable (/*!40001 SQL_NO_CACHE */): se vuelve al texto original si
-        // es la misma clase de sentencia y no hay otro `;` que separe una nueva.
-        Err(_)
-            if matches!(expanded, Cow::Owned(_))
-                && same_single_statement(sql, &expanded, dialect) =>
-        {
-            classify_text(sql, dialect, production)
+        // ejecutable (/*!40001 SQL_NO_CACHE */): vale la lectura sin el si es la
+        // misma clase de sentencia y no hay otro `;` que separe una nueva.
+        (Err(error), Ok(without)) => {
+            if same_single_statement(sql, &with_comments, dialect) {
+                Ok(without)
+            } else {
+                Err(error)
+            }
         }
-        result => result,
+        (Err(error), Err(_)) => Err(error),
+    }
+}
+
+fn stricter(
+    a: DestructiveClassification,
+    b: DestructiveClassification,
+) -> DestructiveClassification {
+    match a {
+        DestructiveClassification::RequiresConfirmation(_) => a,
+        DestructiveClassification::NotDestructive => b,
     }
 }
 
@@ -348,7 +369,16 @@ fn validate_routine(
         }
         if matches!(
             word.as_str(),
-            "BEGIN" | "RETURN" | "SET" | "INSERT" | "UPDATE" | "DELETE" | "SELECT" | "CALL"
+            "BEGIN"
+                | "RETURN"
+                | "SET"
+                | "INSERT"
+                | "UPDATE"
+                | "DELETE"
+                | "SELECT"
+                | "CALL"
+                | "REPLACE"
+                | "WITH"
         ) {
             body = Some(index);
             break;
@@ -377,7 +407,12 @@ fn validate_mysql_body(tokens: &[Token], first: usize) -> Result<(), ParserError
     let mut index = first;
     while index < tokens.len() {
         let token = &tokens[index];
-        let word = token_word(token);
+        // Tras un punto, una palabra reservada es un nombre (`t.case`).
+        let word = if index > first && tokens[index - 1] == Token::Period {
+            String::new()
+        } else {
+            token_word(token)
+        };
         if start && !word.is_empty() && tokens.get(index + 1) == Some(&Token::Colon) {
             label = Some(word);
             index += 2;
@@ -419,7 +454,14 @@ fn validate_mysql_body(tokens: &[Token], first: usize) -> Result<(), ParserError
                 declaring = true;
                 start = false;
             }
-            "HANDLER" if declaring => {
+            "HANDLER"
+                if declaring
+                    && index > first
+                    && matches!(
+                        token_word(&tokens[index - 1]).as_str(),
+                        "CONTINUE" | "EXIT" | "UNDO"
+                    ) =>
+            {
                 index = after_handler_conditions(tokens, index + 1).ok_or_else(invalid)?;
                 start = true;
                 declaring = false;
@@ -1160,6 +1202,55 @@ mod tests {
         accepted(
             "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a THEN 1 ELSE 0 END; SELECT 2; END",
             &[Dialect::Postgres],
+        );
+    }
+
+    #[test]
+    fn a_versioned_comment_is_read_both_ways_and_the_stricter_wins() {
+        requires(
+            "DELETE FROM t /*!99999 WHERE id = 1 */",
+            Dialect::MySql,
+            DestructiveStatement::DeleteWithoutWhere,
+        );
+        requires(
+            "DELETE FROM t /*M!999999 WHERE id = 1 */",
+            Dialect::MariaDb,
+            DestructiveStatement::DeleteWithoutWhere,
+        );
+        accepted("DELETE FROM t WHERE id = 1 /*!50000 OR 1 = 1 */", &MYSQL);
+        accepted("DELETE FROM t WHERE id = 1 /*!50000 */", &MYSQL);
+    }
+
+    #[test]
+    fn reserved_words_after_a_dot_are_names() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT t.case, t.end, t.begin, t.then FROM t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT t.case FROM t; END; DROP TABLE x; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT t.begin FROM t; END; DROP TABLE x; END",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn handler_as_a_name_and_replace_or_with_bodies_are_accepted() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN DECLARE handler INT; END",
+            &MYSQL,
+        );
+        accepted("CREATE PROCEDURE p() REPLACE INTO t VALUES (1)", &MYSQL);
+        accepted(
+            "CREATE PROCEDURE p() WITH c AS (SELECT 1) SELECT * FROM c",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() REPLACE INTO t VALUES (1); DROP TABLE t",
+            &MYSQL,
         );
     }
 
