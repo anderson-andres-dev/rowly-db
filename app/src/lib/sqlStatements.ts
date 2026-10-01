@@ -98,6 +98,18 @@ export interface ScanState {
   blockDepth: number;
   caseDepth: number;
   pendingEnd: boolean;
+  // Una palabra solo abre o cierra un bloque al inicio de una sentencia: en
+  // MySQL `begin` y `end` pueden ser alias o columnas y el CASE de una
+  // expresion tambien cierra con END.
+  stmtStart: boolean;
+  lastWordStarted: boolean;
+  exprCases: number;
+  softEnd: boolean;
+  bodyArmed: boolean;
+  bodyKeyword: boolean;
+  blockClosed: boolean;
+  declaring: boolean;
+  handlerPending: boolean;
   // Los comentarios /*!...*/ llevan SQL ejecutable en MySQL.
   versionedComment: boolean;
   // Cuerpo de funcion SQL de Postgres, con o sin LANGUAGE antes de AS.
@@ -122,6 +134,14 @@ const DOLLAR_QUOTED = 4;
 const DIRECTIVE = 5;
 
 const SEMICOLON = 59;
+const COLON = 58;
+// Lo que puede empezar el cuerpo de una sola sentencia (MySQL / MariaDB).
+const BODY_WORDS: ReadonlySet<string> = new Set(["RETURN", "SET", "INSERT", "UPDATE", "DELETE", "SELECT", "CALL"]);
+// La accion de un DECLARE ... HANDLER FOR <condicion> es una sentencia.
+const HANDLER_ACTIONS: ReadonlySet<string> = new Set([
+  "BEGIN", "SET", "CLOSE", "OPEN", "FETCH", "LEAVE", "ITERATE", "SIGNAL", "RESIGNAL", "ROLLBACK", "COMMIT",
+  "INSERT", "UPDATE", "DELETE", "CALL", "GET", "SELECT", "RETURN", "IF", "WHILE", "LOOP", "REPEAT", "CASE",
+]);
 const DASH = 45;
 const SLASH = 47;
 const STAR = 42;
@@ -311,6 +331,15 @@ export function initialScanState(): ScanState {
     blockDepth: 0,
     caseDepth: 0,
     pendingEnd: false,
+    stmtStart: false,
+    lastWordStarted: false,
+    exprCases: 0,
+    softEnd: false,
+    bodyArmed: false,
+    bodyKeyword: false,
+    blockClosed: false,
+    declaring: false,
+    handlerPending: false,
     versionedComment: false,
     bodyComplete: false,
     languagePending: false,
@@ -367,16 +396,16 @@ function nextLineContinues(
   return CONTINUE_WORDS.has(upper) || (follows?.has(upper) ?? false) || (alwaysFollows?.has(upper) ?? false);
 }
 
-// El salto de linea que abre una linea en blanco (con espacios o no, y con
-// \r\n) dentro de text[from, to), o -1. El salto tiene que estar en ese
-// tramo; el que la cierra puede estar despues (en el margen que trae cada
-// trozo mas alla de su limite): si no, una linea en blanco partida entre dos
-// trozos no se veria.
 // Una sentencia de nivel superior que empieza tras lineas en blanco: lo que
 // cierra una rutina o un cuerpo $$ que se quedo abierto mientras se escribe.
 const RESTART_KEYWORDS = "SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|CALL|SET|USE|SHOW|EXPLAIN|TRUNCATE|GRANT";
 const BLANK_LINES = "(?:[ \\t]*\\r?\\n)+";
 
+// El salto de linea que abre una linea en blanco (con espacios o no, y con
+// \r\n) dentro de text[from, to), o -1. El salto tiene que estar en ese
+// tramo; el que la cierra puede estar despues (en el margen que trae cada
+// trozo mas alla de su limite): si no, una linea en blanco partida entre dos
+// trozos no se veria.
 function blankLineIn(text: string, from: number, to: number): number {
   for (let newline = text.indexOf("\n", from); newline !== -1 && newline < to; newline = text.indexOf("\n", newline + 1)) {
     let next = newline + 1;
@@ -421,6 +450,7 @@ export function scanChunk(
   // que mas cuesta en un documento de 30 MB.
   let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen,
     delimiter, sqlWord, createHead, objectKind, blockDepth, caseDepth, pendingEnd, versionedComment,
+    stmtStart, lastWordStarted, exprCases, softEnd, bodyArmed, bodyKeyword, blockClosed, declaring, handlerPending,
     bodyComplete, languagePending, languageValueSeen, directiveText, awaitingBodyQuote, bodyQuote,
     commentDepth } = state;
   let index = start;
@@ -430,7 +460,10 @@ export function scanChunk(
     if (caseDepth > 0) caseDepth -= 1;
     else {
       blockDepth = Math.max(0, blockDepth - 1);
-      if (blockDepth === 0) bodyComplete = true;
+      if (blockDepth === 0) {
+        bodyComplete = true;
+        blockClosed = true;
+      }
     }
     pendingEnd = false;
   };
@@ -456,20 +489,67 @@ export function scanChunk(
     }
     if (upper === "CREATE" && codeStart >= 0 && !objectKind && (lead === "CREATE" || versionedComment)) createHead = true;
     else if (createHead && !objectKind) {
-      if (["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT", "RULE"].includes(upper)) objectKind = upper;
-      else if (["TABLE", "VIEW", "INDEX", "DATABASE", "SCHEMA", "TYPE", "MATERIALIZED"].includes(upper)) createHead = false;
+      if (["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT", "RULE"].includes(upper)) {
+        objectKind = upper;
+        bodyArmed = upper === "PROCEDURE" || upper === "FUNCTION";
+        return;
+      } else if (["TABLE", "VIEW", "INDEX", "DATABASE", "SCHEMA", "TYPE", "MATERIALIZED"].includes(upper)) createHead = false;
     }
-    if (objectKind && upper === "BEGIN") blockDepth += 1;
-    else if (objectKind && upper === "CASE") caseDepth += 1;
-    else if (objectKind && upper === "END") pendingEnd = true;
+    if (!objectKind) return;
+    const handlerAction = handlerPending && HANDLER_ACTIONS.has(upper);
+    const atStart = stmtStart || handlerAction;
+    if (handlerAction) handlerPending = false;
+    stmtStart = false;
+    lastWordStarted = atStart;
+    if (softEnd) {
+      softEnd = false;
+      if (upper === "REPEAT") return;
+    }
+    if (atStart && upper === "DECLARE") declaring = true;
+    else if (declaring && upper === "HANDLER") {
+      declaring = false;
+      handlerPending = true;
+    }
+    // El cuerpo de una sola sentencia empieza con una de estas palabras; en
+    // un trigger o un evento, solo despues de ROW o DO (antes son cabecera).
+    if (bodyArmed && blockDepth === 0 && (rules.dollar ? upper === "RETURN" : BODY_WORDS.has(upper))) bodyKeyword = true;
+    else if (objectKind === "TRIGGER" && (rules.dollar ? upper === "EXECUTE" : upper === "ROW")) {
+      if (rules.dollar) bodyKeyword = true;
+      else bodyArmed = true;
+    } else if (objectKind === "EVENT" && upper === "DO") bodyArmed = true;
+    if (upper === "BEGIN" && (atStart || (blockDepth === 0 && !bodyKeyword))) {
+      blockDepth += 1;
+      blockClosed = false;
+      stmtStart = true;
+    } else if (upper === "ATOMIC" && rules.dollar && blockDepth > 0) stmtStart = true;
+    else if (upper === "CASE") {
+      caseDepth += 1;
+      if (!atStart) exprCases += 1;
+    } else if (upper === "END") {
+      if (exprCases > 0 && !atStart) {
+        exprCases -= 1;
+        caseDepth = Math.max(0, caseDepth - 1);
+      } else if (atStart) pendingEnd = true;
+      else if (blockDepth > 0) softEnd = true;
+    } else if (exprCases === 0 && (upper === "THEN" || upper === "ELSE" || upper === "DO")) stmtStart = true;
+    else if (atStart && (upper === "LOOP" || upper === "REPEAT")) stmtStart = true;
+  };
+  // Los simbolos de un tramo de codigo: solo `lbl:` deja el inicio de sentencia.
+  const symbol = (code: number) => {
+    if (code === COLON && lastWordStarted) stmtStart = true;
+    else stmtStart = false;
+    lastWordStarted = false;
   };
   const feed = (from: number, to: number) => {
     for (let at = from; at < to; at += 1) {
       const code = text.charCodeAt(at);
       if (isWordChar(code)) sqlWord += text[at];
-      else if (sqlWord) {
-        word(sqlWord);
-        sqlWord = "";
+      else {
+        if (sqlWord) {
+          word(sqlWord);
+          sqlWord = "";
+        }
+        if (objectKind && !isSpace(code)) symbol(code);
       }
     }
   };
@@ -493,6 +573,15 @@ export function scanChunk(
     blockDepth = 0;
     caseDepth = 0;
     pendingEnd = false;
+    stmtStart = false;
+    lastWordStarted = false;
+    exprCases = 0;
+    softEnd = false;
+    bodyArmed = false;
+    bodyKeyword = false;
+    blockClosed = false;
+    declaring = false;
+    handlerPending = false;
     sqlWord = "";
     bodyComplete = false;
     languagePending = false;
@@ -741,6 +830,8 @@ export function scanChunk(
         index = cut;
         if (cut === at) break;
         flushWord();
+        // Un END a solo una linea en blanco de lo siguiente ya cerro su bloque.
+        finishEnd();
         if (objectKind && blockDepth > 0 && !bodyComplete) {
           const following = text.slice(cut + 1).match(new RegExp(`^${BLANK_LINES}(${RESTART_KEYWORDS})\\b`, "i"));
           if (following) {
@@ -749,7 +840,9 @@ export function scanChunk(
           }
         }
         if (codeStart >= 0 && depth === 0 &&
-          (!objectKind || (rules.dollar && bodyComplete && blockDepth === 0 && languageValueSeen))) {
+          (!objectKind || (blockDepth === 0 && caseDepth === 0 && !pendingEnd && (rules.dollar
+            ? (bodyComplete && (languageValueSeen || blockClosed)) || bodyKeyword
+            : blockClosed || bodyKeyword)))) {
           let continues =
             CONTINUES.has(tail) ||
             tail === MULTIPLY ||
@@ -801,11 +894,16 @@ export function scanChunk(
         continue;
       }
       if (code === SEMICOLON) {
+        if (objectKind) {
+          stmtStart = true;
+          lastWordStarted = false;
+        }
         lastNonSpace = base + index + 1;
         index += 1;
         continue;
       }
       if (code === OPEN_PAREN || code === CLOSE_PAREN) {
+        if (objectKind) symbol(code);
         depth = code === OPEN_PAREN ? depth + 1 : Math.max(0, depth - 1);
         if (codeStart < 0) {
           codeStart = base + index;
@@ -843,6 +941,7 @@ export function scanChunk(
       }
       const close = rules.closeOf.get(code);
       if (close !== undefined) {
+        if (objectKind) symbol(code);
         if (codeStart < 0) {
           codeStart = base + index;
           lead = "";
@@ -864,6 +963,7 @@ export function scanChunk(
         DOLLAR_TAG.lastIndex = index;
         const tag = DOLLAR_TAG.exec(text)?.[0];
         if (tag) {
+          if (objectKind) symbol(code);
           if (codeStart < 0) {
             codeStart = base + index;
             lead = "";
@@ -881,6 +981,7 @@ export function scanChunk(
         }
       }
       // Un "-", "/" o "$" sueltos: codigo comun.
+      if (objectKind) symbol(code);
       if (codeStart < 0) {
         codeStart = base + index;
         lead = "";
@@ -943,6 +1044,15 @@ export function scanChunk(
   state.blockDepth = blockDepth;
   state.caseDepth = caseDepth;
   state.pendingEnd = pendingEnd;
+  state.stmtStart = stmtStart;
+  state.lastWordStarted = lastWordStarted;
+  state.exprCases = exprCases;
+  state.softEnd = softEnd;
+  state.bodyArmed = bodyArmed;
+  state.bodyKeyword = bodyKeyword;
+  state.blockClosed = blockClosed;
+  state.declaring = declaring;
+  state.handlerPending = handlerPending;
   state.versionedComment = versionedComment;
   state.bodyComplete = bodyComplete;
   state.languagePending = languagePending;

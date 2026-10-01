@@ -179,6 +179,73 @@ describe("splitStatements", () => {
     }
   });
 
+  const routineCases: [number, string, typeof mysql, string][] = [
+    [2, "func RETURN sin ;", mysql, "CREATE FUNCTION f() RETURNS INT RETURN 1\n\nSELECT 2;"],
+    [2, "trigger SET sin ;", mysql, "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.a = 1\n\nSELECT 2;"],
+    [2, "procedure END sin ;", mysql, "CREATE PROCEDURE p() BEGIN SELECT 1; END\n\nCALL p();"],
+    [2, "Postgres trigger", postgres, "CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW EXECUTE FUNCTION f()\n\nSELECT 2;"],
+    [2, "Postgres ATOMIC sin ;", postgres, "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; END\n\nSELECT 2;"],
+    [2, "lineas en blanco dentro", mysql, "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 2;\nEND;\nSELECT 3;"],
+    [2, "Postgres $$ con lineas en blanco", postgres, "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 2;\nEND; $$ LANGUAGE plpgsql;\nSELECT 3;"],
+    [3, "begin como alias y columna", mysql, "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; SELECT begin FROM t; END;\nSELECT 2;\nSELECT 3;"],
+    [2, "begin como columna en RETURN", mysql, "CREATE FUNCTION f() RETURNS INT RETURN (SELECT begin FROM t);\nSELECT 2;"],
+    [2, "CASE de expresion y columnas start, end", mysql, "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN 1 ELSE 0 END, start, end FROM t; END;\nSELECT 2;"],
+    [2, "THEN begin dentro de un CASE de expresion", mysql, "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN begin ELSE 0 END; END;\nSELECT 2;"],
+    [2, "handler con bloque", mysql, "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; SELECT 1; END;\nSELECT 2;"],
+    [2, "handler simple", mysql, "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1; SELECT 1; END;\nSELECT 2;"],
+    [2, "bucles, IF y CASE sentencia", mysql, "CREATE PROCEDURE p() BEGIN lbl: LOOP IF a THEN LEAVE lbl; ELSEIF b THEN ITERATE lbl; ELSE SELECT 1; END IF; END LOOP lbl; WHILE x < 3 DO SET x = x + 1; END WHILE; REPEAT SET x = x - 1; UNTIL x < 1 END REPEAT; CASE x WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE; END;\nSELECT 5;"],
+    [2, "bloques anidados con etiqueta", mysql, "CREATE PROCEDURE p() outer_b: BEGIN BEGIN SELECT 1; END; SELECT 2; END outer_b;\nSELECT 5;"],
+    [2, "trigger con bloque", mysql, "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN SET NEW.a = 1; SET NEW.b = 2; END;\nSELECT 2;"],
+    [2, "evento con bloque", mysql, "CREATE EVENT ev ON SCHEDULE EVERY 1 DAY DO BEGIN DELETE FROM t; DELETE FROM u; END;\nSELECT 2;"],
+    [3, "BEGIN es una transaccion", mysql, "BEGIN; SELECT 1; COMMIT;"],
+    [2, "DELIMITER", mysql, "DELIMITER $$\nCREATE PROCEDURE p() BEGIN SELECT 1; END$$\nDELIMITER ;\nSELECT 3;"],
+    [2, "Postgres ATOMIC con CASE", postgres, "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a THEN 1 ELSE 0 END; SELECT 2; END;\nSELECT 3;"],
+  ];
+
+  // El escaneo por trozos (con muchos cortes seguidos) da los mismos limites
+  // que el completo.
+  function chunked(text: string, lexical: typeof mysql, step: number): string[] {
+    const state = initialScanState();
+    const out: { from: number; to: number; terminated: boolean }[] = [];
+    let pos = 0;
+    for (;;) {
+      const chunk = text.slice(pos, pos + step + SCAN_OVERLAP);
+      const final = pos + chunk.length === text.length;
+      const stop = scanChunk(chunk, pos, final ? chunk.length : step, final, state, out, lexical);
+      if (final) break;
+      expect(stop, `sin avance en ${pos}`).toBeGreaterThan(0);
+      pos += stop;
+    }
+    return out.map(({ from, to }) => text.slice(from, to));
+  }
+
+  it("rutinas: separa lo que sigue a una definicion completa y no parte los cuerpos", () => {
+    for (const [count, name, lexical, text] of routineCases) {
+      expect(parts(text, lexical).length, name).toBe(count);
+    }
+  });
+
+  it("rutinas y cuerpos $$ abiertos: los limites no cambian con ningun tamano de trozo", () => {
+    const open = [
+      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;",
+      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;\n$$ LANGUAGE plpgsql;\nSELECT 2;",
+      "DO $$ BEGIN\nSELECT 1;\n\nUPDATE t SET a = 1;\n\nDELETE FROM t;",
+    ];
+    const cases: [string, typeof mysql, string][] = [
+      ...routineCases.map(([, name, lexical, text]): [string, typeof mysql, string] => [name, lexical, text]),
+      ...open.map((text, index): [string, typeof mysql, string] => [`abierto ${index}`, postgres, text]),
+      ["MySQL abierta", mysql, "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;"],
+    ];
+    for (const [name, lexical, text] of cases) {
+      const expected = parts(text, lexical);
+      // Desde 2: con trozos de un caracter la primera palabra de una sentencia ni
+      // siquiera llega entera (ya era asi antes); los reales son de decenas de miles.
+      for (let step = 2; step <= Math.min(text.length, 60); step++) {
+        expect(chunked(text, lexical, step), `${name}, trozos de ${step}`).toEqual(expected);
+      }
+    }
+  });
+
   it("recupera una rutina abierta solo al llegar al final sin END", () => {
     const broken = "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;";
     expect(parts(broken)).toEqual(["CREATE PROCEDURE p() BEGIN\nSELECT 1;", "SELECT 99;", "SELECT 100;"]);
