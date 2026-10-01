@@ -1,6 +1,6 @@
 import type { SqlProfile } from "$lib/engines";
 import { refineLayout, upperOperatorWords } from "$lib/sqlFormatLayout";
-import { splitStatements } from "$lib/sqlStatements";
+import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
 import { DEFAULT_INDENT_SIZE, indentationUnit, type IndentSize, type IndentStyle } from "$lib/sqlIndentationConfig";
 
 type Quote = "'" | '"' | "`" | "]";
@@ -175,7 +175,7 @@ function scanFormattedSql(sql: string): SqlScanResult {
 // normal entre parentesis ya no entraria en una linea).
 const MIN_LAYOUT_WIDTH = 80;
 
-function applyIndentation(text: string, style: IndentStyle, size: IndentSize): string {
+function applyIndentation(text: string, style: IndentStyle, size: IndentSize, lexical: SqlLexical): string {
   if (style === "spaces" && size === DEFAULT_INDENT_SIZE) return text;
   const unit = indentationUnit(style, size);
   let quote: string | null = null;
@@ -198,14 +198,14 @@ function applyIndentation(text: string, style: IndentStyle, size: IndentSize): s
           blockComment = false;
           index++;
         }
-      } else if (char === "-" && next === "-") {
+      } else if ((char === "-" && next === "-") || (char === "#" && lexical.hashComments)) {
         break;
       } else if (char === "/" && next === "*") {
         blockComment = true;
         index++;
       } else if (char === "'" || char === '"' || char === "`" || char === "[") {
         quote = char === "[" ? "]" : char;
-      } else if (char === "$") {
+      } else if (char === "$" && lexical.dollarQuotes && !/[\w$]/.test(line[index - 1] ?? "")) {
         const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(line.slice(index))?.[0];
         if (tag) {
           quote = tag;
@@ -273,6 +273,7 @@ export async function tryFormatSqlBlock(
           }),
       indentStyle,
       indentSize,
+      engine.lexical,
     ),
   };
 }

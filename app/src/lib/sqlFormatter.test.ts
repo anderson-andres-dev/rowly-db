@@ -60,6 +60,15 @@ describe("formatSqlBlock", () => {
     expect(script.text.match(/\n\t\S/g)?.length).toBeGreaterThan(1);
   });
 
+  it("keeps indenting with tabs after a MySQL # comment with an apostrophe or a name with $", async () => {
+    const mysql = await formatSqlBlock("select a, b # don't\nfrom t where a = 1 and b = 2 order by a", ENGINES.mysql, 20, true, "tabs", 4);
+    expect(mysql).toMatch(/\n\t\S/);
+    expect(mysql).not.toMatch(/\n {2}\S/);
+    const postgres = await formatSqlBlock("select price$usd$x, b from t where a = 1 and b = 2 order by a", ENGINES.postgres, 20, true, "tabs", 4);
+    expect(postgres).toMatch(/\n\t\S/);
+    expect(postgres).not.toMatch(/\n {2}\S/);
+  });
+
   it("keeps spaces inside a multiline literal when using tabs", async () => {
     const result = await formatSqlBlock("select 'first\n  second' as label, customer_id, customer_name from customers", ENGINES.postgres, 60, true, "tabs", 4);
     expect(result).toContain("first\n  second");
