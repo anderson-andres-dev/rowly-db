@@ -78,7 +78,7 @@
   import { sql } from "@codemirror/lang-sql";
   import { acceptCompletion, autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
-  import { keymap } from "@codemirror/view";
+  import { keymap, scrollPastEnd, tooltips } from "@codemirror/view";
   import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
@@ -91,6 +91,7 @@
     extractDefaultTable,
     resolveCatalogTable,
   } from "$lib/sqlSchema";
+  import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
   import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
@@ -178,6 +179,7 @@
   // activa); defaultTable cambia con cada tecla, asi que se separan para no
   // reconstruir el SQLNamespace completo en cada keystroke.
   let sqlSchema: ReturnType<typeof buildSqlSchema> = buildSqlSchema([]);
+  let catalogCompletions = buildCatalogCompletions([], standardSql);
   // Sin conexion, el SQL estandar: nunca el de otro motor.
   let engine: SqlProfile = standardSql;
   let routineIndex: RoutineIndex = buildRoutineIndex([]);
@@ -355,11 +357,12 @@
     const raw = view.state.sliceDoc(range.from, range.to);
     const sql = raw.trim();
     if (!sql) return true;
+    const statements = splitStatements(raw, engine.lexical);
+    if (statements.length === 0) return true;
 
     const from = range.from + (raw.length - raw.trimStart().length);
     // Varias sentencias: el Workspace las corre como script y va marcando
     // cada una (markStatement), con su icono y su tiempo.
-    const statements = splitStatements(raw, engine.lexical);
     const parts =
       statements.length > 1
         ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
@@ -433,6 +436,7 @@
                 defaultTable,
                 fkIndex: sqlSchema.fkIndex,
                 tableIndex: sqlSchema.tableIndex,
+                catalogCompletions,
                 tableAliases: get(editorSettings).tableAliases,
               }),
             ],
@@ -786,6 +790,8 @@
   const TEXT_FLUSH_DELAY_MS = 300;
   const LARGE_TEXT_FLUSH_DELAY_MS = 1500;
   const LARGE_DOCUMENT = 1024 * 1024;
+  // Px libres que se dejan bajo el cursor al desplazar: lo que ocupa el popup.
+  const CURSOR_BOTTOM_MARGIN = 200;
   let textFlushTimer: ReturnType<typeof setTimeout> | null = null;
   let textDirty = false;
 
@@ -824,6 +830,14 @@
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
         // como escribe el SQL el motor de la conexion (sqlPaste.ts).
         EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
+        // Aire bajo la ultima linea: se puede desplazar mas alla del final y
+        // el cursor no se queda pegado al borde, asi el popup de sugerencias
+        // cabe debajo de lo que se escribe.
+        scrollPastEnd(),
+        // Sugerencias y avisos fuera del editor: dentro, el panel los recorta
+        // cuando el cursor esta cerca del borde inferior.
+        tooltips({ parent: document.body }),
+        EditorView.scrollMargins.of(() => ({ bottom: CURSOR_BOTTOM_MARGIN })),
         statementIndex,
         hintsCompartment.of(parameterHintConfig.of(hintConfig())),
         parameterHints,
@@ -960,12 +974,17 @@
     const defaultSchema = $databaseExplorer?.defaultSchema;
 
     const nextEngine = profile ? engineFor(profile.driver) : standardSql;
-    sqlSchema = buildSqlSchema(tables, { defaultSchema, engine: nextEngine });
+    sqlSchema = buildSqlSchema(tables, {
+      defaultSchema, engine: nextEngine,
+      explorerSchemas: $databaseExplorer?.schemas ?? [],
+      availableSchemas: $databaseExplorer?.availableSchemas ?? [],
+    });
     // Otro motor: el indice de sentencias vuelve a cortar con sus reglas.
     if (view && nextEngine.lexical !== engine.lexical) {
       view.dispatch({ effects: lexicalCompartment.reconfigure(sqlLexical.of(nextEngine.lexical)) });
     }
     engine = nextEngine;
+    catalogCompletions = buildCatalogCompletions($databaseExplorer?.schemas ?? [], engine, defaultSchema);
     sqlDialect = dialectFor(engine);
     // Las rutinas (y el motor) de los hints de parametros.
     routineIndex = buildRoutineIndex($databaseExplorer?.schemas ?? [], defaultSchema);

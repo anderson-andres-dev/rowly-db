@@ -103,7 +103,7 @@ export async function setVisibleSchemas(schemas: string[]): Promise<void> {
   const profileId = get(connection).profileId;
   explorerLoading.set(true);
   try {
-    const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas }));
+    const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas, refresh: false }));
     databaseExplorer.set(explorer);
     catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
     if (profileId) {
@@ -115,6 +115,17 @@ export async function setVisibleSchemas(schemas: string[]): Promise<void> {
   } finally {
     explorerLoading.set(false);
   }
+}
+
+// Despues de un DDL, vuelve a introspectar los schemas visibles sobre el
+// mismo pool. Actualiza juntas las dos fuentes que usa el editor.
+export async function refreshCatalog(): Promise<void> {
+  const current = get(databaseExplorer);
+  if (!current) return;
+  const names = current.schemas.map((objects) => objects.schema);
+  const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names, refresh: true }));
+  databaseExplorer.set(explorer);
+  catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
 }
 
 export interface ConnectionConfig {

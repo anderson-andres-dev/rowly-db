@@ -201,20 +201,29 @@ fn database_explorer(
         .map(ActiveConnection::explorer)
 }
 
-/// Makes `names` (plus the default schema, always) the schemas shown in the
-/// explorer: introspects the ones not loaded yet and drops the rest. Names
-/// the server doesn't list are ignored, so a stale selection saved in the
-/// frontend can't make it introspect arbitrary input.
-///
-/// A schema that fails to load is still added, empty, with the error in its
-/// `warnings`, instead of failing the whole selection.
+fn schemas_to_load(
+    wanted: &[String],
+    existing: &BTreeMap<String, SchemaObjects>,
+    refresh: bool,
+) -> Vec<String> {
+    wanted
+        .iter()
+        .filter(|name| refresh || !existing.contains_key(*name))
+        .cloned()
+        .collect()
+}
+
+/// Muestra `names` mas el schema por defecto. Introspecta los nuevos, o
+/// todos si se pide refresh, y descarta los demas. Ignora nombres que el
+/// servidor no liste. Si un schema falla, conserva su aviso en `warnings`.
 #[tauri::command]
 async fn set_visible_schemas(
     names: Vec<String>,
+    refresh: Option<bool>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<DatabaseExplorer, Message> {
-    let (connector, wanted, missing) = {
+    let (connector, mut wanted, mut to_load, default_schema) = {
         let guard = state
             .connections
             .lock()
@@ -230,16 +239,22 @@ async fn set_visible_schemas(
         if !wanted.contains(&active.default_schema) {
             wanted.push(active.default_schema.clone());
         }
-        let missing: Vec<String> = wanted
-            .iter()
-            .filter(|name| !active.schemas.contains_key(*name))
-            .cloned()
-            .collect();
-        (Arc::clone(&active.connector), wanted, missing)
+        let to_load = schemas_to_load(&wanted, &active.schemas, refresh.unwrap_or(false));
+        (Arc::clone(&active.connector), wanted, to_load, active.default_schema.clone())
     };
 
-    let mut loaded = Vec::with_capacity(missing.len());
-    for name in missing {
+    let available = if refresh.unwrap_or(false) {
+        connector.list_schemas().await.ok()
+    } else {
+        None
+    };
+    if let Some(names) = &available {
+        wanted.retain(|name| name == &default_schema || names.contains(name));
+        to_load.retain(|name| wanted.contains(name));
+    }
+
+    let mut loaded = Vec::with_capacity(to_load.len());
+    for name in to_load {
         let objects = match connector.introspect_schema(&name).await {
             Ok(objects) => objects,
             Err(error) => {
@@ -264,6 +279,9 @@ async fn set_visible_schemas(
     // la conexion anterior y no se mezcla con la nueva.
     if !Arc::ptr_eq(&active.connector, &connector) {
         return Err(Message::key("connectionChanged"));
+    }
+    if let Some(names) = available {
+        active.available_schemas = names;
     }
     active.set_schemas(|schemas| {
         schemas.retain(|name, _| wanted.contains(name));
@@ -969,6 +987,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_refresh_reloads_visible_schemas() {
+        let wanted = vec!["core".to_string(), "other".to_string()];
+        let existing = BTreeMap::from([("core".to_string(), SchemaObjects::new("core"))]);
+        assert_eq!(schemas_to_load(&wanted, &existing, false), vec!["other"]);
+        assert_eq!(schemas_to_load(&wanted, &existing, true), wanted);
+    }
 
     #[test]
     fn a_script_is_checked_statement_by_statement() {
