@@ -137,6 +137,8 @@ const MYSQL_UNPARSED: &[&[&str]] = &[
     &["INTO", "OUTFILE"],
     &["INTO", "DUMPFILE"],
     &["PREPARE"],
+    &["LOAD", "DATA"],
+    &["CREATE", "USER"],
     // UPDATE de una tabla con ORDER BY o LIMIT.
     &["UPDATE", "...", "ORDER", "BY"],
     &["UPDATE", "...", "LIMIT"],
@@ -155,6 +157,13 @@ const MARIADB_UNPARSED: &[&[&str]] = &[
 ];
 
 const POSTGRES_UNPARSED: &[&[&str]] = &[
+    &["CREATE", "DOMAIN"],
+    &["CREATE", "EXTENSION"],
+    &["CREATE", "POLICY"],
+    &["CREATE", "SEQUENCE"],
+    // Tablas hijas: sqlparser no reconoce PARTITION OF.
+    &["PARTITION", "OF"],
+    &["WITH", "NO", "DATA"],
     &["FOR", "NO", "KEY", "UPDATE"],
     &["FOR", "KEY", "SHARE"],
     &["BETWEEN", "SYMMETRIC"],

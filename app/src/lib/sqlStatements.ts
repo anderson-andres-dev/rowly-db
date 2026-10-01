@@ -3,9 +3,11 @@
 // CodeMirror (se parsea por partes y en los huecos entre sentencias no
 // devuelve ninguna); nunca cae al documento entero.
 //
-// Se corta en cada ";" que no este dentro de comillas ('...', "...",
-// `...`), de un comentario (-- ..., /* ... */) ni de un bloque $tag$ de
-// PostgreSQL. Tambien en una linea en blanco, como en DataGrip o DBeaver,
+// Se corta en cada ";" que no este dentro de una rutina compuesta, comillas
+// ('...', "...", `...`), comentarios (-- ..., /* ... */) ni bloques $tag$
+// de PostgreSQL. DELIMITER cambia el terminador de MySQL y MariaDB; su linea
+// y el terminador elegido quedan fuera del SQL. Tambien se corta en una
+// linea en blanco, como en DataGrip o DBeaver,
 // salvo dentro de parentesis, cuando la linea anterior termina en algo que
 // pide seguir (una coma, un parentesis que abre, un operador), cuando la
 // siguiente empieza con algo que no puede abrir una consulta (FROM, WHERE,
@@ -87,6 +89,26 @@ export interface ScanState {
   // trozo la continua (a tailWord y, si es la primera, a lead).
   wordOpen: boolean;
   leadOpen: boolean;
+  // Terminador del cliente y palabra de SQL que puede cruzar un trozo.
+  delimiter: string;
+  sqlWord: string;
+  // Cabecera CREATE y bloques de su cuerpo.
+  createHead: boolean;
+  objectKind: string;
+  blockDepth: number;
+  caseDepth: number;
+  pendingEnd: boolean;
+  // Los comentarios /*!...*/ llevan SQL ejecutable en MySQL.
+  versionedComment: boolean;
+  // Cuerpo de funcion SQL de Postgres, con o sin LANGUAGE antes de AS.
+  bodyComplete: boolean;
+  languagePending: boolean;
+  languageValueSeen: boolean;
+  // Una directiva DELIMITER puede cruzar el limite de un trozo.
+  directiveText: string;
+  awaitingBodyQuote: boolean;
+  bodyQuote: boolean;
+  commentDepth: number;
 }
 
 const CODE = 0;
@@ -94,6 +116,7 @@ const LINE_COMMENT = 1;
 const BLOCK_COMMENT = 2;
 const QUOTED = 3;
 const DOLLAR_QUOTED = 4;
+const DIRECTIVE = 5;
 
 const SEMICOLON = 59;
 const DASH = 45;
@@ -113,7 +136,7 @@ export const SCAN_OVERLAP = 64;
 const HASH = 35;
 const CLOSE_BRACKET = 93;
 
-const DOLLAR_TAG = /\$[A-Za-z_]*\$/y;
+const DOLLAR_TAG = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/y;
 
 
 // Lo que, al final de una linea, dice que la sentencia sigue abajo aunque
@@ -174,6 +197,13 @@ const INCOMPLETE_WORDS = new Set([
 
 function isWordChar(code: number): boolean {
   return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 95;
+}
+
+function opensDashComment(text: string, at: number, mysql: boolean): boolean {
+  if (text.charCodeAt(at + 1) !== DASH) return false;
+  if (!mysql) return true;
+  const after = text.charCodeAt(at + 2);
+  return after <= 32 || after === 127;
 }
 
 // Las reglas de un motor, ya compiladas: lo que puede abrir o cerrar algo en
@@ -271,6 +301,21 @@ export function initialScanState(): ScanState {
     mainStarted: false,
     wordOpen: false,
     leadOpen: false,
+    delimiter: ";",
+    sqlWord: "",
+    createHead: false,
+    objectKind: "",
+    blockDepth: 0,
+    caseDepth: 0,
+    pendingEnd: false,
+    versionedComment: false,
+    bodyComplete: false,
+    languagePending: false,
+    languageValueSeen: false,
+    directiveText: "",
+    awaitingBodyQuote: false,
+    bodyQuote: false,
+    commentDepth: 0,
   };
 }
 
@@ -293,7 +338,7 @@ function nextLineContinues(
     const code = text.charCodeAt(at);
     const next = text.charCodeAt(at + 1);
     if ((code === DASH || code === SLASH) && at + 1 >= text.length) return unknown;
-    if ((code === DASH && next === DASH) || (code === HASH && hash)) {
+    if ((code === DASH && opensDashComment(text, at, hash)) || (code === HASH && hash)) {
       const end = text.indexOf("\n", at);
       if (end === -1) return unknown;
       at = end + 1;
@@ -364,8 +409,85 @@ export function scanChunk(
   const length = text.length;
   // En variables locales: leer y escribir `state` en cada caracter es lo
   // que mas cuesta en un documento de 30 MB.
-  let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen } = state;
+  let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen,
+    delimiter, sqlWord, createHead, objectKind, blockDepth, caseDepth, pendingEnd, versionedComment,
+    bodyComplete, languagePending, languageValueSeen, directiveText, awaitingBodyQuote, bodyQuote,
+    commentDepth } = state;
   let index = start;
+
+  const finishEnd = () => {
+    if (!pendingEnd) return;
+    if (caseDepth > 0) caseDepth -= 1;
+    else {
+      blockDepth = Math.max(0, blockDepth - 1);
+      if (blockDepth === 0) bodyComplete = true;
+    }
+    pendingEnd = false;
+  };
+  const word = (value: string) => {
+    const upper = value.toUpperCase();
+    if (languagePending) {
+      languageValueSeen = true;
+      languagePending = false;
+    }
+    if (objectKind && upper === "LANGUAGE") languagePending = true;
+    if (objectKind && rules.dollar && upper === "AS") awaitingBodyQuote = true;
+    if (pendingEnd) {
+      if (upper === "CASE") {
+        caseDepth = Math.max(0, caseDepth - 1);
+        pendingEnd = false;
+        return;
+      }
+      if (["IF", "WHILE", "LOOP", "REPEAT"].includes(upper)) {
+        pendingEnd = false;
+        return;
+      }
+      finishEnd();
+    }
+    if (upper === "CREATE" && codeStart >= 0 && !objectKind && (lead === "CREATE" || versionedComment)) createHead = true;
+    else if (createHead && !objectKind) {
+      if (["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT", "RULE"].includes(upper)) objectKind = upper;
+      else if (["TABLE", "VIEW", "INDEX", "DATABASE", "SCHEMA", "TYPE", "MATERIALIZED"].includes(upper)) createHead = false;
+    }
+    if (objectKind && upper === "BEGIN") blockDepth += 1;
+    else if (objectKind && upper === "CASE") caseDepth += 1;
+    else if (objectKind && upper === "END") pendingEnd = true;
+  };
+  const feed = (from: number, to: number) => {
+    for (let at = from; at < to; at += 1) {
+      const code = text.charCodeAt(at);
+      if (isWordChar(code)) sqlWord += text[at];
+      else if (sqlWord) {
+        word(sqlWord);
+        sqlWord = "";
+      }
+    }
+  };
+  const flushWord = () => {
+    if (sqlWord) word(sqlWord);
+    sqlWord = "";
+  };
+  const resetStatement = () => {
+    codeStart = -1;
+    lastNonSpace = -1;
+    depth = 0;
+    tail = -1;
+    tailWord = "";
+    lead = "";
+    wordOpen = false;
+    leadOpen = false;
+    createHead = false;
+    objectKind = "";
+    blockDepth = 0;
+    caseDepth = 0;
+    pendingEnd = false;
+    sqlWord = "";
+    bodyComplete = false;
+    languagePending = false;
+    languageValueSeen = false;
+    awaitingBodyQuote = false;
+    bodyQuote = false;
+  };
 
   scan: while (index < limit) {
     switch (mode) {
@@ -378,13 +500,56 @@ export function scanChunk(
         mode = CODE;
         continue;
       }
+      case DIRECTIVE: {
+        const end = text.indexOf("\n", index);
+        directiveText += text.slice(index, end === -1 ? length : end);
+        if (end === -1) {
+          index = length;
+          break scan;
+        }
+        delimiter = directiveText.trim().split(/\s/)[0] || ";";
+        directiveText = "";
+        mode = CODE;
+        index = end + 1;
+        continue;
+      }
       case BLOCK_COMMENT: {
+        if (rules.dollar) {
+          let at = index;
+          while (at < length) {
+            const open = text.indexOf("/*", at);
+            const close = text.indexOf("*/", at);
+            if (open !== -1 && (close === -1 || open < close)) {
+              commentDepth += 1;
+              at = open + 2;
+            } else if (close !== -1) {
+              commentDepth -= 1;
+              at = close + 2;
+              if (commentDepth === 0) {
+                index = at;
+                lastNonSpace = base + index;
+                mode = CODE;
+                continue scan;
+              }
+            } else {
+              break;
+            }
+          }
+          index = final ? length : Math.max(index, length - 1);
+          break scan;
+        }
         const end = text.indexOf("*/", index);
         if (end === -1) {
+          if (versionedComment) feed(index, final ? length : Math.max(index, length - 1));
           lastNonSpace = trimmedEnd(text, index, length, base, lastNonSpace);
           // El "*" del final puede cerrar con el "/" del trozo siguiente.
           index = final ? length : Math.max(index, length - 1);
           break scan;
+        }
+        if (versionedComment) {
+          feed(index, end);
+          flushWord();
+          versionedComment = false;
         }
         index = end + 2;
         lastNonSpace = base + index;
@@ -400,6 +565,8 @@ export function scanChunk(
         }
         index = end + state.tag.length;
         lastNonSpace = base + index;
+        if (bodyQuote) bodyComplete = true;
+        bodyQuote = false;
         mode = CODE;
         continue;
       }
@@ -434,6 +601,8 @@ export function scanChunk(
           }
           index = at + 1;
           lastNonSpace = base + index;
+          if (bodyQuote) bodyComplete = true;
+          bodyQuote = false;
           mode = CODE;
           state.escaping = false;
           continue scan;
@@ -446,9 +615,20 @@ export function scanChunk(
     // tramo intermedio solo importan su primer y su ultimo caracter que no
     // son espacio.
     while (index < limit) {
+      if (rules.hash && codeStart < 0) {
+        const directive = /^[ \t]*(?:\r?\n[ \t]*)*DELIMITER[ \t]+/i.exec(text.slice(index));
+        if (directive) {
+          index += directive[0].length;
+          mode = DIRECTIVE;
+          directiveText = "";
+          continue scan;
+        }
+      }
       SPECIAL.lastIndex = index;
       const found = SPECIAL.exec(text);
-      const at = found === null || found.index >= limit ? limit : found.index;
+      const nextDelimiter = delimiter === ";" ? -1 : text.indexOf(delimiter, index);
+      const specialAt = found === null || found.index >= limit ? limit : found.index;
+      const at = nextDelimiter >= 0 && nextDelimiter < specialAt ? nextDelimiter : specialAt;
       while (at > index) {
         // Una linea en blanco en el tramo parte en dos lo que hay a cada lado.
         const blank = depth === 0 ? blankLineIn(text, index, at) : -1;
@@ -477,6 +657,7 @@ export function scanChunk(
           } else if (joins && leadOpen) {
             lead += text.slice(first, leadEnd).toUpperCase();
           }
+          feed(index, cut);
           tail = text.charCodeAt(end - 1);
           if (isWordChar(tail)) {
             let wordStart = end;
@@ -521,7 +702,9 @@ export function scanChunk(
         lastNonSpace = trimmedEnd(text, index, cut, base, lastNonSpace);
         index = cut;
         if (cut === at) break;
-        if (codeStart >= 0 && depth === 0) {
+        flushWord();
+        if (codeStart >= 0 && depth === 0 &&
+          (!objectKind || (rules.dollar && bodyComplete && blockDepth === 0 && languageValueSeen))) {
           let continues =
             CONTINUES.has(tail) ||
             tail === MULTIPLY ||
@@ -543,11 +726,7 @@ export function scanChunk(
           }
           if (!continues) {
             out.push({ from: codeStart, to: lastNonSpace, terminated: false });
-            codeStart = -1;
-            lastNonSpace = -1;
-            tail = -1;
-            tailWord = "";
-            lead = "";
+            resetStatement();
           }
         }
         index = cut + 1;
@@ -555,16 +734,19 @@ export function scanChunk(
       if (index >= limit) break;
 
       const code = text.charCodeAt(index);
+      flushWord();
+      if (code === SEMICOLON) finishEnd();
+      const customEnd = delimiter !== ";" && text.startsWith(delimiter, index);
+      if (customEnd || (code === SEMICOLON && delimiter === ";" &&
+        (!objectKind || (blockDepth === 0 && caseDepth === 0 && !(objectKind === "RULE" && depth > 0))))) {
+        finishEnd();
+        if (codeStart >= 0) out.push({ from: codeStart, to: customEnd ? lastNonSpace : base + index + 1, terminated: !customEnd });
+        resetStatement();
+        index += customEnd ? delimiter.length : 1;
+        continue;
+      }
       if (code === SEMICOLON) {
-        if (codeStart >= 0) out.push({ from: codeStart, to: base + index + 1, terminated: true });
-        codeStart = -1;
-        lastNonSpace = -1;
-        depth = 0;
-        tail = -1;
-        tailWord = "";
-        lead = "";
-        wordOpen = false;
-        leadOpen = false;
+        lastNonSpace = base + index + 1;
         index += 1;
         continue;
       }
@@ -586,12 +768,15 @@ export function scanChunk(
       // Un comentario, una comilla o un simbolo cortan la palabra en curso.
       wordOpen = false;
       leadOpen = false;
-      if (code === DASH && text.charCodeAt(index + 1) === DASH) {
+      if (code === DASH && opensDashComment(text, index, rules.hash)) {
         mode = LINE_COMMENT;
         index += 2;
         continue scan;
       }
       if (code === SLASH && text.charCodeAt(index + 1) === STAR) {
+        versionedComment = rules.hash && text.charCodeAt(index + 2) === 33;
+        if (versionedComment && codeStart < 0) codeStart = base + index;
+        commentDepth = 1;
         mode = BLOCK_COMMENT;
         index += 2;
         continue scan;
@@ -612,6 +797,8 @@ export function scanChunk(
         tail = code;
         tailWord = "";
         mode = QUOTED;
+        bodyQuote = awaitingBodyQuote && rules.dollar;
+        awaitingBodyQuote = false;
         state.quote = close;
         state.escaping = rules.escapePrefix && code === SINGLE_QUOTE && opensEscapeString(text, index);
         index += 1;
@@ -630,6 +817,8 @@ export function scanChunk(
           tail = code;
           tailWord = "";
           mode = DOLLAR_QUOTED;
+          bodyQuote = awaitingBodyQuote;
+          awaitingBodyQuote = false;
           state.tag = tag;
           index += tag.length;
           lastNonSpace = base + index;
@@ -650,6 +839,9 @@ export function scanChunk(
   }
 
   if (final) {
+    if (mode === DIRECTIVE) delimiter = directiveText.trim().split(/\s/)[0] || ";";
+    flushWord();
+    finishEnd();
     if (codeStart >= 0) out.push({ from: codeStart, to: lastNonSpace, terminated: false });
     state.mode = mode;
     state.codeStart = -1;
@@ -661,6 +853,10 @@ export function scanChunk(
     state.mainStarted = false;
     state.wordOpen = false;
     state.leadOpen = false;
+    state.delimiter = delimiter;
+    state.sqlWord = "";
+    state.versionedComment = false;
+    state.directiveText = "";
     return length;
   }
   state.mode = mode;
@@ -673,6 +869,21 @@ export function scanChunk(
   state.mainStarted = mainStarted;
   state.wordOpen = wordOpen;
   state.leadOpen = leadOpen;
+  state.delimiter = delimiter;
+  state.sqlWord = sqlWord;
+  state.createHead = createHead;
+  state.objectKind = objectKind;
+  state.blockDepth = blockDepth;
+  state.caseDepth = caseDepth;
+  state.pendingEnd = pendingEnd;
+  state.versionedComment = versionedComment;
+  state.bodyComplete = bodyComplete;
+  state.languagePending = languagePending;
+  state.languageValueSeen = languageValueSeen;
+  state.directiveText = directiveText;
+  state.awaitingBodyQuote = awaitingBodyQuote;
+  state.bodyQuote = bodyQuote;
+  state.commentDepth = commentDepth;
   return index;
 }
 

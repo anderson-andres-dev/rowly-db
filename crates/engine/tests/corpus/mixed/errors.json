@@ -1,0 +1,206 @@
+[
+  {
+    "sql": "SLECT 1",
+    "key": "diagnostic.didYouMean"
+  },
+  {
+    "sql": "SELECT * FROM t WHER a = 1",
+    "key": "diagnostic.didYouMean"
+  },
+  {
+    "sql": "SELECT (1",
+    "key": "diagnostic.unclosedParen"
+  },
+  {
+    "sql": "SELECT * FROM t WHERE a = AND b = 1",
+    "key": "diagnostic.missingValue"
+  },
+  {
+    "sql": "SELECT a,, b FROM t",
+    "key": "diagnostic.extraComma"
+  },
+  {
+    "sql": "SELECT * FROM t WHERE a = 1 AND",
+    "key": "diagnostic.incomplete"
+  },
+  {
+    "sql": "CREATE PROCEDURE p(IN x INTT) BEGIN SELECT 1; END",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 25
+  },
+  {
+    "sql": "CREATE PROCEDURE p(IN x) BEGIN SELECT 1; END",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 23
+  },
+  {
+    "sql": "CREATE PROCEDURE p(IN x INT,) BEGIN SELECT 1; END",
+    "key": "diagnostic.extraComma",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 28
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  DECLARE x;\nEND",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 2,
+    "column": 11
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  -- canción\n  SELECT a FROM t WHER a = 1;\nEND",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 3,
+    "column": 19
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n\tIF 1 = 1 THEN INSERT INTO t VALUES (1,); END IF;\nEND",
+    "key": "diagnostic.extraComma",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 2,
+    "column": 39
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  SET x = (1 + 2;\nEND",
+    "key": "diagnostic.unclosedParen",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 2,
+    "column": 11
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  IF x > 0 INSERT INTO t VALUES (1);\nEND",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 2,
+    "column": 3
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  WHILE x < 3 DO SELECT a FROM t WHER a = 1; END WHILE;\nEND",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 2,
+    "column": 34
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN\n  SELECT 'café';\nEND;\nCREATE PROCEDURE q() BEGIN\n\tSELECT a FROM t WHER a = 1;\nEND",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 5,
+    "column": 18
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN SELECT 'café' AS nota FROM t WHER id = 1; END",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 57
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN DECLARE c CURSOR SELECT id FROM t; END",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 38
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER SQLEXCEPTION SET @x = 1; END",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 41
+  },
+  {
+    "sql": "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN INSERT INTO log VALUES (1,); END",
+    "key": "diagnostic.extraComma",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 82
+  },
+  {
+    "sql": "CREATE EVENT e ON SCHEDULE EVERY 1 DAY DO BEGIN SELECT * FROM t WHER id = 1; END",
+    "key": "diagnostic.didYouMean",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 65
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN SET x =; END",
+    "key": "diagnostic.missingValue",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 34
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND SET x =; END",
+    "key": "diagnostic.missingValue",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 73
+  },
+  {
+    "sql": "CREATE PROCEDURE p() BEGIN DECLARE x INT DEFAULT; END",
+    "key": "diagnostic.incomplete",
+    "dialects": [
+      "mysql",
+      "mariadb"
+    ],
+    "line": 1,
+    "column": 42
+  }
+]

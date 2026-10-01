@@ -70,6 +70,10 @@ describe("splitStatements", () => {
     expect(parts("SELECT 'it''s; ok';\nSELECT 'a\\';b';")).toEqual(["SELECT 'it''s; ok';", "SELECT 'a\\';b';"]);
   });
 
+  it("MySQL: -- sin espacio es resta y negacion, no comentario", () => {
+    expect(parts("SELECT 1--2; SELECT 3;")).toEqual(["SELECT 1--2;", "SELECT 3;"]);
+  });
+
   it("Postgres: bloques $$ y la barra invertida es un caracter mas", () => {
     const text = "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql;\nSELECT 'C:\\';SELECT 2;";
     expect(parts(text, postgres)).toEqual([
@@ -79,8 +83,105 @@ describe("splitStatements", () => {
     ]);
   });
 
+  it("Postgres: etiquetas dolar con digitos preservan el cuerpo", () => {
+    expect(parts("DO $body1$ BEGIN PERFORM 1; END $body1$; SELECT 2;", postgres)).toEqual([
+      "DO $body1$ BEGIN PERFORM 1; END $body1$;",
+      "SELECT 2;",
+    ]);
+  });
+
+  it("Postgres: comentarios de bloque anidados no cortan en punto y coma", () => {
+    const text = `SELECT 1 /* externo; ${"x".repeat(100)} /* interno; */ sigue; */; SELECT 2;`;
+    expect(parts(text, postgres)).toEqual([
+      text.slice(0, text.indexOf("; SELECT 2") + 1),
+      "SELECT 2;",
+    ]);
+    const state = initialScanState();
+    const out: { from: number; to: number; terminated: boolean }[] = [];
+    const cut = text.indexOf("externo") + 10;
+    const first = text.slice(0, cut + SCAN_OVERLAP);
+    const stop = scanChunk(first, 0, cut, false, state, out, postgres);
+    scanChunk(text.slice(stop), stop, text.length - stop, true, state, out, postgres);
+    expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(parts(text, postgres));
+  });
+
   it("Postgres: # no es un comentario (es un operador)", () => {
     expect(parts("SELECT 1 # 2; SELECT 3;", postgres)).toEqual(["SELECT 1 # 2;", "SELECT 3;"]);
+    expect(parts("--nota;\nSELECT 2;", postgres)).toEqual(["SELECT 2;"]);
+  });
+
+  it("MySQL: rutina compuesta y DELIMITER son una sentencia SQL limpia", () => {
+    const text = "SELECT 1;\nDELIMITER $$\nCREATE PROCEDURE p() BEGIN DECLARE x INT DEFAULT 0; IF x = 0 THEN SET x = 1; END IF; SELECT CASE WHEN x = 1 THEN 2 ELSE 3 END; END$$\nDELIMITER ;\nSELECT 2;";
+    expect(parts(text)).toEqual([
+      "SELECT 1;",
+      "CREATE PROCEDURE p() BEGIN DECLARE x INT DEFAULT 0; IF x = 0 THEN SET x = 1; END IF; SELECT CASE WHEN x = 1 THEN 2 ELSE 3 END; END",
+      "SELECT 2;",
+    ]);
+    expect(textAt(text, text.indexOf("DECLARE"))).toContain("END IF;");
+  });
+
+  it("MySQL: bloques anidados sin directiva y cuerpos simples", () => {
+    const text = "CREATE PROCEDURE p() BEGIN lbl: BEGIN SELECT 1; END lbl; REPEAT SET @x = 1; UNTIL @x = 1 END REPEAT; END; CREATE FUNCTION f() RETURNS INT RETURN 1; CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = 1;";
+    expect(parts(text)).toEqual([
+      "CREATE PROCEDURE p() BEGIN lbl: BEGIN SELECT 1; END lbl; REPEAT SET @x = 1; UNTIL @x = 1 END REPEAT; END;",
+      "CREATE FUNCTION f() RETURNS INT RETURN 1;",
+      "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = 1;",
+    ]);
+  });
+
+  it("MySQL: comentarios de version pueden contener CREATE y DEFINER", () => {
+    const text = "/*!50003 CREATE*/ /*!50003 DEFINER=`u`@`%`*/ PROCEDURE p() BEGIN SELECT 'x;y'; END; SELECT 2;";
+    expect(parts(text)).toEqual([
+      "/*!50003 CREATE*/ /*!50003 DEFINER=`u`@`%`*/ PROCEDURE p() BEGIN SELECT 'x;y'; END;",
+      "SELECT 2;",
+    ]);
+  });
+
+  it("MySQL: un evento compuesto termina en END; sin DELIMITER", () => {
+    expect(parts("CREATE EVENT e ON SCHEDULE EVERY 1 DAY DO BEGIN SET @x = 1; END; SELECT 2;")).toEqual([
+      "CREATE EVENT e ON SCHEDULE EVERY 1 DAY DO BEGIN SET @x = 1; END;",
+      "SELECT 2;",
+    ]);
+  });
+
+  it("MySQL: una directiva larga partida entre trozos no llega al servidor", () => {
+    const delimiter = "_".repeat(90);
+    const text = `DELIMITER ${delimiter}\nCREATE FUNCTION f() RETURNS INT RETURN 1${delimiter}\nDELIMITER ;\nSELECT 2;`;
+    expect(parts(text)).toEqual(["CREATE FUNCTION f() RETURNS INT RETURN 1", "SELECT 2;"]);
+    const state = initialScanState();
+    const out: { from: number; to: number; terminated: boolean }[] = [];
+    let pos = 0;
+    for (const limit of [12, text.length]) {
+      const chunk = text.slice(pos, Math.min(text.length, limit + SCAN_OVERLAP));
+      const final = pos + chunk.length === text.length;
+      pos += scanChunk(chunk, pos, final ? chunk.length : limit - pos, final, state, out, mysql);
+    }
+    expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(["CREATE FUNCTION f() RETURNS INT RETURN 1", "SELECT 2;"]);
+  });
+
+  it("Postgres: BEGIN ATOMIC y CREATE RULE conservan el cuerpo", () => {
+    const text = "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; SELECT 2; END; CREATE RULE r AS ON INSERT TO t DO (INSERT INTO t2 VALUES (1); INSERT INTO t2 VALUES (2)); DO $b$ BEGIN PERFORM 1; END $b$;";
+    expect(parts(text, postgres)).toEqual([
+      "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; SELECT 2; END;",
+      "CREATE RULE r AS ON INSERT TO t DO (INSERT INTO t2 VALUES (1); INSERT INTO t2 VALUES (2));",
+      "DO $b$ BEGIN PERFORM 1; END $b$;",
+    ]);
+  });
+
+  it("Postgres: AS con comillas simples puede contener punto y coma", () => {
+    const text = "CREATE FUNCTION f() RETURNS integer AS 'SELECT 1; SELECT 2' LANGUAGE sql\n\nSELECT 3;";
+    expect(parts(text, postgres)).toEqual([
+      "CREATE FUNCTION f() RETURNS integer AS 'SELECT 1; SELECT 2' LANGUAGE sql",
+      "SELECT 3;",
+    ]);
+  });
+
+  it("Postgres: un valor por defecto entre comillas no termina la cabecera", () => {
+    const text = "CREATE FUNCTION f(x text DEFAULT 'a;b') RETURNS int LANGUAGE sql\n\nAS $$ SELECT 1; $$; SELECT 2;";
+    expect(parts(text, postgres)).toEqual([
+      "CREATE FUNCTION f(x text DEFAULT 'a;b') RETURNS int LANGUAGE sql\n\nAS $$ SELECT 1; $$;",
+      "SELECT 2;",
+    ]);
   });
 });
 
