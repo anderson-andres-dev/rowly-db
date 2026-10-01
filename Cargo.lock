@@ -3877,6 +3877,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rowly-server-tests"
+version = "0.2.4"
+dependencies = [
+ "khipu-driver-core",
+ "khipu-driver-mysql",
+ "khipu-driver-postgres",
+ "khipu-engine",
+ "tokio",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

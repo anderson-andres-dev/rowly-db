@@ -114,6 +114,9 @@ fn classify_text(
     if let Some(result) = classify_routine(sql, dialect, production) {
         return result;
     }
+    if let Some(result) = classify_unparsed(sql, dialect, production) {
+        return result;
+    }
     let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)?;
     let [statement] = statements.as_slice() else {
         return Err(ParserError::ParserError(
@@ -178,7 +181,7 @@ fn classify_routine(
     }
     let kind = word(at);
     let allowed = match dialect {
-        Dialect::Postgres => matches!(kind.as_str(), "PROCEDURE" | "FUNCTION" | "TRIGGER" | "RULE"),
+        Dialect::Postgres => matches!(kind.as_str(), "PROCEDURE" | "FUNCTION" | "TRIGGER"),
         Dialect::MySql | Dialect::MariaDb => matches!(
             kind.as_str(),
             "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
@@ -187,16 +190,10 @@ fn classify_routine(
     if !allowed {
         return None;
     }
-    if matches!(dialect, Dialect::Postgres) && matches!(kind.as_str(), "TRIGGER" | "RULE") {
-        let result =
-            Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql).and_then(|statements| {
-                if statements.len() == 1 {
-                    Ok(())
-                } else {
-                    Err(routine_error("expected exactly one SQL statement"))
-                }
-            });
-        return Some(result.map(|()| {
+    // sqlparser no lee todos los CREATE TRIGGER (EXECUTE FUNCTION f('texto')):
+    // uno nunca destruye datos, solo importa que sea una sola sentencia.
+    if matches!(dialect, Dialect::Postgres) && kind == "TRIGGER" {
+        return Some(single_top_level_statement(&tokens).map(|()| {
             if production {
                 DestructiveClassification::RequiresConfirmation(
                     DestructiveStatement::WriteInProduction,
@@ -296,6 +293,89 @@ fn line_end(bytes: &[u8], from: usize) -> usize {
         .iter()
         .position(|byte| *byte == b'\n')
         .map_or(bytes.len(), |at| from + at)
+}
+
+// Sentencias validas del motor que sqlparser no lee (ALTER PROCEDURE, DROP
+// EVENT, DO $$ ... $$...). Se reconocen por sus primeras palabras y valen si
+// el texto es una sola sentencia: ningun `;` de nivel superior salvo el final
+// (las cadenas, los comentarios y los $$ son un solo token). Escriben, asi
+// que en produccion piden confirmacion.
+fn classify_unparsed(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let word = |index: usize| tokens.get(index).map(token_word).unwrap_or_default();
+    let (first, second, third) = (word(0), word(1), word(2));
+    let known = match dialect {
+        Dialect::MySql | Dialect::MariaDb => {
+            matches!(
+                (first.as_str(), second.as_str()),
+                ("DROP" | "ALTER", "EVENT")
+                    | ("ALTER", "PROCEDURE" | "FUNCTION")
+                    | ("GRANT" | "REVOKE", "EXECUTE")
+                    | ("OPTIMIZE" | "CHECK" | "REPAIR", "TABLE")
+            ) || first == "DO"
+                || first == "HELP"
+        }
+        Dialect::Postgres => {
+            matches!(
+                (first.as_str(), second.as_str()),
+                ("ALTER", "FUNCTION" | "PROCEDURE" | "ROUTINE")
+                    | ("GRANT" | "REVOKE", "EXECUTE")
+                    | ("CREATE", "RULE" | "AGGREGATE" | "OPERATOR")
+            ) || first == "DO"
+                || (first == "COMMENT"
+                    && second == "ON"
+                    && matches!(
+                        third.as_str(),
+                        "FUNCTION" | "PROCEDURE" | "ROUTINE" | "TRIGGER"
+                    ))
+                || (first == "CREATE" && second == "OR" && third == "REPLACE" && word(3) == "RULE")
+        }
+    };
+    if !known {
+        return None;
+    }
+    let single = if matches!(dialect, Dialect::MySql | Dialect::MariaDb)
+        && second == "EVENT"
+        && first == "ALTER"
+    {
+        // ALTER EVENT ... DO <cuerpo>: el cuerpo puede ser un bloque.
+        match tokens.iter().position(|token| token_word(token) == "DO") {
+            Some(at) => validate_mysql_body(&tokens, at + 1),
+            None => single_top_level_statement(&tokens),
+        }
+    } else {
+        single_top_level_statement(&tokens)
+    };
+    Some(single.map(|()| {
+        if production {
+            DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
+        } else {
+            DestructiveClassification::NotDestructive
+        }
+    }))
+}
+
+fn single_top_level_statement(tokens: &[Token]) -> Result<(), ParserError> {
+    let mut parens = 0usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::LParen => parens += 1,
+            Token::RParen => parens = parens.saturating_sub(1),
+            Token::SemiColon if parens == 0 => return trailing_terminator(&tokens[index..]),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn routine_error(message: &str) -> ParserError {
@@ -1234,6 +1314,62 @@ mod tests {
         rejected(
             "CREATE PROCEDURE p() BEGIN SELECT t.begin FROM t; END; DROP TABLE x; END",
             &MYSQL,
+        );
+    }
+
+    #[test]
+    fn statements_sqlparser_does_not_read_are_accepted_as_one_statement() {
+        accepted("DROP EVENT IF EXISTS ev", &MYSQL);
+        accepted("ALTER EVENT ev DISABLE", &MYSQL);
+        accepted(
+            "ALTER EVENT ev DO BEGIN DELETE FROM t; DELETE FROM u; END",
+            &MYSQL,
+        );
+        accepted("ALTER PROCEDURE p COMMENT 'x';", &MYSQL);
+        accepted("ALTER FUNCTION f SQL SECURITY INVOKER", &MYSQL);
+        accepted("GRANT EXECUTE ON PROCEDURE db.p TO u", &MYSQL);
+        accepted("OPTIMIZE TABLE t", &MYSQL);
+        accepted("DO SLEEP(0)", &MYSQL);
+        rejected("DROP EVENT ev; DROP TABLE t", &MYSQL);
+        rejected("ALTER PROCEDURE p COMMENT 'x'; DROP TABLE t", &MYSQL);
+        rejected(
+            "ALTER EVENT ev DO BEGIN DELETE FROM t; END; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected("DO SLEEP(0); DROP TABLE t", &MYSQL);
+        rejected("OPTIMIZE TABLE t; DROP TABLE t", &MYSQL);
+        let pg = [Dialect::Postgres];
+        accepted("DO $$ BEGIN PERFORM 1; PERFORM 2; END $$", &pg);
+        accepted("DO LANGUAGE plpgsql $tag$ BEGIN NULL; END $tag$;", &pg);
+        accepted("ALTER FUNCTION f(int) OWNER TO u", &pg);
+        accepted("COMMENT ON FUNCTION f(int) IS 'x; y'", &pg);
+        accepted("GRANT EXECUTE ON FUNCTION f(int) TO u", &pg);
+        accepted(
+            "CREATE RULE r AS ON INSERT TO t DO ALSO (INSERT INTO a VALUES (1); INSERT INTO b VALUES (2))",
+            &pg,
+        );
+        accepted(
+            "CREATE OR REPLACE RULE r AS ON INSERT TO t DO INSTEAD NOTHING",
+            &pg,
+        );
+        rejected("DO $$ BEGIN NULL; END $$; DROP TABLE t", &pg);
+        rejected("ALTER FUNCTION f(int) OWNER TO u; DROP TABLE t", &pg);
+        rejected(
+            "CREATE RULE r AS ON INSERT TO t DO INSTEAD NOTHING; DROP TABLE t",
+            &pg,
+        );
+    }
+
+    #[test]
+    fn postgres_triggers_with_literal_arguments_are_one_statement() {
+        let pg = [Dialect::Postgres];
+        accepted(
+            "CREATE TRIGGER t BEFORE INSERT OR UPDATE ON public.film FOR EACH ROW EXECUTE FUNCTION tsvector_update_trigger('fulltext', 'pg_catalog.english', 'title')",
+            &pg,
+        );
+        rejected(
+            "CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW EXECUTE FUNCTION f('a'); DROP TABLE t",
+            &pg,
         );
     }
 
