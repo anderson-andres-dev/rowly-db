@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CompletionContext, type Completion } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { ENGINES } from "./engines";
-import { buildCatalogCompletions } from "./sqlCatalogCompletions";
+import { buildCatalogCompletions, catalogPosition } from "./sqlCatalogCompletions";
 import { buildCompletionSource, buildSqlSchema, dialectFor, extractDefaultTable } from "./sqlSchema";
 import type { CatalogTable, SchemaObjects } from "./types";
 
@@ -13,12 +13,16 @@ const schemas: SchemaObjects[] = [
       { schema: "core", name: "com_anular_facturas_nc", kind: "table", columns: [{ name: "id", dataType: "int", nullable: false, isPrimaryKey: true }], foreignKeys: [], keys: [], indexes: [], triggers: [], checks: [] },
       { schema: "core", name: "com_anular_vista", kind: "view", columns: [{ name: "factura", dataType: "varchar(4)", nullable: false, isPrimaryKey: false }], foreignKeys: [], keys: [], indexes: [], triggers: [], checks: [] },
       { schema: "core", name: "com_anular_resumen", kind: "materializedView", columns: [{ name: "total", dataType: "numeric", nullable: false, isPrimaryKey: false }], foreignKeys: [], keys: [], indexes: [], triggers: [], checks: [] },
+      { schema: "core", name: "my-table", kind: "table", columns: [], foreignKeys: [], keys: [], indexes: [], triggers: [], checks: [] },
+      { schema: "core", name: "My View", kind: "view", columns: [], foreignKeys: [], keys: [], indexes: [], triggers: [], checks: [] },
     ],
     routines: [
       { name: "com_anularFactura", kind: "procedure", arguments: "codiFactNume varchar(4)", parameters: [{ name: "codiFactNume", mode: "in", dataType: "varchar(4)", hasDefault: false }] },
       { name: "com_anularTotal", kind: "function", arguments: "codiFactNume varchar(4)", returnType: "numeric", parameters: [{ name: "codiFactNume", mode: "in", dataType: "varchar(4)", hasDefault: false }] },
       { name: "select", kind: "procedure", arguments: "" },
       { name: "total_hoy", kind: "function", arguments: "", returnType: "numeric" },
+      { name: "my-proc", kind: "procedure", arguments: "" },
+      { name: "My Function", kind: "function", arguments: "", returnType: "int" },
     ],
     sequences: [{ name: "facturas_seq", dataType: "bigint" }], events: [], warnings: [],
   },
@@ -47,6 +51,38 @@ function options(result: Awaited<ReturnType<typeof complete>>): readonly Complet
 
 for (const driver of ["mysql", "mariadb", "postgres"] as const) {
   describe(`catalogo SQL: ${driver}`, () => {
+    it("reemplaza el nombre completo con guiones, espacios y mayusculas", async () => {
+      const quote = driver === "postgres" ? '"' : "`";
+      for (const [input, label, expected] of [
+        ["CALL my-|", "my-proc", `CALL ${quote}my-proc${quote}`],
+        ["CALL core.my-|", "my-proc", `CALL core.${quote}my-proc${quote}`],
+        ["SELECT * FROM my-|", "my-table", `SELECT * FROM ${quote}my-table${quote}`],
+        ["SELECT * FROM core.my-|", "my-table", `SELECT * FROM core.${quote}my-table${quote}`],
+        ["SELECT * FROM My V|", "My View", `SELECT * FROM ${quote}My View${quote}`],
+        ["SELECT * FROM core.My V|", "My View", `SELECT * FROM core.${quote}My View${quote}`],
+        ["SELECT My F|", "My Function", `SELECT ${quote}My Function${quote}()`],
+        ["SELECT core.My F|", "My Function", `SELECT core.${quote}My Function${quote}()`],
+      ]) {
+        const result = await complete(input, driver);
+        const option = options(result).find((item) => item.label === label);
+        expect(option, input).toBeDefined();
+        let change: { changes: { from: number; to: number; insert: string } } | undefined;
+        if (typeof option?.apply === "function") option.apply({ dispatch: (value: typeof change) => { change = value; } } as never, option, result!.from, input.indexOf("|"));
+        const original = input.replace("|", "");
+        expect(original.slice(0, change!.changes.from) + change!.changes.insert + original.slice(change!.changes.to), input).toBe(expected);
+      }
+    });
+
+    it("conserva el contexto despues de comentarios y saltos", () => {
+      const engine = ENGINES[driver];
+      for (const sql of ["CALL /*hi*/ pro", "CALL --hi\n pro", "CALL #hi\n pro"]) {
+        if (sql.includes("#") && driver === "postgres") continue;
+        expect(catalogPosition(sql, sql.length - 3, engine, "unknown").position, sql).toBe("procedure");
+      }
+      for (const [sql, position] of [["SELECT * FROM /*hi*/ my", "relation"], ["SELECT * FROM t JOIN --hi\n my", "relation"], ["DROP PROCEDURE /*hi*/ pro", "procedure"], ["GRANT EXECUTE ON /*hi*/ pro", "routine"]] as const) {
+        expect(catalogPosition(sql, sql.length - (sql.endsWith("pro") ? 3 : 2), engine, "unknown").position, sql).toBe(position);
+      }
+    });
     it("CALL solo ofrece procedures del schema indicado y muestra la firma", async () => {
       const unqualified = options(await complete("CALL com_anular|", driver));
       expect(unqualified.some((o) => o.label === "com_anularFactura" && o.type === "procedure")).toBe(true);

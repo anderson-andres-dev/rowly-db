@@ -213,6 +213,12 @@ function lex(doc: string, end: number, rules: SqlLexical): { tokens: Token[]; le
       lexicalAtEnd = "code";
       continue;
     }
+    if (ch === "=") {
+      tokens.push({ kind: "other", text: "=", raw: "=", from: i, to: i + 1 });
+      i++;
+      lexicalAtEnd = "code";
+      continue;
+    }
     if (ch === "*") {
       tokens.push({ kind: "star", text: "*", raw: "*", from: i, to: i + 1 });
       i++;

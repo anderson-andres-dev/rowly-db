@@ -16,7 +16,7 @@ import { translate, type MessageKey } from "$lib/i18n";
 import { completionPolicy, type CompletionPolicy } from "$lib/sqlCompletionPolicy";
 import { standardSql, type SqlProfile } from "$lib/engines";
 import type { SqlLexical } from "$lib/sqlStatements";
-import { buildCatalogCompletions, catalogPosition } from "$lib/sqlCatalogCompletions";
+import { buildCatalogCompletions, catalogPosition, prefixStartForNames } from "$lib/sqlCatalogCompletions";
 
 // @codemirror/lang-sql pliega cada "Statement" de nivel superior desde
 // min(inicio + 100, fin de su primera linea) hasta su fin. Con una consulta
@@ -844,6 +844,7 @@ export function buildCompletionSource(options: {
   // catalogo conservan exactamente el nombre que entrega la base de datos.
   const keywordSource = keywordCompletionSource(dialect, true, buildKeywordCompletion);
   const catalog = options.catalogCompletions ?? buildCatalogCompletions([], engine, defaultSchema);
+  const tablePrefixStart = prefixStartForNames([...(options.tableIndex?.byKey.values() ?? [])].map((entry) => entry.name));
   const env: SmartEnv = {
     lexical: engine.lexical,
     nameMatches: engine.nameMatches,
@@ -864,9 +865,13 @@ export function buildCompletionSource(options: {
     const clauseContext = classifyContext(current.text, current.offset, engine.lexical);
     const policy = completionPolicy(clauseContext, engine);
     const word = context.matchBefore(/\w*/);
-    const typing = !!word && (word.from < word.to || context.explicit);
+    const catalogStart = catalog.prefixStart(current.text, current.offset);
+    const baseWordFrom = current.offset - (context.pos - (word?.from ?? context.pos));
+    const wordFrom = Math.min(baseWordFrom, catalogStart, tablePrefixStart(current.text, current.offset));
+    const absoluteWordFrom = context.pos - (current.offset - wordFrom);
+    const typing = !!word && (absoluteWordFrom < context.pos || context.explicit);
     const smart = current.text.length <= MAX_SMART_STATEMENT && clauseContext.confidence !== "unknown";
-    const start = current.offset - (context.pos - (word?.from ?? context.pos));
+    const start = wordFrom;
     const info = smart && word ? statementInfo(current.text, { from: start, to: current.offset }, engine.lexical) : null;
     const target = current.text.length <= MAX_SMART_STATEMENT
       ? catalogPosition(current.text, start, engine, clauseContext.position)
@@ -876,7 +881,7 @@ export function buildCompletionSource(options: {
     );
     const schemaQualified = !!target.schema && !relationQualifier && catalog.hasSchema(target.schema, target.schemaQuoted);
     const catalogResult = word && typing && current.text.length <= MAX_SMART_STATEMENT && clauseContext.lexical === "code" && clauseContext.position !== "statement-start" && clauseContext.position !== "alias" && clauseContext.position !== "select-tail" && clauseContext.position !== "relation-tail" && clauseContext.position !== "keyword-continuation"
-      ? catalog.complete(target.position, word.from, schemaQualified ? target.schema : undefined, target.schemaQuoted)
+      ? catalog.complete(target.position, absoluteWordFrom, schemaQualified ? target.schema : undefined, target.schemaQuoted)
       : null;
 
     // "alias.columna"/"schema.tabla" ya escritos: la libreria resuelve esto
@@ -892,6 +897,9 @@ export function buildCompletionSource(options: {
     };
     const schemaMode = target.position === "relation" ? "relations" : target.position === "expression" || target.position === "function" ? "expressions" : target.position === "unknown" ? policy.schemaMode : "none";
     let schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode });
+    if (schemaResult && target.position === "relation" && absoluteWordFrom < schemaResult.from) {
+      schemaResult = { ...schemaResult, from: absoluteWordFrom };
+    }
     if (schemaQualified && target.position === "unknown") schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode: "relations" });
     if (schemaQualified && target.position === "relation") schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode: "relations" });
     const extra: Completion[] = [];

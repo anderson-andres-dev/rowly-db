@@ -588,11 +588,10 @@ fn validate_mysql_declare(
                 }
             }
         } else if word == "CONDITION" {
-            if !matches!(words[for_at + 1].as_str(), "SQLSTATE")
-                && !matches!(tokens[for_at + 1].token, Token::Number(..))
+            if (!matches!(words[for_at + 1].as_str(), "SQLSTATE")
+                && !matches!(tokens[for_at + 1].token, Token::Number(..)))
+                || (words[for_at + 1] == "SQLSTATE" && for_at + 2 >= tokens.len())
             {
-                found.push(routine_incomplete(tokens[for_at + 1]));
-            } else if words[for_at + 1] == "SQLSTATE" && for_at + 2 >= tokens.len() {
                 found.push(routine_incomplete(tokens[for_at + 1]));
             }
         } else {

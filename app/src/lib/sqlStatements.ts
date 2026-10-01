@@ -109,6 +109,7 @@ export interface ScanState {
   awaitingBodyQuote: boolean;
   bodyQuote: boolean;
   commentDepth: number;
+  recovery: { from: number; previousTo: number }[];
 }
 
 const CODE = 0;
@@ -316,6 +317,7 @@ export function initialScanState(): ScanState {
     awaitingBodyQuote: false,
     bodyQuote: false,
     commentDepth: 0,
+    recovery: [],
   };
 }
 
@@ -468,6 +470,7 @@ export function scanChunk(
     sqlWord = "";
   };
   const resetStatement = () => {
+    state.recovery = [];
     codeStart = -1;
     lastNonSpace = -1;
     depth = 0;
@@ -627,7 +630,15 @@ export function scanChunk(
       SPECIAL.lastIndex = index;
       const found = SPECIAL.exec(text);
       const nextDelimiter = delimiter === ";" ? -1 : text.indexOf(delimiter, index);
-      const specialAt = found === null || found.index >= limit ? limit : found.index;
+      let specialAt = found === null || found.index >= limit ? limit : found.index;
+      if (delimiter !== ";" && !final && nextDelimiter === -1) {
+        for (let candidate = Math.max(index, length - delimiter.length + 1); candidate < Math.min(limit, length); candidate++) {
+          if (delimiter.startsWith(text.slice(candidate)) && candidate + delimiter.length > length) {
+            specialAt = Math.min(specialAt, candidate);
+            break;
+          }
+        }
+      }
       const at = nextDelimiter >= 0 && nextDelimiter < specialAt ? nextDelimiter : specialAt;
       while (at > index) {
         // Una linea en blanco en el tramo parte en dos lo que hay a cada lado.
@@ -703,6 +714,13 @@ export function scanChunk(
         index = cut;
         if (cut === at) break;
         flushWord();
+        if (objectKind && blockDepth > 0 && !bodyComplete) {
+          const following = text.slice(cut + 1).match(/^(?:[ \t]*\r?\n)+(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|CALL|SET|USE|SHOW|EXPLAIN|TRUNCATE|GRANT)\b/i);
+          if (following) {
+            const from = base + cut + 1 + following[0].length - following[1].length;
+            if (!state.recovery.some((item) => item.from === from)) state.recovery.push({ from, previousTo: lastNonSpace });
+          }
+        }
         if (codeStart >= 0 && depth === 0 &&
           (!objectKind || (rules.dollar && bodyComplete && blockDepth === 0 && languageValueSeen))) {
           let continues =
@@ -734,13 +752,23 @@ export function scanChunk(
       if (index >= limit) break;
 
       const code = text.charCodeAt(index);
+      if (delimiter !== ";" && !final && index + delimiter.length > length && delimiter.startsWith(text.slice(index))) break scan;
       flushWord();
       if (code === SEMICOLON) finishEnd();
       const customEnd = delimiter !== ";" && text.startsWith(delimiter, index);
       if (customEnd || (code === SEMICOLON && delimiter === ";" &&
         (!objectKind || (blockDepth === 0 && caseDepth === 0 && !(objectKind === "RULE" && depth > 0))))) {
         finishEnd();
-        if (codeStart >= 0) out.push({ from: codeStart, to: customEnd ? lastNonSpace : base + index + 1, terminated: !customEnd });
+        if (codeStart >= 0) {
+          if (customEnd && objectKind && blockDepth > 0 && state.recovery.length > 0) {
+            let from = codeStart;
+            for (const candidate of state.recovery) {
+              if (candidate.previousTo > from) out.push({ from, to: candidate.previousTo, terminated: false });
+              from = candidate.from;
+            }
+            if (lastNonSpace > from) out.push({ from, to: lastNonSpace, terminated: false });
+          } else out.push({ from: codeStart, to: customEnd ? lastNonSpace : base + index + 1, terminated: !customEnd });
+        }
         resetStatement();
         index += customEnd ? delimiter.length : 1;
         continue;
@@ -842,7 +870,17 @@ export function scanChunk(
     if (mode === DIRECTIVE) delimiter = directiveText.trim().split(/\s/)[0] || ";";
     flushWord();
     finishEnd();
-    if (codeStart >= 0) out.push({ from: codeStart, to: lastNonSpace, terminated: false });
+    if (codeStart >= 0) {
+      if (objectKind && blockDepth > 0 && state.recovery.length > 0) {
+        let from = codeStart;
+        for (const candidate of state.recovery) {
+          if (candidate.previousTo > from) out.push({ from, to: candidate.previousTo, terminated: false });
+          from = candidate.from;
+        }
+        if (lastNonSpace > from) out.push({ from, to: lastNonSpace, terminated: false });
+      } else out.push({ from: codeStart, to: lastNonSpace, terminated: false });
+    }
+    state.recovery = [];
     state.mode = mode;
     state.codeStart = -1;
     state.lastNonSpace = -1;

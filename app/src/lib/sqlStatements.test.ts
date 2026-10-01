@@ -159,6 +159,43 @@ describe("splitStatements", () => {
     expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(["CREATE FUNCTION f() RETURNS INT RETURN 1", "SELECT 2;"]);
   });
 
+  it("recupera una rutina abierta solo al llegar al final sin END", () => {
+    const broken = "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;";
+    expect(parts(broken)).toEqual(["CREATE PROCEDURE p() BEGIN\nSELECT 1;", "SELECT 99;", "SELECT 100;"]);
+    const valid = "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;\nEND;";
+    expect(parts(valid)).toEqual([valid]);
+    const delimited = "DELIMITER $$\nCREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;$$\nDELIMITER ;\nSELECT 2;";
+    expect(parts(delimited)).toEqual(["CREATE PROCEDURE p() BEGIN\nSELECT 1;", "SELECT 99;", "SELECT 2;"]);
+    for (const text of [broken, valid]) {
+      const expected = parts(text);
+      for (let cut = 1; cut < text.length; cut++) {
+        const state = initialScanState();
+        const out: { from: number; to: number; terminated: boolean }[] = [];
+        const chunk = text.slice(0, Math.min(text.length, cut + SCAN_OVERLAP));
+        const stop = scanChunk(chunk, 0, cut, false, state, out, mysql);
+        scanChunk(text.slice(stop), stop, text.length - stop, true, state, out, mysql);
+        expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(expected);
+      }
+    }
+  });
+
+  it("los delimitadores de cualquier longitud conservan limites en todos los cortes", () => {
+    for (const length of [1, 2, 3, 90]) {
+      const delimiter = "_".repeat(length);
+      const text = `DELIMITER ${delimiter}\nSELECT 1${delimiter}\nDELIMITER ;\nSELECT 2;`;
+      const expected = ["SELECT 1", "SELECT 2;"];
+      expect(parts(text)).toEqual(expected);
+      for (let cut = 1; cut < text.length; cut++) {
+        const state = initialScanState();
+        const out: { from: number; to: number; terminated: boolean }[] = [];
+        const chunk = text.slice(0, Math.min(text.length, cut + SCAN_OVERLAP));
+        const stop = scanChunk(chunk, 0, cut, false, state, out, mysql);
+        scanChunk(text.slice(stop), stop, text.length - stop, true, state, out, mysql);
+        expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(expected);
+      }
+    }
+  });
+
   it("Postgres: BEGIN ATOMIC y CREATE RULE conservan el cuerpo", () => {
     const text = "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; SELECT 2; END; CREATE RULE r AS ON INSERT TO t DO (INSERT INTO t2 VALUES (1); INSERT INTO t2 VALUES (2)); DO $b$ BEGIN PERFORM 1; END $b$;";
     expect(parts(text, postgres)).toEqual([

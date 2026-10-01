@@ -1,14 +1,13 @@
-//! Classifies a single SQL statement as destructive or not, so the app can
-//! ask for an explicit confirmation before running it. On a production
-//! connection every statement that writes needs confirmation too. This
-//! module knows nothing about execution, Tauri or SQLx: it only looks at the
-//! parsed AST.
+//! Clasifica una sentencia SQL para pedir confirmacion antes de ejecutarla.
+//! En produccion, cada escritura tambien necesita confirmacion. Usa el AST
+//! general y valida las definiciones de rutinas con tokens del motor.
 
 use crate::Dialect;
 use crate::pagination::query_is_read_only;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{AlterTableOperation, ObjectType, Query, SetExpr, Statement};
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,10 +30,7 @@ pub enum DestructiveClassification {
     RequiresConfirmation(DestructiveStatement),
 }
 
-/// Parses `sql` under `dialect` and classifies the single resulting
-/// statement. Returns an error if `sql` is not exactly one statement, or if
-/// it cannot be parsed at all — the caller must not fall back to executing
-/// the statement in either case, since that would bypass the guard.
+/// Valida y clasifica una sola sentencia. Un error impide ejecutarla.
 pub fn classify_destructive_sql(
     sql: &str,
     dialect: Dialect,
@@ -51,6 +47,9 @@ pub fn classify_sql(
     dialect: Dialect,
     production: bool,
 ) -> Result<DestructiveClassification, ParserError> {
+    if let Some(result) = classify_routine(sql, dialect, production) {
+        return result;
+    }
     let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)?;
     let [statement] = statements.as_slice() else {
         return Err(ParserError::ParserError(
@@ -65,6 +64,282 @@ pub fn classify_sql(
         }
         classification => classification,
     })
+}
+
+// El parser general no entiende todos los cuerpos de rutina de los motores.
+// Solo esta ruta valida el texto completo antes de entregarlo al driver.
+fn classify_routine(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let word = |index: usize| -> String {
+        match tokens.get(index) {
+            Some(Token::Word(value)) if value.quote_style.is_none() => {
+                value.value.to_ascii_uppercase()
+            }
+            _ => String::new(),
+        }
+    };
+    if word(0) != "CREATE" {
+        return None;
+    }
+    let mut at = 1;
+    if word(at) == "OR" && word(at + 1) == "REPLACE" {
+        at += 2;
+    }
+    if word(at) == "DEFINER" {
+        at += 1;
+        if tokens.get(at) == Some(&Token::Eq) {
+            at += 1;
+        }
+        while at < tokens.len()
+            && !matches!(
+                word(at).as_str(),
+                "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
+            )
+        {
+            if matches!(tokens[at], Token::SemiColon) || at > 12 {
+                return Some(Err(routine_error("invalid routine definition")));
+            }
+            at += 1;
+        }
+    }
+    let kind = word(at);
+    let allowed = match dialect {
+        Dialect::Postgres => matches!(kind.as_str(), "PROCEDURE" | "FUNCTION" | "TRIGGER" | "RULE"),
+        Dialect::MySql | Dialect::MariaDb => matches!(
+            kind.as_str(),
+            "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
+        ),
+    };
+    if !allowed {
+        return None;
+    }
+    if matches!(dialect, Dialect::Postgres) && matches!(kind.as_str(), "TRIGGER" | "RULE") {
+        let result =
+            Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql).and_then(|statements| {
+                if statements.len() == 1 {
+                    Ok(())
+                } else {
+                    Err(routine_error("expected exactly one SQL statement"))
+                }
+            });
+        return Some(result.map(|()| {
+            if production {
+                DestructiveClassification::RequiresConfirmation(
+                    DestructiveStatement::WriteInProduction,
+                )
+            } else {
+                DestructiveClassification::NotDestructive
+            }
+        }));
+    }
+    Some(validate_routine(&tokens, at, &kind, dialect).map(|()| {
+        if production {
+            DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
+        } else {
+            DestructiveClassification::NotDestructive
+        }
+    }))
+}
+
+fn routine_error(message: &str) -> ParserError {
+    ParserError::ParserError(message.to_string())
+}
+
+fn token_word(token: &Token) -> String {
+    match token {
+        Token::Word(value) if value.quote_style.is_none() => value.value.to_ascii_uppercase(),
+        _ => String::new(),
+    }
+}
+
+fn validate_routine(
+    tokens: &[Token],
+    kind_at: usize,
+    kind: &str,
+    dialect: Dialect,
+) -> Result<(), ParserError> {
+    let invalid = || routine_error("invalid routine definition");
+    let multiple = || routine_error("expected exactly one SQL statement");
+    if !matches!(tokens.get(kind_at + 1), Some(Token::Word(_)))
+        || matches!(
+            token_word(&tokens[kind_at + 1]).as_str(),
+            "BEGIN" | "END" | "SELECT"
+        )
+        || tokens.iter().any(|token| token_word(token) == "DELIMITER")
+    {
+        return Err(invalid());
+    }
+    let mut parens = 0usize;
+    let mut body = None;
+    for (index, token) in tokens.iter().enumerate().skip(kind_at + 1) {
+        match token {
+            Token::LParen => parens += 1,
+            Token::RParen => {
+                if parens == 0 {
+                    return Err(invalid());
+                }
+                parens -= 1;
+            }
+            _ => {}
+        }
+        if parens != 0 {
+            continue;
+        }
+        let word = token_word(token);
+        if kind == "TRIGGER"
+            && !tokens[kind_at + 1..index]
+                .iter()
+                .any(|token| token_word(token) == "ROW")
+        {
+            continue;
+        }
+        if word == "DO" && kind == "EVENT" {
+            body = Some(index + 1);
+            break;
+        }
+        if matches!(
+            word.as_str(),
+            "BEGIN" | "RETURN" | "SET" | "INSERT" | "UPDATE" | "DELETE" | "SELECT"
+        ) || (word == "AS" && matches!(dialect, Dialect::Postgres))
+        {
+            body = Some(index);
+            break;
+        }
+    }
+    if parens != 0 {
+        return Err(invalid());
+    }
+    let Some(body) = body else {
+        return Err(invalid());
+    };
+    if tokens[kind_at + 1..body].contains(&Token::SemiColon) {
+        return Err(multiple());
+    }
+    let body_word = token_word(&tokens[body]);
+    if body_word == "BEGIN" {
+        let label = if body >= 2 && tokens[body - 1] == Token::Colon {
+            Some(token_word(&tokens[body - 2]))
+        } else {
+            None
+        };
+        let mut blocks = 0usize;
+        let mut cases = 0usize;
+        let mut close = None;
+        let mut index = body;
+        while index < tokens.len() {
+            let word = token_word(&tokens[index]);
+            match word.as_str() {
+                "BEGIN" => blocks += 1,
+                "CASE" => {
+                    if index == 0 || token_word(&tokens[index - 1]) != "END" {
+                        cases += 1;
+                    }
+                }
+                "END" => {
+                    let suffix = tokens.get(index + 1).map(token_word).unwrap_or_default();
+                    if matches!(suffix.as_str(), "IF" | "WHILE" | "LOOP" | "REPEAT") {
+                        index += 1;
+                    } else if suffix == "CASE" {
+                        if cases == 0 {
+                            return Err(invalid());
+                        }
+                        cases -= 1;
+                        index += 1;
+                    } else if cases > 0 {
+                        cases -= 1;
+                    } else if blocks > 0 {
+                        blocks -= 1;
+                        if blocks == 0 {
+                            close = Some(index + 1);
+                            break;
+                        }
+                    } else {
+                        return Err(invalid());
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        let Some(close) = close else {
+            return Err(invalid());
+        };
+        if cases != 0 {
+            return Err(invalid());
+        }
+        let after = if let Some(label) = label {
+            if tokens
+                .get(close)
+                .is_some_and(|token| token_word(token) == label)
+            {
+                close + 1
+            } else {
+                close
+            }
+        } else {
+            close
+        };
+        return trailing_terminator(&tokens[after..]);
+    }
+    if body_word == "AS" {
+        if !matches!(
+            tokens.get(body + 1),
+            Some(Token::DollarQuotedString(_) | Token::SingleQuotedString(_))
+        ) {
+            return Err(invalid());
+        }
+        let mut index = body + 2;
+        while index < tokens.len() && tokens[index] != Token::SemiColon {
+            if !matches!(
+                token_word(&tokens[index]).as_str(),
+                "LANGUAGE"
+                    | "SQL"
+                    | "PLPGSQL"
+                    | "IMMUTABLE"
+                    | "STABLE"
+                    | "VOLATILE"
+                    | "STRICT"
+                    | "SECURITY"
+                    | "DEFINER"
+                    | "INVOKER"
+            ) {
+                return Err(multiple());
+            }
+            index += 1;
+        }
+        return trailing_terminator(&tokens[index..]);
+    }
+    if tokens[body..]
+        .iter()
+        .any(|token| token_word(token) == "END")
+    {
+        return Err(invalid());
+    }
+    let semicolon = tokens[body..]
+        .iter()
+        .position(|token| *token == Token::SemiColon);
+    if let Some(index) = semicolon {
+        trailing_terminator(&tokens[body + index..])
+    } else {
+        Ok(())
+    }
+}
+
+fn trailing_terminator(tokens: &[Token]) -> Result<(), ParserError> {
+    match tokens {
+        [] | [Token::SemiColon] => Ok(()),
+        _ => Err(routine_error("expected exactly one SQL statement")),
+    }
 }
 
 /// Statements that never change data or schema. `EXPLAIN` counts only when
@@ -185,6 +460,76 @@ mod tests {
             DestructiveClassification::NotDestructive,
             "expected {sql:?} to not require confirmation"
         );
+    }
+
+    #[test]
+    fn routine_definitions_reach_the_driver_as_one_statement() {
+        let mysql = [
+            "CREATE PROCEDURE p() BEGIN SELECT 1; BEGIN IF 1 THEN SELECT 2; END IF; SELECT CASE WHEN 1 THEN 2 ELSE 3 END; END; END",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1",
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = 1",
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN SET NEW.x = 1; END",
+            "CREATE EVENT e ON SCHEDULE EVERY 1 DAY DO BEGIN SET @x = 1; END",
+            "CREATE OR REPLACE DEFINER=`u`@`%` PROCEDURE p() BEGIN SELECT 1; END;",
+            "CREATE PROCEDURE p() outer_label: BEGIN WHILE 1 DO SELECT CASE WHEN 1 THEN 2 ELSE 3 END; END WHILE; END outer_label;",
+            "CREATE PROCEDURE p() BEGIN SELECT `END` FROM t; SELECT 'END' FROM t; END",
+        ];
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in mysql {
+                assert!(classify_destructive_sql(sql, dialect).is_ok(), "{sql}");
+            }
+        }
+        let postgres = [
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $$BEGIN SELECT 1; END$$",
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $tag$BEGIN SELECT 1; END$tag$;",
+            "CREATE FUNCTION f() RETURNS INT AS 'SELECT 1; SELECT 2' LANGUAGE SQL",
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE SQL BEGIN ATOMIC SELECT 1; END",
+            "CREATE TRIGGER trg BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION f()",
+        ];
+        for sql in postgres {
+            assert!(
+                classify_destructive_sql(sql, Dialect::Postgres).is_ok(),
+                "{sql}"
+            );
+        }
+        assert_eq!(
+            classify_sql(mysql[1], Dialect::MySql, true).unwrap(),
+            DestructiveClassification::RequiresConfirmation(
+                DestructiveStatement::WriteInProduction
+            )
+        );
+    }
+
+    #[test]
+    fn routine_guard_rejects_extra_text_and_unbalanced_blocks() {
+        let invalid = [
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END;;",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END /* cierre */ DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 'END; DROP TABLE t'; END; DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 1;",
+            "CREATE PROCEDURE p() END",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1; DROP TABLE t",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1;;",
+            "CREATE PROCEDURE p() DELIMITER $$ BEGIN SELECT 1; END",
+            "CREATE PROCEDURE p() BEGIN SELECT 'END'; /* END */ SELECT 2;",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END wrong_label",
+            "CREATE FUNCTION f(); RETURN 1",
+        ];
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in invalid {
+                assert!(classify_destructive_sql(sql, dialect).is_err(), "{sql}");
+            }
+        }
+        for sql in [
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $$SELECT 1$$; DROP TABLE t",
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $tag$SELECT 1$tag$;;",
+        ] {
+            assert!(
+                classify_destructive_sql(sql, Dialect::Postgres).is_err(),
+                "{sql}"
+            );
+        }
     }
 
     #[test]

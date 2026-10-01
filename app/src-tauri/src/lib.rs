@@ -240,7 +240,12 @@ async fn set_visible_schemas(
             wanted.push(active.default_schema.clone());
         }
         let to_load = schemas_to_load(&wanted, &active.schemas, refresh.unwrap_or(false));
-        (Arc::clone(&active.connector), wanted, to_load, active.default_schema.clone())
+        (
+            Arc::clone(&active.connector),
+            wanted,
+            to_load,
+            active.default_schema.clone(),
+        )
     };
 
     let available = if refresh.unwrap_or(false) {
@@ -1008,6 +1013,26 @@ mod tests {
             Some(DestructiveStatement::DeleteWithoutWhere)
         );
         assert!(checks[2].error.is_some());
+    }
+
+    #[test]
+    fn routine_is_checked_whole_and_is_not_rewritten_before_execution() {
+        let sql = "CREATE PROCEDURE p() BEGIN SELECT 1; SELECT 2; END";
+        assert!(check_statement(sql, Dialect::MySql, false).error.is_none());
+        assert!(
+            khipu_engine::pagination::sort_sql(
+                sql,
+                Dialect::MySql,
+                &[khipu_engine::pagination::SortKey {
+                    column: 0,
+                    descending: false,
+                }]
+            )
+            .is_none()
+        );
+        assert!(khipu_engine::pagination::paginate_sql(sql, Dialect::MySql, 0, 501).is_none());
+        let bad = "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t";
+        assert!(check_statement(bad, Dialect::MySql, false).error.is_some());
     }
 
     #[test]

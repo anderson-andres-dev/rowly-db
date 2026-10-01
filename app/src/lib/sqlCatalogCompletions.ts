@@ -19,6 +19,28 @@ interface Entry {
   noArgs?: boolean;
 }
 
+export function prefixStartForNames(names: Iterable<string>): (text: string, end: number) => number {
+  const prefixes = new Set<string>();
+  let longest = 0;
+  for (const name of names) {
+    const firstSpecial = name.search(/[-\s]/);
+    if (firstSpecial < 0) continue;
+    for (let length = firstSpecial + 1; length <= name.length; length++) {
+      prefixes.add(name.slice(0, length).toLowerCase());
+    }
+    longest = Math.max(longest, name.length);
+  }
+  return (text, end) => {
+    let start = end;
+    for (let length = 1; length <= longest && length <= end; length++) {
+      const candidate = end - length;
+      if (candidate >= start || (candidate > 0 && /[\w"`-]/.test(text[candidate - 1]))) continue;
+      if (prefixes.has(text.slice(candidate, end).toLowerCase())) start = candidate;
+    }
+    return start;
+  };
+}
+
 function insert(entry: Entry, engine: SqlProfile): Exclude<NonNullable<Completion["apply"]>, string> {
   return (view, _completion, from, to) => {
     const key = `${entry.kind}:${entry.schema}.${entry.name}`;
@@ -80,8 +102,10 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
     plain: option(entry, engine, defaultSchema),
     qualified: option(entry, engine, defaultSchema, true),
   }));
+  const prefixStart = prefixStartForNames(entries.map((entry) => entry.name));
   return {
     hasSchema: (name: string, quoted = false) => [...schemaNames].some((schema) => engine.nameMatches(name, quoted, schema)),
+    prefixStart,
     complete(position: CatalogPosition, wordFrom: number, schema?: string, schemaQuoted = false): CompletionResult | null {
       if (position === "relation") return null;
       const visible = prepared.filter(({ entry }) => {
@@ -104,13 +128,17 @@ export function catalogPosition(text: string, wordFrom: number, engine: SqlProfi
   const prefix = last?.kind === "dot" ? tokens.at(-2) : undefined;
   const schema = prefix && (prefix.kind === "word" || prefix.kind === "quoted") ? (prefix.kind === "quoted" ? prefix.text : prefix.raw) : undefined;
   const schemaQuoted = prefix?.kind === "quoted";
-  const before = text.slice(0, prefix ? prefix.from : wordFrom);
-  if (/^\s*call\s+$/i.test(before)) return { position: "procedure", schema, schemaQuoted };
-  if (/\b(?:drop|alter)\s+(?:procedure|function)\s+(?:if\s+exists\s+)?$/i.test(before) || /\bcreate\s+or\s+replace\s+(?:procedure|function)\s+$/i.test(before)) {
-    return { position: /\bprocedure\s+(?:if\s+exists\s+)?$/i.test(before) ? "procedure" : "function", schema, schemaQuoted };
+  const before = sqlTokens(text, engine.lexical, prefix ? prefix.from : wordFrom);
+  const words = before.map((token) => token.text);
+  const ends = (...suffix: string[]) => suffix.every((part, index) => words[words.length - suffix.length + index] === part);
+  if (ends("call")) return { position: "procedure", schema, schemaQuoted };
+  const routineKind = ends("procedure") || ends("procedure", "if", "exists") ? "procedure"
+    : ends("function") || ends("function", "if", "exists") ? "function" : undefined;
+  if (routineKind && (words.includes("drop") || words.includes("alter") || words.includes("create") || words.includes("grant"))) {
+    return { position: routineKind, schema, schemaQuoted };
   }
-  if (/\bgrant\s+execute\s+on\s+(?:(procedure|function)\s+)?$/i.test(before)) return { position: /\bprocedure\s+$/i.test(before) ? "procedure" : /\bfunction\s+$/i.test(before) ? "function" : "routine", schema, schemaQuoted };
-  if (/\b(?:from|join|into|update|table)\s+$/i.test(before) || classified === "relation-target") return { position: "relation", schema, schemaQuoted };
-  if (/\b(?:set|values)\s*\(?\s*$/i.test(before) || /\bset\b[\s\S]*=\s*$/i.test(before) || classified === "expression" || /\(\s*$/.test(before)) return { position: "expression", schema, schemaQuoted };
+  if (ends("grant", "execute", "on") || ends("execute", "on")) return { position: "routine", schema, schemaQuoted };
+  if (ends("set") || ends("values") || ends("(") || ends("=") || classified === "expression") return { position: "expression", schema, schemaQuoted };
+  if (["from", "join", "into", "update", "table"].some((value) => ends(value)) || classified === "relation-target") return { position: "relation", schema, schemaQuoted };
   return { position: "unknown", schema, schemaQuoted };
 }

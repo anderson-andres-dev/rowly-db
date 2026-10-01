@@ -60,6 +60,7 @@ export const catalogTables = writable<CatalogTable[]>([]);
 export const databaseExplorer = writable<DatabaseExplorer | null>(null);
 // true mientras set_visible_schemas introspecta schemas recien elegidos.
 export const explorerLoading = writable(false);
+let connectionGeneration = 0;
 
 // Schemas extra elegidos en el selector, por perfil, para volver a
 // mostrarlos al reconectar. El schema por defecto no se guarda: el backend
@@ -101,11 +102,14 @@ function withTranslatedWarnings(explorer: DatabaseExplorer): DatabaseExplorer {
 // refresca el arbol y el autocompletado, que tambien ve los schemas nuevos.
 export async function setVisibleSchemas(schemas: string[]): Promise<void> {
   const profileId = get(connection).profileId;
+  const generation = connectionGeneration;
   explorerLoading.set(true);
   try {
     const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names: schemas, refresh: false }));
+    const tables = await invoke<CatalogTable[]>("list_tables");
+    if (generation !== connectionGeneration || profileId !== get(connection).profileId) return;
     databaseExplorer.set(explorer);
-    catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
+    catalogTables.set(tables);
     if (profileId) {
       saveVisibleSchemas(
         profileId,
@@ -122,10 +126,19 @@ export async function setVisibleSchemas(schemas: string[]): Promise<void> {
 export async function refreshCatalog(): Promise<void> {
   const current = get(databaseExplorer);
   if (!current) return;
+  const generation = connectionGeneration;
+  const profileId = get(connection).profileId;
   const names = current.schemas.map((objects) => objects.schema);
-  const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names, refresh: true }));
-  databaseExplorer.set(explorer);
-  catalogTables.set(await invoke<CatalogTable[]>("list_tables"));
+  explorerLoading.set(true);
+  try {
+    const explorer = withTranslatedWarnings(await invoke<DatabaseExplorer>("set_visible_schemas", { names, refresh: true }));
+    const tables = await invoke<CatalogTable[]>("list_tables");
+    if (generation !== connectionGeneration || profileId !== get(connection).profileId) return;
+    databaseExplorer.set(explorer);
+    catalogTables.set(tables);
+  } finally {
+    if (generation === connectionGeneration) explorerLoading.set(false);
+  }
 }
 
 export interface ConnectionConfig {
@@ -144,6 +157,8 @@ export async function connect(
   config: ConnectionConfig,
   production = false,
 ): Promise<number | null> {
+  connectionGeneration += 1;
+  explorerLoading.set(false);
   connection.update((state) => ({ ...state, connecting: true, error: null }));
 
   try {
@@ -265,6 +280,8 @@ export async function testConnection(
 // que esto no llama a invoke(): reconectar es simplemente volver a llamar a
 // connect().
 export function reset(): void {
+  connectionGeneration += 1;
+  explorerLoading.set(false);
   connection.set(initialState);
   catalogTables.set([]);
   databaseExplorer.set(null);
