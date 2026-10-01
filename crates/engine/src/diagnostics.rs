@@ -333,6 +333,12 @@ const MYSQL_TYPES: &[&str] = &[
     "MEDIUMINT",
     "INT",
     "INTEGER",
+    "INT1",
+    "INT2",
+    "INT3",
+    "INT4",
+    "INT8",
+    "MIDDLEINT",
     "BIGINT",
     "DECIMAL",
     "DEC",
@@ -389,6 +395,10 @@ fn validate_mysql_type(
         found.push(routine_incomplete(previous));
         return;
     };
+    // MariaDB: `TYPE OF t.a` y `ROW TYPE OF t` toman el tipo de una columna.
+    if matches!(keyword_text(first).as_str(), "TYPE" | "ROW") {
+        return;
+    }
     if !MYSQL_TYPES.contains(&keyword_text(first).as_str()) {
         let word = keyword_text(first);
         if let Some(suggestion) = closest_keyword(&word, MYSQL_TYPES) {
@@ -513,6 +523,7 @@ fn inspect_routine_chunk(
             {
                 return;
             }
+            "SET" if tokens.iter().any(|t| t.token == Token::Assignment) => return,
             "SET" | "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "REPLACE" | "WITH" => {
                 let from = byte_offset(sql, tokens[start].span.start).unwrap_or(0);
                 let to = byte_offset(sql, tokens.last().unwrap().span.end).unwrap_or(sql.len());
@@ -595,24 +606,10 @@ fn validate_mysql_declare(
                 found.push(routine_incomplete(tokens[for_at + 1]));
             }
         } else {
-            // Tras la condicion, el handler puede ejecutar un bloque o una instruccion.
-            let action = (for_at + 1..tokens.len()).find(|&i| {
-                matches!(
-                    words[i].as_str(),
-                    "BEGIN"
-                        | "SET"
-                        | "INSERT"
-                        | "UPDATE"
-                        | "DELETE"
-                        | "SELECT"
-                        | "SIGNAL"
-                        | "RESIGNAL"
-                        | "ROLLBACK"
-                        | "COMMIT"
-                        | "CALL"
-                )
-            });
-            if let Some(action) = action {
+            // Tras las condiciones, la accion es cualquier sentencia: un bloque,
+            // un SET, un CLOSE, un LEAVE...
+            let action = handler_action(tokens, for_at);
+            if action < tokens.len() {
                 inspect_routine_chunk(sql, &tokens[action..], dialect, found);
             } else {
                 found.push(routine_incomplete(tokens.last().copied().unwrap()));
@@ -642,6 +639,33 @@ fn validate_mysql_declare(
             found.push(routine_incomplete(tokens[end]));
         } else {
             validate_control_condition(&tokens[end + 1..], found);
+        }
+    }
+}
+
+/// Donde empieza la accion de un `DECLARE ... HANDLER FOR condicion[, ...]`.
+fn handler_action(tokens: &[&TokenWithSpan], for_at: usize) -> usize {
+    let word = |index: usize| tokens.get(index).map(|token| keyword_text(token));
+    let mut index = for_at + 1;
+    loop {
+        match word(index).as_deref() {
+            Some("SQLSTATE") => {
+                index += 1;
+                if word(index).as_deref() == Some("VALUE") {
+                    index += 1;
+                }
+                index += 1;
+            }
+            Some("NOT") => index += 2,
+            _ => index += 1,
+        }
+        if tokens
+            .get(index)
+            .is_some_and(|token| token.token == Token::Comma)
+        {
+            index += 1;
+        } else {
+            return index.min(tokens.len());
         }
     }
 }
@@ -711,49 +735,47 @@ fn mysql_select_into_errors(
     }
     let mut depth = 0usize;
     let mut into = None;
-    let mut from = None;
     for (index, token) in tokens.iter().enumerate() {
         match token.token {
             Token::LParen => depth += 1,
             Token::RParen => depth = depth.saturating_sub(1),
-            _ if depth == 0 && keyword_of(token) == Keyword::INTO => into = Some(index),
-            _ if depth == 0 && keyword_of(token) == Keyword::FROM && into.is_some() => {
-                from = Some(index);
+            _ if depth == 0 && keyword_of(token) == Keyword::INTO => {
+                into = Some(index);
                 break;
             }
             _ => {}
         }
     }
+    // Lista de variables: `a, b` o `@x, @y`. Con una sola, sqlparser la lee.
     let into = into?;
-    let from = from?;
-    if !tokens[into + 1..from]
-        .iter()
-        .any(|token| token.token == Token::Comma)
-    {
-        return None;
+    let mut end = into + 1;
+    let mut commas = 0;
+    loop {
+        if !matches!(tokens.get(end)?.token, Token::Word(_)) {
+            return None;
+        }
+        end += 1;
+        if tokens
+            .get(end)
+            .is_some_and(|token| token.token == Token::Comma)
+        {
+            end += 1;
+            commas += 1;
+        } else {
+            break;
+        }
     }
-    let variables = &tokens[into + 1..from];
-    if variables.is_empty()
-        || variables.iter().enumerate().any(|(index, token)| {
-            if index % 2 == 0 {
-                !matches!(token.token, Token::Word(_))
-            } else {
-                token.token != Token::Comma
-            }
-        })
-        || variables.len() % 2 == 0
-    {
+    if commas == 0 {
         return None;
     }
     let start = byte_offset(sql, tokens[into].span.start)?;
-    let end = byte_offset(sql, tokens[from].span.start)?;
-    let mut copy = sql.as_bytes().to_vec();
-    for byte in &mut copy[start..end] {
-        if *byte != b'\n' {
-            *byte = b' ';
-        }
-    }
-    let copy = String::from_utf8(copy).ok()?;
+    let stop = byte_offset(sql, tokens[end - 1].span.end)?;
+    // Se borra la lista sin mover las posiciones: un espacio por caracter.
+    let blank: String = sql[start..stop]
+        .chars()
+        .map(|c| if c == '\n' || c == '\r' { c } else { ' ' })
+        .collect();
+    let copy = format!("{}{}{}", &sql[..start], blank, &sql[stop..]);
     Some(analyze_statement(&copy, dialect, catalog))
 }
 
@@ -2604,6 +2626,69 @@ mod tests {
     fn mysql_no_distingue_mayusculas() {
         assert!(analyze_mixed_case("SELECT id FROM users", Dialect::MySql).is_empty());
         assert!(analyze_mixed_case("SELECT `Id` FROM `Users`", Dialect::MySql).is_empty());
+    }
+
+    #[test]
+    fn valid_handlers_assignments_and_select_into_forms_have_no_diagnostics() {
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in [
+                "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND CLOSE c; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION GET DIAGNOSTICS CONDITION 1 @m = MESSAGE_TEXT; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR SQLSTATE '23000', NOT FOUND LEAVE lbl; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLWARNING SET x = 1; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; END",
+                "CREATE PROCEDURE p() BEGIN SET x := 1; SET @y := x + 1; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE x INT4 DEFAULT 0; DECLARE y MIDDLEINT; END",
+                "SELECT 1, 2 INTO a, b",
+                "SELECT a, b FROM t LIMIT 1 INTO a, b",
+                "SELECT a, b FROM t INTO @x, @y",
+                "SELECT 1, 2 INTO @x, @y",
+            ] {
+                let found = analyze_statement(sql, dialect, None);
+                assert!(found.is_empty(), "{dialect:?}: {sql}: {found:?}");
+            }
+        }
+        let sql = "CREATE PROCEDURE p() BEGIN DECLARE v TYPE OF t.a; DECLARE r ROW TYPE OF t; END";
+        let found = analyze_statement(sql, Dialect::MariaDb, None);
+        assert!(found.is_empty(), "{sql}: {found:?}");
+    }
+
+    #[test]
+    fn select_into_keeps_positions_with_multibyte_characters() {
+        let found = analyze_statement(
+            "SELECT a, b INTO vñ, w FROM t WHER a = 1",
+            Dialect::MySql,
+            None,
+        );
+        assert_eq!(found.first().map(|d| d.start), Some(at(1, 31)), "{found:?}");
+        let found = analyze_statement(
+            "SELECT '😀', b INTO v, w FROM t WHER a = 1",
+            Dialect::MySql,
+            None,
+        );
+        assert_eq!(found.first().map(|d| d.start), Some(at(1, 32)), "{found:?}");
+    }
+
+    #[test]
+    fn handlers_and_select_into_still_report_real_errors() {
+        for (sql, expected) in [
+            (
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION; END",
+                "diagnostic.incomplete",
+            ),
+            (
+                "SELECT a, b INTO x, y FROM t WHER a = 1",
+                "diagnostic.didYouMean",
+            ),
+            (
+                "SELECT a, b FROM t WHERE c = AND d = 1 INTO x, y",
+                "diagnostic.missingValue",
+            ),
+        ] {
+            let found = analyze_statement(sql, Dialect::MySql, None);
+            assert!(!found.is_empty(), "debia detectar: {sql}");
+            assert_eq!(key(&found[0]), expected, "{sql}: {found:?}");
+        }
     }
 }
 
