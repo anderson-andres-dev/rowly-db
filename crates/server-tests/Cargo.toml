@@ -16,3 +16,4 @@ khipu-driver-mysql.workspace = true
 khipu-driver-postgres.workspace = true
 tokio.workspace = true
 sqlx = { workspace = true, features = ["mysql", "postgres"] }
+serde_json.workspace = true

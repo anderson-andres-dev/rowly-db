@@ -9,5 +9,7 @@ INSERT INTO rowly_test.canary VALUES (1, 'uno'), (2, 'dos'), (3, 'tres');
 CREATE TABLE rowly_test.log (id INT AUTO_INCREMENT PRIMARY KEY, msg VARCHAR(200), at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 GRANT ALL PRIVILEGES ON rowly_test.* TO 'rowly'@'%';
 GRANT ALL PRIVILEGES ON sakila.* TO 'rowly'@'%';
+-- Las pruebas de consolas mezcladas crean y borran core.
+GRANT ALL PRIVILEGES ON core.* TO 'rowly'@'%';
 
 FLUSH PRIVILEGES;

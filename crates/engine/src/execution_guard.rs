@@ -136,28 +136,214 @@ fn classify_text(
     if let Some(result) = classify_unparsed(sql, dialect, production) {
         return result;
     }
+    match parse_single_statement(sql, dialect) {
+        Ok(statement) => Ok(match classify_statement(&statement) {
+            DestructiveClassification::NotDestructive
+                if production && !statement_is_read_only(&statement) =>
+            {
+                DestructiveClassification::RequiresConfirmation(
+                    DestructiveStatement::WriteInProduction,
+                )
+            }
+            classification => classification,
+        }),
+        // sqlparser no lee todo lo que el motor acepta: si es una sola
+        // sentencia que empieza como una del motor, vale por su estructura.
+        Err(error) => classify_by_structure(sql, dialect, production).unwrap_or(Err(error)),
+    }
+}
+
+fn parse_single_statement(sql: &str, dialect: Dialect) -> Result<Statement, ParserError> {
     let sqlparser_dialect = dialect.as_sqlparser_dialect();
     let mut parser = Parser::new(&*sqlparser_dialect).try_with_sql(sql)?;
-    let statements = parser.parse_statements()?;
+    let mut statements = parser.parse_statements()?;
     // sqlparser deja de leer sin error en un END donde esperaba un `;` y
     // descarta lo que sigue (`SELECT 1 END; DROP TABLE t`): lo que queda sin
     // leer es una sentencia mas que el servidor si ejecutaria.
-    if parser.peek_token().token != Token::EOF {
+    if parser.peek_token().token != Token::EOF || statements.len() != 1 {
         return Err(routine_error("expected exactly one SQL statement"));
     }
-    let [statement] = statements.as_slice() else {
-        return Err(ParserError::ParserError(
-            "expected exactly one SQL statement".to_string(),
-        ));
+    Ok(statements.remove(0))
+}
+
+const MYSQL_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "REPLACE",
+    "UPDATE",
+    "DELETE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "RENAME",
+    "SET",
+    "SHOW",
+    "USE",
+    "LOAD",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "UNLOCK",
+    "FLUSH",
+    "OPTIMIZE",
+    "ANALYZE",
+    "CHECK",
+    "CHECKSUM",
+    "REPAIR",
+    "HELP",
+    "EXPLAIN",
+    "DESCRIBE",
+    "DESC",
+    "START",
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "XA",
+    "KILL",
+    "RESET",
+    "PURGE",
+    "TABLE",
+    "VALUES",
+    "HANDLER",
+    "SIGNAL",
+    "RESIGNAL",
+    "INSTALL",
+    "UNINSTALL",
+    "CLONE",
+    "IMPORT",
+];
+
+const POSTGRES_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "SET",
+    "RESET",
+    "SHOW",
+    "USE",
+    "COPY",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "VACUUM",
+    "ANALYZE",
+    "CLUSTER",
+    "REINDEX",
+    "REFRESH",
+    "EXPLAIN",
+    "BEGIN",
+    "START",
+    "COMMIT",
+    "END",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "DECLARE",
+    "FETCH",
+    "MOVE",
+    "CLOSE",
+    "LISTEN",
+    "NOTIFY",
+    "UNLISTEN",
+    "COMMENT",
+    "SECURITY",
+    "DISCARD",
+    "CHECKPOINT",
+    "IMPORT",
+    "TABLE",
+    "VALUES",
+];
+
+// Una sola sentencia que empieza por un verbo del motor y que sqlparser no
+// entiende (CREATE SEQUENCE ... INCREMENT, PREPARE ... FROM @sql, LOAD DATA,
+// SELECT ... INTO @a, @b...). El servidor valida su sintaxis; aqui solo
+// importa que sea una y lo destructiva que es, asi que se mira por sus
+// palabras: lo que pueda borrar sin WHERE pide confirmacion, como en el
+// camino normal.
+fn classify_by_structure(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let starters = match dialect {
+        Dialect::MySql | Dialect::MariaDb => MYSQL_STARTERS,
+        Dialect::Postgres => POSTGRES_STARTERS,
     };
-    Ok(match classify_statement(statement) {
-        DestructiveClassification::NotDestructive
-            if production && !statement_is_read_only(statement) =>
-        {
+    let first = tokens.first().map(token_word)?;
+    if !starters.contains(&first.as_str()) {
+        return None;
+    }
+    if let Err(error) = single_top_level_statement(&tokens) {
+        return Some(Err(error));
+    }
+    let words: Vec<String> = tokens.iter().map(token_word).collect();
+    let has = |word: &str| words.iter().any(|w| w == word);
+    let mut depth = 0usize;
+    let mut top_level_where = false;
+    for token in &tokens {
+        match token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth = depth.saturating_sub(1),
+            _ if depth == 0 && token_word(token) == "WHERE" => top_level_where = true,
+            _ => {}
+        }
+    }
+    let second = words.get(1).map(String::as_str).unwrap_or("");
+    let destructive = match first.as_str() {
+        "TRUNCATE" => Some(DestructiveStatement::Truncate),
+        "DROP" => match second {
+            "TABLE" => Some(DestructiveStatement::DropTable),
+            "SCHEMA" => Some(DestructiveStatement::DropSchema),
+            "DATABASE" => Some(DestructiveStatement::DropDatabase),
+            _ => None,
+        },
+        "ALTER" if second == "TABLE" && has("DROP") => Some(DestructiveStatement::DropColumn),
+        _ if has("TRUNCATE") => Some(DestructiveStatement::Truncate),
+        _ if has("DELETE") && !top_level_where => Some(DestructiveStatement::DeleteWithoutWhere),
+        _ if has("UPDATE") && !top_level_where && first != "SELECT" => {
+            Some(DestructiveStatement::UpdateWithoutWhere)
+        }
+        _ => None,
+    };
+    let read_only = matches!(
+        first.as_str(),
+        "SELECT" | "SHOW" | "USE" | "DESCRIBE" | "DESC" | "HELP" | "TABLE" | "VALUES"
+    ) || (first == "EXPLAIN" && !has("ANALYZE"));
+    Some(Ok(match destructive {
+        Some(statement) => DestructiveClassification::RequiresConfirmation(statement),
+        None if production && !read_only => {
             DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
         }
-        classification => classification,
-    })
+        None => DestructiveClassification::NotDestructive,
+    }))
 }
 
 // El parser general no entiende todos los cuerpos de rutina de los motores.
@@ -1460,7 +1646,6 @@ mod tests {
             "SELECT 1 END; DROP TABLE t",
             "SELECT 1 END; DROP TABLE t; END",
             "DELETE FROM t WHERE a = 1 END; DELETE FROM t",
-            "SELECT 1 END",
         ] {
             rejected(sql, &[Dialect::MySql, Dialect::MariaDb, Dialect::Postgres]);
         }
@@ -1508,6 +1693,41 @@ mod tests {
                 DestructiveStatement::DeleteWithoutWhere
             )
         );
+    }
+
+    #[test]
+    fn valid_statements_sqlparser_cannot_read_are_judged_by_their_structure() {
+        let pg = [Dialect::Postgres];
+        for sql in [
+            "PREPARE stmt FROM @sql",
+            "CREATE USER 'reader'@'localhost' IDENTIFIED BY 'pw'",
+            "LOAD DATA LOCAL INFILE '/tmp/c.csv' INTO TABLE t FIELDS TERMINATED BY ','",
+            "SELECT id, state INTO @picked, @status FROM t WHERE id = 1",
+            "SELECT 1 end",
+        ] {
+            accepted(sql, &MYSQL);
+        }
+        for sql in [
+            "CREATE SEQUENCE s START WITH 1 INCREMENT BY 1",
+            "CREATE DOMAIN d AS integer CHECK (VALUE > 0)",
+            "CREATE MATERIALIZED VIEW m AS SELECT 1 WITH NO DATA",
+            "CREATE TABLE c PARTITION OF p FOR VALUES FROM (1) TO (2)",
+            "CREATE EXTENSION IF NOT EXISTS pgcrypto",
+        ] {
+            accepted(sql, &pg);
+        }
+        // Se mide lo destructivo por sus palabras: sin WHERE pide confirmacion.
+        requires(
+            "UPDATE t SET a = 1 ORDER BY b LIMIT 1",
+            Dialect::MySql,
+            DestructiveStatement::UpdateWithoutWhere,
+        );
+        accepted("UPDATE t SET a = 1 WHERE b = 2 ORDER BY b LIMIT 1", &MYSQL);
+        // Lo que no es una sentencia del motor, o son dos, se rechaza.
+        rejected("SELEKT 1 FRUM x", &[Dialect::MySql, Dialect::Postgres]);
+        rejected("PREPARE stmt FROM @sql; DROP TABLE t", &MYSQL);
+        rejected("CREATE SEQUENCE s INCREMENT 1; DROP TABLE t", &pg);
+        rejected("CREATE USER 'a'@'b'; DELETE FROM t", &MYSQL);
     }
 
     #[test]

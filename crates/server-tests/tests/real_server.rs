@@ -768,3 +768,172 @@ async fn the_analyzer_marks_nothing_in_sql_the_real_servers_accept() {
         false_positives.join("\n---\n")
     );
 }
+
+fn is_syntax_error(result: &khipu_driver_core::QueryExecutionResult) -> bool {
+    let text = error_text(result);
+    text.contains("\"1064\"") || text.contains("\"42601\"")
+}
+
+fn mixed_statements(text: &str) -> Vec<String> {
+    let value: serde_json::Value = serde_json::from_str(text).expect("fixture JSON");
+    value["statements"]
+        .as_array()
+        .expect("statements")
+        .iter()
+        .map(|statement| statement.as_str().expect("texto").to_string())
+        .collect()
+}
+
+/// Las consolas mezcladas del corpus compartido (las que prueba el divisor):
+/// cada sentencia que el divisor entrega debe aceptarla el guard, y las que
+/// no dependen de usuarios ni archivos del entorno corren en el servidor.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn the_mixed_console_corpus_runs_through_guard_and_server() {
+    let fixtures = [
+        (
+            Engine::MySql,
+            include_str!("../../engine/tests/corpus/mixed/mysql.json"),
+        ),
+        (
+            Engine::MariaDb,
+            include_str!("../../engine/tests/corpus/mixed/mysql.json"),
+        ),
+        (
+            Engine::MariaDb,
+            include_str!("../../engine/tests/corpus/mixed/mariadb.json"),
+        ),
+        (
+            Engine::Postgres,
+            include_str!("../../engine/tests/corpus/mixed/postgres.json"),
+        ),
+    ];
+    // Necesitan algo que el entorno no tiene (usuarios, archivos, variables).
+    let environment = [
+        "GRANT ",
+        "REVOKE ",
+        "CREATE USER",
+        "LOAD DATA",
+        "PREPARE ",
+        "EXECUTE ",
+        "DEALLOCATE ",
+        "CREATE EXTENSION",
+        "CREATE POLICY",
+        "COPY ",
+    ];
+    let mut failures = Vec::new();
+    for (engine, text) in fixtures {
+        let conn = Conn::open(engine).await;
+        let setup: &[&str] = if engine.is_mysql_family() {
+            &["DROP DATABASE IF EXISTS core", "CREATE DATABASE core"]
+        } else {
+            &["DROP SCHEMA IF EXISTS audit CASCADE", "CREATE SCHEMA audit"]
+        };
+        for sql in setup {
+            let result = conn.raw(sql).await;
+            assert!(
+                !is_error(&result) || sql.starts_with("DROP"),
+                "{sql}: {}",
+                error_text(&result)
+            );
+        }
+        for statement in mixed_statements(text) {
+            let head: String = statement
+                .chars()
+                .take(70)
+                .collect::<String>()
+                .replace('\n', " ");
+            match conn.guarded(engine, &statement).await {
+                Err(message) => {
+                    failures.push(format!("{engine:?} el guard rechazo: {head}\n  {message}"))
+                }
+                // Un objeto que falta o un permiso son del entorno; el servidor no
+                // debe encontrar errores de SINTAXIS (1064 / 42601).
+                Ok(result)
+                    if is_error(&result)
+                        && is_syntax_error(&result)
+                        && !environment
+                            .iter()
+                            .any(|prefix| statement.starts_with(prefix)) =>
+                {
+                    failures.push(format!(
+                        "{engine:?} error de sintaxis en el servidor: {head}\n  {}",
+                        error_text(&result)
+                    ));
+                }
+                Ok(_) => {}
+            }
+        }
+    }
+    assert!(failures.is_empty(), "\n{}\n", failures.join("\n"));
+}
+
+/// Con NO_BACKSLASH_ESCAPES el servidor corta las cadenas en otro sitio: el
+/// guard, avisado del modo, tiene que leer el texto como el servidor.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh; cambia el sql_mode global y lo restaura"]
+async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
+    use khipu_engine::execution_guard::GuardOptions;
+    const ON: &str = "SET GLOBAL sql_mode = CONCAT(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES')";
+    const OFF: &str = "SET GLOBAL sql_mode = REPLACE(REPLACE(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES', ''), 'NO_BACKSLASH_ESCAPES,', '')";
+    let templates = [
+        "SELECT '\\'; {x}; --'",
+        "SELECT '\\' , '\\'; {x}; --'",
+        "SELECT 'a\\'; {x}; SELECT '\\'",
+        "DELETE FROM rowly_test.canary WHERE note = '\\'; {x}; --'",
+        "SELECT \"\\\"; {x}; --\"",
+        "SELECT 1 /*!50000 ; {x} ; SELECT '\\' */",
+    ];
+    let mut failures = Vec::new();
+    for engine in [Engine::MySql, Engine::MariaDb] {
+        admin(engine, OFF);
+        admin(engine, ON);
+        let conn = Conn::open(engine).await;
+        let mode = conn
+            .scalar("SELECT @@SESSION.sql_mode")
+            .await
+            .unwrap_or_default();
+        assert!(
+            mode.contains("NO_BACKSLASH_ESCAPES"),
+            "{engine:?}: el modo no se aplico: {mode}"
+        );
+        let (mut dangerous, mut missed_without_option) = (0, 0);
+        for template in templates {
+            for payload in PAYLOADS {
+                let text = template.replace("{x}", payload);
+                fresh(&conn, engine).await;
+                Conn::multi_statement(engine, &text).await;
+                let damaged = !victim_intact(&conn).await;
+                dangerous += damaged as usize;
+                let aware = classification_with(
+                    engine,
+                    &text,
+                    GuardOptions {
+                        no_backslash_escapes: true,
+                    },
+                )
+                .is_ok();
+                let unaware = classification_with(engine, &text, GuardOptions::default()).is_ok();
+                if damaged && aware {
+                    failures.push(format!("{engine:?}: avisado del modo, el guard acepto un texto que ejecuta la carga:\n{text}"));
+                }
+                if damaged && unaware {
+                    missed_without_option += 1;
+                }
+            }
+        }
+        admin(engine, OFF);
+        println!(
+            "{engine:?}: {dangerous} peligrosos en este modo, {missed_without_option} que el guard sin aviso habria dejado pasar"
+        );
+        assert!(
+            dangerous > 0,
+            "{engine:?}: la prueba no mide nada si ninguno es peligroso"
+        );
+        assert!(
+            missed_without_option > 0,
+            "{engine:?}: sin el aviso del modo, el guard debia equivocarse en alguno (la prueba mide el aviso)"
+        );
+    }
+    assert!(failures.is_empty(), "\n{}\n", failures.join("\n---\n"));
+}

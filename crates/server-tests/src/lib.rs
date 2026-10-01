@@ -8,7 +8,9 @@ use khipu_driver_core::{
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
 use khipu_engine::Dialect;
-use khipu_engine::execution_guard::{DestructiveClassification, classify_sql};
+use khipu_engine::execution_guard::{
+    DestructiveClassification, GuardOptions, classify_sql, classify_sql_with,
+};
 use sqlx::{Connection, MySqlConnection, PgConnection};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -147,6 +149,15 @@ impl Conn {
 
 pub fn classification(engine: Engine, sql: &str) -> Result<DestructiveClassification, String> {
     classify_sql(sql.trim(), engine.dialect(), false).map_err(|error| error.to_string())
+}
+
+pub fn classification_with(
+    engine: Engine,
+    sql: &str,
+    options: GuardOptions,
+) -> Result<DestructiveClassification, String> {
+    classify_sql_with(sql.trim(), engine.dialect(), false, options)
+        .map_err(|error| error.to_string())
 }
 
 pub fn is_error(result: &QueryExecutionResult) -> bool {
