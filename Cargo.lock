@@ -3884,6 +3884,7 @@ dependencies = [
  "khipu-driver-mysql",
  "khipu-driver-postgres",
  "khipu-engine",
+ "sqlx",
  "tokio",
 ]
 

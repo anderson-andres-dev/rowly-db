@@ -48,15 +48,34 @@ pub fn classify_sql(
     dialect: Dialect,
     production: bool,
 ) -> Result<DestructiveClassification, ParserError> {
-    let expanded = expand_executable_comments(sql, dialect)?;
-    let Cow::Owned(with_comments) = expanded else {
-        return classify_text(sql, dialect, production);
-    };
+    classify_sql_with(sql, dialect, production, GuardOptions::default())
+}
+
+/// Lo que el guard no puede saber del texto y si de la conexion.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GuardOptions {
+    /// El `sql_mode` de MySQL / MariaDB incluye NO_BACKSLASH_ESCAPES: la barra
+    /// invertida es un caracter mas dentro de una cadena, no un escape.
+    pub no_backslash_escapes: bool,
+}
+
+pub fn classify_sql_with(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+    options: GuardOptions,
+) -> Result<DestructiveClassification, ParserError> {
+    let with_comments =
+        double_backslashes(expand_executable_comments(sql, dialect)?, dialect, options);
+    let without_comments = double_backslashes(Cow::Borrowed(sql), dialect, options);
+    if with_comments == without_comments {
+        return classify_text(&without_comments, dialect, production);
+    }
     // El servidor solo ejecuta /*!NNNNN ... */ si su version llega a NNNNN, y
     // no se sabe cual es: se clasifica con el contenido y sin el, y gana la
     // lectura que pide mas cuidado.
     let with = classify_text(&with_comments, dialect, production);
-    let without = classify_text(sql, dialect, production);
+    let without = classify_text(&without_comments, dialect, production);
     match (with, without) {
         (Ok(with), Ok(without)) => Ok(stricter(with, without)),
         (Ok(with), Err(_)) => Ok(with),
@@ -64,7 +83,7 @@ pub fn classify_sql(
         // ejecutable (/*!40001 SQL_NO_CACHE */): vale la lectura sin el si es la
         // misma clase de sentencia y no hay otro `;` que separe una nueva.
         (Err(error), Ok(without)) => {
-            if same_single_statement(sql, &with_comments, dialect) {
+            if same_single_statement(&without_comments, &with_comments, dialect) {
                 Ok(without)
             } else {
                 Err(error)
@@ -117,7 +136,15 @@ fn classify_text(
     if let Some(result) = classify_unparsed(sql, dialect, production) {
         return result;
     }
-    let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)?;
+    let sqlparser_dialect = dialect.as_sqlparser_dialect();
+    let mut parser = Parser::new(&*sqlparser_dialect).try_with_sql(sql)?;
+    let statements = parser.parse_statements()?;
+    // sqlparser deja de leer sin error en un END donde esperaba un `;` y
+    // descarta lo que sigue (`SELECT 1 END; DROP TABLE t`): lo que queda sin
+    // leer es una sentencia mas que el servidor si ejecutaria.
+    if parser.peek_token().token != Token::EOF {
+        return Err(routine_error("expected exactly one SQL statement"));
+    }
     let [statement] = statements.as_slice() else {
         return Err(ParserError::ParserError(
             "expected exactly one SQL statement".to_string(),
@@ -286,6 +313,60 @@ fn expand_executable_comments(sql: &str, dialect: Dialect) -> Result<Cow<'_, str
     }
     out.push_str(&sql[copied.min(sql.len())..]);
     Ok(Cow::Owned(out))
+}
+
+// Con NO_BACKSLASH_ESCAPES la barra es un caracter mas dentro de una cadena,
+// pero el tokenizer de sqlparser siempre la toma por escape: se duplica para
+// que lea lo mismo que el servidor.
+fn double_backslashes<'a>(
+    sql: Cow<'a, str>,
+    dialect: Dialect,
+    options: GuardOptions,
+) -> Cow<'a, str> {
+    if dialect == Dialect::Postgres || !options.no_backslash_escapes || !sql.contains('\\') {
+        return sql;
+    }
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len() + 8);
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        index += 1;
+                        if bytes.get(index) != Some(&quote) {
+                            break;
+                        }
+                        index += 1;
+                    } else {
+                        if bytes[index] == b'\\' && quote != b'`' {
+                            out.push_str(&sql[copied..=index]);
+                            out.push('\\');
+                            copied = index + 1;
+                        }
+                        index += 1;
+                    }
+                }
+            }
+            b'#' => index = line_end(bytes, index),
+            b'-' if bytes.get(index + 1) == Some(&b'-')
+                && bytes.get(index + 2).is_none_or(|b| b.is_ascii_whitespace()) =>
+            {
+                index = line_end(bytes, index);
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index = sql[index + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |at| at + index + 4);
+            }
+            _ => index += 1,
+        }
+    }
+    out.push_str(&sql[copied..]);
+    Cow::Owned(out)
 }
 
 fn line_end(bytes: &[u8], from: usize) -> usize {
@@ -1370,6 +1451,62 @@ mod tests {
         rejected(
             "CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW EXECUTE FUNCTION f('a'); DROP TABLE t",
             &pg,
+        );
+    }
+
+    #[test]
+    fn text_after_a_stray_end_is_not_silently_dropped() {
+        for sql in [
+            "SELECT 1 END; DROP TABLE t",
+            "SELECT 1 END; DROP TABLE t; END",
+            "DELETE FROM t WHERE a = 1 END; DELETE FROM t",
+            "SELECT 1 END",
+        ] {
+            rejected(sql, &[Dialect::MySql, Dialect::MariaDb, Dialect::Postgres]);
+        }
+        for sql in [
+            "SELECT start, end FROM t",
+            "SELECT t.end, t.start FROM t",
+            "SELECT 1 AS end",
+            "SELECT CASE WHEN a THEN 1 END FROM t",
+            "SELECT CASE WHEN a THEN 1 ELSE 2 END AS x FROM t",
+            "UPDATE t SET end = 1 WHERE start = 0",
+            "INSERT INTO t (start, end) VALUES (1, 2)",
+            "CREATE TABLE t (start int, end int)",
+            "SELECT * FROM t WHERE end > 1 ORDER BY end",
+        ] {
+            accepted(sql, &MYSQL);
+        }
+        accepted("SELECT CASE WHEN a THEN 1 END FROM t", &[Dialect::Postgres]);
+        accepted("SELECT 1 AS \"end\"", &[Dialect::Postgres]);
+    }
+
+    #[test]
+    fn the_backslash_is_an_escape_unless_the_server_says_otherwise() {
+        let plain = GuardOptions::default();
+        let literal = GuardOptions {
+            no_backslash_escapes: true,
+        };
+        let classify = |sql: &str, options| classify_sql_with(sql, Dialect::MySql, false, options);
+        // Con escapes, '\'; ...' es una sola cadena; sin ellos, la cadena
+        // termina en la barra y lo que sigue es otra sentencia.
+        let hidden = "SELECT '\\'; DROP TABLE t; --'";
+        assert!(classify(hidden, plain).is_ok());
+        assert!(classify(hidden, literal).is_err());
+        assert!(classify("SELECT 'a\\b', \"c\\d\"", literal).is_ok());
+        assert!(classify("SELECT 'it\\'s fine'", plain).is_ok());
+        // Un DELETE con WHERE cuyo valor es una barra: valido solo sin escapes.
+        assert!(classify("DELETE FROM t WHERE a = '\\'", plain).is_err());
+        assert_eq!(
+            classify("DELETE FROM t WHERE a = '\\'", literal).unwrap(),
+            DestructiveClassification::NotDestructive
+        );
+        // Los comentarios ejecutables siguen leyendose en ese modo.
+        assert_eq!(
+            classify("DELETE FROM t /*!99999 WHERE a = '\\' */", literal).unwrap(),
+            DestructiveClassification::RequiresConfirmation(
+                DestructiveStatement::DeleteWithoutWhere
+            )
         );
     }
 

@@ -16,7 +16,7 @@ use khipu_driver_core::{
 use khipu_engine::Dialect;
 use khipu_engine::catalog::{CatalogTable, SchemaCatalog};
 use khipu_engine::execution_guard::{
-    DestructiveClassification, DestructiveStatement, classify_sql,
+    DestructiveClassification, DestructiveStatement, GuardOptions, classify_sql_with,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -66,6 +66,9 @@ struct ActiveConnection {
     /// The profile is marked as production: every write asks for
     /// confirmation (`DestructiveStatement::WriteInProduction`).
     production: bool,
+    /// El `sql_mode` del servidor incluye NO_BACKSLASH_ESCAPES: el guard lee la
+    /// barra invertida como un caracter, no como un escape.
+    no_backslash_escapes: bool,
     server_version: String,
     tls: TlsStatus,
     default_schema: String,
@@ -80,6 +83,28 @@ struct ActiveConnection {
     catalog: Arc<SchemaCatalog>,
 }
 
+/// MySQL y MariaDB: ¿el `sql_mode` de la sesion lleva NO_BACKSLASH_ESCAPES?
+/// Cambia como se parten las cadenas, y con ello lo que el guard ve.
+async fn uses_no_backslash_escapes(connector: &dyn DbConnector, dialect: Dialect) -> bool {
+    if dialect == Dialect::Postgres {
+        return false;
+    }
+    match connector
+        .execute_query(
+            "SELECT @@SESSION.sql_mode",
+            QueryExecutionOptions { max_rows: 1 },
+        )
+        .await
+    {
+        QueryExecutionResult::ResultSet { rows, .. } => rows
+            .first()
+            .and_then(|row| row.first())
+            .and_then(|mode| mode.as_deref())
+            .is_some_and(|mode| mode.to_ascii_uppercase().contains("NO_BACKSLASH_ESCAPES")),
+        _ => false,
+    }
+}
+
 fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<SchemaCatalog> {
     Arc::new(catalog_adapter::tables_to_catalog(
         schemas
@@ -89,6 +114,12 @@ fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<SchemaCatalog
 }
 
 impl ActiveConnection {
+    fn guard_options(&self) -> GuardOptions {
+        GuardOptions {
+            no_backslash_escapes: self.no_backslash_escapes,
+        }
+    }
+
     /// The only way to change `schemas`: keeps `catalog` in step.
     fn set_schemas(&mut self, update: impl FnOnce(&mut BTreeMap<String, SchemaObjects>)) {
         update(&mut self.schemas);
@@ -332,6 +363,8 @@ async fn connect(
     let mut schemas = BTreeMap::new();
     schemas.insert(connected.default_schema.clone(), connected.default_objects);
     let catalog = build_catalog(&schemas);
+    let no_backslash_escapes =
+        uses_no_backslash_escapes(&*connected.connector, kind.dialect()).await;
 
     state
         .connections
@@ -343,6 +376,7 @@ async fn connect(
                 connector: connected.connector,
                 dialect: kind.dialect(),
                 production: production.unwrap_or(false),
+                no_backslash_escapes,
                 server_version: connected.server_version,
                 tls: connected.tls,
                 default_schema: connected.default_schema,
@@ -385,7 +419,7 @@ async fn execute_query(
         });
     }
 
-    let (connector, dialect, production) = {
+    let (connector, dialect, production, guard_options) = {
         let guard = state
             .connections
             .lock()
@@ -395,6 +429,7 @@ async fn execute_query(
                 Arc::clone(&active.connector),
                 active.dialect,
                 active.production,
+                active.guard_options(),
             ),
             None => {
                 return Ok(ExecuteQueryResponse::Completed {
@@ -409,7 +444,7 @@ async fn execute_query(
         }
     };
 
-    let classification = match classify_sql(sql, dialect, production) {
+    let classification = match classify_sql_with(sql, dialect, production, guard_options) {
         Ok(classification) => classification,
         Err(error) => {
             return Ok(ExecuteQueryResponse::Completed {
@@ -531,7 +566,7 @@ fn classify_statements(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<StatementCheck>, Message> {
-    let (dialect, production) = {
+    let (dialect, production, options) = {
         let guard = state
             .connections
             .lock()
@@ -539,16 +574,21 @@ fn classify_statements(
         let active = guard
             .get(window.label())
             .ok_or_else(|| Message::key("noActiveConnection"))?;
-        (active.dialect, active.production)
+        (active.dialect, active.production, active.guard_options())
     };
     Ok(statements
         .iter()
-        .map(|statement| check_statement(statement, dialect, production))
+        .map(|statement| check_statement(statement, dialect, production, options))
         .collect())
 }
 
-fn check_statement(statement: &str, dialect: Dialect, production: bool) -> StatementCheck {
-    match classify_sql(statement.trim(), dialect, production) {
+fn check_statement(
+    statement: &str,
+    dialect: Dialect,
+    production: bool,
+    options: GuardOptions,
+) -> StatementCheck {
+    match classify_sql_with(statement.trim(), dialect, production, options) {
         Ok(DestructiveClassification::NotDestructive) => StatementCheck {
             confirmation: None,
             error: None,
@@ -1005,7 +1045,7 @@ mod tests {
     fn a_script_is_checked_statement_by_statement() {
         let checks: Vec<StatementCheck> = ["SELECT 1;", "DELETE FROM t;", "SELEC nada"]
             .iter()
-            .map(|sql| check_statement(sql, Dialect::MySql, false))
+            .map(|sql| check_statement(sql, Dialect::MySql, false, GuardOptions::default()))
             .collect();
         assert!(checks[0].confirmation.is_none() && checks[0].error.is_none());
         assert_eq!(
@@ -1018,7 +1058,11 @@ mod tests {
     #[test]
     fn routine_is_checked_whole_and_is_not_rewritten_before_execution() {
         let sql = "CREATE PROCEDURE p() BEGIN SELECT 1; SELECT 2; END";
-        assert!(check_statement(sql, Dialect::MySql, false).error.is_none());
+        assert!(
+            check_statement(sql, Dialect::MySql, false, GuardOptions::default())
+                .error
+                .is_none()
+        );
         assert!(
             khipu_engine::pagination::sort_sql(
                 sql,
@@ -1032,17 +1076,26 @@ mod tests {
         );
         assert!(khipu_engine::pagination::paginate_sql(sql, Dialect::MySql, 0, 501).is_none());
         let bad = "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t";
-        assert!(check_statement(bad, Dialect::MySql, false).error.is_some());
+        assert!(
+            check_statement(bad, Dialect::MySql, false, GuardOptions::default())
+                .error
+                .is_some()
+        );
     }
 
     #[test]
     fn in_production_every_write_needs_confirmation() {
-        let insert = check_statement("INSERT INTO t VALUES (1)", Dialect::Postgres, true);
+        let insert = check_statement(
+            "INSERT INTO t VALUES (1)",
+            Dialect::Postgres,
+            true,
+            GuardOptions::default(),
+        );
         assert_eq!(
             insert.confirmation,
             Some(DestructiveStatement::WriteInProduction)
         );
-        let select = check_statement("SELECT 1", Dialect::Postgres, true);
+        let select = check_statement("SELECT 1", Dialect::Postgres, true, GuardOptions::default());
         assert!(select.confirmation.is_none());
     }
 }

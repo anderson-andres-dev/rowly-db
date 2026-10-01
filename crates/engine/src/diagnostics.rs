@@ -746,10 +746,9 @@ fn mysql_select_into_errors(
             _ => {}
         }
     }
-    // Lista de variables: `a, b` o `@x, @y`. Con una sola, sqlparser la lee.
+    // Lista de variables: `a`, `a, b` o `@x, @y`, antes del FROM o al final.
     let into = into?;
     let mut end = into + 1;
-    let mut commas = 0;
     loop {
         if !matches!(tokens.get(end)?.token, Token::Word(_)) {
             return None;
@@ -760,13 +759,9 @@ fn mysql_select_into_errors(
             .is_some_and(|token| token.token == Token::Comma)
         {
             end += 1;
-            commas += 1;
         } else {
             break;
         }
-    }
-    if commas == 0 {
-        return None;
     }
     let start = byte_offset(sql, tokens[into].span.start)?;
     let stop = byte_offset(sql, tokens[end - 1].span.end)?;
@@ -2639,6 +2634,9 @@ mod tests {
                 "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; END",
                 "CREATE PROCEDURE p() BEGIN SET x := 1; SET @y := x + 1; END",
                 "CREATE PROCEDURE p() BEGIN DECLARE x INT4 DEFAULT 0; DECLARE y MIDDLEINT; END",
+                "SELECT COUNT(*) FROM inventory WHERE film_id = 1 AND store_id = 2 INTO v_count",
+                "SELECT COUNT(*) INTO v_count FROM inventory",
+                "SELECT inventory_in_stock(1) INTO @ok",
                 "SELECT 1, 2 INTO a, b",
                 "SELECT a, b FROM t LIMIT 1 INTO a, b",
                 "SELECT a, b FROM t INTO @x, @y",

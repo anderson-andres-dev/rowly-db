@@ -9,6 +9,7 @@ use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
 use khipu_engine::Dialect;
 use khipu_engine::execution_guard::{DestructiveClassification, classify_sql};
+use sqlx::{Connection, MySqlConnection, PgConnection};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Engine {
@@ -105,6 +106,35 @@ impl Conn {
         }
     }
 
+    /// Lo que haria el servidor con el texto SIN la barrera del driver (que
+    /// prepara antes de ejecutar y asi rechaza varias sentencias): protocolo de
+    /// texto con varias sentencias, como lo hace el cliente `mysql` o `psql`.
+    pub async fn multi_statement(engine: Engine, sql: &str) {
+        let config = engine.config();
+        match engine {
+            Engine::Postgres => {
+                let url = format!(
+                    "postgres://rowly:rowly@127.0.0.1:{}/{}",
+                    config.port, config.database
+                );
+                let mut conn = PgConnection::connect(&url)
+                    .await
+                    .expect("postgres de prueba");
+                let _ = sqlx::raw_sql(sql).execute(&mut conn).await;
+            }
+            _ => {
+                let url = format!(
+                    "mysql://rowly:rowly@127.0.0.1:{}/{}",
+                    config.port, config.database
+                );
+                let mut conn = MySqlConnection::connect(&url)
+                    .await
+                    .expect("mysql de prueba");
+                let _ = sqlx::raw_sql(sql).execute(&mut conn).await;
+            }
+        }
+    }
+
     pub async fn scalar(&self, sql: &str) -> Option<String> {
         match self.raw(sql).await {
             QueryExecutionResult::ResultSet { rows, .. } => {
@@ -142,6 +172,20 @@ pub fn entries(text: &str) -> Vec<String> {
 
 /// Ejecuta un comando en el contenedor del motor como administrador: lo que
 /// la app no puede hacer con el usuario de prueba (cambiar el sql_mode global).
+pub fn try_admin(engine: Engine, sql: &str) -> bool {
+    let mut command = std::process::Command::new("docker");
+    command.arg("exec").arg(engine.container());
+    match engine {
+        Engine::MySql => command.args(["mysql", "-uroot", "-prowly", "rowly_test", "-e", sql]),
+        Engine::MariaDb => command.args(["mariadb", "-uroot", "-prowly", "rowly_test", "-e", sql]),
+        Engine::Postgres => command.args(["psql", "-U", "rowly", "-d", "pagila", "-c", sql]),
+    };
+    command
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 pub fn admin(engine: Engine, sql: &str) {
     let mut command = std::process::Command::new("docker");
     command.arg("exec").arg(engine.container());

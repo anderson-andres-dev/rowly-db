@@ -1,0 +1,109 @@
+CREATE PROCEDURE atk() BEGIN SELECT 1; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END;; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1 AS begin; END; {x}; END
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT begin FROM canary; END; {x}; END
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT c.case FROM canary c; END; {x}; END
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT c.end, c.begin, c.then FROM canary c; END; {x}; END
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT CASE WHEN 1 THEN begin ELSE 0 END FROM canary; END; {x}; END
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END /*!; {x}; */
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END /*!50000; {x}; */
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END /*!99999; {x}; */
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END /*M!100000; {x}; */
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END /*M!999999; {x}; */
+-- ---
+SELECT 1 /*!; {x} */
+-- ---
+SELECT 1 /*!50000; {x} */
+-- ---
+SELECT 1 /*!99999; {x} */
+-- ---
+SELECT 1 /*M!100000; {x} */
+-- ---
+SELECT 1; {x}
+-- ---
+SELECT 1 -- x
+; {x}
+-- ---
+SELECT 1 # x
+; {x}
+-- ---
+SELECT 1 /* ; */ ; {x}
+-- ---
+SELECT '\'; {x}; --'
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT '\'; END; {x}; --'; END
+-- ---
+CREATE PROCEDURE atk() lbl: BEGIN SELECT 1; END lbl; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END lbl; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN IF 1 THEN SELECT 1; END IF; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN IF 1 THEN SELECT 1; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN WHILE 0 DO SELECT 1; END WHILE; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN lp: LOOP LEAVE lp; END LOOP lp; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN REPEAT SELECT 1; UNTIL 1 END REPEAT; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN CASE 1 WHEN 1 THEN SELECT 1; END CASE; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN BEGIN SELECT 1; END; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN BEGIN SELECT 1; END; {x}; END
+-- ---
+CREATE FUNCTION atk() RETURNS INT RETURN 1; {x}
+-- ---
+CREATE TRIGGER atk BEFORE INSERT ON log FOR EACH ROW SET NEW.msg = 'a'; {x}
+-- ---
+CREATE TRIGGER atk BEFORE INSERT ON log FOR EACH ROW BEGIN SET NEW.msg = 'a'; END; {x}
+-- ---
+CREATE EVENT atk ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1; {x}
+-- ---
+CREATE EVENT atk ON SCHEDULE EVERY 1 DAY DISABLE DO BEGIN SELECT 1; END; {x}
+-- ---
+CREATE PROCEDURE atk() REPLACE INTO canary VALUES (1, 'uno'); {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN DECLARE handler INT; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END; END; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND CLOSE c; END; {x}
+-- ---
+ALTER EVENT atk DISABLE; {x}
+-- ---
+ALTER EVENT atk DO BEGIN SELECT 1; END; {x}
+-- ---
+ALTER PROCEDURE atk COMMENT 'x'; {x}
+-- ---
+DROP EVENT IF EXISTS atk; {x}
+-- ---
+DO 1; {x}
+-- ---
+OPTIMIZE TABLE canary; {x}
+-- ---
+GRANT EXECUTE ON PROCEDURE atk TO 'rowly'@'%'; {x}
+-- ---
+DELETE FROM canary WHERE id = 99 /*!99999 AND 1 */; {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END
+{x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END
+-- {x}
+-- ---
+CREATE PROCEDURE atk() BEGIN SELECT 1; END
+/* c */
+; {x}
