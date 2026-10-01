@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
+import { DEFAULT_INDENT_SIZE, type IndentSize, type IndentStyle } from "$lib/sqlIndentationConfig";
 
 const STORAGE_KEY = "khipu:editor-settings:v1";
 export const DEFAULT_FORMATTER_LINE_WIDTH = 60;
@@ -18,6 +19,8 @@ export interface EditorSettings {
   // las condiciones (sqlFormatLayout.ts).
   formatterAlignColumns: boolean;
   tabNavigatesCompletion: boolean;
+  indentStyle: IndentStyle;
+  indentSize: IndentSize;
   tableAliases: TableAliasMode;
 }
 
@@ -30,12 +33,22 @@ function normalizeTableAliases(value: unknown): TableAliasMode {
   return TABLE_ALIAS_MODES.includes(value as TableAliasMode) ? (value as TableAliasMode) : "always";
 }
 
+function normalizeIndentStyle(value: unknown): IndentStyle {
+  return value === "tabs" ? "tabs" : "spaces";
+}
+
+function normalizeIndentSize(value: unknown): IndentSize {
+  return value === 4 || value === 8 ? value : DEFAULT_INDENT_SIZE;
+}
+
 function defaultEditorSettings(): EditorSettings {
   return {
     formatterLineWidth: DEFAULT_FORMATTER_LINE_WIDTH,
     autoUppercaseKeywords: true,
     formatterAlignColumns: true,
     tabNavigatesCompletion: true,
+    indentStyle: "spaces",
+    indentSize: DEFAULT_INDENT_SIZE,
     tableAliases: "always",
   };
 }
@@ -52,6 +65,8 @@ function loadEditorSettings(): EditorSettings {
       autoUppercaseKeywords: parsed.autoUppercaseKeywords !== false,
       formatterAlignColumns: parsed.formatterAlignColumns !== false,
       tabNavigatesCompletion: parsed.tabNavigatesCompletion !== false,
+      indentStyle: normalizeIndentStyle(parsed.indentStyle),
+      indentSize: normalizeIndentSize(parsed.indentSize),
       tableAliases: normalizeTableAliases(parsed.tableAliases),
     };
   } catch {
@@ -71,6 +86,8 @@ if (browser) {
           autoUppercaseKeywords: settings.autoUppercaseKeywords,
           formatterAlignColumns: settings.formatterAlignColumns,
           tabNavigatesCompletion: settings.tabNavigatesCompletion,
+          indentStyle: normalizeIndentStyle(settings.indentStyle),
+          indentSize: normalizeIndentSize(settings.indentSize),
           tableAliases: settings.tableAliases,
         }),
       );
@@ -97,6 +114,14 @@ export function setFormatterAlignColumns(enabled: boolean): void {
 
 export function setTabNavigatesCompletion(enabled: boolean): void {
   editorSettings.update((settings) => ({ ...settings, tabNavigatesCompletion: enabled }));
+}
+
+export function setIndentStyle(style: IndentStyle): void {
+  editorSettings.update((settings) => ({ ...settings, indentStyle: normalizeIndentStyle(style) }));
+}
+
+export function setIndentSize(size: IndentSize): void {
+  editorSettings.update((settings) => ({ ...settings, indentSize: normalizeIndentSize(size) }));
 }
 
 export function setTableAliases(mode: TableAliasMode): void {

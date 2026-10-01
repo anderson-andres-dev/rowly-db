@@ -76,10 +76,10 @@
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
   import { sql } from "@codemirror/lang-sql";
-  import { acceptCompletion, autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
+  import { autocompletion } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
-  import { keymap, scrollPastEnd, tooltips } from "@codemirror/view";
-  import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
+  import { scrollPastEnd } from "@codemirror/view";
+  import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
   import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
@@ -96,6 +96,7 @@
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
+  import { buildTabCompletionKeymap, indentationExtension } from "$lib/sqlIndentation";
   import { formatSqlText } from "$lib/sqlFormatter";
   import { notifyError } from "$lib/stores/notifications";
   import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
@@ -173,6 +174,7 @@
   const definitionLinkCompartment = new Compartment();
   const behaviorCompartment = new Compartment();
   const tabCompletionCompartment = new Compartment();
+  const indentationCompartment = new Compartment();
   const phrasesCompartment = new Compartment();
 
   // Config vigente. schema/dialect/fkIndex cambian poco (catalogo o conexion
@@ -296,7 +298,7 @@
     const source = view.state.sliceDoc(range.from, range.to);
     const originalCursor = view.state.selection.main.head;
     const settings = get(editorSettings);
-    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns).then((result) => {
+    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns, settings.indentStyle, settings.indentSize).then((result) => {
       // La primera ejecución carga el formateador bajo demanda. Si el usuario
       // escribió durante esos milisegundos, no se reemplaza una versión vieja.
       if (!view || view.state.doc !== originalDoc) return;
@@ -397,21 +399,6 @@
     "diagnostic-details": whenFocused(showDetails),
     "apply-quick-fix": whenFocused(applyFirstFix),
   });
-
-  // Con sugerencias visibles, Tab las recorre (Shift-Tab hacia atras) o, con
-  // "Navegar sugerencias con Tab" apagado, acepta la elegida, como DataGrip.
-  // moveCompletionSelection() y acceptCompletion() no hacen nada (devuelven
-  // false) sin el tooltip abierto, asi que el resto del tiempo Tab sigue su
-  // comportamiento normal.
-  function buildTabCompletionKeymap(navigates: boolean) {
-    return Prec.highest(
-      keymap.of([
-        navigates
-          ? { key: "Tab", run: moveCompletionSelection(true), shift: moveCompletionSelection(false) }
-          : { key: "Tab", run: acceptCompletion },
-      ]),
-    );
-  }
 
   function buildDefinitionLink() {
     return definitionLinkExtension({
@@ -826,6 +813,7 @@
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        indentationCompartment.of(indentationExtension(get(editorSettings).indentStyle, get(editorSettings).indentSize)),
         lexicalCompartment.of(sqlLexical.of(engine.lexical)),
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
         // como escribe el SQL el motor de la conexion (sqlPaste.ts).
@@ -834,9 +822,6 @@
         // el cursor no se queda pegado al borde, asi el popup de sugerencias
         // cabe debajo de lo que se escribe.
         scrollPastEnd(),
-        // Sugerencias y avisos fuera del editor: dentro, el panel los recorta
-        // cuando el cursor esta cerca del borde inferior.
-        tooltips({ parent: document.body }),
         EditorView.scrollMargins.of(() => ({ bottom: CURSOR_BOTTOM_MARGIN })),
         statementIndex,
         hintsCompartment.of(parameterHintConfig.of(hintConfig())),
@@ -962,6 +947,12 @@
     view.dispatch({
       effects: tabCompletionCompartment.reconfigure(buildTabCompletionKeymap(tabNavigatesCompletion)),
     });
+  });
+
+  $effect(() => {
+    const { indentStyle, indentSize } = $editorSettings;
+    if (!view) return;
+    view.dispatch({ effects: indentationCompartment.reconfigure(indentationExtension(indentStyle, indentSize)) });
   });
 
   // Reconfigura schema/dialecto/FK cuando cambia el catalogo o la conexion
