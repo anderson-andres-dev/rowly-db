@@ -49,6 +49,13 @@ impl Dialect {
         }
     }
 
+    pub fn statement_starters(self) -> &'static [&'static str] {
+        match self {
+            Dialect::MySql | Dialect::MariaDb => MYSQL_STARTERS,
+            Dialect::Postgres => POSTGRES_STARTERS,
+        }
+    }
+
     /// Una tabla del sistema que se nombra sin schema y no esta en el
     /// catalogo cargado: `DUAL` en MySQL y MariaDB, `pg_tables` (pg_catalog
     /// esta siempre en el search_path) en Postgres. Existe; sus columnas no
@@ -116,6 +123,118 @@ impl Dialect {
 }
 
 /// MySQL, y por lo tanto MariaDB (ver `Dialect::unparsed_syntax`).
+
+/// Los verbos con que empieza una sentencia del motor: lo que el guard reconoce
+/// aunque sqlparser no la lea y lo que el analizador usa para sugerir `SELEC`.
+const MYSQL_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "REPLACE",
+    "UPDATE",
+    "DELETE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "RENAME",
+    "SET",
+    "SHOW",
+    "USE",
+    "LOAD",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "UNLOCK",
+    "FLUSH",
+    "OPTIMIZE",
+    "ANALYZE",
+    "CHECK",
+    "CHECKSUM",
+    "REPAIR",
+    "HELP",
+    "EXPLAIN",
+    "DESCRIBE",
+    "DESC",
+    "START",
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "XA",
+    "KILL",
+    "RESET",
+    "PURGE",
+    "TABLE",
+    "VALUES",
+    "HANDLER",
+    "SIGNAL",
+    "RESIGNAL",
+    "INSTALL",
+    "UNINSTALL",
+    "CLONE",
+    "IMPORT",
+];
+
+const POSTGRES_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "SET",
+    "RESET",
+    "SHOW",
+    "USE",
+    "COPY",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "VACUUM",
+    "ANALYZE",
+    "CLUSTER",
+    "REINDEX",
+    "REFRESH",
+    "EXPLAIN",
+    "BEGIN",
+    "START",
+    "COMMIT",
+    "END",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "DECLARE",
+    "FETCH",
+    "MOVE",
+    "CLOSE",
+    "LISTEN",
+    "NOTIFY",
+    "UNLISTEN",
+    "COMMENT",
+    "SECURITY",
+    "DISCARD",
+    "CHECKPOINT",
+    "IMPORT",
+    "TABLE",
+    "VALUES",
+];
+
 const MYSQL_UNPARSED: &[&[&str]] = &[
     // Operadores: `a MOD 2`, `a SOUNDS LIKE 'x'`.
     &["MOD"],

@@ -462,7 +462,158 @@ fn routine_body_errors(sql: &str, dialect: Dialect) -> Vec<Diagnostic> {
             start = i + 1;
         }
     }
+    routine_block_errors(&tokens, &mut found);
     found
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Open {
+    Block,
+    If,
+    Case,
+    CaseExpr,
+    While,
+    Loop,
+    Repeat,
+}
+
+impl Open {
+    fn closer(self) -> &'static str {
+        match self {
+            Open::Block => "END",
+            Open::If => "END IF",
+            Open::Case | Open::CaseExpr => "END CASE",
+            Open::While => "END WHILE",
+            Open::Loop => "END LOOP",
+            Open::Repeat => "END REPEAT",
+        }
+    }
+}
+
+// Un END que no cierra lo que esta abierto (IF ... END; en vez de END IF).
+// BEGIN y END solo cuentan al inicio de una sentencia: `begin` y `end` pueden
+// ser alias o columnas, y un CASE de expresion tambien cierra con END. Ante
+// cualquier duda no se marca nada.
+fn routine_block_errors(tokens: &[&TokenWithSpan], found: &mut Vec<Diagnostic>) {
+    let plain = |index: usize| -> String {
+        match tokens.get(index).map(|token| &token.token) {
+            Some(Token::Word(word)) if word.quote_style.is_none() => word.value.to_uppercase(),
+            _ => String::new(),
+        }
+    };
+    let mut stack: Vec<Open> = Vec::new();
+    let mut start = true;
+    let mut declaring = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let dotted = index > 0 && tokens[index - 1].token == Token::Period;
+        let word = if dotted { String::new() } else { plain(index) };
+        if start
+            && !word.is_empty()
+            && tokens.get(index + 1).map(|t| &t.token) == Some(&Token::Colon)
+        {
+            index += 2;
+            continue;
+        }
+        if tokens[index].token == Token::SemiColon {
+            start = true;
+            declaring = false;
+            index += 1;
+            continue;
+        }
+        let top = stack.last().copied();
+        match word.as_str() {
+            "BEGIN" if start => stack.push(Open::Block),
+            "IF" if start => {
+                stack.push(Open::If);
+                start = false;
+            }
+            "CASE" => {
+                stack.push(if start { Open::Case } else { Open::CaseExpr });
+                start = false;
+            }
+            "WHILE" if start => {
+                stack.push(Open::While);
+                start = false;
+            }
+            "LOOP" if start => stack.push(Open::Loop),
+            "REPEAT" if start => stack.push(Open::Repeat),
+            "THEN" | "ELSE" => start = matches!(top, Some(Open::If | Open::Case)),
+            "DO" if top == Some(Open::While) => start = true,
+            "UNTIL" if top == Some(Open::Repeat) => start = false,
+            "DECLARE" if start => {
+                declaring = true;
+                start = false;
+            }
+            "HANDLER"
+                if declaring
+                    && index > 0
+                    && matches!(plain(index - 1).as_str(), "CONTINUE" | "EXIT" | "UNDO") =>
+            {
+                let mut at = index + 2;
+                loop {
+                    match plain(at).as_str() {
+                        "SQLSTATE" => {
+                            at += 1;
+                            if plain(at) == "VALUE" {
+                                at += 1;
+                            }
+                            at += 1;
+                        }
+                        "NOT" => at += 2,
+                        _ => at += 1,
+                    }
+                    if tokens.get(at).map(|t| &t.token) == Some(&Token::Comma) {
+                        at += 1;
+                    } else {
+                        break;
+                    }
+                }
+                index = at;
+                start = true;
+                declaring = false;
+                continue;
+            }
+            "END" => {
+                let named = match plain(index + 1).as_str() {
+                    "IF" => Some(Open::If),
+                    "WHILE" => Some(Open::While),
+                    "LOOP" => Some(Open::Loop),
+                    "REPEAT" => Some(Open::Repeat),
+                    "CASE" => Some(Open::Case),
+                    _ => None,
+                };
+                if top == Some(Open::CaseExpr) {
+                    stack.pop();
+                } else if named.is_some() && named == top {
+                    stack.pop();
+                    index += 1;
+                } else if start && top == Some(Open::Block) {
+                    stack.pop();
+                } else if let (Some(open), true) = (top, start || named.is_some()) {
+                    let wrote = match plain(index + 1).as_str() {
+                        "IF" | "WHILE" | "LOOP" | "REPEAT" | "CASE" => {
+                            format!("END {}", plain(index + 1))
+                        }
+                        _ => "END".to_string(),
+                    };
+                    found.push(at_token(
+                        tokens[index],
+                        DiagnosticMessage::key("diagnostic.expected")
+                            .with("expected", open.closer())
+                            .with("found", wrote),
+                    ));
+                    stack.pop();
+                    if named.is_some() {
+                        index += 1;
+                    }
+                }
+                start = false;
+            }
+            _ => start = false,
+        }
+        index += 1;
+    }
 }
 
 fn inspect_routine_chunk(
@@ -532,7 +683,22 @@ fn inspect_routine_chunk(
                 }
                 return;
             }
-            _ => return,
+            _ => {
+                // Un verbo que no existe pero se parece a uno que si: `SELEC 1`.
+                if let Token::Word(typed) = &tokens[start].token {
+                    if typed.quote_style.is_none()
+                        && typed.value.chars().all(|c| c.is_ascii_alphabetic())
+                    {
+                        if let Some(suggestion) =
+                            closest_keyword(&typed.value, dialect.statement_starters())
+                        {
+                            let (from, to) = span_of(tokens[start]);
+                            found.push(typo(from, to, &typed.value, suggestion));
+                        }
+                    }
+                }
+                return;
+            }
         }
     }
 }
@@ -2686,6 +2852,67 @@ mod tests {
             let found = analyze_statement(sql, Dialect::MySql, None);
             assert!(!found.is_empty(), "debia detectar: {sql}");
             assert_eq!(key(&found[0]), expected, "{sql}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is() {
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            let at_start = |sql: &str, dialect| analyze_statement(sql, dialect, None);
+            let found = at_start("CREATE PROCEDURE p() BEGIN\n  SELEC 1;\nEND", dialect);
+            assert_eq!(
+                found.first().map(|d| (d.start, key(d))),
+                Some((at(2, 3), "diagnostic.didYouMean")),
+                "{found:?}"
+            );
+            let found = at_start("CREATE PROCEDURE p() BEGIN\n  SETT @a = 1;\nEND", dialect);
+            assert_eq!(
+                found.first().map(|d| (d.start, key(d))),
+                Some((at(2, 3), "diagnostic.didYouMean")),
+                "{found:?}"
+            );
+            let found = at_start(
+                "CREATE PROCEDURE p() BEGIN\n  INSRT INTO t VALUES (1);\nEND",
+                dialect,
+            );
+            assert_eq!(
+                found.first().map(|d| key(d)),
+                Some("diagnostic.didYouMean"),
+                "{found:?}"
+            );
+            // END donde iba END IF / END WHILE / END LOOP / END REPEAT / END CASE.
+            for (body, line) in [
+                ("IF 1 THEN\n    SET @a = 1;\n  END;", 4),
+                ("WHILE 1 DO\n    SET @a = 1;\n  END;", 4),
+                ("lp: LOOP\n    LEAVE lp;\n  END;", 4),
+                ("REPEAT\n    SET @a = 1;\n  UNTIL 1 END;", 5),
+                ("CASE 1 WHEN 1 THEN\n    SET @a = 1;\n  END;", 4),
+                ("IF 1 THEN\n    SET @a = 1;\n  END WHILE;", 4),
+            ] {
+                let sql = format!("CREATE PROCEDURE p() BEGIN\n  {body}\nEND");
+                let found = at_start(&sql, dialect);
+                let hit = found.iter().find(|d| key(d) == "diagnostic.expected");
+                assert!(
+                    hit.is_some_and(|d| d.start.line == line),
+                    "{dialect:?}: {sql}\n{found:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn valid_routine_structures_are_not_objected_to() {
+        for sql in [
+            "CREATE PROCEDURE p() BEGIN IF 1 THEN SET @a = 1; ELSEIF 2 THEN SET @a = 2; ELSE SET @a = 3; END IF; END",
+            "CREATE PROCEDURE p() BEGIN lp: LOOP LEAVE lp; END LOOP lp; WHILE 0 DO SET @a = 1; END WHILE; REPEAT SET @a = 1; UNTIL @a > 1 END REPEAT; END",
+            "CREATE PROCEDURE p() BEGIN CASE @a WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE; SELECT CASE WHEN @a THEN 1 END, c.end, c.begin FROM t c; END",
+            "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END; DECLARE CONTINUE HANDLER FOR NOT FOUND SET @d = 1; SELECT 1 AS begin, 2 AS end; END",
+            "CREATE PROCEDURE p() outer_b: BEGIN BEGIN SELECT 1; END; LEAVE outer_b; END outer_b",
+        ] {
+            for dialect in [Dialect::MySql, Dialect::MariaDb] {
+                let found = analyze_statement(sql, dialect, None);
+                assert!(found.is_empty(), "{dialect:?}: {sql}\n{found:?}");
+            }
         }
     }
 }
