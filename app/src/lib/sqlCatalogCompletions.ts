@@ -116,7 +116,7 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
         return true;
       });
       const options = visible.map((candidate) => schema ? candidate.qualified : candidate.plain);
-      if (!schema && (position === "expression" || position === "function" || position === "unknown")) options.push(...builtin);
+      if (!schema && (position === "expression" || position === "unknown")) options.push(...builtin);
       return options.length ? { from: wordFrom, options } : null;
     },
   };
@@ -139,6 +139,7 @@ export function catalogPosition(text: string, wordFrom: number, engine: SqlProfi
   }
   if (ends("grant", "execute", "on") || ends("execute", "on")) return { position: "routine", schema, schemaQuoted };
   if (ends("set") || ends("values") || ends("(") || ends("=") || classified === "expression") return { position: "expression", schema, schemaQuoted };
-  if (["from", "join", "into", "update", "table"].some((value) => ends(value)) || classified === "relation-target") return { position: "relation", schema, schemaQuoted };
+  const existsAfterObject = ["table", "view", "index", "sequence", "schema", "database"].some((value) => ends(value, "if", "exists") || ends(value, "if", "not", "exists"));
+  if (["from", "join", "into", "update", "table"].some((value) => ends(value)) || existsAfterObject || classified === "relation-target") return { position: "relation", schema, schemaQuoted };
   return { position: "unknown", schema, schemaQuoted };
 }

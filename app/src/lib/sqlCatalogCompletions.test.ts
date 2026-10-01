@@ -51,6 +51,21 @@ function options(result: Awaited<ReturnType<typeof complete>>): readonly Complet
 
 for (const driver of ["mysql", "mariadb", "postgres"] as const) {
   describe(`catalogo SQL: ${driver}`, () => {
+    it("DDL: ofrece las palabras clave IF/EXISTS y no mezcla rutinas ni funciones integradas", async () => {
+      const keywords = (result: Awaited<ReturnType<typeof complete>>) => options(result).filter((o) => o.type === "keyword").map((o) => o.label.toUpperCase());
+      for (const input of ["CREATE TABLE I|", "DROP TABLE I|", "DROP FUNCTION I|", "DROP PROCEDURE I|"]) {
+        expect(keywords(await complete(input, driver)), input).toContain("IF");
+      }
+      const dropFunction = options(await complete("DROP FUNCTION I|", driver));
+      expect(dropFunction.filter((o) => o.type === "function" && o.label.toUpperCase() === "IF"), "IF() integrada").toEqual([]);
+      for (const input of ["DROP TABLE IF EXISTS |", "DROP TABLE IF EXISTS com_|", "DROP VIEW IF EXISTS |"]) {
+        const found = options(await complete(input, driver));
+        expect(found.map((o) => o.type), input).not.toContain("procedure");
+        expect(found.map((o) => o.type), input).not.toContain("function");
+        expect(found.some((o) => ["table", "view", "materializedView"].includes(o.type ?? "")), input).toBe(true);
+      }
+    });
+
     it("reemplaza el nombre completo con guiones, espacios y mayusculas", async () => {
       const quote = driver === "postgres" ? '"' : "`";
       for (const [input, label, expected] of [

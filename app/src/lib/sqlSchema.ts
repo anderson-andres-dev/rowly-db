@@ -949,9 +949,14 @@ export function buildCompletionSource(options: {
 
     const extraResult: CompletionResult | null = extra.length > 0 && word ? { from: word.from, options: extra } : null;
     const withExtra = mergeCompatibleResults(mergeCompatibleResults(schemaResult, catalogResult), extraResult);
-    let keywordResult = schemaQualified || target.position === "procedure" || target.position === "function" || target.position === "routine" || target.position === "relation"
-      ? null
-      : rankKeywordResult(keywordResultRaw, policy);
+    let keywordResult = schemaQualified ? null : rankKeywordResult(keywordResultRaw, policy);
+    // Tras CALL solo hay procedures; tras DROP|ALTER PROCEDURE|FUNCTION, ademas
+    // IF y EXISTS.
+    if (keywordResult && (target.position === "procedure" || target.position === "function" || target.position === "routine")) {
+      const keep = /^\s*call\b/i.test(current.text) ? /^$/ : /^(?:IF|EXISTS)$/i;
+      const options = keywordResult.options.filter((option) => keep.test(option.label));
+      keywordResult = options.length > 0 ? { ...keywordResult, options } : null;
+    }
     if (keywordResult && catalogResult) {
       const functions = new Set(catalogResult.options.filter((option) => option.type === "function").map((option) => option.label.toLowerCase()));
       keywordResult = { ...keywordResult, options: keywordResult.options.filter((option) => !functions.has(option.label.toLowerCase())) };
