@@ -122,8 +122,6 @@ impl Dialect {
     }
 }
 
-/// MySQL, y por lo tanto MariaDB (ver `Dialect::unparsed_syntax`).
-
 /// Los verbos con que empieza una sentencia del motor: lo que el guard reconoce
 /// aunque sqlparser no la lea y lo que el analizador usa para sugerir `SELEC`.
 const MYSQL_STARTERS: &[&str] = &[
@@ -235,6 +233,7 @@ const POSTGRES_STARTERS: &[&str] = &[
     "VALUES",
 ];
 
+/// MySQL, y por lo tanto MariaDB (ver `Dialect::unparsed_syntax`).
 const MYSQL_UNPARSED: &[&[&str]] = &[
     // Operadores: `a MOD 2`, `a SOUNDS LIKE 'x'`.
     &["MOD"],

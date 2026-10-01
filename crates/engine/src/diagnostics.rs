@@ -2876,7 +2876,7 @@ mod tests {
                 dialect,
             );
             assert_eq!(
-                found.first().map(|d| key(d)),
+                found.first().map(key),
                 Some("diagnostic.didYouMean"),
                 "{found:?}"
             );
