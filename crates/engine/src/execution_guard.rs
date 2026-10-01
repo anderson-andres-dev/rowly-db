@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser::ast::{AlterTableOperation, ObjectType, Query, SetExpr, Statement};
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Token, Tokenizer};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +44,48 @@ pub fn classify_destructive_sql(
 /// `WriteInProduction` unless it only reads. Destructive statements keep
 /// their own, more specific classification.
 pub fn classify_sql(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Result<DestructiveClassification, ParserError> {
+    let expanded = expand_executable_comments(sql, dialect)?;
+    match classify_text(&expanded, dialect, production) {
+        // sqlparser no conoce todo lo que MySQL acepta dentro de un comentario
+        // ejecutable (/*!40001 SQL_NO_CACHE */): se vuelve al texto original si
+        // es la misma clase de sentencia y no hay otro `;` que separe una nueva.
+        Err(_)
+            if matches!(expanded, Cow::Owned(_))
+                && same_single_statement(sql, &expanded, dialect) =>
+        {
+            classify_text(sql, dialect, production)
+        }
+        result => result,
+    }
+}
+
+fn same_single_statement(original: &str, expanded: &str, dialect: Dialect) -> bool {
+    let words = |sql: &str| {
+        Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+            .tokenize()
+            .ok()
+            .map(|tokens| {
+                tokens
+                    .into_iter()
+                    .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+                    .collect::<Vec<Token>>()
+            })
+    };
+    let (Some(original), Some(expanded)) = (words(original), words(expanded)) else {
+        return false;
+    };
+    let single = !expanded
+        .iter()
+        .take(expanded.len().saturating_sub(1))
+        .any(|token| *token == Token::SemiColon);
+    single && original.first().map(token_word) == expanded.first().map(token_word)
+}
+
+fn classify_text(
     sql: &str,
     dialect: Dialect,
     production: bool,
@@ -151,6 +194,89 @@ fn classify_routine(
     }))
 }
 
+// MySQL y MariaDB ejecutan el contenido de /*! ... */ (y /*M! ... */ en
+// MariaDB) como SQL; el tokenizer lo toma por un comentario. Se clasifica el
+// texto con ese contenido a la vista; al servidor se envia el original. La
+// version se ignora: no se conoce la del servidor, asi que cuenta como
+// ejecutable.
+fn expand_executable_comments(sql: &str, dialect: Dialect) -> Result<Cow<'_, str>, ParserError> {
+    if dialect == Dialect::Postgres || !sql.contains("/*") {
+        return Ok(Cow::Borrowed(sql));
+    }
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut copied = 0;
+    let mut index = 0;
+    let mut expanded = false;
+    while index < bytes.len() {
+        match bytes[index] {
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == b'\\' && quote != b'`' {
+                        index += 2;
+                    } else if bytes[index] == quote {
+                        index += 1;
+                        if bytes.get(index) != Some(&quote) {
+                            break;
+                        }
+                        index += 1;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+            b'#' => index = line_end(bytes, index),
+            b'-' if bytes.get(index + 1) == Some(&b'-')
+                && bytes.get(index + 2).is_none_or(|b| b.is_ascii_whitespace()) =>
+            {
+                index = line_end(bytes, index);
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                let marker = match (bytes.get(index + 2), bytes.get(index + 3)) {
+                    (Some(b'!'), _) => Some(3),
+                    (Some(b'M'), Some(b'!')) if dialect == Dialect::MariaDb => Some(4),
+                    _ => None,
+                };
+                let close = sql[index + 2..].find("*/").map(|at| at + index + 2);
+                match (marker, close) {
+                    (Some(skip), Some(close)) => {
+                        let mut from = index + skip;
+                        while bytes.get(from).is_some_and(u8::is_ascii_digit) {
+                            from += 1;
+                        }
+                        out.push_str(&sql[copied..index]);
+                        out.push(' ');
+                        out.push_str(&sql[from.min(close)..close]);
+                        out.push(' ');
+                        copied = close + 2;
+                        index = close + 2;
+                        expanded = true;
+                    }
+                    (Some(_), None) => {
+                        return Err(routine_error("unterminated executable comment"));
+                    }
+                    (None, Some(close)) => index = close + 2,
+                    (None, None) => index = bytes.len(),
+                }
+            }
+            _ => index += 1,
+        }
+    }
+    if !expanded {
+        return Ok(Cow::Borrowed(sql));
+    }
+    out.push_str(&sql[copied.min(sql.len())..]);
+    Ok(Cow::Owned(out))
+}
+
+fn line_end(bytes: &[u8], from: usize) -> usize {
+    bytes[from..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(bytes.len(), |at| from + at)
+}
+
 fn routine_error(message: &str) -> ParserError {
     ParserError::ParserError(message.to_string())
 }
@@ -162,6 +288,17 @@ fn token_word(token: &Token) -> String {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Open {
+    Block,
+    If,
+    Case,
+    CaseExpr,
+    While,
+    Loop,
+    Repeat,
+}
+
 fn validate_routine(
     tokens: &[Token],
     kind_at: usize,
@@ -169,7 +306,6 @@ fn validate_routine(
     dialect: Dialect,
 ) -> Result<(), ParserError> {
     let invalid = || routine_error("invalid routine definition");
-    let multiple = || routine_error("expected exactly one SQL statement");
     if !matches!(tokens.get(kind_at + 1), Some(Token::Word(_)))
         || matches!(
             token_word(&tokens[kind_at + 1]).as_str(),
@@ -178,6 +314,9 @@ fn validate_routine(
         || tokens.iter().any(|token| token_word(token) == "DELIMITER")
     {
         return Err(invalid());
+    }
+    if dialect == Dialect::Postgres {
+        return validate_postgres_body(tokens, kind_at + 1);
     }
     let mut parens = 0usize;
     let mut body = None;
@@ -209,130 +348,197 @@ fn validate_routine(
         }
         if matches!(
             word.as_str(),
-            "BEGIN" | "RETURN" | "SET" | "INSERT" | "UPDATE" | "DELETE" | "SELECT"
-        ) || (word == "AS" && matches!(dialect, Dialect::Postgres))
-        {
+            "BEGIN" | "RETURN" | "SET" | "INSERT" | "UPDATE" | "DELETE" | "SELECT" | "CALL"
+        ) {
             body = Some(index);
             break;
         }
     }
-    if parens != 0 {
-        return Err(invalid());
-    }
-    let Some(body) = body else {
+    let Some(body) = body.filter(|_| parens == 0) else {
         return Err(invalid());
     };
     if tokens[kind_at + 1..body].contains(&Token::SemiColon) {
-        return Err(multiple());
+        return Err(routine_error("expected exactly one SQL statement"));
     }
-    let body_word = token_word(&tokens[body]);
-    if body_word == "BEGIN" {
-        let label = if body >= 2 && tokens[body - 1] == Token::Colon {
-            Some(token_word(&tokens[body - 2]))
-        } else {
-            None
-        };
-        let mut blocks = 0usize;
-        let mut cases = 0usize;
-        let mut close = None;
-        let mut index = body;
-        while index < tokens.len() {
-            let word = token_word(&tokens[index]);
-            match word.as_str() {
-                "BEGIN" => blocks += 1,
-                "CASE" => {
-                    if index == 0 || token_word(&tokens[index - 1]) != "END" {
-                        cases += 1;
+    let labeled =
+        body >= 2 && tokens[body - 1] == Token::Colon && matches!(tokens[body - 2], Token::Word(_));
+    validate_mysql_body(tokens, if labeled { body - 2 } else { body })
+}
+
+// BEGIN y END solo abren y cierran un bloque al inicio de una sentencia: en
+// MySQL `begin` y `end` pueden ser alias o columnas, y un CASE de expresion
+// tambien cierra con END. Cualquier duda rechaza la definicion.
+fn validate_mysql_body(tokens: &[Token], first: usize) -> Result<(), ParserError> {
+    let invalid = || routine_error("invalid routine definition");
+    let mut stack: Vec<(Open, Option<String>)> = Vec::new();
+    let mut start = true;
+    let mut label: Option<String> = None;
+    let mut declaring = false;
+    let mut index = first;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        let word = token_word(token);
+        if start && !word.is_empty() && tokens.get(index + 1) == Some(&Token::Colon) {
+            label = Some(word);
+            index += 2;
+            continue;
+        }
+        if *token == Token::SemiColon {
+            if stack.is_empty() {
+                return trailing_terminator(&tokens[index..]);
+            }
+            start = true;
+            declaring = false;
+            index += 1;
+            continue;
+        }
+        let top = stack.last().map(|entry| entry.0);
+        match word.as_str() {
+            "BEGIN" if start => {
+                stack.push((Open::Block, label.take()));
+            }
+            "IF" if start => {
+                stack.push((Open::If, label.take()));
+                start = false;
+            }
+            "CASE" => {
+                let open = if start { Open::Case } else { Open::CaseExpr };
+                stack.push((open, label.take()));
+                start = false;
+            }
+            "WHILE" if start => {
+                stack.push((Open::While, label.take()));
+                start = false;
+            }
+            "LOOP" if start => stack.push((Open::Loop, label.take())),
+            "REPEAT" if start => stack.push((Open::Repeat, label.take())),
+            "THEN" | "ELSE" => start = matches!(top, Some(Open::If | Open::Case)),
+            "DO" if top == Some(Open::While) => start = true,
+            "UNTIL" if top == Some(Open::Repeat) => start = false,
+            "DECLARE" if start => {
+                declaring = true;
+                start = false;
+            }
+            "HANDLER" if declaring => {
+                index = after_handler_conditions(tokens, index + 1).ok_or_else(invalid)?;
+                start = true;
+                declaring = false;
+                continue;
+            }
+            "END" => {
+                let closes = match tokens.get(index + 1).map(token_word).as_deref() {
+                    Some("IF") => Some(Open::If),
+                    Some("WHILE") => Some(Open::While),
+                    Some("LOOP") => Some(Open::Loop),
+                    Some("REPEAT") => Some(Open::Repeat),
+                    Some("CASE") => Some(Open::Case),
+                    _ => None,
+                };
+                let entry = if top == Some(Open::CaseExpr) {
+                    stack.pop()
+                } else if closes.is_some() && closes == top {
+                    index += 1;
+                    stack.pop()
+                } else if start && top == Some(Open::Block) {
+                    stack.pop()
+                } else if start || stack.is_empty() {
+                    return Err(invalid());
+                } else {
+                    None
+                };
+                if let Some((open, name)) = entry {
+                    if stack.is_empty() && open != Open::CaseExpr {
+                        let mut rest = &tokens[index + 1..];
+                        if name.is_some() && rest.first().map(token_word) == name {
+                            rest = &rest[1..];
+                        }
+                        return trailing_terminator(rest);
                     }
                 }
-                "END" => {
-                    let suffix = tokens.get(index + 1).map(token_word).unwrap_or_default();
-                    if matches!(suffix.as_str(), "IF" | "WHILE" | "LOOP" | "REPEAT") {
-                        index += 1;
-                    } else if suffix == "CASE" {
-                        if cases == 0 {
-                            return Err(invalid());
-                        }
-                        cases -= 1;
-                        index += 1;
-                    } else if cases > 0 {
-                        cases -= 1;
-                    } else if blocks > 0 {
-                        blocks -= 1;
-                        if blocks == 0 {
-                            close = Some(index + 1);
-                            break;
-                        }
-                    } else {
-                        return Err(invalid());
-                    }
-                }
-                _ => {}
+                start = false;
             }
-            index += 1;
+            _ => start = false,
         }
-        let Some(close) = close else {
-            return Err(invalid());
-        };
-        if cases != 0 {
-            return Err(invalid());
-        }
-        let after = if let Some(label) = label {
-            if tokens
-                .get(close)
-                .is_some_and(|token| token_word(token) == label)
-            {
-                close + 1
-            } else {
-                close
-            }
-        } else {
-            close
-        };
-        return trailing_terminator(&tokens[after..]);
+        index += 1;
     }
-    if body_word == "AS" {
-        if !matches!(
-            tokens.get(body + 1),
-            Some(Token::DollarQuotedString(_) | Token::SingleQuotedString(_))
-        ) {
-            return Err(invalid());
-        }
-        let mut index = body + 2;
-        while index < tokens.len() && tokens[index] != Token::SemiColon {
-            if !matches!(
-                token_word(&tokens[index]).as_str(),
-                "LANGUAGE"
-                    | "SQL"
-                    | "PLPGSQL"
-                    | "IMMUTABLE"
-                    | "STABLE"
-                    | "VOLATILE"
-                    | "STRICT"
-                    | "SECURITY"
-                    | "DEFINER"
-                    | "INVOKER"
-            ) {
-                return Err(multiple());
-            }
-            index += 1;
-        }
-        return trailing_terminator(&tokens[index..]);
-    }
-    if tokens[body..]
-        .iter()
-        .any(|token| token_word(token) == "END")
-    {
-        return Err(invalid());
-    }
-    let semicolon = tokens[body..]
-        .iter()
-        .position(|token| *token == Token::SemiColon);
-    if let Some(index) = semicolon {
-        trailing_terminator(&tokens[body + index..])
-    } else {
+    if stack.is_empty() {
         Ok(())
+    } else {
+        Err(invalid())
     }
+}
+
+// Despues de `HANDLER FOR condicion[, condicion]...` empieza la accion, que
+// es una sentencia (puede ser un BEGIN).
+fn after_handler_conditions(tokens: &[Token], from: usize) -> Option<usize> {
+    let mut index = from;
+    if token_word(tokens.get(index)?) != "FOR" {
+        return None;
+    }
+    index += 1;
+    loop {
+        match token_word(tokens.get(index)?).as_str() {
+            "SQLSTATE" => {
+                index += 1;
+                if token_word(tokens.get(index)?) == "VALUE" {
+                    index += 1;
+                }
+                index += 1;
+            }
+            "NOT" => index += 2,
+            _ => index += 1,
+        }
+        if tokens.get(index) == Some(&Token::Comma) {
+            index += 1;
+        } else {
+            return (index <= tokens.len()).then_some(index);
+        }
+    }
+}
+
+// Sin BEGIN ATOMIC la definicion es una sola sentencia si no hay mas `;` de
+// nivel superior que el final: los cuerpos entre comillas o $$ son un solo
+// token. Con BEGIN ATOMIC los `;` del cuerpo cuentan hasta su END.
+fn validate_postgres_body(tokens: &[Token], from: usize) -> Result<(), ParserError> {
+    let mut parens = 0usize;
+    for index in from..tokens.len() {
+        match &tokens[index] {
+            Token::LParen => parens += 1,
+            Token::RParen => parens = parens.saturating_sub(1),
+            Token::SemiColon if parens == 0 => return trailing_terminator(&tokens[index..]),
+            _ if parens == 0
+                && token_word(&tokens[index]) == "BEGIN"
+                && tokens.get(index + 1).map(token_word).as_deref() == Some("ATOMIC") =>
+            {
+                return validate_atomic_body(tokens, index + 2);
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn validate_atomic_body(tokens: &[Token], from: usize) -> Result<(), ParserError> {
+    let mut start = true;
+    let mut cases = 0usize;
+    for index in from..tokens.len() {
+        let word = token_word(&tokens[index]);
+        if tokens[index] == Token::SemiColon {
+            start = true;
+        } else if word == "END" && start {
+            return trailing_terminator(&tokens[index + 1..]);
+        } else if word == "END" && cases > 0 {
+            cases -= 1;
+        } else if word == "CASE" {
+            cases += 1;
+            start = false;
+        } else if word == "BEGIN" && start {
+            break;
+        } else {
+            start = false;
+        }
+    }
+    Err(routine_error("invalid routine definition"))
 }
 
 fn trailing_terminator(tokens: &[Token]) -> Result<(), ParserError> {
@@ -847,5 +1053,140 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    const MYSQL: [Dialect; 2] = [Dialect::MySql, Dialect::MariaDb];
+
+    fn accepted(sql: &str, dialects: &[Dialect]) {
+        for dialect in dialects {
+            assert!(
+                classify_destructive_sql(sql, *dialect).is_ok(),
+                "{dialect:?} should accept {sql:?}"
+            );
+        }
+    }
+
+    fn rejected(sql: &str, dialects: &[Dialect]) {
+        for dialect in dialects {
+            assert!(
+                classify_destructive_sql(sql, *dialect).is_err(),
+                "{dialect:?} should reject {sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn begin_and_end_as_names_do_not_open_or_close_blocks() {
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT begin FROM t; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN begin ELSE 0 END; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1 AS begin; END; DROP TABLE t; END",
+            &[Dialect::Postgres],
+        );
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT start, end FROM t; END",
+            &MYSQL,
+        );
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; SELECT begin FROM t; END",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn single_statement_routines_with_case_expressions_are_accepted() {
+        accepted(
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = CASE WHEN NEW.y > 0 THEN 1 ELSE 0 END",
+            &MYSQL,
+        );
+        accepted(
+            "CREATE FUNCTION f() RETURNS INT RETURN (SELECT CASE WHEN a THEN 1 ELSE 0 END)",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = CASE WHEN a THEN 1 END; DROP TABLE t",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn mysql_control_blocks_balance_and_handlers_may_open_blocks() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; DECLARE CONTINUE HANDLER FOR NOT FOUND, SQLSTATE '42S02' SET x = 1; lbl: LOOP LEAVE lbl; END LOOP lbl; WHILE x < 3 DO SET x = x + 1; END WHILE; REPEAT SET x = x - 1; UNTIL x < 1 END REPEAT; CASE x WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE; IF x THEN SELECT 1; ELSEIF y THEN SELECT 2; ELSE SELECT 3; END IF; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END IF; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN IF a THEN SELECT 1; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END x; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected("CREATE PROCEDURE p() BEGIN SELECT 1;", &MYSQL);
+    }
+
+    #[test]
+    fn postgres_function_attributes_after_the_body_are_accepted() {
+        for tail in [
+            "LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE",
+            "LANGUAGE \"plpgsql\" CALLED ON NULL INPUT",
+            "LANGUAGE plpython3u RETURNS NULL ON NULL INPUT",
+            "LANGUAGE sql COST 10 ROWS 5 SECURITY DEFINER SET search_path = public",
+        ] {
+            accepted(
+                &format!("CREATE FUNCTION f() RETURNS int AS $$ select 1 $$ {tail}"),
+                &[Dialect::Postgres],
+            );
+        }
+        rejected(
+            "CREATE FUNCTION f() RETURNS int AS $$ select 1 $$ LANGUAGE sql; DROP TABLE t",
+            &[Dialect::Postgres],
+        );
+        accepted(
+            "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a THEN 1 ELSE 0 END; SELECT 2; END",
+            &[Dialect::Postgres],
+        );
+    }
+
+    #[test]
+    fn executable_comments_are_classified_as_code() {
+        for sql in [
+            "SELECT 1 /*!; DROP TABLE t; */",
+            "SELECT 1 /*!50000; DROP TABLE t */",
+            "SELECT 1 /*!500001; DROP TABLE t */",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END /*!; DROP TABLE t; */",
+            "SELECT 1 /*!50000 ",
+        ] {
+            rejected(sql, &MYSQL);
+        }
+        requires(
+            "/*!50000 DROP TABLE t */",
+            Dialect::MySql,
+            DestructiveStatement::DropTable,
+        );
+        rejected("SELECT 1 /*M!100100; DROP TABLE t; */", &[Dialect::MariaDb]);
+        accepted("SELECT 1 /*M!100100; DROP TABLE t; */", &[Dialect::MySql]);
+        accepted("SELECT /*!40001 SQL_NO_CACHE */ 1", &MYSQL);
+        accepted("/*!40101 SET NAMES utf8 */", &MYSQL);
+        accepted("SELECT '/*!; DROP TABLE t */'", &MYSQL);
+        accepted("SELECT 1 -- /*!; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 # /*!; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 /* ; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 /*!; DROP TABLE t; */", &[Dialect::Postgres]);
     }
 }
