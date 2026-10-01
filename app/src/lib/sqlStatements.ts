@@ -110,6 +110,8 @@ export interface ScanState {
   bodyQuote: boolean;
   commentDepth: number;
   recovery: { from: number; previousTo: number }[];
+  // Puntos donde cortar un $$...$$ que no llega a cerrarse (ver DOLLAR_QUOTED).
+  dollarRecovery: { from: number; previousTo: number }[];
 }
 
 const CODE = 0;
@@ -318,6 +320,7 @@ export function initialScanState(): ScanState {
     bodyQuote: false,
     commentDepth: 0,
     recovery: [],
+    dollarRecovery: [],
   };
 }
 
@@ -369,6 +372,11 @@ function nextLineContinues(
 // tramo; el que la cierra puede estar despues (en el margen que trae cada
 // trozo mas alla de su limite): si no, una linea en blanco partida entre dos
 // trozos no se veria.
+// Una sentencia de nivel superior que empieza tras lineas en blanco: lo que
+// cierra una rutina o un cuerpo $$ que se quedo abierto mientras se escribe.
+const RESTART_KEYWORDS = "SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|CALL|SET|USE|SHOW|EXPLAIN|TRUNCATE|GRANT";
+const BLANK_LINES = "(?:[ \\t]*\\r?\\n)+";
+
 function blankLineIn(text: string, from: number, to: number): number {
   for (let newline = text.indexOf("\n", from); newline !== -1 && newline < to; newline = text.indexOf("\n", newline + 1)) {
     let next = newline + 1;
@@ -471,6 +479,7 @@ export function scanChunk(
   };
   const resetStatement = () => {
     state.recovery = [];
+    state.dollarRecovery = [];
     codeStart = -1;
     lastNonSpace = -1;
     depth = 0;
@@ -562,10 +571,28 @@ export function scanChunk(
       case DOLLAR_QUOTED: {
         const end = text.indexOf(state.tag, index);
         if (end === -1) {
+          // Sin cierre a la vista: si nunca llega, cada sentencia que empieza
+          // tras una linea en blanco es una consulta nueva y no parte del cuerpo.
+          const restart = new RegExp(`(\\S)[ \\t]*\\r?\\n${BLANK_LINES}(?=(?:${RESTART_KEYWORDS})\\b)`, "gi");
+          restart.lastIndex = index;
+          // Un candidato cuya palabra clave no cabe en el trozo se retoma en el
+          // siguiente desde su inicio.
+          let pending = length;
+          for (let found = restart.exec(text); found; found = restart.exec(text)) {
+            const at = found.index + found[0].length;
+            if (!final && at + 16 > length) {
+              pending = found.index;
+              break;
+            }
+            if (!state.dollarRecovery.some((item) => item.from === base + at)) {
+              state.dollarRecovery.push({ from: base + at, previousTo: base + found.index + 1 });
+            }
+          }
           lastNonSpace = trimmedEnd(text, index, length, base, lastNonSpace);
-          index = final ? length : Math.max(index, length - state.tag.length + 1);
+          index = final ? length : Math.max(index, Math.min(length - state.tag.length + 1, pending));
           break scan;
         }
+        state.dollarRecovery = [];
         index = end + state.tag.length;
         lastNonSpace = base + index;
         if (bodyQuote) bodyComplete = true;
@@ -715,7 +742,7 @@ export function scanChunk(
         if (cut === at) break;
         flushWord();
         if (objectKind && blockDepth > 0 && !bodyComplete) {
-          const following = text.slice(cut + 1).match(/^(?:[ \t]*\r?\n)+(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|CALL|SET|USE|SHOW|EXPLAIN|TRUNCATE|GRANT)\b/i);
+          const following = text.slice(cut + 1).match(new RegExp(`^${BLANK_LINES}(${RESTART_KEYWORDS})\\b`, "i"));
           if (following) {
             const from = base + cut + 1 + following[0].length - following[1].length;
             if (!state.recovery.some((item) => item.from === from)) state.recovery.push({ from, previousTo: lastNonSpace });
@@ -871,9 +898,10 @@ export function scanChunk(
     flushWord();
     finishEnd();
     if (codeStart >= 0) {
-      if (objectKind && blockDepth > 0 && state.recovery.length > 0) {
+      const cuts = mode === DOLLAR_QUOTED ? state.dollarRecovery : objectKind && blockDepth > 0 ? state.recovery : [];
+      if (cuts.length > 0) {
         let from = codeStart;
-        for (const candidate of state.recovery) {
+        for (const candidate of cuts) {
           if (candidate.previousTo > from) out.push({ from, to: candidate.previousTo, terminated: false });
           from = candidate.from;
         }
@@ -881,6 +909,7 @@ export function scanChunk(
       } else out.push({ from: codeStart, to: lastNonSpace, terminated: false });
     }
     state.recovery = [];
+    state.dollarRecovery = [];
     state.mode = mode;
     state.codeStart = -1;
     state.lastNonSpace = -1;

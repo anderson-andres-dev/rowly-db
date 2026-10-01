@@ -159,6 +159,26 @@ describe("splitStatements", () => {
     expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(["CREATE FUNCTION f() RETURNS INT RETURN 1", "SELECT 2;"]);
   });
 
+  it("Postgres: un cuerpo $$ abierto no absorbe las consultas siguientes, solo si nunca cierra", () => {
+    const broken = "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;";
+    expect(parts(broken, postgres)).toEqual(["CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;", "SELECT 99;", "SELECT 100;"]);
+    const closed = "CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 99;\nEND; $$ LANGUAGE plpgsql;\nSELECT 2;";
+    expect(parts(closed, postgres)).toEqual(["CREATE FUNCTION f() RETURNS int AS $$ BEGIN\nSELECT 1;\n\nSELECT 99;\nEND; $$ LANGUAGE plpgsql;", "SELECT 2;"]);
+    const noBlank = "DO $$ BEGIN\nSELECT 1;\nSELECT 2;";
+    expect(parts(noBlank, postgres)).toEqual([noBlank]);
+    for (const text of [broken, closed, noBlank]) {
+      const expected = parts(text, postgres);
+      for (let cut = 1; cut < text.length; cut++) {
+        const state = initialScanState();
+        const out: { from: number; to: number; terminated: boolean }[] = [];
+        const chunk = text.slice(0, Math.min(text.length, cut + SCAN_OVERLAP));
+        const stop = scanChunk(chunk, 0, cut, false, state, out, postgres);
+        scanChunk(text.slice(stop), stop, text.length - stop, true, state, out, postgres);
+        expect(out.map(({ from, to }) => text.slice(from, to))).toEqual(expected);
+      }
+    }
+  });
+
   it("recupera una rutina abierta solo al llegar al final sin END", () => {
     const broken = "CREATE PROCEDURE p() BEGIN\nSELECT 1;\n\nSELECT 99;\n\nSELECT 100;";
     expect(parts(broken)).toEqual(["CREATE PROCEDURE p() BEGIN\nSELECT 1;", "SELECT 99;", "SELECT 100;"]);
