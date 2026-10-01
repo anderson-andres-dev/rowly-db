@@ -937,3 +937,226 @@ async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
     }
     assert!(failures.is_empty(), "\n{}\n", failures.join("\n---\n"));
 }
+
+// --- Destructividad: lo que daña datos no puede pasar como NotDestructive ---
+
+const SCRATCH: &str = "rowly_test.scratch";
+
+async fn fresh_scratch(conn: &Conn, engine: Engine) {
+    let drop = if engine.is_mysql_family() {
+        format!("DROP TABLE IF EXISTS {SCRATCH}")
+    } else {
+        format!("DROP TABLE IF EXISTS {SCRATCH} CASCADE")
+    };
+    for sql in [
+        drop,
+        format!("CREATE TABLE {SCRATCH} (id int, c int)"),
+        format!("INSERT INTO {SCRATCH} VALUES (1, 1), (2, 2), (3, 3)"),
+    ] {
+        let result = conn.raw(&sql).await;
+        assert!(!is_error(&result), "{sql}: {}", error_text(&result));
+    }
+}
+
+/// Filas, columna y valores como estaban: (3 filas, suma de c = 6).
+async fn scratch_intact(conn: &Conn) -> bool {
+    let rows = conn
+        .scalar(&format!("SELECT COUNT(id) FROM {SCRATCH}"))
+        .await;
+    let sum = conn.scalar(&format!("SELECT SUM(c) FROM {SCRATCH}")).await;
+    rows.as_deref() == Some("3") && sum.as_deref().map(|s| s.trim_end_matches(".0")) == Some("6")
+}
+
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn what_damages_data_never_passes_as_not_destructive() {
+    // REPLACE, INSERT ... ON DUPLICATE y MERGE cambian filas por clave, como
+    // un upsert: no son "destructivos" para el producto, y no se miden aqui.
+    use khipu_engine::execution_guard::DestructiveClassification::NotDestructive;
+    let common = [
+        "DROP TABLE {t}",
+        "DROP TABLE IF EXISTS {t}",
+        "DELETE FROM {t}",
+        "TRUNCATE {t}",
+        "TRUNCATE TABLE {t}",
+        "UPDATE {t} SET c = 0",
+        "ALTER TABLE {t} DROP COLUMN c",
+        "ALTER TABLE {t} DROP COLUMN IF EXISTS c",
+        "WITH x AS (SELECT 1) DELETE FROM {t}",
+        "WITH x AS (SELECT 1) UPDATE {t} SET c = 0",
+    ];
+    let mysql = [
+        "DROP TABLES {t}",
+        "DROP TEMPORARY TABLES IF EXISTS zz_nada, {t}",
+        "/*!40101 DROP TABLES {t} */",
+        "/*!50000 DROP TABLE {t} */",
+        "DELETE FROM {t} LIMIT 10",
+        "DELETE FROM {t} ORDER BY id LIMIT 10",
+        "DELETE {t} FROM {t}",
+        "DELETE FROM {t} /*!99999 WHERE id = 1 */",
+        "DELETE FROM {t} WHERE 1 = 1 /*!50000 AND id = 99 */",
+        "UPDATE {t} SET c = 0 LIMIT 3",
+        "UPDATE {t} SET c = 0 ORDER BY id",
+        "UPDATE IGNORE {t} SET c = 0",
+        "ALTER TABLE {t} DROP c",
+        "ALTER IGNORE TABLE {t} DROP COLUMN c",
+        "ALTER ONLINE TABLE {t} DROP COLUMN c",
+        "ALTER TABLE {t} ENGINE=InnoDB, DROP COLUMN c",
+        "TRUNCATE TABLE {t}; ",
+    ];
+    let mariadb = [
+        "DELETE FROM {t} RETURNING *",
+        "DELETE HISTORY FROM {t}",
+        "TRUNCATE {t}",
+    ];
+    let postgres = [
+        "DROP TABLE {t} CASCADE",
+        "DELETE FROM ONLY {t}",
+        "DELETE FROM {t} RETURNING *",
+        "TRUNCATE {t} CASCADE",
+        "TRUNCATE {t} RESTART IDENTITY",
+        "WITH d AS (DELETE FROM {t} RETURNING *) SELECT count(*) FROM d",
+        "WITH u AS (UPDATE {t} SET c = 0 RETURNING *) SELECT count(*) FROM u",
+        "UPDATE {t} SET c = 0 RETURNING *",
+        "DO $$ BEGIN DELETE FROM {t}; END $$",
+        "DO $$ BEGIN DROP TABLE {t}; END $$",
+        "DO $$ BEGIN EXECUTE 'delete from {t}'; END $$",
+        "DO $$ BEGIN TRUNCATE {t}; END $$",
+        "DO $$ BEGIN UPDATE {t} SET c = 0; END $$",
+        "ALTER TABLE {t} DROP COLUMN c CASCADE",
+    ];
+    let mut failures = Vec::new();
+    let mut damaging = 0;
+    for engine in Engine::ALL {
+        let conn = Conn::open(engine).await;
+        let mut templates: Vec<&str> = common.to_vec();
+        match engine {
+            Engine::MySql => templates.extend(mysql),
+            Engine::MariaDb => {
+                templates.extend(mysql);
+                templates.extend(mariadb);
+            }
+            Engine::Postgres => templates.extend(postgres),
+        }
+        for template in templates {
+            let text = template.replace("{t}", SCRATCH);
+            fresh_scratch(&conn, engine).await;
+            let verdict = classification(engine, &text);
+            // Lo que la app ejecutaria sin confirmar es lo que el guard deja pasar.
+            if !matches!(verdict, Ok(NotDestructive)) {
+                continue;
+            }
+            conn.raw(&text).await;
+            if !scratch_intact(&conn).await {
+                damaging += 1;
+                failures.push(format!("{engine:?}: dano sin confirmacion: {text}"));
+            }
+        }
+    }
+    println!("sentencias que daban dano y pasaban como no destructivas: {damaging}");
+    assert!(failures.is_empty(), "\n{}\n", failures.join("\n"));
+}
+
+fn valid_corpus(engine: Engine) -> &'static str {
+    match engine {
+        Engine::Postgres => include_str!("../corpus/postgres/valid.sql"),
+        _ => include_str!("../corpus/mysql/valid.sql"),
+    }
+}
+
+/// DDL y DML corrientes, autovalidados: cada sentencia corre bien en el
+/// servidor real, asi que ni el guard ni el analizador pueden objetarla.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn common_valid_ddl_and_dml_is_never_objected_to() {
+    // Dependen de la conexion del pool (transaccion, bloqueo) y no de la sintaxis.
+    let per_connection = [
+        "SAVEPOINT",
+        "ROLLBACK TO",
+        "BEGIN",
+        "COMMIT",
+        "LOCK TABLES",
+        "UNLOCK TABLES",
+        "SET LOCAL",
+        "START TRANSACTION",
+    ];
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for engine in Engine::ALL {
+        let conn = Conn::open(engine).await;
+        let scope = if engine.is_mysql_family() {
+            "core"
+        } else {
+            "valid_test"
+        };
+        let setup: &[&str] = if engine.is_mysql_family() {
+            &["DROP DATABASE IF EXISTS core", "CREATE DATABASE core"]
+        } else {
+            &[
+                "DROP SCHEMA IF EXISTS valid_test CASCADE",
+                "CREATE SCHEMA valid_test",
+            ]
+        };
+        for sql in setup {
+            let result = conn.raw(sql).await;
+            assert!(!is_error(&result), "{sql}: {}", error_text(&result));
+        }
+        for mut template in entries(valid_corpus(engine)) {
+            // Cabeceras: `-- only: mysql|mariadb` y `-- no-exec`.
+            let mut execute = true;
+            while let Some(line) = template.lines().next().filter(|l| l.starts_with("-- ")) {
+                if let Some(only) = line.strip_prefix("-- only:") {
+                    let wanted = only.trim();
+                    if (wanted == "mysql") != (engine == Engine::MySql)
+                        && (wanted == "mariadb") != (engine == Engine::MariaDb)
+                    {
+                        template.clear();
+                        break;
+                    }
+                } else if line == "-- no-exec" {
+                    execute = false;
+                } else {
+                    break;
+                }
+                template = template.lines().skip(1).collect::<Vec<_>>().join("\n");
+            }
+            if template.is_empty() {
+                continue;
+            }
+            let sql = template.replace("{s}", scope);
+            let head: String = sql.chars().take(90).collect::<String>().replace('\n', " ");
+            checked += 1;
+            if let Err(message) = classification(engine, &sql) {
+                failures.push(format!("{engine:?} el guard rechazo: {head}\n  {message}"));
+            }
+            let found = khipu_engine::diagnostics::analyze_statement(&sql, engine.dialect(), None);
+            if !found.is_empty() {
+                failures.push(format!(
+                    "{engine:?} el analizador marco: {head}\n  {:?}",
+                    found
+                        .iter()
+                        .take(2)
+                        .map(|d| (d.start, &d.message))
+                        .collect::<Vec<_>>()
+                ));
+            }
+            if !execute {
+                continue;
+            }
+            let result = conn.raw(&sql).await;
+            if is_error(&result) && !per_connection.iter().any(|prefix| sql.starts_with(prefix)) {
+                failures.push(format!(
+                    "{engine:?} el SERVIDOR rechazo (el corpus esta mal): {head}\n  {}",
+                    error_text(&result)
+                ));
+            }
+        }
+    }
+    println!("sentencias comprobadas: {checked}");
+    assert!(
+        failures.is_empty(),
+        "\n{} problemas de {checked}:\n{}\n",
+        failures.len(),
+        failures.join("\n")
+    );
+}

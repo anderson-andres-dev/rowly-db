@@ -139,6 +139,37 @@ const MYSQL_UNPARSED: &[&[&str]] = &[
     &["PREPARE"],
     &["LOAD", "DATA"],
     &["CREATE", "USER"],
+    // DDL: modificadores numericos, particiones, opciones de tabla, indices.
+    &["DECIMAL", "...", "UNSIGNED"],
+    &["DEC", "...", "UNSIGNED"],
+    &["NUMERIC", "...", "UNSIGNED"],
+    &["FLOAT", "...", "UNSIGNED"],
+    &["DOUBLE", "...", "UNSIGNED"],
+    &["REAL", "...", "UNSIGNED"],
+    &["ZEROFILL"],
+    &["PARTITION", "BY", "RANGE"],
+    &["PARTITION", "BY", "LIST"],
+    &["PARTITION", "BY", "HASH"],
+    &["PARTITION", "BY", "KEY"],
+    &["PARTITION", "BY", "LINEAR"],
+    &["ALTER", "TABLE", "...", "ENGINE"],
+    &["ALTER", "TABLE", "...", "AUTO_INCREMENT"],
+    &["ALTER", "TABLE", "...", "ROW_FORMAT"],
+    &["ALTER", "TABLE", "...", "CHARSET"],
+    &["DROP", "INDEX"],
+    &["DROP", "KEY"],
+    &["DROP", "FOREIGN", "KEY"],
+    &["DROP", "PRIMARY", "KEY"],
+    &["CREATE", "FULLTEXT"],
+    &["CREATE", "SPATIAL"],
+    &["CHECK", "OPTION"],
+    // Sentencias de sesion y administracion.
+    &["WITH", "CONSISTENT", "SNAPSHOT"],
+    &["SET", "...", ":="],
+    &["EXPLAIN", "FORMAT"],
+    &["FULL", "PROCESSLIST"],
+    &["LOCK", "TABLES"],
+    &["UNLOCK", "TABLES"],
     // UPDATE de una tabla con ORDER BY o LIMIT.
     &["UPDATE", "...", "ORDER", "BY"],
     &["UPDATE", "...", "LIMIT"],
@@ -146,6 +177,10 @@ const MYSQL_UNPARSED: &[&[&str]] = &[
 
 /// Lo propio de MariaDB, ademas de lo de MySQL.
 const MARIADB_UNPARSED: &[&[&str]] = &[
+    // ANALYZE SELECT ...: el plan con ejecucion de MariaDB (en MySQL es
+    // EXPLAIN ANALYZE).
+    &["ANALYZE", "SELECT"],
+    &["ANALYZE", "FORMAT"],
     // Secuencias: SELECT NEXT VALUE FOR s (PREVIOUS VALUE igual).
     &["NEXT", "VALUE", "FOR"],
     &["PREVIOUS", "VALUE", "FOR"],
@@ -161,6 +196,15 @@ const POSTGRES_UNPARSED: &[&[&str]] = &[
     &["CREATE", "EXTENSION"],
     &["CREATE", "POLICY"],
     &["CREATE", "SEQUENCE"],
+    &["CREATE", "UNLOGGED"],
+    &["INCLUDING"],
+    &["EXCLUDING"],
+    &["NOT", "VALID"],
+    &["VALIDATE", "CONSTRAINT"],
+    &["CHECK", "OPTION"],
+    &["WITH", "DATA"],
+    &["OVERRIDING", "SYSTEM", "VALUE"],
+    &["OVERRIDING", "USER", "VALUE"],
     // Tablas hijas: sqlparser no reconoce PARTITION OF.
     &["PARTITION", "OF"],
     &["WITH", "NO", "DATA"],

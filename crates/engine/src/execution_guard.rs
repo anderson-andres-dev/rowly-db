@@ -316,16 +316,53 @@ fn classify_by_structure(
             _ => {}
         }
     }
-    let second = words.get(1).map(String::as_str).unwrap_or("");
+    // El objeto, saltando los modificadores: DROP TEMPORARY TABLES, ALTER IGNORE TABLE.
+    let object = words
+        .iter()
+        .skip(1)
+        .map(String::as_str)
+        .find(|word| {
+            !matches!(
+                *word,
+                "TEMPORARY" | "IGNORE" | "ONLINE" | "OFFLINE" | "GLOBAL" | "LOCAL" | "UNLOGGED"
+            )
+        })
+        .unwrap_or("");
+    let drops_column = words.iter().enumerate().any(|(index, word)| {
+        word == "DROP"
+            && !matches!(
+                words.get(index + 1).map(String::as_str),
+                Some(
+                    "INDEX"
+                        | "KEY"
+                        | "PRIMARY"
+                        | "FOREIGN"
+                        | "CONSTRAINT"
+                        | "CHECK"
+                        | "PARTITION"
+                        | "SUBPARTITION"
+                )
+            )
+    });
+    let drops_partition = words.iter().enumerate().any(|(index, word)| {
+        word == "DROP"
+            && matches!(
+                words.get(index + 1).map(String::as_str),
+                Some("PARTITION" | "SUBPARTITION")
+            )
+    });
     let destructive = match first.as_str() {
         "TRUNCATE" => Some(DestructiveStatement::Truncate),
-        "DROP" => match second {
-            "TABLE" => Some(DestructiveStatement::DropTable),
+        "DROP" => match object {
+            "TABLE" | "TABLES" => Some(DestructiveStatement::DropTable),
             "SCHEMA" => Some(DestructiveStatement::DropSchema),
-            "DATABASE" => Some(DestructiveStatement::DropDatabase),
+            "DATABASE" | "OWNED" => Some(DestructiveStatement::DropDatabase),
             _ => None,
         },
-        "ALTER" if second == "TABLE" && has("DROP") => Some(DestructiveStatement::DropColumn),
+        "ALTER" if object == "TABLE" && drops_column => Some(DestructiveStatement::DropColumn),
+        "ALTER" if object == "TABLE" && (drops_partition || has("TRUNCATE")) => {
+            Some(DestructiveStatement::Truncate)
+        }
         _ if has("TRUNCATE") => Some(DestructiveStatement::Truncate),
         _ if has("DELETE") && !top_level_where => Some(DestructiveStatement::DeleteWithoutWhere),
         _ if has("UPDATE") && !top_level_where && first != "SELECT" => {
@@ -333,10 +370,13 @@ fn classify_by_structure(
         }
         _ => None,
     };
-    let read_only = matches!(
+    // INTO OUTFILE / DUMPFILE escribe un archivo en el servidor.
+    let read_only = (matches!(
         first.as_str(),
         "SELECT" | "SHOW" | "USE" | "DESCRIBE" | "DESC" | "HELP" | "TABLE" | "VALUES"
-    ) || (first == "EXPLAIN" && !has("ANALYZE"));
+    ) && !has("OUTFILE")
+        && !has("DUMPFILE"))
+        || (first == "EXPLAIN" && !has("ANALYZE"));
     Some(Ok(match destructive {
         Some(statement) => DestructiveClassification::RequiresConfirmation(statement),
         None if production && !read_only => {
@@ -611,6 +651,11 @@ fn classify_unparsed(
     if !known {
         return None;
     }
+    if dialect == Dialect::Postgres && first == "DO" && do_block_changes_data(&tokens) {
+        return Some(Err(routine_error(
+            "a DO block that deletes, updates, truncates, drops or runs dynamic SQL can't be run from here",
+        )));
+    }
     let single = if matches!(dialect, Dialect::MySql | Dialect::MariaDb)
         && second == "EVENT"
         && first == "ALTER"
@@ -630,6 +675,24 @@ fn classify_unparsed(
             DestructiveClassification::NotDestructive
         }
     }))
+}
+
+// El cuerpo de un DO es una cadena que el guard no lee: si menciona algo que
+// borra o cambia datos (o SQL dinamico), no se ejecuta sin mirarlo.
+fn do_block_changes_data(tokens: &[Token]) -> bool {
+    tokens.iter().any(|token| {
+        let body = match token {
+            Token::DollarQuotedString(quoted) => quoted.value.as_str(),
+            Token::SingleQuotedString(text) => text.as_str(),
+            _ => return false,
+        };
+        body.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .any(|word| {
+                ["DELETE", "UPDATE", "TRUNCATE", "DROP", "EXECUTE"]
+                    .iter()
+                    .any(|danger| word.eq_ignore_ascii_case(danger))
+            })
+    })
 }
 
 fn single_top_level_statement(tokens: &[Token]) -> Result<(), ParserError> {
@@ -1022,7 +1085,16 @@ fn classify_alter_table(operations: &[AlterTableOperation]) -> DestructiveClassi
 /// `SetExpr::Update`/`SetExpr::Delete` wrapping the same statement, so a CTE
 /// around a destructive statement is classified the same as one without it.
 fn classify_query(query: &Query) -> DestructiveClassification {
-    classify_set_expr(&query.body)
+    // Un CTE tambien puede borrar o actualizar (WITH d AS (DELETE ... RETURNING *)).
+    let ctes = query
+        .with
+        .iter()
+        .flat_map(|with| with.cte_tables.iter())
+        .map(|cte| classify_query(&cte.query));
+    std::iter::once(classify_set_expr(&query.body))
+        .chain(ctes)
+        .find(|classification| *classification != DestructiveClassification::NotDestructive)
+        .unwrap_or(DestructiveClassification::NotDestructive)
 }
 
 fn classify_set_expr(expr: &SetExpr) -> DestructiveClassification {
@@ -1728,6 +1800,60 @@ mod tests {
         rejected("PREPARE stmt FROM @sql; DROP TABLE t", &MYSQL);
         rejected("CREATE SEQUENCE s INCREMENT 1; DROP TABLE t", &pg);
         rejected("CREATE USER 'a'@'b'; DELETE FROM t", &MYSQL);
+    }
+
+    #[test]
+    fn destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation() {
+        use DestructiveStatement::*;
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for (sql, expected) in [
+                ("DROP TABLES t", DropTable),
+                ("DROP TEMPORARY TABLES t", DropTable),
+                ("DROP TEMPORARY TABLE IF EXISTS t", DropTable),
+                ("/*!40101 DROP TABLES t */", DropTable),
+                ("ALTER IGNORE TABLE t DROP COLUMN c", DropColumn),
+                ("ALTER ONLINE TABLE t DROP COLUMN c", DropColumn),
+                ("ALTER TABLE t DROP c", DropColumn),
+                ("ALTER TABLE t DROP PARTITION p0", Truncate),
+                ("ALTER TABLE t TRUNCATE PARTITION p0", Truncate),
+            ] {
+                requires(sql, dialect, expected);
+            }
+            accepted("ALTER TABLE t DROP INDEX idx", &[dialect]);
+            accepted("ALTER TABLE t DROP FOREIGN KEY fk", &[dialect]);
+            assert_eq!(
+                classify_sql("SELECT * FROM t INTO OUTFILE '/tmp/x'", dialect, true).unwrap(),
+                DestructiveClassification::RequiresConfirmation(WriteInProduction)
+            );
+        }
+        requires("DROP OWNED BY someone", Dialect::Postgres, DropDatabase);
+        for sql in [
+            "DO $$ BEGIN DELETE FROM t; END $$",
+            "DO $$ BEGIN DROP TABLE t; END $$",
+            "DO $$ BEGIN EXECUTE 'drop table t'; END $$",
+            "DO $$ BEGIN TRUNCATE t; END $$",
+            "DO $$ BEGIN UPDATE t SET a = 1; END $$",
+        ] {
+            rejected(sql, &[Dialect::Postgres]);
+        }
+        accepted(
+            "DO $$ BEGIN PERFORM 1; RAISE NOTICE 'hola'; END $$",
+            &[Dialect::Postgres],
+        );
+        requires(
+            "WITH d AS (DELETE FROM t RETURNING *) SELECT count(*) FROM d",
+            Dialect::Postgres,
+            DeleteWithoutWhere,
+        );
+        requires(
+            "WITH u AS (UPDATE t SET a = 1 RETURNING *) SELECT * FROM u",
+            Dialect::Postgres,
+            UpdateWithoutWhere,
+        );
+        accepted(
+            "WITH d AS (DELETE FROM t WHERE a = 1 RETURNING *) SELECT count(*) FROM d",
+            &[Dialect::Postgres],
+        );
     }
 
     #[test]
