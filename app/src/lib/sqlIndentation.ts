@@ -31,7 +31,9 @@ export function backspaceIndent(view: EditorView): boolean {
   const changes = state.changeByRange((range) => {
     const line = state.doc.lineAt(range.head);
     const column = range.head - line.from;
-    const count = Math.min(column, size);
+    // Hasta el multiplo anterior de la unidad: desde la columna 3 con
+    // unidad 2 borra uno, no dos.
+    const count = Math.min(column, column % size || size);
     return { changes: { from: range.head - count, to: range.head }, range: EditorSelection.cursor(range.head - count) };
   });
   view.dispatch(state.update(changes, { userEvent: "delete.backward" }));

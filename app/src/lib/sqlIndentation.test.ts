@@ -117,6 +117,15 @@ describe("Tab en el editor SQL", () => {
     expect(view.state.tabSize).toBe(8);
   });
 
+  it("Backspace borra hasta el multiplo anterior de la unidad", () => {
+    for (const [spaces, size, expected] of [[3, 2, 2], [2, 2, 0], [5, 4, 4], [4, 4, 0], [1, 4, 0], [6, 8, 0]] as const) {
+      const { view } = editor(" ".repeat(spaces), false, "spaces", size);
+      view.dispatch({ selection: EditorSelection.cursor(spaces) });
+      expect(backspaceIndent(view)).toBe(true);
+      expect(view.state.doc.toString(), `${spaces} espacios, unidad ${size}`).toBe(" ".repeat(expected));
+    }
+  });
+
   it("Enter usa la sangria elegida", () => {
     for (const style of ["spaces", "tabs"] as const) {
       const { view } = editor("SELECT (", false, style, 4);
