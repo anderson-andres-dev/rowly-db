@@ -414,20 +414,6 @@ async fn no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server() 
     assert!(violations.is_empty(), "\n{}\n", violations.join("\n---\n"));
 }
 
-/// ROWLY_ENGINES=mysql,postgres limita la prueba a esos motores.
-fn engine_selected(engine: Engine) -> bool {
-    match std::env::var("ROWLY_ENGINES") {
-        Ok(list) => list.split(',').any(|name| {
-            name.trim().eq_ignore_ascii_case(match engine {
-                Engine::MySql => "mysql",
-                Engine::MariaDb => "mariadb",
-                Engine::Postgres => "postgres",
-            })
-        }),
-        Err(_) => true,
-    }
-}
-
 struct Lcg(u64);
 
 impl Lcg {
