@@ -28,7 +28,7 @@ Data lives in named volumes, so it survives `down`; `down -v` deletes it. `up.sh
 
 ```bash
 tools/test-dbs/lines.sh up postgres      # or mysql, mariadb; no argument: all of them
-cargo test -p rowly-server-tests --test version_lines -- --ignored
+cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1
 tools/test-dbs/lines.sh down postgres
 tools/test-dbs/lines.sh list             # lines, images and ports
 ```

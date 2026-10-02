@@ -28,7 +28,7 @@ Los datos viven en volúmenes con nombre: sobreviven a `down`, y `down -v` los b
 
 ```bash
 tools/test-dbs/lines.sh up postgres      # o mysql, mariadb; sin argumento: todos
-cargo test -p rowly-server-tests --test version_lines -- --ignored
+cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1
 tools/test-dbs/lines.sh down postgres
 tools/test-dbs/lines.sh list             # líneas, imágenes y puertos
 ```
