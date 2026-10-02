@@ -89,11 +89,13 @@ async function connect(session, name) {
   // Para el diagnostico de un fallo: que tecla llego y a que elemento.
   await session.script(`
     window.__e2eKeys = [];
-    document.addEventListener("keydown", (e) => {
-      const t = e.target;
-      window.__e2eKeys.push((e.ctrlKey ? "Ctrl+" : "") + e.key + "@" + (t.className || t.tagName));
-      if (window.__e2eKeys.length > 60) window.__e2eKeys.shift();
-    }, true);
+    for (const type of ["keydown", "keyup"]) {
+      window.addEventListener(type, (e) => {
+        const t = e.target;
+        window.__e2eKeys.push(type[3] + ":" + (e.ctrlKey ? "Ctrl+" : "") + e.key + "@" + (t.className || t.tagName));
+        if (window.__e2eKeys.length > 80) window.__e2eKeys.shift();
+      }, true);
+    }
   `);
 }
 
@@ -115,6 +117,7 @@ async function write(session, text) {
 
 async function run(session, text) {
   await write(session, text);
+  await sleep(300);
   await session.keys({ chord: [KEYS.control, KEYS.enter] });
 }
 
@@ -216,7 +219,7 @@ for (const { name, body } of flows) {
     console.log(`      dialogs: ${JSON.stringify(dialogs)}; filas en victim: ${count()}`);
     const active = await session.script(`return document.activeElement?.className ?? ""`).catch(() => "");
     console.log(`      foco: ${active}`);
-    const keys = await session.script(`return (window.__e2eKeys ?? []).slice(-25)`).catch(() => []);
+    const keys = await session.script(`return (window.__e2eKeys ?? []).slice(-16)`).catch(() => []);
     console.log(`      teclas: ${JSON.stringify(keys)}`);
   } finally {
     await session.quit();
