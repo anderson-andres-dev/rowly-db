@@ -1,3 +1,4 @@
+import { commentAwareWrap } from "$lib/sqlCommentHighlight";
 import type { Completion, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
 import {
   keywordCompletionSource,
@@ -30,11 +31,12 @@ const NO_STATEMENT_FOLD = foldNodeProp.add({ Statement: () => null });
 const dialectCache = new WeakMap<SqlProfile, SQLDialect>();
 
 // El dialecto del editor para el SQL de un motor (o el estandar), con lo de
-// la app encima.
+// la app encima: los comentarios como los lee el motor (sqlCommentHighlight.ts).
 export function dialectFor(engine: SqlProfile): SQLDialect {
   const cached = dialectCache.get(engine);
   if (cached) return cached;
-  const configured = engine.editorDialect.configureLanguage({ props: [NO_STATEMENT_FOLD] });
+  const wrap = commentAwareWrap(engine.lexical, engine.editorDialect.language.parser);
+  const configured = engine.editorDialect.configureLanguage({ props: [NO_STATEMENT_FOLD], ...(wrap ? { wrap } : {}) });
   dialectCache.set(engine, configured);
   return configured;
 }
