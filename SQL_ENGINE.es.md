@@ -179,7 +179,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D6 | La versión del servidor se lee y se asigna a su línea, incluidas formas como `5.5.5-10.11.6-MariaDB` | la lectura de la versión: tests unitarios de `crates/drivers/*/src/version.rs`; la asignación a una línea es un **hueco** (§9) |
 | D7 | Cada línea de §5.3 se distingue de la anterior, en sus dos extremos | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | El driver lee cada tipo de columna que puede devolver una línea soportada | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<motor>/<línea>/reads.sql`) |
-| D9 | Motor, versión exacta, modo SQL, línea y revisión son coherentes entre backend y frontend; reconectar o cambiar modo invalida cachés y nunca aplica reglas de otro motor | `front/connectionIdentity.test.ts` cubre parte de la identidad; contexto e invalidación completos son un **hueco** (§9) |
+| D9 | Motor, versión exacta, modo SQL, línea y revisión son coherentes entre backend y frontend; reconectar o cambiar modo invalida cachés y nunca aplica reglas de otro motor | `app/src-tauri/src/drivers.rs` `cada_motor_del_frontend_llega_como_el_suyo` (cada ID de motor del frontend llega a su propio `Dialect`) y `front/stores/connectionCatalog.test.ts` (se descarta el refresco del catálogo de una conexión anterior) cubren una parte; contexto e invalidación completos son un **hueco** (§9) |
 
 ### 6.5 Capacidades
 
