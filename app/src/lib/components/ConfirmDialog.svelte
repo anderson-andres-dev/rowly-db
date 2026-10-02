@@ -32,12 +32,12 @@
   } = $props();
 
   let dialog = $state<HTMLDialogElement>();
+  let cancelButton = $state<HTMLButtonElement>();
 
   $effect(() => {
     void tick().then(() => {
       dialog?.showModal();
-      // Foco en el dialogo, no en un boton: un Enter accidental no confirma.
-      dialog?.focus();
+      cancelButton?.focus();
     });
   });
 
@@ -45,8 +45,11 @@
   // animacion de salida (dialogMotion.ts): el padre desmonta el componente
   // recien ahi, sin cortar la animacion.
   let answer: "confirm" | "alternate" | "cancel" = "cancel";
+  let answered = false;
 
   function respond(next: typeof answer) {
+    if (answered) return;
+    answered = true;
     answer = next;
     dialog?.close();
   }
@@ -78,13 +81,13 @@
       <p>{message}</p>
     </div>
   </div>
-  <div class="alert-actions">
+  <div class="alert-actions" data-dialog-actions>
     {#if alternateLabel}
       <button type="button" class="action-button danger-soft" onclick={() => respond("alternate")}>
         {alternateLabel}
       </button>
     {/if}
-    <button type="button" class="action-button secondary" onclick={() => respond("cancel")}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button secondary" bind:this={cancelButton} onclick={() => respond("cancel")}>{$t("common.cancel")}</button>
     <button
       type="button"
       class="action-button {tone === 'danger' && !alternateLabel ? 'danger' : 'primary'}"

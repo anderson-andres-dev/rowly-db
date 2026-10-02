@@ -2,7 +2,7 @@
   import { tooltip } from "$lib/tooltip";
   import { onMount } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { ArrowDownToLine, ChevronRight, CircleCheck, ExternalLink, LoaderCircle, RefreshCw, RotateCcw, Undo2 } from "@lucide/svelte";
+  import { ArrowDownToLine, ChevronRight, CircleAlert, CircleCheck, ExternalLink, LoaderCircle, RefreshCw, RotateCcw, Undo2 } from "@lucide/svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { locale, t, type MessageKey } from "$lib/i18n";
   import {
@@ -10,11 +10,10 @@
     checking,
     installRelease,
     installState,
-    lastChecked,
-    loadUpdateContext,
     newerRelease,
     releases,
     releasesError,
+    retryAt,
     restartApp,
     updateContext,
     updatePrefs,
@@ -29,11 +28,7 @@
   let showOlder = $state(false);
 
   onMount(() => {
-    void loadUpdateContext();
-    // Al abrir la sección se busca si no hay datos o si la última búsqueda
-    // tiene más de 10 minutos.
-    const stale = !$lastChecked || Date.now() - $lastChecked.getTime() > 10 * 60 * 1000;
-    if (!$releases || stale) void checkForUpdates();
+    void checkForUpdates({ automatic: true });
   });
 
   const busy = $derived($installState.phase === "downloading" || $installState.phase === "installing");
@@ -44,6 +39,13 @@
   const pendingRestart = $derived($installState.phase === "done" ? $installState : null);
   const mainReleases = $derived($visibleReleases.filter((release) => release.relation !== "older"));
   const olderReleases = $derived($visibleReleases.filter((release) => release.relation === "older"));
+  const checkErrorText = $derived.by(() => {
+    if (!$releasesError) return "";
+    const message = $t(`updates.error.${$releasesError}` as MessageKey);
+    if ($releasesError !== "rateLimited" || $retryAt === null) return message;
+    const time = new Intl.DateTimeFormat($locale, { hour: "numeric", minute: "2-digit" }).format(new Date($retryAt));
+    return `${message} ${$t("updates.error.retryAt", { time })}`;
+  });
 
   // El desvanecido de la lista de anteriores, solo del lado donde queda algo
   // por ver.
@@ -198,6 +200,11 @@
         {/if}
       </div>
       <div class="summary-actions">
+        {#if $releasesError}
+          <span class="check-error" role="img" aria-label={checkErrorText} title={checkErrorText}>
+            <CircleAlert size={15} aria-hidden="true" />
+          </span>
+        {/if}
         {#if pendingRestart}
           <button class="action-button primary small" type="button" onclick={() => void restartApp()}>
             <RotateCcw size={13} aria-hidden="true" />
@@ -212,7 +219,7 @@
               type="button"
               aria-label={$t("updates.check")}
               use:tooltip={$t("updates.check")}
-              disabled={$checking || busy}
+              disabled={$checking || busy || $retryAt !== null}
               onclick={() => void checkForUpdates()}
             >
               <RefreshCw size={14} class={$checking ? "spin" : undefined} aria-hidden="true" />
@@ -225,7 +232,7 @@
             <button
               class="action-button secondary small"
               type="button"
-              disabled={$checking || busy}
+              disabled={$checking || busy || $retryAt !== null}
               onclick={() => void checkForUpdates()}
             >
               <RefreshCw size={13} class={$checking ? "spin" : undefined} aria-hidden="true" />
@@ -237,16 +244,9 @@
     </div>
   </div>
 
-  {#if $releasesError}
-    <div class="set-group">
-      <div class="set-row error-row" role="alert">
-        <span>{$t(`updates.error.${$releasesError}` as MessageKey)}</span>
-        <button class="action-button secondary small" type="button" onclick={() => void checkForUpdates()}>{$t("updates.retry")}</button>
-      </div>
-    </div>
-  {:else if $releases && $visibleReleases.length === 0}
+  {#if $releases && $visibleReleases.length === 0 && !$releasesError}
     <p class="notice">{$t("updates.empty")}</p>
-  {:else if $releases}
+  {:else if $releases && $visibleReleases.length > 0}
     <h3 class="set-caption">{$t("updates.table.version")}</h3>
     <div class="set-group">
       {#each mainReleases as release (release.tag)}
@@ -387,9 +387,17 @@
     font-size: 0.75rem;
   }
 
-  .error-row {
+  .check-error {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
     color: var(--danger);
-    font-size: 0.8125rem;
+    cursor: help;
   }
 
   /* Una version por fila; lo que se despliega (notas, progreso, aviso)

@@ -20,7 +20,10 @@
   let chosen: ConnectionDriver | null = null;
 
   $effect(() => {
-    if (dialogEl && !dialogEl.open) dialogEl.showModal();
+    if (dialogEl && !dialogEl.open) {
+      dialogEl.showModal();
+      dialogEl.querySelector<HTMLButtonElement>(".driver")?.focus();
+    }
   });
 
   function choose(driver: ConnectionDriver) {
@@ -52,7 +55,7 @@
     </button>
   </header>
 
-  <div class="driver-list">
+  <div class="driver-list" data-dialog-actions>
     {#each connectionDrivers as driver (driver.id)}
       <button class="driver" type="button" onclick={() => choose(driver.id)}>
         <DriverLogo driver={driver.id} size={32} />
@@ -167,7 +170,7 @@
     transform: translateY(-1px);
   }
 
-  .driver:focus-visible {
+  .driver:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }

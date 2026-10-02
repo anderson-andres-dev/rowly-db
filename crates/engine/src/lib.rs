@@ -49,6 +49,13 @@ impl Dialect {
         }
     }
 
+    pub fn statement_starters(self) -> &'static [&'static str] {
+        match self {
+            Dialect::MySql | Dialect::MariaDb => MYSQL_STARTERS,
+            Dialect::Postgres => POSTGRES_STARTERS,
+        }
+    }
+
     /// Una tabla del sistema que se nombra sin schema y no esta en el
     /// catalogo cargado: `DUAL` en MySQL y MariaDB, `pg_tables` (pg_catalog
     /// esta siempre en el search_path) en Postgres. Existe; sus columnas no
@@ -115,6 +122,117 @@ impl Dialect {
     }
 }
 
+/// Los verbos con que empieza una sentencia del motor: lo que el guard reconoce
+/// aunque sqlparser no la lea y lo que el analizador usa para sugerir `SELEC`.
+const MYSQL_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "REPLACE",
+    "UPDATE",
+    "DELETE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "RENAME",
+    "SET",
+    "SHOW",
+    "USE",
+    "LOAD",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "UNLOCK",
+    "FLUSH",
+    "OPTIMIZE",
+    "ANALYZE",
+    "CHECK",
+    "CHECKSUM",
+    "REPAIR",
+    "HELP",
+    "EXPLAIN",
+    "DESCRIBE",
+    "DESC",
+    "START",
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "XA",
+    "KILL",
+    "RESET",
+    "PURGE",
+    "TABLE",
+    "VALUES",
+    "HANDLER",
+    "SIGNAL",
+    "RESIGNAL",
+    "INSTALL",
+    "UNINSTALL",
+    "CLONE",
+    "IMPORT",
+];
+
+const POSTGRES_STARTERS: &[&str] = &[
+    "SELECT",
+    "WITH",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "TRUNCATE",
+    "SET",
+    "RESET",
+    "SHOW",
+    "USE",
+    "COPY",
+    "PREPARE",
+    "EXECUTE",
+    "DEALLOCATE",
+    "GRANT",
+    "REVOKE",
+    "CALL",
+    "DO",
+    "LOCK",
+    "VACUUM",
+    "ANALYZE",
+    "CLUSTER",
+    "REINDEX",
+    "REFRESH",
+    "EXPLAIN",
+    "BEGIN",
+    "START",
+    "COMMIT",
+    "END",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "DECLARE",
+    "FETCH",
+    "MOVE",
+    "CLOSE",
+    "LISTEN",
+    "NOTIFY",
+    "UNLISTEN",
+    "COMMENT",
+    "SECURITY",
+    "DISCARD",
+    "CHECKPOINT",
+    "IMPORT",
+    "TABLE",
+    "VALUES",
+];
+
 /// MySQL, y por lo tanto MariaDB (ver `Dialect::unparsed_syntax`).
 const MYSQL_UNPARSED: &[&[&str]] = &[
     // Operadores: `a MOD 2`, `a SOUNDS LIKE 'x'`.
@@ -137,6 +255,39 @@ const MYSQL_UNPARSED: &[&[&str]] = &[
     &["INTO", "OUTFILE"],
     &["INTO", "DUMPFILE"],
     &["PREPARE"],
+    &["LOAD", "DATA"],
+    &["CREATE", "USER"],
+    // DDL: modificadores numericos, particiones, opciones de tabla, indices.
+    &["DECIMAL", "...", "UNSIGNED"],
+    &["DEC", "...", "UNSIGNED"],
+    &["NUMERIC", "...", "UNSIGNED"],
+    &["FLOAT", "...", "UNSIGNED"],
+    &["DOUBLE", "...", "UNSIGNED"],
+    &["REAL", "...", "UNSIGNED"],
+    &["ZEROFILL"],
+    &["PARTITION", "BY", "RANGE"],
+    &["PARTITION", "BY", "LIST"],
+    &["PARTITION", "BY", "HASH"],
+    &["PARTITION", "BY", "KEY"],
+    &["PARTITION", "BY", "LINEAR"],
+    &["ALTER", "TABLE", "...", "ENGINE"],
+    &["ALTER", "TABLE", "...", "AUTO_INCREMENT"],
+    &["ALTER", "TABLE", "...", "ROW_FORMAT"],
+    &["ALTER", "TABLE", "...", "CHARSET"],
+    &["DROP", "INDEX"],
+    &["DROP", "KEY"],
+    &["DROP", "FOREIGN", "KEY"],
+    &["DROP", "PRIMARY", "KEY"],
+    &["CREATE", "FULLTEXT"],
+    &["CREATE", "SPATIAL"],
+    &["CHECK", "OPTION"],
+    // Sentencias de sesion y administracion.
+    &["WITH", "CONSISTENT", "SNAPSHOT"],
+    &["SET", "...", ":="],
+    &["EXPLAIN", "FORMAT"],
+    &["FULL", "PROCESSLIST"],
+    &["LOCK", "TABLES"],
+    &["UNLOCK", "TABLES"],
     // UPDATE de una tabla con ORDER BY o LIMIT.
     &["UPDATE", "...", "ORDER", "BY"],
     &["UPDATE", "...", "LIMIT"],
@@ -144,6 +295,10 @@ const MYSQL_UNPARSED: &[&[&str]] = &[
 
 /// Lo propio de MariaDB, ademas de lo de MySQL.
 const MARIADB_UNPARSED: &[&[&str]] = &[
+    // ANALYZE SELECT ...: el plan con ejecucion de MariaDB (en MySQL es
+    // EXPLAIN ANALYZE).
+    &["ANALYZE", "SELECT"],
+    &["ANALYZE", "FORMAT"],
     // Secuencias: SELECT NEXT VALUE FOR s (PREVIOUS VALUE igual).
     &["NEXT", "VALUE", "FOR"],
     &["PREVIOUS", "VALUE", "FOR"],
@@ -155,6 +310,22 @@ const MARIADB_UNPARSED: &[&[&str]] = &[
 ];
 
 const POSTGRES_UNPARSED: &[&[&str]] = &[
+    &["CREATE", "DOMAIN"],
+    &["CREATE", "EXTENSION"],
+    &["CREATE", "POLICY"],
+    &["CREATE", "SEQUENCE"],
+    &["CREATE", "UNLOGGED"],
+    &["INCLUDING"],
+    &["EXCLUDING"],
+    &["NOT", "VALID"],
+    &["VALIDATE", "CONSTRAINT"],
+    &["CHECK", "OPTION"],
+    &["WITH", "DATA"],
+    &["OVERRIDING", "SYSTEM", "VALUE"],
+    &["OVERRIDING", "USER", "VALUE"],
+    // Tablas hijas: sqlparser no reconoce PARTITION OF.
+    &["PARTITION", "OF"],
+    &["WITH", "NO", "DATA"],
     &["FOR", "NO", "KEY", "UPDATE"],
     &["FOR", "KEY", "SHARE"],
     &["BETWEEN", "SYMMETRIC"],

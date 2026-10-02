@@ -1,0 +1,70 @@
+# Bases de datos de prueba de Rowly DB: MySQL, MariaDB y Postgres con Sakila /
+# Pagila (el mismo videoclub en los tres motores) mas rutinas propias en
+# rowly_test. Los datos viven en volumenes con nombre: sobreviven a
+# `docker compose down`; `down -v` los borra. Ver README.md.
+name: rowly-test-dbs
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: rowly-test-mysql
+    restart: "no"
+    command: ["--log-bin-trust-function-creators=1", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rowly
+      MYSQL_USER: rowly
+      MYSQL_PASSWORD: rowly
+    ports: ["127.0.0.1:33306:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./data:/data:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -prowly --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  mariadb:
+    image: mariadb:11
+    container_name: rowly-test-mariadb
+    restart: "no"
+    command: ["--log-bin-trust-function-creators=1", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
+    environment:
+      MARIADB_ROOT_PASSWORD: rowly
+      MARIADB_USER: rowly
+      MARIADB_PASSWORD: rowly
+    ports: ["127.0.0.1:33307:3306"]
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./data:/data:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -prowly --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: rowly-test-postgres
+    restart: "no"
+    environment:
+      POSTGRES_USER: rowly
+      POSTGRES_PASSWORD: rowly
+      POSTGRES_DB: postgres
+    ports: ["127.0.0.1:55432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./data:/data:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rowly -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+volumes:
+  mysql-data:
+  mariadb-data:
+  postgres-data:

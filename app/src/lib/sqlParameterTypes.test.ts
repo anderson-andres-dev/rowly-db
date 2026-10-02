@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { findParameters } from "./sqlParameters";
 import { parameterColumns, typeOfColumn } from "./sqlParameterTypes";
-import type { SqlLexical } from "./sqlStatements";
+import { ENGINES } from "./engines";
 import type { CatalogTable } from "./types";
 
-const MYSQL: SqlLexical = {
-  identifierQuotes: ["`"],
-  backslashEscapes: true,
-  hashComments: true,
-  dollarQuotes: false,
-  escapeStringPrefix: false,
-};
+const MYSQL = ENGINES.mysql.lexical;
 
 const column = (name: string, dataType: string) => ({ name, dataType, nullable: true, isPrimaryKey: false });
 

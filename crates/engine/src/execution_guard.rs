@@ -1,14 +1,14 @@
-//! Classifies a single SQL statement as destructive or not, so the app can
-//! ask for an explicit confirmation before running it. On a production
-//! connection every statement that writes needs confirmation too. This
-//! module knows nothing about execution, Tauri or SQLx: it only looks at the
-//! parsed AST.
+//! Clasifica una sentencia SQL para pedir confirmacion antes de ejecutarla.
+//! En produccion, cada escritura tambien necesita confirmacion. Usa el AST
+//! general y valida las definiciones de rutinas con tokens del motor.
 
 use crate::Dialect;
 use crate::pagination::query_is_read_only;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{AlterTableOperation, ObjectType, Query, SetExpr, Statement};
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Token, Tokenizer};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,10 +31,7 @@ pub enum DestructiveClassification {
     RequiresConfirmation(DestructiveStatement),
 }
 
-/// Parses `sql` under `dialect` and classifies the single resulting
-/// statement. Returns an error if `sql` is not exactly one statement, or if
-/// it cannot be parsed at all — the caller must not fall back to executing
-/// the statement in either case, since that would bypass the guard.
+/// Valida y clasifica una sola sentencia. Un error impide ejecutarla.
 pub fn classify_destructive_sql(
     sql: &str,
     dialect: Dialect,
@@ -51,20 +48,843 @@ pub fn classify_sql(
     dialect: Dialect,
     production: bool,
 ) -> Result<DestructiveClassification, ParserError> {
-    let statements = Parser::parse_sql(&*dialect.as_sqlparser_dialect(), sql)?;
-    let [statement] = statements.as_slice() else {
-        return Err(ParserError::ParserError(
-            "expected exactly one SQL statement".to_string(),
-        ));
+    classify_sql_with(sql, dialect, production, GuardOptions::default())
+}
+
+/// Lo que el guard no puede saber del texto y si de la conexion.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GuardOptions {
+    /// El `sql_mode` de MySQL / MariaDB incluye NO_BACKSLASH_ESCAPES: la barra
+    /// invertida es un caracter mas dentro de una cadena, no un escape.
+    pub no_backslash_escapes: bool,
+}
+
+pub fn classify_sql_with(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+    options: GuardOptions,
+) -> Result<DestructiveClassification, ParserError> {
+    let with_comments =
+        double_backslashes(expand_executable_comments(sql, dialect)?, dialect, options);
+    let without_comments = double_backslashes(Cow::Borrowed(sql), dialect, options);
+    if with_comments == without_comments {
+        return classify_text(&without_comments, dialect, production);
+    }
+    // El servidor solo ejecuta /*!NNNNN ... */ si su version llega a NNNNN, y
+    // no se sabe cual es: se clasifica con el contenido y sin el, y gana la
+    // lectura que pide mas cuidado.
+    let with = classify_text(&with_comments, dialect, production);
+    let without = classify_text(&without_comments, dialect, production);
+    match (with, without) {
+        (Ok(with), Ok(without)) => Ok(stricter(with, without)),
+        (Ok(with), Err(_)) => Ok(with),
+        // sqlparser no conoce todo lo que MySQL acepta dentro de un comentario
+        // ejecutable (/*!40001 SQL_NO_CACHE */): vale la lectura sin el si es la
+        // misma clase de sentencia y no hay otro `;` que separe una nueva.
+        (Err(error), Ok(without)) => {
+            if same_single_statement(&without_comments, &with_comments, dialect) {
+                Ok(without)
+            } else {
+                Err(error)
+            }
+        }
+        (Err(error), Err(_)) => Err(error),
+    }
+}
+
+fn stricter(
+    a: DestructiveClassification,
+    b: DestructiveClassification,
+) -> DestructiveClassification {
+    match a {
+        DestructiveClassification::RequiresConfirmation(_) => a,
+        DestructiveClassification::NotDestructive => b,
+    }
+}
+
+fn same_single_statement(original: &str, expanded: &str, dialect: Dialect) -> bool {
+    let words = |sql: &str| {
+        Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+            .tokenize()
+            .ok()
+            .map(|tokens| {
+                tokens
+                    .into_iter()
+                    .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+                    .collect::<Vec<Token>>()
+            })
     };
-    Ok(match classify_statement(statement) {
-        DestructiveClassification::NotDestructive
-            if production && !statement_is_read_only(statement) =>
-        {
+    let (Some(original), Some(expanded)) = (words(original), words(expanded)) else {
+        return false;
+    };
+    let single = !expanded
+        .iter()
+        .take(expanded.len().saturating_sub(1))
+        .any(|token| *token == Token::SemiColon);
+    single && original.first().map(token_word) == expanded.first().map(token_word)
+}
+
+fn classify_text(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Result<DestructiveClassification, ParserError> {
+    if let Some(result) = classify_routine(sql, dialect, production) {
+        return result;
+    }
+    if let Some(result) = classify_unparsed(sql, dialect, production) {
+        return result;
+    }
+    match parse_single_statement(sql, dialect) {
+        Ok(statement) => Ok(match classify_statement(&statement) {
+            DestructiveClassification::NotDestructive
+                if production && !statement_is_read_only(&statement) =>
+            {
+                DestructiveClassification::RequiresConfirmation(
+                    DestructiveStatement::WriteInProduction,
+                )
+            }
+            classification => classification,
+        }),
+        // sqlparser no lee todo lo que el motor acepta: si es una sola
+        // sentencia que empieza como una del motor, vale por su estructura.
+        Err(error) => classify_by_structure(sql, dialect, production).unwrap_or(Err(error)),
+    }
+}
+
+fn parse_single_statement(sql: &str, dialect: Dialect) -> Result<Statement, ParserError> {
+    let sqlparser_dialect = dialect.as_sqlparser_dialect();
+    let mut parser = Parser::new(&*sqlparser_dialect).try_with_sql(sql)?;
+    let mut statements = parser.parse_statements()?;
+    // sqlparser deja de leer sin error en un END donde esperaba un `;` y
+    // descarta lo que sigue (`SELECT 1 END; DROP TABLE t`): lo que queda sin
+    // leer es una sentencia mas que el servidor si ejecutaria.
+    if parser.peek_token().token != Token::EOF || statements.len() != 1 {
+        return Err(routine_error("expected exactly one SQL statement"));
+    }
+    Ok(statements.remove(0))
+}
+
+// Una sola sentencia que empieza por un verbo del motor y que sqlparser no
+// entiende (CREATE SEQUENCE ... INCREMENT, PREPARE ... FROM @sql, LOAD DATA,
+// SELECT ... INTO @a, @b...). El servidor valida su sintaxis; aqui solo
+// importa que sea una y lo destructiva que es, asi que se mira por sus
+// palabras: lo que pueda borrar sin WHERE pide confirmacion, como en el
+// camino normal.
+fn classify_by_structure(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let first = tokens.first().map(token_word)?;
+    if !dialect.statement_starters().contains(&first.as_str()) {
+        return None;
+    }
+    if let Err(error) = single_top_level_statement(&tokens) {
+        return Some(Err(error));
+    }
+    let words: Vec<String> = tokens.iter().map(token_word).collect();
+    let has = |word: &str| words.iter().any(|w| w == word);
+    let mut depth = 0usize;
+    let mut top_level_where = false;
+    for token in &tokens {
+        match token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth = depth.saturating_sub(1),
+            _ if depth == 0 && token_word(token) == "WHERE" => top_level_where = true,
+            _ => {}
+        }
+    }
+    // El objeto, saltando los modificadores: DROP TEMPORARY TABLES, ALTER IGNORE TABLE.
+    let object = words
+        .iter()
+        .skip(1)
+        .map(String::as_str)
+        .find(|word| {
+            !matches!(
+                *word,
+                "TEMPORARY" | "IGNORE" | "ONLINE" | "OFFLINE" | "GLOBAL" | "LOCAL" | "UNLOGGED"
+            )
+        })
+        .unwrap_or("");
+    let drops_column = words.iter().enumerate().any(|(index, word)| {
+        word == "DROP"
+            && !matches!(
+                words.get(index + 1).map(String::as_str),
+                Some(
+                    "INDEX"
+                        | "KEY"
+                        | "PRIMARY"
+                        | "FOREIGN"
+                        | "CONSTRAINT"
+                        | "CHECK"
+                        | "PARTITION"
+                        | "SUBPARTITION"
+                )
+            )
+    });
+    let drops_partition = words.iter().enumerate().any(|(index, word)| {
+        word == "DROP"
+            && matches!(
+                words.get(index + 1).map(String::as_str),
+                Some("PARTITION" | "SUBPARTITION")
+            )
+    });
+    let destructive = match first.as_str() {
+        "TRUNCATE" => Some(DestructiveStatement::Truncate),
+        "DROP" => match object {
+            "TABLE" | "TABLES" => Some(DestructiveStatement::DropTable),
+            "SCHEMA" => Some(DestructiveStatement::DropSchema),
+            "DATABASE" | "OWNED" => Some(DestructiveStatement::DropDatabase),
+            _ => None,
+        },
+        "ALTER" if object == "TABLE" && drops_column => Some(DestructiveStatement::DropColumn),
+        "ALTER" if object == "TABLE" && (drops_partition || has("TRUNCATE")) => {
+            Some(DestructiveStatement::Truncate)
+        }
+        _ if has("TRUNCATE") => Some(DestructiveStatement::Truncate),
+        _ if has("DELETE") && !top_level_where => Some(DestructiveStatement::DeleteWithoutWhere),
+        _ if has("UPDATE") && !top_level_where && first != "SELECT" => {
+            Some(DestructiveStatement::UpdateWithoutWhere)
+        }
+        _ => None,
+    };
+    // INTO OUTFILE / DUMPFILE escribe un archivo en el servidor.
+    let read_only = (matches!(
+        first.as_str(),
+        "SELECT" | "SHOW" | "USE" | "DESCRIBE" | "DESC" | "HELP" | "TABLE" | "VALUES"
+    ) && !has("OUTFILE")
+        && !has("DUMPFILE"))
+        || (first == "EXPLAIN" && !has("ANALYZE"));
+    Some(Ok(match destructive {
+        Some(statement) => DestructiveClassification::RequiresConfirmation(statement),
+        None if production && !read_only => {
             DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
         }
-        classification => classification,
+        None => DestructiveClassification::NotDestructive,
+    }))
+}
+
+// El parser general no entiende todos los cuerpos de rutina de los motores.
+// Solo esta ruta valida el texto completo antes de entregarlo al driver.
+fn classify_routine(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let word = |index: usize| -> String {
+        match tokens.get(index) {
+            Some(Token::Word(value)) if value.quote_style.is_none() => {
+                value.value.to_ascii_uppercase()
+            }
+            _ => String::new(),
+        }
+    };
+    if word(0) != "CREATE" {
+        return None;
+    }
+    let mut at = 1;
+    if word(at) == "OR" && word(at + 1) == "REPLACE" {
+        at += 2;
+    }
+    if word(at) == "DEFINER" {
+        at += 1;
+        if tokens.get(at) == Some(&Token::Eq) {
+            at += 1;
+        }
+        while at < tokens.len()
+            && !matches!(
+                word(at).as_str(),
+                "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
+            )
+        {
+            if matches!(tokens[at], Token::SemiColon) || at > 12 {
+                return Some(Err(routine_error("invalid routine definition")));
+            }
+            at += 1;
+        }
+    }
+    let kind = word(at);
+    let allowed = match dialect {
+        Dialect::Postgres => matches!(kind.as_str(), "PROCEDURE" | "FUNCTION" | "TRIGGER"),
+        Dialect::MySql | Dialect::MariaDb => matches!(
+            kind.as_str(),
+            "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
+        ),
+    };
+    if !allowed {
+        return None;
+    }
+    // sqlparser no lee todos los CREATE TRIGGER (EXECUTE FUNCTION f('texto')):
+    // uno nunca destruye datos, solo importa que sea una sola sentencia.
+    if matches!(dialect, Dialect::Postgres) && kind == "TRIGGER" {
+        return Some(single_top_level_statement(&tokens).map(|()| {
+            if production {
+                DestructiveClassification::RequiresConfirmation(
+                    DestructiveStatement::WriteInProduction,
+                )
+            } else {
+                DestructiveClassification::NotDestructive
+            }
+        }));
+    }
+    Some(validate_routine(&tokens, at, &kind, dialect).map(|()| {
+        if production {
+            DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
+        } else {
+            DestructiveClassification::NotDestructive
+        }
+    }))
+}
+
+// MySQL y MariaDB ejecutan el contenido de /*! ... */ (y /*M! ... */ en
+// MariaDB) como SQL; el tokenizer lo toma por un comentario. Se clasifica el
+// texto con ese contenido a la vista; al servidor se envia el original. La
+// version se ignora: no se conoce la del servidor, asi que cuenta como
+// ejecutable.
+fn expand_executable_comments(sql: &str, dialect: Dialect) -> Result<Cow<'_, str>, ParserError> {
+    if dialect == Dialect::Postgres || !sql.contains("/*") {
+        return Ok(Cow::Borrowed(sql));
+    }
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut copied = 0;
+    let mut index = 0;
+    let mut expanded = false;
+    while index < bytes.len() {
+        match bytes[index] {
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == b'\\' && quote != b'`' {
+                        index += 2;
+                    } else if bytes[index] == quote {
+                        index += 1;
+                        if bytes.get(index) != Some(&quote) {
+                            break;
+                        }
+                        index += 1;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+            b'#' => index = line_end(bytes, index),
+            b'-' if bytes.get(index + 1) == Some(&b'-')
+                && bytes.get(index + 2).is_none_or(|b| b.is_ascii_whitespace()) =>
+            {
+                index = line_end(bytes, index);
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                let marker = match (bytes.get(index + 2), bytes.get(index + 3)) {
+                    (Some(b'!'), _) => Some(3),
+                    (Some(b'M'), Some(b'!')) if dialect == Dialect::MariaDb => Some(4),
+                    _ => None,
+                };
+                let close = sql[index + 2..].find("*/").map(|at| at + index + 2);
+                match (marker, close) {
+                    (Some(skip), Some(close)) => {
+                        let mut from = index + skip;
+                        while bytes.get(from).is_some_and(u8::is_ascii_digit) {
+                            from += 1;
+                        }
+                        out.push_str(&sql[copied..index]);
+                        out.push(' ');
+                        out.push_str(&sql[from.min(close)..close]);
+                        out.push(' ');
+                        copied = close + 2;
+                        index = close + 2;
+                        expanded = true;
+                    }
+                    (Some(_), None) => {
+                        return Err(routine_error("unterminated executable comment"));
+                    }
+                    (None, Some(close)) => index = close + 2,
+                    (None, None) => index = bytes.len(),
+                }
+            }
+            _ => index += 1,
+        }
+    }
+    if !expanded {
+        return Ok(Cow::Borrowed(sql));
+    }
+    out.push_str(&sql[copied.min(sql.len())..]);
+    Ok(Cow::Owned(out))
+}
+
+// Con NO_BACKSLASH_ESCAPES la barra es un caracter mas dentro de una cadena,
+// pero el tokenizer de sqlparser siempre la toma por escape: se duplica para
+// que lea lo mismo que el servidor.
+fn double_backslashes<'a>(
+    sql: Cow<'a, str>,
+    dialect: Dialect,
+    options: GuardOptions,
+) -> Cow<'a, str> {
+    if dialect == Dialect::Postgres || !options.no_backslash_escapes || !sql.contains('\\') {
+        return sql;
+    }
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len() + 8);
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        index += 1;
+                        if bytes.get(index) != Some(&quote) {
+                            break;
+                        }
+                        index += 1;
+                    } else {
+                        if bytes[index] == b'\\' && quote != b'`' {
+                            out.push_str(&sql[copied..=index]);
+                            out.push('\\');
+                            copied = index + 1;
+                        }
+                        index += 1;
+                    }
+                }
+            }
+            b'#' => index = line_end(bytes, index),
+            b'-' if bytes.get(index + 1) == Some(&b'-')
+                && bytes.get(index + 2).is_none_or(|b| b.is_ascii_whitespace()) =>
+            {
+                index = line_end(bytes, index);
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index = sql[index + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |at| at + index + 4);
+            }
+            _ => index += 1,
+        }
+    }
+    out.push_str(&sql[copied..]);
+    Cow::Owned(out)
+}
+
+fn line_end(bytes: &[u8], from: usize) -> usize {
+    bytes[from..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(bytes.len(), |at| from + at)
+}
+
+// Sentencias validas del motor que sqlparser no lee (ALTER PROCEDURE, DROP
+// EVENT, DO $$ ... $$...). Se reconocen por sus primeras palabras y valen si
+// el texto es una sola sentencia: ningun `;` de nivel superior salvo el final
+// (las cadenas, los comentarios y los $$ son un solo token). Escriben, asi
+// que en produccion piden confirmacion.
+fn classify_unparsed(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+) -> Option<Result<DestructiveClassification, ParserError>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize()
+        .ok()?;
+    let tokens: Vec<Token> = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let word = |index: usize| tokens.get(index).map(token_word).unwrap_or_default();
+    let (first, second, third) = (word(0), word(1), word(2));
+    let known = match dialect {
+        Dialect::MySql | Dialect::MariaDb => {
+            matches!(
+                (first.as_str(), second.as_str()),
+                ("DROP" | "ALTER", "EVENT")
+                    | ("ALTER", "PROCEDURE" | "FUNCTION")
+                    | ("GRANT" | "REVOKE", "EXECUTE")
+                    | ("OPTIMIZE" | "CHECK" | "REPAIR", "TABLE")
+            ) || first == "DO"
+                || first == "HELP"
+        }
+        Dialect::Postgres => {
+            matches!(
+                (first.as_str(), second.as_str()),
+                ("ALTER", "FUNCTION" | "PROCEDURE" | "ROUTINE")
+                    | ("GRANT" | "REVOKE", "EXECUTE")
+                    | ("CREATE", "RULE" | "AGGREGATE" | "OPERATOR")
+            ) || first == "DO"
+                || (first == "COMMENT"
+                    && second == "ON"
+                    && matches!(
+                        third.as_str(),
+                        "FUNCTION" | "PROCEDURE" | "ROUTINE" | "TRIGGER"
+                    ))
+                || (first == "CREATE" && second == "OR" && third == "REPLACE" && word(3) == "RULE")
+        }
+    };
+    if !known {
+        return None;
+    }
+    if dialect == Dialect::Postgres && first == "DO" && do_block_changes_data(&tokens) {
+        return Some(Err(routine_error(
+            "a DO block that deletes, updates, truncates, drops or runs dynamic SQL can't be run from here",
+        )));
+    }
+    let single = if matches!(dialect, Dialect::MySql | Dialect::MariaDb)
+        && second == "EVENT"
+        && first == "ALTER"
+    {
+        // ALTER EVENT ... DO <cuerpo>: el cuerpo puede ser un bloque.
+        match tokens.iter().position(|token| token_word(token) == "DO") {
+            Some(at) => validate_mysql_body(&tokens, at + 1),
+            None => single_top_level_statement(&tokens),
+        }
+    } else {
+        single_top_level_statement(&tokens)
+    };
+    Some(single.map(|()| {
+        if production {
+            DestructiveClassification::RequiresConfirmation(DestructiveStatement::WriteInProduction)
+        } else {
+            DestructiveClassification::NotDestructive
+        }
+    }))
+}
+
+// El cuerpo de un DO es una cadena que el guard no lee: si menciona algo que
+// borra o cambia datos (o SQL dinamico), no se ejecuta sin mirarlo.
+fn do_block_changes_data(tokens: &[Token]) -> bool {
+    tokens.iter().any(|token| {
+        let body = match token {
+            Token::DollarQuotedString(quoted) => quoted.value.as_str(),
+            Token::SingleQuotedString(text) => text.as_str(),
+            _ => return false,
+        };
+        body.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .any(|word| {
+                ["DELETE", "UPDATE", "TRUNCATE", "DROP", "EXECUTE"]
+                    .iter()
+                    .any(|danger| word.eq_ignore_ascii_case(danger))
+            })
     })
+}
+
+fn single_top_level_statement(tokens: &[Token]) -> Result<(), ParserError> {
+    let mut parens = 0usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::LParen => parens += 1,
+            Token::RParen => parens = parens.saturating_sub(1),
+            Token::SemiColon if parens == 0 => return trailing_terminator(&tokens[index..]),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn routine_error(message: &str) -> ParserError {
+    ParserError::ParserError(message.to_string())
+}
+
+fn token_word(token: &Token) -> String {
+    match token {
+        Token::Word(value) if value.quote_style.is_none() => value.value.to_ascii_uppercase(),
+        _ => String::new(),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Open {
+    Block,
+    If,
+    Case,
+    CaseExpr,
+    While,
+    Loop,
+    Repeat,
+}
+
+fn validate_routine(
+    tokens: &[Token],
+    kind_at: usize,
+    kind: &str,
+    dialect: Dialect,
+) -> Result<(), ParserError> {
+    let invalid = || routine_error("invalid routine definition");
+    if !matches!(tokens.get(kind_at + 1), Some(Token::Word(_)))
+        || matches!(
+            token_word(&tokens[kind_at + 1]).as_str(),
+            "BEGIN" | "END" | "SELECT"
+        )
+        || tokens.iter().any(|token| token_word(token) == "DELIMITER")
+    {
+        return Err(invalid());
+    }
+    if dialect == Dialect::Postgres {
+        return validate_postgres_body(tokens, kind_at + 1);
+    }
+    let mut parens = 0usize;
+    let mut body = None;
+    for (index, token) in tokens.iter().enumerate().skip(kind_at + 1) {
+        match token {
+            Token::LParen => parens += 1,
+            Token::RParen => {
+                if parens == 0 {
+                    return Err(invalid());
+                }
+                parens -= 1;
+            }
+            _ => {}
+        }
+        if parens != 0 {
+            continue;
+        }
+        let word = token_word(token);
+        if kind == "TRIGGER"
+            && !tokens[kind_at + 1..index]
+                .iter()
+                .any(|token| token_word(token) == "ROW")
+        {
+            continue;
+        }
+        if word == "DO" && kind == "EVENT" {
+            body = Some(index + 1);
+            break;
+        }
+        if matches!(
+            word.as_str(),
+            "BEGIN"
+                | "RETURN"
+                | "SET"
+                | "INSERT"
+                | "UPDATE"
+                | "DELETE"
+                | "SELECT"
+                | "CALL"
+                | "REPLACE"
+                | "WITH"
+        ) {
+            body = Some(index);
+            break;
+        }
+    }
+    let Some(body) = body.filter(|_| parens == 0) else {
+        return Err(invalid());
+    };
+    if tokens[kind_at + 1..body].contains(&Token::SemiColon) {
+        return Err(routine_error("expected exactly one SQL statement"));
+    }
+    let labeled =
+        body >= 2 && tokens[body - 1] == Token::Colon && matches!(tokens[body - 2], Token::Word(_));
+    validate_mysql_body(tokens, if labeled { body - 2 } else { body })
+}
+
+// BEGIN y END solo abren y cierran un bloque al inicio de una sentencia: en
+// MySQL `begin` y `end` pueden ser alias o columnas, y un CASE de expresion
+// tambien cierra con END. Cualquier duda rechaza la definicion.
+fn validate_mysql_body(tokens: &[Token], first: usize) -> Result<(), ParserError> {
+    let invalid = || routine_error("invalid routine definition");
+    let mut stack: Vec<(Open, Option<String>)> = Vec::new();
+    let mut start = true;
+    let mut label: Option<String> = None;
+    let mut declaring = false;
+    let mut index = first;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        // Tras un punto, una palabra reservada es un nombre (`t.case`).
+        let word = if index > first && tokens[index - 1] == Token::Period {
+            String::new()
+        } else {
+            token_word(token)
+        };
+        if start && !word.is_empty() && tokens.get(index + 1) == Some(&Token::Colon) {
+            label = Some(word);
+            index += 2;
+            continue;
+        }
+        if *token == Token::SemiColon {
+            if stack.is_empty() {
+                return trailing_terminator(&tokens[index..]);
+            }
+            start = true;
+            declaring = false;
+            index += 1;
+            continue;
+        }
+        let top = stack.last().map(|entry| entry.0);
+        match word.as_str() {
+            "BEGIN" if start => {
+                stack.push((Open::Block, label.take()));
+            }
+            "IF" if start => {
+                stack.push((Open::If, label.take()));
+                start = false;
+            }
+            "CASE" => {
+                let open = if start { Open::Case } else { Open::CaseExpr };
+                stack.push((open, label.take()));
+                start = false;
+            }
+            "WHILE" if start => {
+                stack.push((Open::While, label.take()));
+                start = false;
+            }
+            "LOOP" if start => stack.push((Open::Loop, label.take())),
+            "REPEAT" if start => stack.push((Open::Repeat, label.take())),
+            "THEN" | "ELSE" => start = matches!(top, Some(Open::If | Open::Case)),
+            "DO" if top == Some(Open::While) => start = true,
+            "UNTIL" if top == Some(Open::Repeat) => start = false,
+            "DECLARE" if start => {
+                declaring = true;
+                start = false;
+            }
+            "HANDLER"
+                if declaring
+                    && index > first
+                    && matches!(
+                        token_word(&tokens[index - 1]).as_str(),
+                        "CONTINUE" | "EXIT" | "UNDO"
+                    ) =>
+            {
+                index = after_handler_conditions(tokens, index + 1).ok_or_else(invalid)?;
+                start = true;
+                declaring = false;
+                continue;
+            }
+            "END" => {
+                let closes = match tokens.get(index + 1).map(token_word).as_deref() {
+                    Some("IF") => Some(Open::If),
+                    Some("WHILE") => Some(Open::While),
+                    Some("LOOP") => Some(Open::Loop),
+                    Some("REPEAT") => Some(Open::Repeat),
+                    Some("CASE") => Some(Open::Case),
+                    _ => None,
+                };
+                let entry = if top == Some(Open::CaseExpr) {
+                    stack.pop()
+                } else if closes.is_some() && closes == top {
+                    index += 1;
+                    stack.pop()
+                } else if start && top == Some(Open::Block) {
+                    stack.pop()
+                } else if start || stack.is_empty() {
+                    return Err(invalid());
+                } else {
+                    None
+                };
+                if let Some((open, name)) = entry {
+                    if stack.is_empty() && open != Open::CaseExpr {
+                        let mut rest = &tokens[index + 1..];
+                        if name.is_some() && rest.first().map(token_word) == name {
+                            rest = &rest[1..];
+                        }
+                        return trailing_terminator(rest);
+                    }
+                }
+                start = false;
+            }
+            _ => start = false,
+        }
+        index += 1;
+    }
+    if stack.is_empty() {
+        Ok(())
+    } else {
+        Err(invalid())
+    }
+}
+
+// Despues de `HANDLER FOR condicion[, condicion]...` empieza la accion, que
+// es una sentencia (puede ser un BEGIN).
+fn after_handler_conditions(tokens: &[Token], from: usize) -> Option<usize> {
+    let mut index = from;
+    if token_word(tokens.get(index)?) != "FOR" {
+        return None;
+    }
+    index += 1;
+    loop {
+        match token_word(tokens.get(index)?).as_str() {
+            "SQLSTATE" => {
+                index += 1;
+                if token_word(tokens.get(index)?) == "VALUE" {
+                    index += 1;
+                }
+                index += 1;
+            }
+            "NOT" => index += 2,
+            _ => index += 1,
+        }
+        if tokens.get(index) == Some(&Token::Comma) {
+            index += 1;
+        } else {
+            return (index <= tokens.len()).then_some(index);
+        }
+    }
+}
+
+// Sin BEGIN ATOMIC la definicion es una sola sentencia si no hay mas `;` de
+// nivel superior que el final: los cuerpos entre comillas o $$ son un solo
+// token. Con BEGIN ATOMIC los `;` del cuerpo cuentan hasta su END.
+fn validate_postgres_body(tokens: &[Token], from: usize) -> Result<(), ParserError> {
+    let mut parens = 0usize;
+    for index in from..tokens.len() {
+        match &tokens[index] {
+            Token::LParen => parens += 1,
+            Token::RParen => parens = parens.saturating_sub(1),
+            Token::SemiColon if parens == 0 => return trailing_terminator(&tokens[index..]),
+            _ if parens == 0
+                && token_word(&tokens[index]) == "BEGIN"
+                && tokens.get(index + 1).map(token_word).as_deref() == Some("ATOMIC") =>
+            {
+                return validate_atomic_body(tokens, index + 2);
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn validate_atomic_body(tokens: &[Token], from: usize) -> Result<(), ParserError> {
+    let mut start = true;
+    let mut cases = 0usize;
+    for index in from..tokens.len() {
+        let word = token_word(&tokens[index]);
+        if tokens[index] == Token::SemiColon {
+            start = true;
+        } else if word == "END" && start {
+            return trailing_terminator(&tokens[index + 1..]);
+        } else if word == "END" && cases > 0 {
+            cases -= 1;
+        } else if word == "CASE" {
+            cases += 1;
+            start = false;
+        } else if word == "BEGIN" && start {
+            break;
+        } else {
+            start = false;
+        }
+    }
+    Err(routine_error("invalid routine definition"))
+}
+
+fn trailing_terminator(tokens: &[Token]) -> Result<(), ParserError> {
+    match tokens {
+        [] | [Token::SemiColon] => Ok(()),
+        _ => Err(routine_error("expected exactly one SQL statement")),
+    }
 }
 
 /// Statements that never change data or schema. `EXPLAIN` counts only when
@@ -152,7 +972,16 @@ fn classify_alter_table(operations: &[AlterTableOperation]) -> DestructiveClassi
 /// `SetExpr::Update`/`SetExpr::Delete` wrapping the same statement, so a CTE
 /// around a destructive statement is classified the same as one without it.
 fn classify_query(query: &Query) -> DestructiveClassification {
-    classify_set_expr(&query.body)
+    // Un CTE tambien puede borrar o actualizar (WITH d AS (DELETE ... RETURNING *)).
+    let ctes = query
+        .with
+        .iter()
+        .flat_map(|with| with.cte_tables.iter())
+        .map(|cte| classify_query(&cte.query));
+    std::iter::once(classify_set_expr(&query.body))
+        .chain(ctes)
+        .find(|classification| *classification != DestructiveClassification::NotDestructive)
+        .unwrap_or(DestructiveClassification::NotDestructive)
 }
 
 fn classify_set_expr(expr: &SetExpr) -> DestructiveClassification {
@@ -185,6 +1014,76 @@ mod tests {
             DestructiveClassification::NotDestructive,
             "expected {sql:?} to not require confirmation"
         );
+    }
+
+    #[test]
+    fn routine_definitions_reach_the_driver_as_one_statement() {
+        let mysql = [
+            "CREATE PROCEDURE p() BEGIN SELECT 1; BEGIN IF 1 THEN SELECT 2; END IF; SELECT CASE WHEN 1 THEN 2 ELSE 3 END; END; END",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1",
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = 1",
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN SET NEW.x = 1; END",
+            "CREATE EVENT e ON SCHEDULE EVERY 1 DAY DO BEGIN SET @x = 1; END",
+            "CREATE OR REPLACE DEFINER=`u`@`%` PROCEDURE p() BEGIN SELECT 1; END;",
+            "CREATE PROCEDURE p() outer_label: BEGIN WHILE 1 DO SELECT CASE WHEN 1 THEN 2 ELSE 3 END; END WHILE; END outer_label;",
+            "CREATE PROCEDURE p() BEGIN SELECT `END` FROM t; SELECT 'END' FROM t; END",
+        ];
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in mysql {
+                assert!(classify_destructive_sql(sql, dialect).is_ok(), "{sql}");
+            }
+        }
+        let postgres = [
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $$BEGIN SELECT 1; END$$",
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $tag$BEGIN SELECT 1; END$tag$;",
+            "CREATE FUNCTION f() RETURNS INT AS 'SELECT 1; SELECT 2' LANGUAGE SQL",
+            "CREATE FUNCTION f() RETURNS INT LANGUAGE SQL BEGIN ATOMIC SELECT 1; END",
+            "CREATE TRIGGER trg BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION f()",
+        ];
+        for sql in postgres {
+            assert!(
+                classify_destructive_sql(sql, Dialect::Postgres).is_ok(),
+                "{sql}"
+            );
+        }
+        assert_eq!(
+            classify_sql(mysql[1], Dialect::MySql, true).unwrap(),
+            DestructiveClassification::RequiresConfirmation(
+                DestructiveStatement::WriteInProduction
+            )
+        );
+    }
+
+    #[test]
+    fn routine_guard_rejects_extra_text_and_unbalanced_blocks() {
+        let invalid = [
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END;;",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END /* cierre */ DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 'END; DROP TABLE t'; END; DROP TABLE t",
+            "CREATE PROCEDURE p() BEGIN SELECT 1;",
+            "CREATE PROCEDURE p() END",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1; DROP TABLE t",
+            "CREATE FUNCTION f() RETURNS INT RETURN 1;;",
+            "CREATE PROCEDURE p() DELIMITER $$ BEGIN SELECT 1; END",
+            "CREATE PROCEDURE p() BEGIN SELECT 'END'; /* END */ SELECT 2;",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END wrong_label",
+            "CREATE FUNCTION f(); RETURN 1",
+        ];
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in invalid {
+                assert!(classify_destructive_sql(sql, dialect).is_err(), "{sql}");
+            }
+        }
+        for sql in [
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $$SELECT 1$$; DROP TABLE t",
+            "CREATE PROCEDURE p() LANGUAGE SQL AS $tag$SELECT 1$tag$;;",
+        ] {
+            assert!(
+                classify_destructive_sql(sql, Dialect::Postgres).is_err(),
+                "{sql}"
+            );
+        }
     }
 
     #[test]
@@ -502,5 +1401,389 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    const MYSQL: [Dialect; 2] = [Dialect::MySql, Dialect::MariaDb];
+
+    fn accepted(sql: &str, dialects: &[Dialect]) {
+        for dialect in dialects {
+            assert!(
+                classify_destructive_sql(sql, *dialect).is_ok(),
+                "{dialect:?} should accept {sql:?}"
+            );
+        }
+    }
+
+    fn rejected(sql: &str, dialects: &[Dialect]) {
+        for dialect in dialects {
+            assert!(
+                classify_destructive_sql(sql, *dialect).is_err(),
+                "{dialect:?} should reject {sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn begin_and_end_as_names_do_not_open_or_close_blocks() {
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT begin FROM t; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT CASE WHEN a THEN begin ELSE 0 END; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1 AS begin; END; DROP TABLE t; END",
+            &[Dialect::Postgres],
+        );
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT start, end FROM t; END",
+            &MYSQL,
+        );
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT 1 AS begin; SELECT begin FROM t; END",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn single_statement_routines_with_case_expressions_are_accepted() {
+        accepted(
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = CASE WHEN NEW.y > 0 THEN 1 ELSE 0 END",
+            &MYSQL,
+        );
+        accepted(
+            "CREATE FUNCTION f() RETURNS INT RETURN (SELECT CASE WHEN a THEN 1 ELSE 0 END)",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET NEW.x = CASE WHEN a THEN 1 END; DROP TABLE t",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn mysql_control_blocks_balance_and_handlers_may_open_blocks() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; DECLARE CONTINUE HANDLER FOR NOT FOUND, SQLSTATE '42S02' SET x = 1; lbl: LOOP LEAVE lbl; END LOOP lbl; WHILE x < 3 DO SET x = x + 1; END WHILE; REPEAT SET x = x - 1; UNTIL x < 1 END REPEAT; CASE x WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE; IF x THEN SELECT 1; ELSEIF y THEN SELECT 2; ELSE SELECT 3; END IF; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END IF; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN IF a THEN SELECT 1; END; DROP TABLE t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END x; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected("CREATE PROCEDURE p() BEGIN SELECT 1;", &MYSQL);
+    }
+
+    #[test]
+    fn postgres_function_attributes_after_the_body_are_accepted() {
+        for tail in [
+            "LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE",
+            "LANGUAGE \"plpgsql\" CALLED ON NULL INPUT",
+            "LANGUAGE plpython3u RETURNS NULL ON NULL INPUT",
+            "LANGUAGE sql COST 10 ROWS 5 SECURITY DEFINER SET search_path = public",
+        ] {
+            accepted(
+                &format!("CREATE FUNCTION f() RETURNS int AS $$ select 1 $$ {tail}"),
+                &[Dialect::Postgres],
+            );
+        }
+        rejected(
+            "CREATE FUNCTION f() RETURNS int AS $$ select 1 $$ LANGUAGE sql; DROP TABLE t",
+            &[Dialect::Postgres],
+        );
+        accepted(
+            "CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT CASE WHEN a THEN 1 ELSE 0 END; SELECT 2; END",
+            &[Dialect::Postgres],
+        );
+    }
+
+    #[test]
+    fn a_versioned_comment_is_read_both_ways_and_the_stricter_wins() {
+        requires(
+            "DELETE FROM t /*!99999 WHERE id = 1 */",
+            Dialect::MySql,
+            DestructiveStatement::DeleteWithoutWhere,
+        );
+        requires(
+            "DELETE FROM t /*M!999999 WHERE id = 1 */",
+            Dialect::MariaDb,
+            DestructiveStatement::DeleteWithoutWhere,
+        );
+        accepted("DELETE FROM t WHERE id = 1 /*!50000 OR 1 = 1 */", &MYSQL);
+        accepted("DELETE FROM t WHERE id = 1 /*!50000 */", &MYSQL);
+    }
+
+    #[test]
+    fn reserved_words_after_a_dot_are_names() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN SELECT t.case, t.end, t.begin, t.then FROM t; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT t.case FROM t; END; DROP TABLE x; END",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() BEGIN SELECT t.begin FROM t; END; DROP TABLE x; END",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn statements_sqlparser_does_not_read_are_accepted_as_one_statement() {
+        accepted("DROP EVENT IF EXISTS ev", &MYSQL);
+        accepted("ALTER EVENT ev DISABLE", &MYSQL);
+        accepted(
+            "ALTER EVENT ev DO BEGIN DELETE FROM t; DELETE FROM u; END",
+            &MYSQL,
+        );
+        accepted("ALTER PROCEDURE p COMMENT 'x';", &MYSQL);
+        accepted("ALTER FUNCTION f SQL SECURITY INVOKER", &MYSQL);
+        accepted("GRANT EXECUTE ON PROCEDURE db.p TO u", &MYSQL);
+        accepted("OPTIMIZE TABLE t", &MYSQL);
+        accepted("DO SLEEP(0)", &MYSQL);
+        rejected("DROP EVENT ev; DROP TABLE t", &MYSQL);
+        rejected("ALTER PROCEDURE p COMMENT 'x'; DROP TABLE t", &MYSQL);
+        rejected(
+            "ALTER EVENT ev DO BEGIN DELETE FROM t; END; DROP TABLE t",
+            &MYSQL,
+        );
+        rejected("DO SLEEP(0); DROP TABLE t", &MYSQL);
+        rejected("OPTIMIZE TABLE t; DROP TABLE t", &MYSQL);
+        let pg = [Dialect::Postgres];
+        accepted("DO $$ BEGIN PERFORM 1; PERFORM 2; END $$", &pg);
+        accepted("DO LANGUAGE plpgsql $tag$ BEGIN NULL; END $tag$;", &pg);
+        accepted("ALTER FUNCTION f(int) OWNER TO u", &pg);
+        accepted("COMMENT ON FUNCTION f(int) IS 'x; y'", &pg);
+        accepted("GRANT EXECUTE ON FUNCTION f(int) TO u", &pg);
+        accepted(
+            "CREATE RULE r AS ON INSERT TO t DO ALSO (INSERT INTO a VALUES (1); INSERT INTO b VALUES (2))",
+            &pg,
+        );
+        accepted(
+            "CREATE OR REPLACE RULE r AS ON INSERT TO t DO INSTEAD NOTHING",
+            &pg,
+        );
+        rejected("DO $$ BEGIN NULL; END $$; DROP TABLE t", &pg);
+        rejected("ALTER FUNCTION f(int) OWNER TO u; DROP TABLE t", &pg);
+        rejected(
+            "CREATE RULE r AS ON INSERT TO t DO INSTEAD NOTHING; DROP TABLE t",
+            &pg,
+        );
+    }
+
+    #[test]
+    fn postgres_triggers_with_literal_arguments_are_one_statement() {
+        let pg = [Dialect::Postgres];
+        accepted(
+            "CREATE TRIGGER t BEFORE INSERT OR UPDATE ON public.film FOR EACH ROW EXECUTE FUNCTION tsvector_update_trigger('fulltext', 'pg_catalog.english', 'title')",
+            &pg,
+        );
+        rejected(
+            "CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW EXECUTE FUNCTION f('a'); DROP TABLE t",
+            &pg,
+        );
+    }
+
+    #[test]
+    fn text_after_a_stray_end_is_not_silently_dropped() {
+        for sql in [
+            "SELECT 1 END; DROP TABLE t",
+            "SELECT 1 END; DROP TABLE t; END",
+            "DELETE FROM t WHERE a = 1 END; DELETE FROM t",
+        ] {
+            rejected(sql, &[Dialect::MySql, Dialect::MariaDb, Dialect::Postgres]);
+        }
+        for sql in [
+            "SELECT start, end FROM t",
+            "SELECT t.end, t.start FROM t",
+            "SELECT 1 AS end",
+            "SELECT CASE WHEN a THEN 1 END FROM t",
+            "SELECT CASE WHEN a THEN 1 ELSE 2 END AS x FROM t",
+            "UPDATE t SET end = 1 WHERE start = 0",
+            "INSERT INTO t (start, end) VALUES (1, 2)",
+            "CREATE TABLE t (start int, end int)",
+            "SELECT * FROM t WHERE end > 1 ORDER BY end",
+        ] {
+            accepted(sql, &MYSQL);
+        }
+        accepted("SELECT CASE WHEN a THEN 1 END FROM t", &[Dialect::Postgres]);
+        accepted("SELECT 1 AS \"end\"", &[Dialect::Postgres]);
+    }
+
+    #[test]
+    fn the_backslash_is_an_escape_unless_the_server_says_otherwise() {
+        let plain = GuardOptions::default();
+        let literal = GuardOptions {
+            no_backslash_escapes: true,
+        };
+        let classify = |sql: &str, options| classify_sql_with(sql, Dialect::MySql, false, options);
+        // Con escapes, '\'; ...' es una sola cadena; sin ellos, la cadena
+        // termina en la barra y lo que sigue es otra sentencia.
+        let hidden = "SELECT '\\'; DROP TABLE t; --'";
+        assert!(classify(hidden, plain).is_ok());
+        assert!(classify(hidden, literal).is_err());
+        assert!(classify("SELECT 'a\\b', \"c\\d\"", literal).is_ok());
+        assert!(classify("SELECT 'it\\'s fine'", plain).is_ok());
+        // Un DELETE con WHERE cuyo valor es una barra: valido solo sin escapes.
+        assert!(classify("DELETE FROM t WHERE a = '\\'", plain).is_err());
+        assert_eq!(
+            classify("DELETE FROM t WHERE a = '\\'", literal).unwrap(),
+            DestructiveClassification::NotDestructive
+        );
+        // Los comentarios ejecutables siguen leyendose en ese modo.
+        assert_eq!(
+            classify("DELETE FROM t /*!99999 WHERE a = '\\' */", literal).unwrap(),
+            DestructiveClassification::RequiresConfirmation(
+                DestructiveStatement::DeleteWithoutWhere
+            )
+        );
+    }
+
+    #[test]
+    fn valid_statements_sqlparser_cannot_read_are_judged_by_their_structure() {
+        let pg = [Dialect::Postgres];
+        for sql in [
+            "PREPARE stmt FROM @sql",
+            "CREATE USER 'reader'@'localhost' IDENTIFIED BY 'pw'",
+            "LOAD DATA LOCAL INFILE '/tmp/c.csv' INTO TABLE t FIELDS TERMINATED BY ','",
+            "SELECT id, state INTO @picked, @status FROM t WHERE id = 1",
+            "SELECT 1 end",
+        ] {
+            accepted(sql, &MYSQL);
+        }
+        for sql in [
+            "CREATE SEQUENCE s START WITH 1 INCREMENT BY 1",
+            "CREATE DOMAIN d AS integer CHECK (VALUE > 0)",
+            "CREATE MATERIALIZED VIEW m AS SELECT 1 WITH NO DATA",
+            "CREATE TABLE c PARTITION OF p FOR VALUES FROM (1) TO (2)",
+            "CREATE EXTENSION IF NOT EXISTS pgcrypto",
+        ] {
+            accepted(sql, &pg);
+        }
+        // Se mide lo destructivo por sus palabras: sin WHERE pide confirmacion.
+        requires(
+            "UPDATE t SET a = 1 ORDER BY b LIMIT 1",
+            Dialect::MySql,
+            DestructiveStatement::UpdateWithoutWhere,
+        );
+        accepted("UPDATE t SET a = 1 WHERE b = 2 ORDER BY b LIMIT 1", &MYSQL);
+        // Lo que no es una sentencia del motor, o son dos, se rechaza.
+        rejected("SELEKT 1 FRUM x", &[Dialect::MySql, Dialect::Postgres]);
+        rejected("PREPARE stmt FROM @sql; DROP TABLE t", &MYSQL);
+        rejected("CREATE SEQUENCE s INCREMENT 1; DROP TABLE t", &pg);
+        rejected("CREATE USER 'a'@'b'; DELETE FROM t", &MYSQL);
+    }
+
+    #[test]
+    fn destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation() {
+        use DestructiveStatement::*;
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for (sql, expected) in [
+                ("DROP TABLES t", DropTable),
+                ("DROP TEMPORARY TABLES t", DropTable),
+                ("DROP TEMPORARY TABLE IF EXISTS t", DropTable),
+                ("/*!40101 DROP TABLES t */", DropTable),
+                ("ALTER IGNORE TABLE t DROP COLUMN c", DropColumn),
+                ("ALTER ONLINE TABLE t DROP COLUMN c", DropColumn),
+                ("ALTER TABLE t DROP c", DropColumn),
+                ("ALTER TABLE t DROP PARTITION p0", Truncate),
+                ("ALTER TABLE t TRUNCATE PARTITION p0", Truncate),
+            ] {
+                requires(sql, dialect, expected);
+            }
+            accepted("ALTER TABLE t DROP INDEX idx", &[dialect]);
+            accepted("ALTER TABLE t DROP FOREIGN KEY fk", &[dialect]);
+            assert_eq!(
+                classify_sql("SELECT * FROM t INTO OUTFILE '/tmp/x'", dialect, true).unwrap(),
+                DestructiveClassification::RequiresConfirmation(WriteInProduction)
+            );
+        }
+        requires("DROP OWNED BY someone", Dialect::Postgres, DropDatabase);
+        for sql in [
+            "DO $$ BEGIN DELETE FROM t; END $$",
+            "DO $$ BEGIN DROP TABLE t; END $$",
+            "DO $$ BEGIN EXECUTE 'drop table t'; END $$",
+            "DO $$ BEGIN TRUNCATE t; END $$",
+            "DO $$ BEGIN UPDATE t SET a = 1; END $$",
+        ] {
+            rejected(sql, &[Dialect::Postgres]);
+        }
+        accepted(
+            "DO $$ BEGIN PERFORM 1; RAISE NOTICE 'hola'; END $$",
+            &[Dialect::Postgres],
+        );
+        requires(
+            "WITH d AS (DELETE FROM t RETURNING *) SELECT count(*) FROM d",
+            Dialect::Postgres,
+            DeleteWithoutWhere,
+        );
+        requires(
+            "WITH u AS (UPDATE t SET a = 1 RETURNING *) SELECT * FROM u",
+            Dialect::Postgres,
+            UpdateWithoutWhere,
+        );
+        accepted(
+            "WITH d AS (DELETE FROM t WHERE a = 1 RETURNING *) SELECT count(*) FROM d",
+            &[Dialect::Postgres],
+        );
+    }
+
+    #[test]
+    fn handler_as_a_name_and_replace_or_with_bodies_are_accepted() {
+        accepted(
+            "CREATE PROCEDURE p() BEGIN DECLARE handler INT; END",
+            &MYSQL,
+        );
+        accepted("CREATE PROCEDURE p() REPLACE INTO t VALUES (1)", &MYSQL);
+        accepted(
+            "CREATE PROCEDURE p() WITH c AS (SELECT 1) SELECT * FROM c",
+            &MYSQL,
+        );
+        rejected(
+            "CREATE PROCEDURE p() REPLACE INTO t VALUES (1); DROP TABLE t",
+            &MYSQL,
+        );
+    }
+
+    #[test]
+    fn executable_comments_are_classified_as_code() {
+        for sql in [
+            "SELECT 1 /*!; DROP TABLE t; */",
+            "SELECT 1 /*!50000; DROP TABLE t */",
+            "SELECT 1 /*!500001; DROP TABLE t */",
+            "CREATE PROCEDURE p() BEGIN SELECT 1; END /*!; DROP TABLE t; */",
+            "SELECT 1 /*!50000 ",
+        ] {
+            rejected(sql, &MYSQL);
+        }
+        requires(
+            "/*!50000 DROP TABLE t */",
+            Dialect::MySql,
+            DestructiveStatement::DropTable,
+        );
+        rejected("SELECT 1 /*M!100100; DROP TABLE t; */", &[Dialect::MariaDb]);
+        accepted("SELECT 1 /*M!100100; DROP TABLE t; */", &[Dialect::MySql]);
+        accepted("SELECT /*!40001 SQL_NO_CACHE */ 1", &MYSQL);
+        accepted("/*!40101 SET NAMES utf8 */", &MYSQL);
+        accepted("SELECT '/*!; DROP TABLE t */'", &MYSQL);
+        accepted("SELECT 1 -- /*!; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 # /*!; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 /* ; DROP TABLE t */", &MYSQL);
+        accepted("SELECT 1 /*!; DROP TABLE t; */", &[Dialect::Postgres]);
     }
 }

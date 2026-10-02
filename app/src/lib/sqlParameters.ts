@@ -1,3 +1,4 @@
+import { commentAt } from "$lib/sqlComments";
 import type { SqlLexical } from "$lib/sqlStatements";
 
 // Parametros con nombre (:nombre) en una consulta, como en DataGrip: antes
@@ -66,14 +67,9 @@ export function findParameters(text: string, lexical: SqlLexical): SqlParameter[
   while (index < text.length) {
     const char = text[index];
     const next = text[index + 1];
-    if ((char === "-" && next === "-") || (char === "#" && lexical.hashComments)) {
-      const end = text.indexOf("\n", index);
-      index = end === -1 ? text.length : end + 1;
-      continue;
-    }
-    if (char === "/" && next === "*") {
-      const end = text.indexOf("*/", index + 2);
-      index = end === -1 ? text.length : end + 2;
+    const comment = commentAt(text, index, lexical);
+    if (comment) {
+      index = comment.kind === "line" && comment.closed ? comment.end + 1 : comment.end;
       continue;
     }
     if (char === "'") {

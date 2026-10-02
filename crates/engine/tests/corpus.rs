@@ -230,3 +230,113 @@ fn lo_de_mysql_y_mariadb_no_da_falsos_positivos() {
 fn lo_de_postgres_no_da_falsos_positivos() {
     check("postgres.sql", &[Dialect::Postgres]);
 }
+
+#[test]
+fn consolas_mezcladas_no_dan_falsos_positivos() {
+    for (file, dialects) in [
+        ("mysql.json", &[Dialect::MySql, Dialect::MariaDb][..]),
+        ("mariadb.json", &[Dialect::MariaDb][..]),
+        ("postgres.json", &[Dialect::Postgres][..]),
+    ] {
+        let path = format!("{}/tests/corpus/mixed/{file}", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(path).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let sql = fixture["sql"].as_str().unwrap();
+        let statements = fixture["statements"].as_array().unwrap();
+        assert!(
+            statements.len() > 20 || file == "mariadb.json" && statements.len() >= 3,
+            "{file}: corpus insuficiente"
+        );
+        let mut after = 0;
+        for statement in statements {
+            let statement = statement.as_str().unwrap();
+            let at = sql[after..]
+                .find(statement)
+                .expect("sentencia en el script")
+                + after;
+            after = at + statement.len();
+            for &dialect in dialects {
+                let found = analyze_statement(statement, dialect, None);
+                assert!(
+                    found.is_empty(),
+                    "{file} {dialect:?}: {statement}\n{found:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn errores_ordinarios_siguen_detectandose() {
+    let path = format!(
+        "{}/tests/corpus/mixed/errors.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let text = std::fs::read_to_string(path).unwrap();
+    let cases: serde_json::Value = serde_json::from_str(&text).unwrap();
+    for case in cases.as_array().unwrap() {
+        let sql = case["sql"].as_str().unwrap();
+        let expected = case["key"].as_str().unwrap();
+        let dialects: Vec<Dialect> = if case["dialects"].is_array() {
+            vec![Dialect::MySql, Dialect::MariaDb]
+        } else {
+            Dialect::ALL.to_vec()
+        };
+        for dialect in dialects {
+            let (statement, line_offset) = match sql.find(";\nCREATE PROCEDURE") {
+                Some(at) => (&sql[at + 2..], sql[..at + 2].matches('\n').count() as u64),
+                None => (sql, 0),
+            };
+            let found = analyze_statement(statement, dialect, None);
+            let first = found
+                .first()
+                .unwrap_or_else(|| panic!("{dialect:?}: {sql}"));
+            match &first.message {
+                khipu_engine::diagnostics::DiagnosticMessage::Key { key, .. } => {
+                    assert_eq!(key, expected, "{dialect:?}: {sql}");
+                }
+                other => panic!("{dialect:?}: {sql}: {other:?}"),
+            }
+            if let (Some(line), Some(column)) = (case["line"].as_u64(), case["column"].as_u64()) {
+                assert_eq!(
+                    (first.start.line + line_offset, first.start.column),
+                    (line, column),
+                    "{dialect:?}: {sql}: {found:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn comentario_mysql_de_version_no_da_diagnosticos() {
+    let sql = "/*!50003 CREATE*/ /*!50003 DEFINER=`u`@`%`*/ PROCEDURE p() BEGIN SELECT 1; END";
+    for dialect in [Dialect::MySql, Dialect::MariaDb] {
+        let found = analyze_statement(sql, dialect, None);
+        assert!(found.is_empty(), "{dialect:?}: {found:?}");
+    }
+}
+
+#[test]
+fn rutinas_mysql_validas_no_dan_falsos_positivos() {
+    let path = format!(
+        "{}/tests/corpus/mixed/valid_routines.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let text = std::fs::read_to_string(path).unwrap();
+    let cases: Vec<String> = serde_json::from_str(&text).unwrap();
+    assert!(cases.len() >= 20);
+    let tables = catalog();
+    let view = CatalogView {
+        tables: &tables,
+        loaded_schemas: vec!["app"],
+        default_schema: "app",
+        created: vec![],
+    };
+    for sql in cases {
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            let found = analyze_statement(&sql, dialect, Some(&view));
+            assert!(found.is_empty(), "{dialect:?}: {sql}\n{found:?}");
+        }
+    }
+}

@@ -31,7 +31,10 @@
     transform var(--duration-fast);
 }
 
-.action-button:focus-visible {
+/* El foco inicial programado en un modal tambien debe verse. */
+.action-button:focus-visible,
+dialog .action-button:focus,
+dialog [data-dialog-actions] button:focus {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }

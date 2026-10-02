@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { setAnalysisIn, sqlDiagnostics, visibleDiagnosticCount, type SqlDiagnostic } from "$lib/sqlDiagnostics";
+import { setAnalysisIn, sqlDiagnostics, stopTyping, visibleDiagnosticCount, type SqlDiagnostic } from "$lib/sqlDiagnostics";
 
 // Lo que se ve en el editor: cada error marcado, sea de sintaxis o un nombre
 // que no existe.
@@ -12,8 +12,8 @@ const DOC = "SELECT * FROM clientes WHERE a IN (\n  1,\n  2\n  3\n)";
 let view: EditorView;
 afterEach(() => view?.destroy());
 
-function show(list: SqlDiagnostic[]) {
-  view = new EditorView({ state: EditorState.create({ doc: DOC, extensions: [sqlDiagnostics] }), parent: document.body });
+function show(list: SqlDiagnostic[], doc = DOC) {
+  view = new EditorView({ state: EditorState.create({ doc, extensions: [sqlDiagnostics] }), parent: document.body });
   view.dispatch({ effects: setAnalysisIn.of({ ranges: [{ from: 0, to: DOC.length }], list }) });
 }
 
@@ -55,5 +55,29 @@ describe("errores en el editor", () => {
     // Escribir al final: lo incompleto de esa sentencia se calla.
     view.dispatch({ changes: { from: DOC.length, insert: " " }, selection: { anchor: DOC.length + 1 }, userEvent: "input.type" });
     expect(visibleDiagnosticCount(view.state)).toBe(1);
+  });
+
+  // Lo que encontro la simulacion de escribir SQL real letra por letra
+  // (crates/server-tests, typing_real_sql_shows_nothing_that_is_only_unfinished).
+  it("a medio escribir no se ve lo de la ultima palabra ni un nombre que aun puede definirse", () => {
+    for (const [doc, item] of [
+      // Un alias antes de escribir el FROM.
+      ["SELECT a.f", { from: 7, to: 8, message: "No se encontró «a».", source: "analysis", unresolved: true }],
+      // Lo ultimo escrito, ya con el espacio detras.
+      ["SELECT * FROM ", { from: 9, to: 13, message: "Falta la tabla después de FROM.", source: "analysis" }],
+      // Un mensaje generico mal ubicado mientras se escribe al final.
+      ["SELECT CASE WHEN a.b", { from: 17, to: 18, message: "No se esperaba «a».", source: "analysis", vague: true }],
+    ] as const) {
+      // Se teclea la ultima letra y despues llega el analisis, como en la app.
+      const typed = doc.slice(0, -1);
+      show([], typed);
+      view.dispatch({ changes: { from: typed.length, insert: doc.slice(-1) }, selection: { anchor: doc.length }, userEvent: "input.type" });
+      view.dispatch({ effects: setAnalysisIn.of({ ranges: [{ from: 0, to: doc.length }], list: [item] }) });
+      expect(visibleDiagnosticCount(view.state), doc).toBe(0);
+      // Al dejar de escribir (salir de la sentencia o perder el foco), se ve.
+      view.dispatch({ effects: stopTyping.of(null) });
+      expect(visibleDiagnosticCount(view.state), doc).toBe(1);
+      view.destroy();
+    }
   });
 });

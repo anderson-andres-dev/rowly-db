@@ -37,6 +37,7 @@
 
   onMount(() => {
     dialogEl?.showModal();
+    dialogEl?.querySelector<HTMLButtonElement>(".dialog-close:not(:disabled)")?.focus();
     void load();
     return () => ddlView?.destroy();
   });
@@ -127,7 +128,7 @@
     dialogEl?.close();
   }}
 >
-  <div class="dialog-heading">
+  <div class="dialog-heading" data-dialog-actions>
     <h2>{table}</h2>
     <button
       type="button"
@@ -232,7 +233,7 @@
     color: var(--text-primary);
   }
 
-  .dialog-close:focus-visible {
+  .dialog-close:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }

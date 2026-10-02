@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 
 // La busqueda del arranque (list_releases) devuelve lo que el test elija.
 let listed: unknown[] = [];
+let listCalls = 0;
 vi.mock("$app/environment", () => ({ browser: false }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -10,7 +11,10 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (command === "update_context") {
       return { currentVersion: "0.2.3", installKind: "deb", canInstall: true, releasesPage: "" };
     }
-    if (command === "list_releases") return listed;
+    if (command === "list_releases") {
+      listCalls += 1;
+      return listed;
+    }
     return undefined;
   },
 }));
@@ -32,15 +36,22 @@ function release(version: string, relation: "current" | "newer" | "older") {
 }
 
 describe("aviso de version nueva al abrir", () => {
+  let day = 0;
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 1 + day++ * 2)));
+    listCalls = 0;
     updatePrefs.set({ autoCheck: true, includePrereleases: false, skippedTag: null });
     updatePrompt.set(null);
   });
+  afterEach(() => vi.useRealTimers());
 
   it("pregunta por la version nueva que encontro la busqueda", async () => {
     listed = [release("0.2.4", "newer"), release("0.2.3", "current")];
     await checkOnStartup();
     expect(get(updatePrompt)?.tag).toBe("v0.2.4");
+    await checkOnStartup();
+    expect(listCalls).toBe(1);
   });
 
   it("al dia, no pregunta", async () => {
@@ -60,6 +71,7 @@ describe("aviso de version nueva al abrir", () => {
     expect(get(updatePrompt)).toBeNull();
 
     listed = [release("0.2.5", "newer"), release("0.2.4", "newer"), release("0.2.3", "current")];
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 1);
     await checkOnStartup();
     expect(get(updatePrompt)?.tag).toBe("v0.2.5");
   });

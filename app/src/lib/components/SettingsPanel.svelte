@@ -19,10 +19,13 @@
     setAutoUppercaseKeywords,
     setFormatterAlignColumns,
     setFormatterLineWidth,
+    setIndentSize,
+    setIndentStyle,
     setTabNavigatesCompletion,
     setTableAliases,
     type TableAliasMode,
   } from "$lib/stores/editorSettings";
+  import type { IndentSize, IndentStyle } from "$lib/sqlIndentationConfig";
   import { GRID_ROW_STYLES, gridSettings, setGridRowStyle } from "$lib/stores/gridSettings";
 
   // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
@@ -45,12 +48,11 @@
   let dialogEl: HTMLDialogElement | undefined = $state();
   let navEl: HTMLElement | undefined = $state();
 
-  // Al abrir, el foco va al modal (no a un boton con su anillo); las
-  // flechas ya recorren las secciones desde ahi.
+  // Al abrir, el foco visible queda en la seccion actual.
   $effect(() => {
     if (dialogEl && !dialogEl.open) {
       dialogEl.showModal();
-      dialogEl.focus();
+      navEl?.querySelector<HTMLButtonElement>(`[data-section="${activeSection}"]`)?.focus();
     }
   });
 
@@ -58,15 +60,16 @@
     if (event.target === dialogEl) dialogEl?.close();
   }
 
-  // Flechas arriba/abajo recorren la lista de secciones (con el foco en el
-  // modal o en la lista).
+  // Las flechas recorren la lista de secciones.
   function handleNavKeydown(event: KeyboardEvent) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(event.key)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.isComposing) return;
     const target = event.target as HTMLElement;
     if (target !== dialogEl && !target.classList.contains("nav-item")) return;
     event.preventDefault();
     const index = sections.findIndex((section) => section.id === activeSection);
-    const next = sections[(index + (event.key === "ArrowDown" ? 1 : -1) + sections.length) % sections.length];
+    const forward = event.key === "ArrowDown" || event.key === "ArrowRight";
+    const next = sections[(index + (forward ? 1 : -1) + sections.length) % sections.length];
     activeSection = next.id;
     navEl?.querySelector<HTMLButtonElement>(`[data-section="${next.id}"]`)?.focus();
   }
@@ -106,6 +109,11 @@
       label: $t(`settings.editor.tableAliases.${mode}`),
     })),
   );
+  const indentStyleOptions = $derived([
+    { value: "spaces", label: $t("settings.editor.indent.spaces") },
+    { value: "tabs", label: $t("settings.editor.indent.tabs") },
+  ]);
+  const indentSizeOptions = [2, 4, 8].map((size) => ({ value: String(size), label: String(size) }));
 
   // --- Atajos -------------------------------------------------------------
   // Agrupados como en el registro de comandos (lib/commands.ts). Dos
@@ -352,6 +360,24 @@
         {:else if activeSection === "editor"}
           <h3 class="set-caption">{$t("settings.editor.format")}</h3>
           <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.type")}</span></div>
+              <Select
+                value={$editorSettings.indentStyle}
+                options={indentStyleOptions}
+                label={$t("settings.editor.indent.type")}
+                onchange={(value) => setIndentStyle(value as IndentStyle)}
+              />
+            </div>
+            <div class="set-row">
+              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.size")}</span></div>
+              <Select
+                value={String($editorSettings.indentSize)}
+                options={indentSizeOptions}
+                label={$t("settings.editor.indent.size")}
+                onchange={(value) => setIndentSize(Number(value) as IndentSize)}
+              />
+            </div>
             <div class="set-row">
               <div class="set-text">
                 <span class="set-label">{$t("settings.editor.lineWidth")}</span>
@@ -622,7 +648,7 @@
     color: var(--accent);
   }
 
-  .nav-item:focus-visible {
+  .nav-item:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
   }

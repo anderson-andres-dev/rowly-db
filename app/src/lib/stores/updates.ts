@@ -55,7 +55,35 @@ export type InstallState =
   | { phase: "error"; tag: string; version: string; code: UpdateErrorCode };
 
 const PREFS_KEY = "khipu:updates:v1";
+const CACHE_KEY = "khipu:updates:releases:v1";
+const AUTO_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const ERROR_RETRY_INTERVAL_MS = 60 * 60 * 1000;
+const RATE_LIMIT_FALLBACK_MS = 15 * 60 * 1000;
 const DEFAULT_PREFS: UpdatePrefs = { autoCheck: true, includePrereleases: false, skippedTag: null };
+
+interface CachedCheck {
+  version: string;
+  releases: ReleaseInfo[] | null;
+  checkedAt: number | null;
+  attemptedAt: number | null;
+  lastError: UpdateErrorCode | null;
+  retryAt: number | null;
+}
+
+function loadCache(): CachedCheck | null {
+  if (!browser) return null;
+  try {
+    const value = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null") as CachedCheck | null;
+    if (!value || typeof value.version !== "string") return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+let cachedCheck = loadCache();
+let attemptedAt: number | null = null;
+let contextPromise: Promise<UpdateContext> | null = null;
 
 function loadPrefs(): UpdatePrefs {
   if (!browser) return DEFAULT_PREFS;
@@ -85,10 +113,46 @@ if (browser) {
 
 export const updateContext = writable<UpdateContext | null>(null);
 export const releases = writable<ReleaseInfo[] | null>(null);
-export const releasesError = writable<UpdateErrorCode | null>(null);
+export const releasesError = writable<UpdateErrorCode | null>(
+  cachedCheck?.lastError === "rateLimited" && cachedCheck.retryAt && cachedCheck.retryAt > Date.now()
+    ? "rateLimited" : null,
+);
 export const checking = writable(false);
 export const lastChecked = writable<Date | null>(null);
+export const retryAt = writable<number | null>(cachedCheck?.retryAt && cachedCheck.retryAt > Date.now() ? cachedCheck.retryAt : null);
 export const installState = writable<InstallState>({ phase: "idle" });
+
+function saveCache(): void {
+  const context = get(updateContext);
+  if (!context || !browser) return;
+  cachedCheck = {
+    version: context.currentVersion,
+    releases: get(releases),
+    checkedAt: get(lastChecked)?.getTime() ?? null,
+    attemptedAt,
+    lastError: get(releasesError),
+    retryAt: get(retryAt),
+  };
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cachedCheck));
+  } catch {
+    // La comprobacion sigue funcionando durante esta sesion.
+  }
+}
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function setRetryAt(value: number | null): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  const next = value && value > Date.now() ? value : null;
+  retryAt.set(next);
+  if (next) retryTimer = setTimeout(() => {
+    retryAt.set(null);
+    saveCache();
+  }, next - Date.now());
+}
+
+setRetryAt(get(retryAt));
 
 /** Versiones que se muestran: las preliminares solo si el usuario las pidió, salvo la instalada. */
 export const visibleReleases = derived([releases, updatePrefs], ([$releases, $prefs]) =>
@@ -108,21 +172,49 @@ export function errorCode(error: unknown): UpdateErrorCode {
 }
 
 export async function loadUpdateContext(): Promise<UpdateContext> {
-  const context = await invoke<UpdateContext>("update_context");
-  updateContext.set(context);
-  return context;
+  const current = get(updateContext);
+  if (current) return current;
+  contextPromise ??= invoke<UpdateContext>("update_context").then((context) => {
+    updateContext.set(context);
+    if (cachedCheck?.version === context.currentVersion) {
+      releases.set(Array.isArray(cachedCheck.releases) ? cachedCheck.releases : null);
+      lastChecked.set(typeof cachedCheck.checkedAt === "number" ? new Date(cachedCheck.checkedAt) : null);
+      releasesError.set(cachedCheck.lastError ?? null);
+      attemptedAt = typeof cachedCheck.attemptedAt === "number" ? cachedCheck.attemptedAt : null;
+    } else {
+      attemptedAt = null;
+    }
+    return context;
+  }).finally(() => (contextPromise = null));
+  return contextPromise;
 }
 
-export async function checkForUpdates(): Promise<void> {
+export async function checkForUpdates({ automatic = false }: { automatic?: boolean } = {}): Promise<void> {
   if (get(checking)) return;
   checking.set(true);
-  releasesError.set(null);
   try {
     if (!get(updateContext)) await loadUpdateContext();
+    if (get(retryAt) && get(retryAt)! > Date.now()) return;
+    if (automatic && attemptedAt !== null) {
+      const age = Date.now() - attemptedAt;
+      const interval = get(releasesError) ? ERROR_RETRY_INTERVAL_MS : AUTO_CHECK_INTERVAL_MS;
+      if (age >= 0 && age < interval) return;
+    }
+    releasesError.set(null);
+    attemptedAt = Date.now();
     releases.set(await invoke<ReleaseInfo[]>("list_releases"));
     lastChecked.set(new Date());
+    setRetryAt(null);
+    saveCache();
   } catch (error) {
-    releasesError.set(errorCode(error));
+    const code = errorCode(error);
+    releasesError.set(code);
+    if (code === "rateLimited") {
+      const indicated = error && typeof error === "object" && "retryAt" in error && typeof error.retryAt === "number"
+        ? error.retryAt : Date.now() + RATE_LIMIT_FALLBACK_MS;
+      setRetryAt(Math.max(Date.now() + 60_000, indicated));
+    }
+    saveCache();
   } finally {
     checking.set(false);
   }
@@ -138,7 +230,7 @@ export const updatePrompt = writable<ReleaseInfo | null>(null);
 /** Búsqueda silenciosa al arrancar: solo si el usuario la dejó activada. */
 export async function checkOnStartup(): Promise<void> {
   if (!get(updatePrefs).autoCheck) return;
-  await checkForUpdates();
+  await checkForUpdates({ automatic: true });
   const newer = get(newerRelease);
   if (newer && newer.tag !== get(updatePrefs).skippedTag) updatePrompt.set(newer);
 }

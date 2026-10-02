@@ -1,22 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { findParameters, parameterNames, parameterValue, substituteParameters, type ParameterType } from "./sqlParameters";
-import type { SqlLexical } from "./sqlStatements";
+import { ENGINES } from "./engines";
 
-const MYSQL: SqlLexical = {
-  identifierQuotes: ["`"],
-  backslashEscapes: true,
-  hashComments: true,
-  dollarQuotes: false,
-  escapeStringPrefix: false,
-};
+const MYSQL = ENGINES.mysql.lexical;
 
-const POSTGRES: SqlLexical = {
-  identifierQuotes: ['"'],
-  backslashEscapes: false,
-  hashComments: false,
-  dollarQuotes: true,
-  escapeStringPrefix: true,
-};
+const POSTGRES = ENGINES.postgres.lexical;
 
 const names = (sql: string, lexical = MYSQL) => findParameters(sql, lexical).map((parameter) => parameter.name);
 

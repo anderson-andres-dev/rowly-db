@@ -30,7 +30,10 @@
   $effect(() => {
     void tick().then(() => {
       dialog?.showModal();
-      dialog?.focus();
+      const initial = dialog?.querySelector<HTMLButtonElement>(".actions button:not(:disabled)")
+        ?? dialog?.querySelector<HTMLButtonElement>(".notes-toggle");
+      if (initial) initial.focus();
+      else dialog?.focus();
     });
   });
 
@@ -105,7 +108,7 @@
     <p class="error" role="alert">{$t(`updates.error.${install.code}` as MessageKey)}</p>
   {/if}
 
-  <div class="actions">
+  <div class="actions" data-dialog-actions>
     {#if install?.phase === "done"}
       <button class="action-button secondary" type="button" onclick={close}>{$t("updates.prompt.later")}</button>
       <button class="action-button primary" type="button" onclick={() => void restartApp()}>

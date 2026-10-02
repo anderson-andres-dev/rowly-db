@@ -1,140 +1,85 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { TriangleAlert } from "@lucide/svelte";
   import { t } from "$lib/i18n";
-  import type { DestructiveStatement } from "$lib/types";
-  import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
+  import { blocksHeldEnter, confirmsOnEnter } from "$lib/dialogKeys";
 
-  let { sql, statement, script = null, production = false, oncancel, onconfirm }: {
-    // Lo que se va a ejecutar: se muestra para que se vea de que bloque se
-    // trata.
-    sql: string;
-    statement: DestructiveStatement;
-    // Script: todas las que piden confirmacion, para avisar de una vez.
-    script?: (DestructiveStatement | null)[] | null;
-    // Conexion de produccion: se marca y el boton lo dice.
+  // Una confirmacion por ejecucion. El resumen cuenta todas las instrucciones
+  // del script, incluso las que no necesitan confirmacion por si solas.
+  let { count, production = false, oncancel, onconfirm }: {
+    count: number;
     production?: boolean;
     oncancel: () => void;
     onconfirm: () => void;
   } = $props();
 
-  const pending = $derived(script ? script.filter((item) => item !== null) : [statement]);
-  const kinds = $derived([...new Set(pending)]);
-  const preview = $derived(sql.replace(/\s+/g, " ").trim());
+  let dialog = $state<HTMLDialogElement>();
+  let confirmButton = $state<HTMLButtonElement>();
+
+  $effect(() => {
+    void tick().then(() => {
+      dialog?.showModal();
+      confirmButton?.focus();
+    });
+  });
+
+  // El evento close llega al terminar la animacion de salida (dialogMotion.ts).
+  let answer: "confirm" | "cancel" = "cancel";
+  let answered = false;
+
+  function respond(next: typeof answer) {
+    if (answered) return;
+    answered = true;
+    answer = next;
+    dialog?.close();
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    if (!confirmsOnEnter(event)) return;
+    event.preventDefault();
+    respond("confirm");
+  }
+
+  function onKeydownCapture(event: KeyboardEvent) {
+    if (blocksHeldEnter(event)) event.preventDefault();
+  }
 </script>
 
-<div class="execution-guard" role="alert">
-  <TriangleAlert size={14} aria-hidden="true" />
-  {#if production}
-    <EnvironmentBadge environment="production" />
-  {/if}
-  {#if script}
-    <span class="message">
-      <span>
-        {$t(pending.length === 1 ? "workspace.guard.scriptOne" : "workspace.guard.scriptOther", {
-          count: pending.length,
-          total: script.length,
-        })}
-      </span>
-      {#each kinds as kind (kind)}<span class="kind">{$t(`workspace.guard.${kind}`)}</span>{/each}
-    </span>
-  {:else}
-    <span class="message">{$t(`workspace.guard.${pending[0] ?? statement}`)}</span>
-  {/if}
-  <code class="sql" title={sql}>{preview}</code>
-  <div class="actions">
-    <button type="button" class="secondary-action" onclick={oncancel}>{$t("common.cancel")}</button>
-    <button type="button" class="danger-action" onclick={onconfirm}>
-      {production ? $t("workspace.guard.runInProduction") : $t("workspace.guard.runAnyway")}
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<dialog
+  class="review-dialog execution-guard"
+  tabindex="-1"
+  aria-labelledby="execution-guard-title"
+  aria-describedby="execution-guard-summary"
+  bind:this={dialog}
+  onkeydown={onKeydown}
+  onkeydowncapture={onKeydownCapture}
+  oncancel={(event) => {
+    event.preventDefault();
+    respond("cancel");
+  }}
+  onclose={() => (answer === "confirm" ? onconfirm() : oncancel())}
+>
+  <header class="review-heading">
+    <span class="review-heading-icon" aria-hidden="true"><TriangleAlert size={16} strokeWidth={2.25} /></span>
+    <div class="review-heading-content">
+      <h2 id="execution-guard-title">{$t("workspace.guard.title")}</h2>
+      <p class="review-heading-summary" id="execution-guard-summary">
+        {$t(count === 1 ? "workspace.guard.countOne" : "workspace.guard.countOther", { count })}
+      </p>
+    </div>
+  </header>
+  <footer data-dialog-actions>
+    <button type="button" class="action-button secondary" onclick={() => respond("cancel")}>{$t("common.cancel")}</button>
+    <button type="button" class="action-button danger" bind:this={confirmButton} onclick={() => respond("confirm")}>
+      {production ? $t("workspace.guard.runInProduction") : $t("workspace.guard.run")}
     </button>
-  </div>
-</div>
+  </footer>
+</dialog>
 
 <style>
   .execution-guard {
-    display: flex;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-3);
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-    color: var(--text-primary);
-    font-size: 0.8125rem;
-    animation: guard-in 0.6s ease-out;
-  }
-
-  /* Cada confirmacion nueva entra con un destello (ver el {#key} en
-     Workspace): si ya habia un aviso, se nota que ahora es otro bloque. */
-  @keyframes guard-in {
-    from {
-      background: color-mix(in srgb, var(--danger) 38%, var(--surface));
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .execution-guard {
-      animation: none;
-    }
-  }
-
-  .sql {
-    flex-basis: 100%;
-    order: 1;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
-    font-size: 0.75rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .execution-guard :global(svg) {
-    flex-shrink: 0;
-    color: var(--danger);
-  }
-
-  .message {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-width: 12rem;
-  }
-
-  .kind {
-    color: var(--text-secondary);
-  }
-
-  .actions {
-    display: flex;
-    flex-shrink: 0;
-    gap: var(--space-2);
-  }
-
-  .actions button {
-    min-height: 1.5rem;
-    padding: 0 var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-  }
-
-  .secondary-action {
-    background: var(--surface-elevated);
-    color: var(--text-primary);
-  }
-
-  .danger-action {
-    border-color: var(--danger) !important;
-    background: var(--danger);
-    color: var(--text-on-accent);
-  }
-
-  .actions button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: -2px;
+    --review-tone: var(--danger);
+    width: min(26rem, calc(100vw - 2rem));
   }
 </style>

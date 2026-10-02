@@ -1,0 +1,19 @@
+[package]
+name = "rowly-server-tests"
+description = "Pruebas contra servidores reales (tools/test-dbs): el guard, el divisor y los drivers juntos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+khipu-engine.workspace = true
+khipu-driver-core.workspace = true
+khipu-driver-mysql.workspace = true
+khipu-driver-postgres.workspace = true
+tokio.workspace = true
+sqlx = { workspace = true, features = ["mysql", "postgres"] }
+serde_json.workspace = true

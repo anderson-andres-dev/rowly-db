@@ -14,10 +14,12 @@
 //!   usa `rpm -U`, que se niega a volver a una versión anterior, y no conoce
 //!   pacman.
 
+use reqwest::header::{HeaderMap, RETRY_AFTER};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -100,6 +102,8 @@ pub struct ReleaseInfo {
 pub struct UpdateError {
     code: &'static str,
     detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retry_at: Option<u64>,
 }
 
 impl UpdateError {
@@ -107,7 +111,13 @@ impl UpdateError {
         Self {
             code,
             detail: detail.to_string(),
+            retry_at: None,
         }
+    }
+
+    fn with_retry_at(mut self, retry_at: Option<u64>) -> Self {
+        self.retry_at = retry_at;
+        self
     }
 }
 
@@ -229,6 +239,38 @@ fn http_client() -> Result<reqwest::Client, UpdateError> {
         .map_err(|error| UpdateError::new("network", error))
 }
 
+fn rate_limit_retry_at(headers: &HeaderMap) -> Option<u64> {
+    if let Some(seconds) = headers
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_millis() as u64;
+        return Some(now.saturating_add(seconds.saturating_mul(1000)));
+    }
+    if headers.get("x-ratelimit-remaining")?.to_str().ok()? != "0" {
+        return None;
+    }
+    headers
+        .get("x-ratelimit-reset")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|seconds| seconds.saturating_mul(1000))
+}
+
+fn is_rate_limited(status: reqwest::StatusCode, headers: &HeaderMap, detail: &str) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || (status == reqwest::StatusCode::FORBIDDEN
+            && (headers.get(RETRY_AFTER).is_some()
+                || headers
+                    .get("x-ratelimit-remaining")
+                    .is_some_and(|value| value.to_str().is_ok_and(|text| text == "0"))
+                || detail.to_ascii_lowercase().contains("rate limit")))
+}
+
 #[tauri::command]
 pub async fn list_releases<R: Runtime>(app: AppHandle<R>) -> Result<Vec<ReleaseInfo>, UpdateError> {
     let url = std::env::var(RELEASES_URL_ENV).unwrap_or_else(|_| {
@@ -241,11 +283,13 @@ pub async fn list_releases<R: Runtime>(app: AppHandle<R>) -> Result<Vec<ReleaseI
         .await
         .map_err(|error| UpdateError::new("offline", error))?;
     let status = response.status();
-    if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::TOO_MANY_REQUESTS
-    {
-        return Err(UpdateError::new("rateLimited", status));
-    }
     if !status.is_success() {
+        let retry_at = rate_limit_retry_at(response.headers());
+        let headers = response.headers().clone();
+        let detail = response.text().await.unwrap_or_default();
+        if is_rate_limited(status, &headers, &detail) {
+            return Err(UpdateError::new("rateLimited", status).with_retry_at(retry_at));
+        }
         return Err(UpdateError::new("network", status));
     }
     let releases: Vec<GithubRelease> = response
@@ -393,6 +437,29 @@ pub fn restart_app<R: Runtime>(app: AppHandle<R>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn solo_un_403_de_limite_se_muestra_como_rate_limited() {
+        let mut headers = HeaderMap::new();
+        assert!(!is_rate_limited(
+            reqwest::StatusCode::FORBIDDEN,
+            &headers,
+            "forbidden"
+        ));
+        assert!(is_rate_limited(
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            &headers,
+            ""
+        ));
+        headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
+        assert!(is_rate_limited(
+            reqwest::StatusCode::FORBIDDEN,
+            &headers,
+            ""
+        ));
+        headers.insert("x-ratelimit-reset", "1800000000".parse().unwrap());
+        assert_eq!(rate_limit_retry_at(&headers), Some(1_800_000_000_000));
+    }
 
     fn release(tag: &str, assets: &[&str]) -> GithubRelease {
         GithubRelease {

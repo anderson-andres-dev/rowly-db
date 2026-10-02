@@ -94,10 +94,31 @@ fn text_column(row: &MySqlRow, index: usize) -> Result<String, DriverError> {
 /// the grid always has something displayable without losing data.
 fn mysql_cell_to_query_value(row: &MySqlRow, index: usize) -> Result<QueryValue, sqlx::Error> {
     let raw: Option<Vec<u8>> = row.try_get_unchecked(index)?;
-    Ok(raw.map(|bytes| match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(error) => format!("0x{}", hex_encode(error.as_bytes())),
+    let vector = row.column(index).type_info().name() == "VECTOR";
+    Ok(raw.map(|bytes| {
+        if vector {
+            if let Some(text) = vector_text(&bytes) {
+                return text;
+            }
+        }
+        match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(error) => format!("0x{}", hex_encode(error.as_bytes())),
+        }
     }))
+}
+
+/// A MySQL 9 `VECTOR` arrives as its float32 values, little-endian. It is
+/// shown as `[1,2.5,3]`, the text `STRING_TO_VECTOR` reads back.
+fn vector_text(bytes: &[u8]) -> Option<String> {
+    if bytes.len() % 4 != 0 {
+        return None;
+    }
+    let values: Vec<String> = bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]).to_string())
+        .collect();
+    Some(format!("[{}]", values.join(",")))
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -487,15 +508,7 @@ async fn execute_on_connection(
     };
 
     let Some(describe) = describe.filter(|describe| !describe.columns().is_empty()) else {
-        let outcome = match Executor::execute(&mut *conn, RawStatement(sql)).await {
-            Ok(outcome) => outcome,
-            Err(error) => return mysql_error_to_result(error).into(),
-        };
-        return QueryExecutionResult::Command {
-            affected_rows: outcome.rows_affected(),
-            execution_time_ms: start.elapsed().as_millis() as u64,
-        }
-        .into();
+        return run_without_columns(conn, sql, options, start).await;
     };
 
     // El servidor deja de producir filas en max_rows + 1 (la extra es solo
@@ -531,6 +544,102 @@ async fn execute_on_connection(
     }
 
     outcome
+}
+
+/// Una sentencia de la que PREPARE no dio columnas: DML y DDL, pero tambien
+/// las que devuelven filas sin que el servidor las describa al prepararlas
+/// (CALL con un SELECT dentro, SHOW CREATE ...). Se leen las filas que llegan:
+/// con ellas es un resultado (las columnas salen de la primera fila, y de
+/// varios conjuntos se muestra el primero); sin ellas, un comando.
+async fn run_without_columns(
+    conn: &mut MySqlConnection,
+    sql: &str,
+    options: QueryExecutionOptions,
+    start: Instant,
+) -> ExecutionOutcome {
+    let mut stream = Executor::fetch_many(&mut *conn, RawStatement(sql));
+    let mut columns: Option<Vec<QueryColumn>> = None;
+    let mut rows: Vec<QueryRow> = Vec::new();
+    let mut affected_rows = 0;
+    let mut first_set_done = false;
+    let mut truncated = false;
+    let mut discarded = 0;
+    let mut stream_finished = false;
+    loop {
+        let item = match stream.try_next().await {
+            Ok(Some(item)) => item,
+            Ok(None) => {
+                stream_finished = true;
+                break;
+            }
+            Err(error) => {
+                return ExecutionOutcome {
+                    result: mysql_error_to_result(error),
+                    connection_reusable: false,
+                };
+            }
+        };
+        match item {
+            sqlx::Either::Left(done) => {
+                affected_rows += done.rows_affected();
+                first_set_done = columns.is_some();
+            }
+            sqlx::Either::Right(_) if first_set_done => {}
+            sqlx::Either::Right(row) => {
+                let columns = columns.get_or_insert_with(|| {
+                    row.columns()
+                        .iter()
+                        .map(|column| QueryColumn {
+                            name: column.name().to_string(),
+                            data_type: column.type_info().name().to_string(),
+                            nullable: None,
+                        })
+                        .collect()
+                });
+                if rows.len() >= options.max_rows {
+                    truncated = true;
+                    discarded += 1;
+                    if discarded > MAX_ROWS_TO_DRAIN {
+                        break;
+                    }
+                    continue;
+                }
+                let mut query_row = Vec::with_capacity(columns.len());
+                for index in 0..columns.len() {
+                    match mysql_cell_to_query_value(&row, index) {
+                        Ok(value) => query_row.push(value),
+                        Err(error) => {
+                            return ExecutionOutcome {
+                                result: mysql_error_to_result(error),
+                                connection_reusable: false,
+                            };
+                        }
+                    }
+                }
+                rows.push(query_row);
+            }
+        }
+    }
+    drop(stream);
+
+    let execution_time_ms = start.elapsed().as_millis() as u64;
+    let result = match columns {
+        Some(columns) => QueryExecutionResult::ResultSet {
+            row_count: rows.len() as u64,
+            columns,
+            rows,
+            execution_time_ms,
+            truncated,
+        },
+        None => QueryExecutionResult::Command {
+            affected_rows,
+            execution_time_ms,
+        },
+    };
+    ExecutionOutcome {
+        result,
+        connection_reusable: stream_finished,
+    }
 }
 
 async fn read_result_set(
@@ -611,6 +720,17 @@ async fn read_result_set(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_vector_reads_as_the_text_string_to_vector_accepts() {
+        let bytes: Vec<u8> = [1.0f32, 2.5, -3.0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        assert_eq!(vector_text(&bytes).as_deref(), Some("[1,2.5,-3]"));
+        assert_eq!(vector_text(&[]).as_deref(), Some("[]"));
+        assert_eq!(vector_text(&[1, 2, 3]), None);
+    }
 
     fn config_from_env() -> ConnectionConfig {
         let host = std::env::var("KHIPU_TEST_MYSQL_HOST")

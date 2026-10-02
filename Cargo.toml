@@ -6,11 +6,12 @@ members = [
     "crates/driver-core",
     "crates/drivers/mysql",
     "crates/drivers/postgres",
+    "crates/server-tests",
     "app/src-tauri",
 ]
 
 [workspace.package]
-version = "0.2.4"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -38,3 +39,16 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# sqlx 0.8.6 con soporte para las columnas VECTOR de MySQL 9 (tipo 0xf2), que
+# ni la 0.8.6 ni la 0.9.0 saben leer: un SELECT sobre una tabla con una de ellas
+# fallaba. Todos los crates de sqlx salen del mismo commit, o habria dos copias
+# de sqlx-core. Se quita cuando sqlx publique el arreglo:
+# https://github.com/transact-rs/sqlx/pull/4441
+[patch.crates-io]
+sqlx = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-macros = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-macros-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-mysql = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-postgres = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }

@@ -1,6 +1,8 @@
 import type { SqlProfile } from "$lib/engines";
+import { opensLineComment } from "$lib/sqlComments";
 import { refineLayout, upperOperatorWords } from "$lib/sqlFormatLayout";
-import { splitStatements } from "$lib/sqlStatements";
+import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
+import { DEFAULT_INDENT_SIZE, indentationUnit, type IndentSize, type IndentStyle } from "$lib/sqlIndentationConfig";
 
 type Quote = "'" | '"' | "`" | "]";
 
@@ -174,6 +176,57 @@ function scanFormattedSql(sql: string): SqlScanResult {
 // normal entre parentesis ya no entraria en una linea).
 const MIN_LAYOUT_WIDTH = 80;
 
+function applyIndentation(text: string, style: IndentStyle, size: IndentSize, lexical: SqlLexical): string {
+  if (style === "spaces" && size === DEFAULT_INDENT_SIZE) return text;
+  const unit = indentationUnit(style, size);
+  let quote: string | null = null;
+  // Profundidad del comentario de bloque abierto (solo pasa de 1 donde el
+  // motor anida, sqlComments.ts).
+  let commentDepth = 0;
+  return text.split("\n").map((line) => {
+    const protectedLine = quote !== null || commentDepth > 0;
+    for (let index = 0; index < line.length; index++) {
+      const char = line[index];
+      const next = line[index + 1];
+      if (quote) {
+        if (line.startsWith(quote, index)) {
+          if (quote.length === 1 && next === quote) index++;
+          else {
+            index += quote.length - 1;
+            quote = null;
+          }
+        } else if (char === "\\" && quote === "'" && next) index++;
+      } else if (commentDepth > 0) {
+        if (char === "*" && next === "/") {
+          commentDepth--;
+          index++;
+        } else if (char === "/" && next === "*" && lexical.nestedComments) {
+          commentDepth++;
+          index++;
+        }
+      } else if (opensLineComment(line, index, lexical)) {
+        break;
+      } else if (char === "/" && next === "*") {
+        commentDepth = 1;
+        index++;
+      } else if (char === "'" || char === '"' || char === "`" || char === "[") {
+        quote = char === "[" ? "]" : char;
+      } else if (char === "$" && lexical.dollarQuotes && !/[\w$]/.test(line[index - 1] ?? "")) {
+        const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(line.slice(index))?.[0];
+        if (tag) {
+          quote = tag;
+          index += tag.length - 1;
+        }
+      }
+    }
+    if (protectedLine) return line;
+    return line.replace(/^ +/, (spaces) =>
+      unit.repeat(Math.floor(spaces.length / DEFAULT_INDENT_SIZE)) +
+      " ".repeat(spaces.length % DEFAULT_INDENT_SIZE),
+    );
+  }).join("\n");
+}
+
 export type FormatResult =
   | { ok: true; text: string }
   // El parser del formateador no entendio la consulta: donde se trabo, si lo
@@ -186,6 +239,8 @@ export async function tryFormatSqlBlock(
   engine: SqlProfile,
   lineWidth: number,
   alignAliases = true,
+  indentStyle: IndentStyle = "spaces",
+  indentSize: IndentSize = DEFAULT_INDENT_SIZE,
 ): Promise<FormatResult> {
   if (!sql.trim()) return { ok: true, text: sql };
 
@@ -197,7 +252,7 @@ export async function tryFormatSqlBlock(
       keywordCase: "upper",
       dataTypeCase: "upper",
       functionCase: "upper",
-      tabWidth: 2,
+      tabWidth: DEFAULT_INDENT_SIZE,
       useTabs: false,
       expressionWidth: lineWidth,
       linesBetweenQueries: 1,
@@ -215,13 +270,17 @@ export async function tryFormatSqlBlock(
   const scanned = scanFormattedSql(formatted);
   return {
     ok: true,
-    text:
+    text: applyIndentation(
       !scanned.hasComment && scanned.compact.length <= lineWidth
         ? upperOperatorWords(scanned.compact)
         : refineLayout(compactStructuredLayout(formatted), {
             width: Math.max(lineWidth, MIN_LAYOUT_WIDTH),
             alignAliases,
           }),
+      indentStyle,
+      indentSize,
+      engine.lexical,
+    ),
   };
 }
 
@@ -255,10 +314,12 @@ export async function formatSqlText(
   engine: SqlProfile,
   lineWidth: number,
   alignAliases = true,
+  indentStyle: IndentStyle = "spaces",
+  indentSize: IndentSize = DEFAULT_INDENT_SIZE,
 ): Promise<FormatTextResult> {
   const ranges = splitStatements(sql, engine.lexical);
   if (ranges.length <= 1) {
-    const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases);
+    const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases, indentStyle, indentSize);
     return result.ok
       ? { text: result.text, formatted: 1, failures: [] }
       : { text: sql, formatted: 0, failures: [{ line: result.line ?? 1, token: result.token }] };
@@ -271,7 +332,7 @@ export async function formatSqlText(
     const gap = sql.slice(last, range.from);
     text += last === 0 || gap.trim() !== "" ? gap : "\n\n";
     const statement = sql.slice(range.from, range.to);
-    const result = await tryFormatSqlBlock(statement, engine, lineWidth, alignAliases);
+    const result = await tryFormatSqlBlock(statement, engine, lineWidth, alignAliases, indentStyle, indentSize);
     if (result.ok) {
       text += result.text;
       formatted += 1;
@@ -292,7 +353,9 @@ export async function formatSqlBlock(
   engine: SqlProfile,
   lineWidth: number,
   alignAliases = true,
+  indentStyle: IndentStyle = "spaces",
+  indentSize: IndentSize = DEFAULT_INDENT_SIZE,
 ): Promise<string> {
-  const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases);
+  const result = await tryFormatSqlBlock(sql, engine, lineWidth, alignAliases, indentStyle, indentSize);
   return result.ok ? result.text : sql;
 }

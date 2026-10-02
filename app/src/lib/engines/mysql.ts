@@ -57,6 +57,10 @@ export const mysql: EngineProfile = {
     hashComments: true,
     dollarQuotes: false,
     escapeStringPrefix: false,
+    nestedComments: false,
+    dashCommentNeedsSpace: true,
+    executableComments: ["/*!"],
+    optimizerHints: true,
   },
   quoteIdentifier: (name) => quoteWith("`", "`", name),
   // Las mayusculas dan igual: solo caracteres raros o reservadas.

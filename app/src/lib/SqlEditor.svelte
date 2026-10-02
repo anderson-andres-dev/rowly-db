@@ -76,10 +76,10 @@
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
   import { sql } from "@codemirror/lang-sql";
-  import { acceptCompletion, autocompletion, moveCompletionSelection } from "@codemirror/autocomplete";
+  import { autocompletion } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
-  import { keymap } from "@codemirror/view";
-  import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
+  import { scrollPastEnd } from "@codemirror/view";
+  import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
   import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
@@ -91,10 +91,15 @@
     extractDefaultTable,
     resolveCatalogTable,
   } from "$lib/sqlSchema";
+  import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
+  import { vendorSupport } from "$lib/engines/vendorSupport";
+  import { commentEditing } from "$lib/sqlCommentEditing";
+  import { commentStyle } from "$lib/sqlCommentStyle";
   import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
+  import { buildTabCompletionKeymap, indentationExtension } from "$lib/sqlIndentation";
   import { formatSqlText } from "$lib/sqlFormatter";
   import { notifyError } from "$lib/stores/notifications";
   import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
@@ -172,12 +177,14 @@
   const definitionLinkCompartment = new Compartment();
   const behaviorCompartment = new Compartment();
   const tabCompletionCompartment = new Compartment();
+  const indentationCompartment = new Compartment();
   const phrasesCompartment = new Compartment();
 
   // Config vigente. schema/dialect/fkIndex cambian poco (catalogo o conexion
   // activa); defaultTable cambia con cada tecla, asi que se separan para no
   // reconstruir el SQLNamespace completo en cada keystroke.
   let sqlSchema: ReturnType<typeof buildSqlSchema> = buildSqlSchema([]);
+  let catalogCompletions = buildCatalogCompletions([], standardSql);
   // Sin conexion, el SQL estandar: nunca el de otro motor.
   let engine: SqlProfile = standardSql;
   let routineIndex: RoutineIndex = buildRoutineIndex([]);
@@ -294,7 +301,7 @@
     const source = view.state.sliceDoc(range.from, range.to);
     const originalCursor = view.state.selection.main.head;
     const settings = get(editorSettings);
-    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns).then((result) => {
+    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns, settings.indentStyle, settings.indentSize).then((result) => {
       // La primera ejecución carga el formateador bajo demanda. Si el usuario
       // escribió durante esos milisegundos, no se reemplaza una versión vieja.
       if (!view || view.state.doc !== originalDoc) return;
@@ -355,11 +362,12 @@
     const raw = view.state.sliceDoc(range.from, range.to);
     const sql = raw.trim();
     if (!sql) return true;
+    const statements = splitStatements(raw, engine.lexical);
+    if (statements.length === 0) return true;
 
     const from = range.from + (raw.length - raw.trimStart().length);
     // Varias sentencias: el Workspace las corre como script y va marcando
     // cada una (markStatement), con su icono y su tiempo.
-    const statements = splitStatements(raw, engine.lexical);
     const parts =
       statements.length > 1
         ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
@@ -395,21 +403,6 @@
     "apply-quick-fix": whenFocused(applyFirstFix),
   });
 
-  // Con sugerencias visibles, Tab las recorre (Shift-Tab hacia atras) o, con
-  // "Navegar sugerencias con Tab" apagado, acepta la elegida, como DataGrip.
-  // moveCompletionSelection() y acceptCompletion() no hacen nada (devuelven
-  // false) sin el tooltip abierto, asi que el resto del tiempo Tab sigue su
-  // comportamiento normal.
-  function buildTabCompletionKeymap(navigates: boolean) {
-    return Prec.highest(
-      keymap.of([
-        navigates
-          ? { key: "Tab", run: moveCompletionSelection(true), shift: moveCompletionSelection(false) }
-          : { key: "Tab", run: acceptCompletion },
-      ]),
-    );
-  }
-
   function buildDefinitionLink() {
     return definitionLinkExtension({
       resolveTable: (word) => resolveCatalogTable(sqlSchema.schema, sqlSchema.defaultSchema, word),
@@ -433,6 +426,7 @@
                 defaultTable,
                 fkIndex: sqlSchema.fkIndex,
                 tableIndex: sqlSchema.tableIndex,
+                catalogCompletions,
                 tableAliases: get(editorSettings).tableAliases,
               }),
             ],
@@ -530,6 +524,19 @@
     "diagnostic.missingValue",
   ]);
 
+  // Los mensajes genericos de sqlparser ("Expected X, found Y" y los que no
+  // traducimos): con la sentencia a medias suele retroceder y senalar un
+  // token anterior al que falta (sqlDiagnostics.ts, whileTyping).
+  const VAGUE_KEYS: ReadonlySet<string> = new Set([
+    "",
+    "diagnostic.unexpected",
+    "diagnostic.expected",
+    "diagnostic.expectedStatement",
+    "diagnostic.expectedExpression",
+    "diagnostic.expectedIdentifier",
+    "diagnostic.expectedClose",
+  ]);
+
   const samePosition = (a: AnalysisPosition, b: AnalysisPosition) => a.line === b.line && a.column === b.column;
 
   // Lo que dijo el backend de una sentencia que empieza en `start`.
@@ -568,6 +575,7 @@
         fixes,
         unresolved: UNRESOLVED_KEYS.has(key),
         incomplete,
+        vague: VAGUE_KEYS.has(key),
       };
     });
   }
@@ -693,6 +701,8 @@
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
   // que recorre F2.
   let diagnosticCount = $state(0);
+  // Sin soporte del fabricante: una etiqueta junto a la version, sin mas.
+  const serverSupport = $derived($databaseExplorer?.serverVersion ? vendorSupport($databaseExplorer.serverVersion) : null);
   let scrollbarWidth = $state(0);
   let scrollbarHeight = $state(0);
   // El fondo del editor (cambia con el tema): el contador lo toma para leerse
@@ -786,6 +796,8 @@
   const TEXT_FLUSH_DELAY_MS = 300;
   const LARGE_TEXT_FLUSH_DELAY_MS = 1500;
   const LARGE_DOCUMENT = 1024 * 1024;
+  // Px libres que se dejan bajo el cursor al desplazar: lo que ocupa el popup.
+  const CURSOR_BOTTOM_MARGIN = 200;
   let textFlushTimer: ReturnType<typeof setTimeout> | null = null;
   let textDirty = false;
 
@@ -820,10 +832,20 @@
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        // /* se cierra solo (sqlCommentEditing.ts) y la jerarquia dentro de
+        // los comentarios (sqlCommentStyle.ts).
+        commentEditing,
+        commentStyle,
+        indentationCompartment.of(indentationExtension(get(editorSettings).indentStyle, get(editorSettings).indentSize)),
         lexicalCompartment.of(sqlLexical.of(engine.lexical)),
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
         // como escribe el SQL el motor de la conexion (sqlPaste.ts).
         EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
+        // Aire bajo la ultima linea: se puede desplazar mas alla del final y
+        // el cursor no se queda pegado al borde, asi el popup de sugerencias
+        // cabe debajo de lo que se escribe.
+        scrollPastEnd(),
+        EditorView.scrollMargins.of(() => ({ bottom: CURSOR_BOTTOM_MARGIN })),
         statementIndex,
         hintsCompartment.of(parameterHintConfig.of(hintConfig())),
         parameterHints,
@@ -950,6 +972,12 @@
     });
   });
 
+  $effect(() => {
+    const { indentStyle, indentSize } = $editorSettings;
+    if (!view) return;
+    view.dispatch({ effects: indentationCompartment.reconfigure(indentationExtension(indentStyle, indentSize)) });
+  });
+
   // Reconfigura schema/dialecto/FK cuando cambia el catalogo o la conexion
   // activa (ver arriba para el resto de la reconfiguracion, atada al texto).
   $effect(() => {
@@ -960,12 +988,17 @@
     const defaultSchema = $databaseExplorer?.defaultSchema;
 
     const nextEngine = profile ? engineFor(profile.driver) : standardSql;
-    sqlSchema = buildSqlSchema(tables, { defaultSchema, engine: nextEngine });
+    sqlSchema = buildSqlSchema(tables, {
+      defaultSchema, engine: nextEngine,
+      explorerSchemas: $databaseExplorer?.schemas ?? [],
+      availableSchemas: $databaseExplorer?.availableSchemas ?? [],
+    });
     // Otro motor: el indice de sentencias vuelve a cortar con sus reglas.
     if (view && nextEngine.lexical !== engine.lexical) {
       view.dispatch({ effects: lexicalCompartment.reconfigure(sqlLexical.of(nextEngine.lexical)) });
     }
     engine = nextEngine;
+    catalogCompletions = buildCatalogCompletions($databaseExplorer?.schemas ?? [], engine, defaultSchema);
     sqlDialect = dialectFor(engine);
     // Las rutinas (y el motor) de los hints de parametros.
     routineIndex = buildRoutineIndex($databaseExplorer?.schemas ?? [], defaultSchema);
@@ -1010,6 +1043,25 @@
     style:right={`${scrollbarWidth + 10}px`}
     style:--problems-background={editorBackground || undefined}
   >
+    {#if $databaseExplorer?.serverVersion}
+      <span class="server-version" use:tooltip={{ label: $t("editor.serverVersion"), placement: "above" }}>
+        {$databaseExplorer.serverVersion}
+      </span>
+      {#if serverSupport?.status === "unsupported"}
+        <span
+          class="server-unsupported"
+          use:tooltip={{
+            label: $t("editor.serverUnsupportedHint", {
+              version: $databaseExplorer.serverVersion,
+              date: new Intl.DateTimeFormat($locale, { month: "long", year: "numeric" }).format(new Date(`${serverSupport.eol}T12:00:00Z`)),
+            }),
+            placement: "above",
+          }}
+        >
+          {$t("editor.serverUnsupported")}
+        </span>
+      {/if}
+    {/if}
     {#if diagnosticCount > 0}
       <span
         class="problems-count"
@@ -1107,7 +1159,28 @@
   .problems.clean {
     padding-right: 6px;
     color: var(--success);
+  }
+
+  .problems.clean .problems-count {
     opacity: 0.7;
+  }
+
+  /* La version del servidor, discreta: no compite con el contador. */
+  .server-version {
+    margin-right: 6px;
+    color: var(--text-secondary);
+    opacity: 0.75;
+    font-size: 0.6875rem;
+  }
+
+  .server-unsupported {
+    margin-right: 6px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--warning);
+    font-size: 0.625rem;
+    line-height: 1.4;
   }
 
   .problems-count {

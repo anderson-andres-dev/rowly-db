@@ -3,9 +3,11 @@
 // CodeMirror (se parsea por partes y en los huecos entre sentencias no
 // devuelve ninguna); nunca cae al documento entero.
 //
-// Se corta en cada ";" que no este dentro de comillas ('...', "...",
-// `...`), de un comentario (-- ..., /* ... */) ni de un bloque $tag$ de
-// PostgreSQL. Tambien en una linea en blanco, como en DataGrip o DBeaver,
+// Se corta en cada ";" que no este dentro de una rutina compuesta, comillas
+// ('...', "...", `...`), comentarios (-- ..., /* ... */) ni bloques $tag$
+// de PostgreSQL. DELIMITER cambia el terminador de MySQL y MariaDB; su linea
+// y el terminador elegido quedan fuera del SQL. Tambien se corta en una
+// linea en blanco, como en DataGrip o DBeaver,
 // salvo dentro de parentesis, cuando la linea anterior termina en algo que
 // pide seguir (una coma, un parentesis que abre, un operador), cuando la
 // siguiente empieza con algo que no puede abrir una consulta (FROM, WHERE,
@@ -16,6 +18,8 @@
 //
 // En el editor no se usa sobre el texto entero: sqlStatementIndex.ts lleva
 // las sentencias del documento al dia por partes, con este mismo escaner.
+
+import { commentAt, executablePrefix, opensDashComment } from "$lib/sqlComments";
 
 export interface StatementRange {
   from: number;
@@ -46,6 +50,13 @@ export interface SqlLexical {
   // E'...': un texto donde la barra invertida escapa aunque en el resto no
   // (Postgres).
   escapeStringPrefix: boolean;
+  // Comentarios (sqlComments.ts): /* /* */ */ (Postgres); "-- " y no "--x"
+  // (MySQL, MariaDB); los que el motor ejecuta, "/*!" (MySQL y MariaDB) y
+  // "/*M!" (MariaDB); pistas del optimizador /*+ ... */.
+  nestedComments: boolean;
+  dashCommentNeedsSpace: boolean;
+  executableComments: readonly ("/*!" | "/*M!")[];
+  optimizerHints: boolean;
 }
 
 // El SQL estandar: sin conexion no hay motor (engines/standard.ts).
@@ -55,6 +66,10 @@ export const STANDARD_LEXICAL: SqlLexical = {
   hashComments: false,
   dollarQuotes: false,
   escapeStringPrefix: false,
+  nestedComments: false,
+  dashCommentNeedsSpace: false,
+  executableComments: [],
+  optimizerHints: false,
 };
 
 // Donde quedo el escaner al cortar un trozo: el documento se escanea por
@@ -87,6 +102,42 @@ export interface ScanState {
   // trozo la continua (a tailWord y, si es la primera, a lead).
   wordOpen: boolean;
   leadOpen: boolean;
+  // Terminador del cliente y palabra de SQL que puede cruzar un trozo.
+  delimiter: string;
+  sqlWord: string;
+  // Cabecera CREATE y bloques de su cuerpo.
+  createHead: boolean;
+  objectKind: string;
+  blockDepth: number;
+  caseDepth: number;
+  pendingEnd: boolean;
+  // Una palabra solo abre o cierra un bloque al inicio de una sentencia: en
+  // MySQL `begin` y `end` pueden ser alias o columnas y el CASE de una
+  // expresion tambien cierra con END.
+  stmtStart: boolean;
+  lastWordStarted: boolean;
+  exprCases: number;
+  softEnd: boolean;
+  bodyArmed: boolean;
+  bodyKeyword: boolean;
+  blockClosed: boolean;
+  declaring: boolean;
+  handlerPending: boolean;
+  afterDot: boolean;
+  // Los comentarios /*!...*/ llevan SQL ejecutable en MySQL.
+  versionedComment: boolean;
+  // Cuerpo de funcion SQL de Postgres, con o sin LANGUAGE antes de AS.
+  bodyComplete: boolean;
+  languagePending: boolean;
+  languageValueSeen: boolean;
+  // Una directiva DELIMITER puede cruzar el limite de un trozo.
+  directiveText: string;
+  awaitingBodyQuote: boolean;
+  bodyQuote: boolean;
+  commentDepth: number;
+  recovery: { from: number; previousTo: number }[];
+  // Puntos donde cortar un $$...$$ que no llega a cerrarse (ver DOLLAR_QUOTED).
+  dollarRecovery: { from: number; previousTo: number }[];
 }
 
 const CODE = 0;
@@ -94,8 +145,18 @@ const LINE_COMMENT = 1;
 const BLOCK_COMMENT = 2;
 const QUOTED = 3;
 const DOLLAR_QUOTED = 4;
+const DIRECTIVE = 5;
 
 const SEMICOLON = 59;
+const COLON = 58;
+const DOT = 46;
+// Lo que puede empezar el cuerpo de una sola sentencia (MySQL / MariaDB).
+const BODY_WORDS: ReadonlySet<string> = new Set(["RETURN", "SET", "INSERT", "UPDATE", "DELETE", "SELECT", "CALL"]);
+// La accion de un DECLARE ... HANDLER FOR <condicion> es una sentencia.
+const HANDLER_ACTIONS: ReadonlySet<string> = new Set([
+  "BEGIN", "SET", "CLOSE", "OPEN", "FETCH", "LEAVE", "ITERATE", "SIGNAL", "RESIGNAL", "ROLLBACK", "COMMIT",
+  "INSERT", "UPDATE", "DELETE", "CALL", "GET", "SELECT", "RETURN", "IF", "WHILE", "LOOP", "REPEAT", "CASE",
+]);
 const DASH = 45;
 const SLASH = 47;
 const STAR = 42;
@@ -113,7 +174,7 @@ export const SCAN_OVERLAP = 64;
 const HASH = 35;
 const CLOSE_BRACKET = 93;
 
-const DOLLAR_TAG = /\$[A-Za-z_]*\$/y;
+const DOLLAR_TAG = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/y;
 
 
 // Lo que, al final de una linea, dice que la sentencia sigue abajo aunque
@@ -183,6 +244,8 @@ interface ScanRules {
   special: RegExp;
   closeOf: Map<number, number>;
   closer: Map<number, RegExp>;
+  // El motor: las reglas de comentarios salen de aqui (sqlComments.ts).
+  lexical: SqlLexical;
   hash: boolean;
   dollar: boolean;
   escapePrefix: boolean;
@@ -231,6 +294,7 @@ function rulesFor(lexical: SqlLexical): ScanRules {
     special,
     closeOf,
     closer,
+    lexical,
     hash: lexical.hashComments,
     dollar: lexical.dollarQuotes,
     escapePrefix: lexical.escapeStringPrefix,
@@ -271,6 +335,33 @@ export function initialScanState(): ScanState {
     mainStarted: false,
     wordOpen: false,
     leadOpen: false,
+    delimiter: ";",
+    sqlWord: "",
+    createHead: false,
+    objectKind: "",
+    blockDepth: 0,
+    caseDepth: 0,
+    pendingEnd: false,
+    stmtStart: false,
+    lastWordStarted: false,
+    exprCases: 0,
+    softEnd: false,
+    bodyArmed: false,
+    bodyKeyword: false,
+    blockClosed: false,
+    declaring: false,
+    handlerPending: false,
+    afterDot: false,
+    versionedComment: false,
+    bodyComplete: false,
+    languagePending: false,
+    languageValueSeen: false,
+    directiveText: "",
+    awaitingBodyQuote: false,
+    bodyQuote: false,
+    commentDepth: 0,
+    recovery: [],
+    dollarRecovery: [],
   };
 }
 
@@ -281,7 +372,7 @@ function nextLineContinues(
   text: string,
   from: number,
   final: boolean,
-  hash: boolean,
+  lexical: SqlLexical,
   follows: ReadonlySet<string> | undefined,
   alwaysFollows: ReadonlySet<string> | undefined,
 ): boolean | null {
@@ -291,18 +382,11 @@ function nextLineContinues(
     while (at < text.length && isSpace(text.charCodeAt(at))) at += 1;
     if (at >= text.length) return unknown;
     const code = text.charCodeAt(at);
-    const next = text.charCodeAt(at + 1);
     if ((code === DASH || code === SLASH) && at + 1 >= text.length) return unknown;
-    if ((code === DASH && next === DASH) || (code === HASH && hash)) {
-      const end = text.indexOf("\n", at);
-      if (end === -1) return unknown;
-      at = end + 1;
-      continue;
-    }
-    if (code === SLASH && next === STAR) {
-      const end = text.indexOf("*/", at + 2);
-      if (end === -1) return unknown;
-      at = end + 2;
+    const comment = commentAt(text, at, lexical);
+    if (comment) {
+      if (!comment.closed) return unknown;
+      at = comment.kind === "line" ? comment.end + 1 : comment.end;
       continue;
     }
     break;
@@ -316,6 +400,11 @@ function nextLineContinues(
   const upper = word.toUpperCase();
   return CONTINUE_WORDS.has(upper) || (follows?.has(upper) ?? false) || (alwaysFollows?.has(upper) ?? false);
 }
+
+// Una sentencia de nivel superior que empieza tras lineas en blanco: lo que
+// cierra una rutina o un cuerpo $$ que se quedo abierto mientras se escribe.
+const RESTART_KEYWORDS = "SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|CALL|SET|USE|SHOW|EXPLAIN|TRUNCATE|GRANT";
+const BLANK_LINES = "(?:[ \\t]*\\r?\\n)+";
 
 // El salto de linea que abre una linea en blanco (con espacios o no, y con
 // \r\n) dentro de text[from, to), o -1. El salto tiene que estar en ese
@@ -364,8 +453,156 @@ export function scanChunk(
   const length = text.length;
   // En variables locales: leer y escribir `state` en cada caracter es lo
   // que mas cuesta en un documento de 30 MB.
-  let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen } = state;
+  let { mode, codeStart, lastNonSpace, depth, tail, tailWord, lead, mainStarted, wordOpen, leadOpen,
+    delimiter, sqlWord, createHead, objectKind, blockDepth, caseDepth, pendingEnd, versionedComment,
+    stmtStart, lastWordStarted, exprCases, softEnd, bodyArmed, bodyKeyword, blockClosed, declaring, handlerPending, afterDot,
+    bodyComplete, languagePending, languageValueSeen, directiveText, awaitingBodyQuote, bodyQuote,
+    commentDepth } = state;
   let index = start;
+
+  const finishEnd = () => {
+    if (!pendingEnd) return;
+    if (caseDepth > 0) caseDepth -= 1;
+    else {
+      blockDepth = Math.max(0, blockDepth - 1);
+      if (blockDepth === 0) {
+        bodyComplete = true;
+        blockClosed = true;
+      }
+    }
+    pendingEnd = false;
+  };
+  const word = (value: string) => {
+    const upper = value.toUpperCase();
+    if (languagePending) {
+      languageValueSeen = true;
+      languagePending = false;
+    }
+    if (objectKind && upper === "LANGUAGE") languagePending = true;
+    if (objectKind && rules.dollar && upper === "AS") awaitingBodyQuote = true;
+    if (pendingEnd) {
+      if (upper === "CASE") {
+        caseDepth = Math.max(0, caseDepth - 1);
+        pendingEnd = false;
+        return;
+      }
+      if (["IF", "WHILE", "LOOP", "REPEAT"].includes(upper)) {
+        pendingEnd = false;
+        return;
+      }
+      finishEnd();
+    }
+    if (upper === "CREATE" && codeStart >= 0 && !objectKind && (lead === "CREATE" || versionedComment)) createHead = true;
+    else if (createHead && !objectKind) {
+      if (["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT", "RULE"].includes(upper)) {
+        objectKind = upper;
+        bodyArmed = upper === "PROCEDURE" || upper === "FUNCTION";
+        return;
+      } else if (["TABLE", "VIEW", "INDEX", "DATABASE", "SCHEMA", "TYPE", "MATERIALIZED"].includes(upper)) createHead = false;
+    }
+    if (!objectKind) return;
+    // Tras un punto, una palabra reservada es un nombre (`t.case`).
+    if (afterDot) {
+      afterDot = false;
+      stmtStart = false;
+      lastWordStarted = false;
+      return;
+    }
+    const handlerAction = handlerPending && HANDLER_ACTIONS.has(upper);
+    const atStart = stmtStart || handlerAction;
+    if (handlerAction) handlerPending = false;
+    stmtStart = false;
+    lastWordStarted = atStart;
+    if (softEnd) {
+      softEnd = false;
+      if (upper === "REPEAT") return;
+    }
+    if (atStart && upper === "DECLARE") declaring = true;
+    else if (declaring && upper === "HANDLER") {
+      declaring = false;
+      handlerPending = true;
+    }
+    // El cuerpo de una sola sentencia empieza con una de estas palabras; en
+    // un trigger o un evento, solo despues de ROW o DO (antes son cabecera).
+    if (bodyArmed && blockDepth === 0 && (rules.dollar ? upper === "RETURN" : BODY_WORDS.has(upper))) bodyKeyword = true;
+    else if (objectKind === "TRIGGER" && (rules.dollar ? upper === "EXECUTE" : upper === "ROW")) {
+      if (rules.dollar) bodyKeyword = true;
+      else bodyArmed = true;
+    } else if (objectKind === "EVENT" && upper === "DO") bodyArmed = true;
+    if (upper === "BEGIN" && (atStart || (blockDepth === 0 && !bodyKeyword))) {
+      blockDepth += 1;
+      blockClosed = false;
+      stmtStart = true;
+    } else if (upper === "ATOMIC" && rules.dollar && blockDepth > 0) stmtStart = true;
+    else if (upper === "CASE") {
+      caseDepth += 1;
+      if (!atStart) exprCases += 1;
+    } else if (upper === "END") {
+      if (exprCases > 0 && !atStart) {
+        exprCases -= 1;
+        caseDepth = Math.max(0, caseDepth - 1);
+      } else if (atStart) pendingEnd = true;
+      else if (blockDepth > 0) softEnd = true;
+    } else if (exprCases === 0 && (upper === "THEN" || upper === "ELSE" || upper === "DO")) stmtStart = true;
+    else if (atStart && (upper === "LOOP" || upper === "REPEAT")) stmtStart = true;
+  };
+  // Los simbolos de un tramo de codigo: solo `lbl:` deja el inicio de sentencia.
+  const symbol = (code: number) => {
+    if (code === COLON && lastWordStarted) stmtStart = true;
+    else stmtStart = false;
+    lastWordStarted = false;
+    afterDot = code === DOT;
+  };
+  const feed = (from: number, to: number) => {
+    for (let at = from; at < to; at += 1) {
+      const code = text.charCodeAt(at);
+      if (isWordChar(code)) sqlWord += text[at];
+      else {
+        if (sqlWord) {
+          word(sqlWord);
+          sqlWord = "";
+        }
+        if (objectKind && !isSpace(code)) symbol(code);
+      }
+    }
+  };
+  const flushWord = () => {
+    if (sqlWord) word(sqlWord);
+    sqlWord = "";
+  };
+  const resetStatement = () => {
+    state.recovery = [];
+    state.dollarRecovery = [];
+    codeStart = -1;
+    lastNonSpace = -1;
+    depth = 0;
+    tail = -1;
+    tailWord = "";
+    lead = "";
+    wordOpen = false;
+    leadOpen = false;
+    createHead = false;
+    objectKind = "";
+    blockDepth = 0;
+    caseDepth = 0;
+    pendingEnd = false;
+    stmtStart = false;
+    lastWordStarted = false;
+    exprCases = 0;
+    softEnd = false;
+    bodyArmed = false;
+    bodyKeyword = false;
+    blockClosed = false;
+    declaring = false;
+    handlerPending = false;
+    afterDot = false;
+    sqlWord = "";
+    bodyComplete = false;
+    languagePending = false;
+    languageValueSeen = false;
+    awaitingBodyQuote = false;
+    bodyQuote = false;
+  };
 
   scan: while (index < limit) {
     switch (mode) {
@@ -378,13 +615,56 @@ export function scanChunk(
         mode = CODE;
         continue;
       }
+      case DIRECTIVE: {
+        const end = text.indexOf("\n", index);
+        directiveText += text.slice(index, end === -1 ? length : end);
+        if (end === -1) {
+          index = length;
+          break scan;
+        }
+        delimiter = directiveText.trim().split(/\s/)[0] || ";";
+        directiveText = "";
+        mode = CODE;
+        index = end + 1;
+        continue;
+      }
       case BLOCK_COMMENT: {
+        if (rules.lexical.nestedComments) {
+          let at = index;
+          while (at < length) {
+            const open = text.indexOf("/*", at);
+            const close = text.indexOf("*/", at);
+            if (open !== -1 && (close === -1 || open < close)) {
+              commentDepth += 1;
+              at = open + 2;
+            } else if (close !== -1) {
+              commentDepth -= 1;
+              at = close + 2;
+              if (commentDepth === 0) {
+                index = at;
+                lastNonSpace = base + index;
+                mode = CODE;
+                continue scan;
+              }
+            } else {
+              break;
+            }
+          }
+          index = final ? length : Math.max(index, length - 1);
+          break scan;
+        }
         const end = text.indexOf("*/", index);
         if (end === -1) {
+          if (versionedComment) feed(index, final ? length : Math.max(index, length - 1));
           lastNonSpace = trimmedEnd(text, index, length, base, lastNonSpace);
           // El "*" del final puede cerrar con el "/" del trozo siguiente.
           index = final ? length : Math.max(index, length - 1);
           break scan;
+        }
+        if (versionedComment) {
+          feed(index, end);
+          flushWord();
+          versionedComment = false;
         }
         index = end + 2;
         lastNonSpace = base + index;
@@ -394,12 +674,32 @@ export function scanChunk(
       case DOLLAR_QUOTED: {
         const end = text.indexOf(state.tag, index);
         if (end === -1) {
+          // Sin cierre a la vista: si nunca llega, cada sentencia que empieza
+          // tras una linea en blanco es una consulta nueva y no parte del cuerpo.
+          const restart = new RegExp(`(\\S)[ \\t]*\\r?\\n${BLANK_LINES}(?=(?:${RESTART_KEYWORDS})\\b)`, "gi");
+          restart.lastIndex = index;
+          // Un candidato cuya palabra clave no cabe en el trozo se retoma en el
+          // siguiente desde su inicio.
+          let pending = length;
+          for (let found = restart.exec(text); found; found = restart.exec(text)) {
+            const at = found.index + found[0].length;
+            if (!final && at + 16 > length) {
+              pending = found.index;
+              break;
+            }
+            if (!state.dollarRecovery.some((item) => item.from === base + at)) {
+              state.dollarRecovery.push({ from: base + at, previousTo: base + found.index + 1 });
+            }
+          }
           lastNonSpace = trimmedEnd(text, index, length, base, lastNonSpace);
-          index = final ? length : Math.max(index, length - state.tag.length + 1);
+          index = final ? length : Math.max(index, Math.min(length - state.tag.length + 1, pending));
           break scan;
         }
+        state.dollarRecovery = [];
         index = end + state.tag.length;
         lastNonSpace = base + index;
+        if (bodyQuote) bodyComplete = true;
+        bodyQuote = false;
         mode = CODE;
         continue;
       }
@@ -434,6 +734,8 @@ export function scanChunk(
           }
           index = at + 1;
           lastNonSpace = base + index;
+          if (bodyQuote) bodyComplete = true;
+          bodyQuote = false;
           mode = CODE;
           state.escaping = false;
           continue scan;
@@ -446,9 +748,28 @@ export function scanChunk(
     // tramo intermedio solo importan su primer y su ultimo caracter que no
     // son espacio.
     while (index < limit) {
+      if (rules.hash && codeStart < 0) {
+        const directive = /^[ \t]*(?:\r?\n[ \t]*)*DELIMITER[ \t]+/i.exec(text.slice(index));
+        if (directive) {
+          index += directive[0].length;
+          mode = DIRECTIVE;
+          directiveText = "";
+          continue scan;
+        }
+      }
       SPECIAL.lastIndex = index;
       const found = SPECIAL.exec(text);
-      const at = found === null || found.index >= limit ? limit : found.index;
+      const nextDelimiter = delimiter === ";" ? -1 : text.indexOf(delimiter, index);
+      let specialAt = found === null || found.index >= limit ? limit : found.index;
+      if (delimiter !== ";" && !final && nextDelimiter === -1) {
+        for (let candidate = Math.max(index, length - delimiter.length + 1); candidate < Math.min(limit, length); candidate++) {
+          if (delimiter.startsWith(text.slice(candidate)) && candidate + delimiter.length > length) {
+            specialAt = Math.min(specialAt, candidate);
+            break;
+          }
+        }
+      }
+      const at = nextDelimiter >= 0 && nextDelimiter < specialAt ? nextDelimiter : specialAt;
       while (at > index) {
         // Una linea en blanco en el tramo parte en dos lo que hay a cada lado.
         const blank = depth === 0 ? blankLineIn(text, index, at) : -1;
@@ -477,6 +798,7 @@ export function scanChunk(
           } else if (joins && leadOpen) {
             lead += text.slice(first, leadEnd).toUpperCase();
           }
+          feed(index, cut);
           tail = text.charCodeAt(end - 1);
           if (isWordChar(tail)) {
             let wordStart = end;
@@ -521,7 +843,20 @@ export function scanChunk(
         lastNonSpace = trimmedEnd(text, index, cut, base, lastNonSpace);
         index = cut;
         if (cut === at) break;
-        if (codeStart >= 0 && depth === 0) {
+        flushWord();
+        // Un END a solo una linea en blanco de lo siguiente ya cerro su bloque.
+        finishEnd();
+        if (objectKind && blockDepth > 0 && !bodyComplete) {
+          const following = text.slice(cut + 1).match(new RegExp(`^${BLANK_LINES}(${RESTART_KEYWORDS})\\b`, "i"));
+          if (following) {
+            const from = base + cut + 1 + following[0].length - following[1].length;
+            if (!state.recovery.some((item) => item.from === from)) state.recovery.push({ from, previousTo: lastNonSpace });
+          }
+        }
+        if (codeStart >= 0 && depth === 0 &&
+          (!objectKind || (blockDepth === 0 && caseDepth === 0 && !pendingEnd && (rules.dollar
+            ? (bodyComplete && (languageValueSeen || blockClosed)) || bodyKeyword
+            : blockClosed || bodyKeyword)))) {
           let continues =
             CONTINUES.has(tail) ||
             tail === MULTIPLY ||
@@ -532,7 +867,7 @@ export function scanChunk(
               text,
               cut + 1,
               final,
-              rules.hash,
+              rules.lexical,
               mainStarted ? undefined : FOLLOWS_LEAD.get(lead),
               ALWAYS_FOLLOWS_LEAD.get(lead),
             );
@@ -543,11 +878,7 @@ export function scanChunk(
           }
           if (!continues) {
             out.push({ from: codeStart, to: lastNonSpace, terminated: false });
-            codeStart = -1;
-            lastNonSpace = -1;
-            tail = -1;
-            tailWord = "";
-            lead = "";
+            resetStatement();
           }
         }
         index = cut + 1;
@@ -555,20 +886,38 @@ export function scanChunk(
       if (index >= limit) break;
 
       const code = text.charCodeAt(index);
+      if (delimiter !== ";" && !final && index + delimiter.length > length && delimiter.startsWith(text.slice(index))) break scan;
+      flushWord();
+      if (code === SEMICOLON) finishEnd();
+      const customEnd = delimiter !== ";" && text.startsWith(delimiter, index);
+      if (customEnd || (code === SEMICOLON && delimiter === ";" &&
+        (!objectKind || (blockDepth === 0 && caseDepth === 0 && !(objectKind === "RULE" && depth > 0))))) {
+        finishEnd();
+        if (codeStart >= 0) {
+          if (customEnd && objectKind && blockDepth > 0 && state.recovery.length > 0) {
+            let from = codeStart;
+            for (const candidate of state.recovery) {
+              if (candidate.previousTo > from) out.push({ from, to: candidate.previousTo, terminated: false });
+              from = candidate.from;
+            }
+            if (lastNonSpace > from) out.push({ from, to: lastNonSpace, terminated: false });
+          } else out.push({ from: codeStart, to: customEnd ? lastNonSpace : base + index + 1, terminated: !customEnd });
+        }
+        resetStatement();
+        index += customEnd ? delimiter.length : 1;
+        continue;
+      }
       if (code === SEMICOLON) {
-        if (codeStart >= 0) out.push({ from: codeStart, to: base + index + 1, terminated: true });
-        codeStart = -1;
-        lastNonSpace = -1;
-        depth = 0;
-        tail = -1;
-        tailWord = "";
-        lead = "";
-        wordOpen = false;
-        leadOpen = false;
+        if (objectKind) {
+          stmtStart = true;
+          lastWordStarted = false;
+        }
+        lastNonSpace = base + index + 1;
         index += 1;
         continue;
       }
       if (code === OPEN_PAREN || code === CLOSE_PAREN) {
+        if (objectKind) symbol(code);
         depth = code === OPEN_PAREN ? depth + 1 : Math.max(0, depth - 1);
         if (codeStart < 0) {
           codeStart = base + index;
@@ -586,14 +935,20 @@ export function scanChunk(
       // Un comentario, una comilla o un simbolo cortan la palabra en curso.
       wordOpen = false;
       leadOpen = false;
-      if (code === DASH && text.charCodeAt(index + 1) === DASH) {
+      if (code === DASH && opensDashComment(text, index, rules.lexical)) {
         mode = LINE_COMMENT;
         index += 2;
         continue scan;
       }
       if (code === SLASH && text.charCodeAt(index + 1) === STAR) {
+        // /*! y /*M!: el motor ejecuta su contenido. La sentencia empieza en
+        // el "/"; el contenido se lee desde el "!", asi la "M" no es una palabra.
+        const executable = executablePrefix(text, index, rules.lexical);
+        versionedComment = executable !== null;
+        if (versionedComment && codeStart < 0) codeStart = base + index;
+        commentDepth = 1;
         mode = BLOCK_COMMENT;
-        index += 2;
+        index += executable === "/*M!" ? 3 : 2;
         continue scan;
       }
       if (code === HASH && rules.hash) {
@@ -603,6 +958,7 @@ export function scanChunk(
       }
       const close = rules.closeOf.get(code);
       if (close !== undefined) {
+        if (objectKind) symbol(code);
         if (codeStart < 0) {
           codeStart = base + index;
           lead = "";
@@ -612,6 +968,8 @@ export function scanChunk(
         tail = code;
         tailWord = "";
         mode = QUOTED;
+        bodyQuote = awaitingBodyQuote && rules.dollar;
+        awaitingBodyQuote = false;
         state.quote = close;
         state.escaping = rules.escapePrefix && code === SINGLE_QUOTE && opensEscapeString(text, index);
         index += 1;
@@ -622,6 +980,7 @@ export function scanChunk(
         DOLLAR_TAG.lastIndex = index;
         const tag = DOLLAR_TAG.exec(text)?.[0];
         if (tag) {
+          if (objectKind) symbol(code);
           if (codeStart < 0) {
             codeStart = base + index;
             lead = "";
@@ -630,6 +989,8 @@ export function scanChunk(
           tail = code;
           tailWord = "";
           mode = DOLLAR_QUOTED;
+          bodyQuote = awaitingBodyQuote;
+          awaitingBodyQuote = false;
           state.tag = tag;
           index += tag.length;
           lastNonSpace = base + index;
@@ -637,6 +998,7 @@ export function scanChunk(
         }
       }
       // Un "-", "/" o "$" sueltos: codigo comun.
+      if (objectKind) symbol(code);
       if (codeStart < 0) {
         codeStart = base + index;
         lead = "";
@@ -650,7 +1012,22 @@ export function scanChunk(
   }
 
   if (final) {
-    if (codeStart >= 0) out.push({ from: codeStart, to: lastNonSpace, terminated: false });
+    if (mode === DIRECTIVE) delimiter = directiveText.trim().split(/\s/)[0] || ";";
+    flushWord();
+    finishEnd();
+    if (codeStart >= 0) {
+      const cuts = mode === DOLLAR_QUOTED ? state.dollarRecovery : objectKind && blockDepth > 0 ? state.recovery : [];
+      if (cuts.length > 0) {
+        let from = codeStart;
+        for (const candidate of cuts) {
+          if (candidate.previousTo > from) out.push({ from, to: candidate.previousTo, terminated: false });
+          from = candidate.from;
+        }
+        if (lastNonSpace > from) out.push({ from, to: lastNonSpace, terminated: false });
+      } else out.push({ from: codeStart, to: lastNonSpace, terminated: false });
+    }
+    state.recovery = [];
+    state.dollarRecovery = [];
     state.mode = mode;
     state.codeStart = -1;
     state.lastNonSpace = -1;
@@ -661,6 +1038,10 @@ export function scanChunk(
     state.mainStarted = false;
     state.wordOpen = false;
     state.leadOpen = false;
+    state.delimiter = delimiter;
+    state.sqlWord = "";
+    state.versionedComment = false;
+    state.directiveText = "";
     return length;
   }
   state.mode = mode;
@@ -673,6 +1054,31 @@ export function scanChunk(
   state.mainStarted = mainStarted;
   state.wordOpen = wordOpen;
   state.leadOpen = leadOpen;
+  state.delimiter = delimiter;
+  state.sqlWord = sqlWord;
+  state.createHead = createHead;
+  state.objectKind = objectKind;
+  state.blockDepth = blockDepth;
+  state.caseDepth = caseDepth;
+  state.pendingEnd = pendingEnd;
+  state.stmtStart = stmtStart;
+  state.lastWordStarted = lastWordStarted;
+  state.exprCases = exprCases;
+  state.softEnd = softEnd;
+  state.bodyArmed = bodyArmed;
+  state.bodyKeyword = bodyKeyword;
+  state.blockClosed = blockClosed;
+  state.declaring = declaring;
+  state.handlerPending = handlerPending;
+  state.afterDot = afterDot;
+  state.versionedComment = versionedComment;
+  state.bodyComplete = bodyComplete;
+  state.languagePending = languagePending;
+  state.languageValueSeen = languageValueSeen;
+  state.directiveText = directiveText;
+  state.awaitingBodyQuote = awaitingBodyQuote;
+  state.bodyQuote = bodyQuote;
+  state.commentDepth = commentDepth;
   return index;
 }
 

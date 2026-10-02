@@ -16,12 +16,13 @@
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
-  import { catalogTables, connection, isProduction } from "$lib/stores/connection";
+  import { catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
   import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
+  import { sqlTokens } from "$lib/sqlContext";
   import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
   import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
@@ -783,6 +784,20 @@
     return true;
   }
 
+  const CATALOG_DDL = new Set(["create", "drop", "alter", "rename", "comment"]);
+
+  async function refreshAfterDdl(sql: string, result: QueryExecutionResult, cancelled: boolean) {
+    if (cancelled || result.type === "error") return;
+    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
+    const first = sqlTokens(sql, lexical).find((token) => token.kind === "word");
+    if (!first || !CATALOG_DDL.has(first.text)) return;
+    try {
+      await refreshCatalog();
+    } catch (error) {
+      notifyError(error);
+    }
+  }
+
   // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
   // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
   // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
@@ -824,6 +839,7 @@
     applyExecuteQueryResponse(key, sql, response, paging);
     if (response.type === "completed") {
       selectTab(consoleId, response.result.type === "resultSet" ? key : "output");
+      await refreshAfterDdl(sql, response.result, cancelled);
     }
   }
 
@@ -1199,9 +1215,9 @@
   }
 
   // Solicita una ejecucion nueva (Ctrl+Enter o el boton "Ejecutar"). No hace
-  // nada si esa consola ya esta ejecutando. Con un guard visible, la
-  // ejecucion nueva lo reemplaza: confirmar ejecuta siempre lo ultimo que se
-  // pidio, nunca un bloque anterior (y el guard se vuelve a mostrar, ver el
+  // nada si esa consola ya esta ejecutando. Con una confirmacion pendiente,
+  // la ejecucion nueva la reemplaza: confirmar ejecuta siempre lo ultimo que
+  // se pidio, nunca un bloque anterior (y su modal se abre de nuevo, ver el
   // {#key} de ExecutionGuard). Nada se confirma por si solo.
   async function requestExecution(consoleId: string, requested: string) {
     if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
@@ -1209,18 +1225,21 @@
     // Con las reglas del motor: las mismas con que el editor marca cada
     // sentencia del script.
     const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    // Lo que se ejecuta (y queda en la Salida y el historial) es la consulta
-    // con los valores de sus parametros.
+    // Los parametros se reemplazan antes de dividir el script.
     const sql = await fillParameters(requested, lexical);
     if (sql === null || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
     const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
+    if (statements.length === 0) {
+      stopQueryExecution(consoleId);
+      return;
+    }
     if (statements.length > 1) {
       await startScript(consoleId, sql, statements);
       return;
     }
-    await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
+    await runQuery(consoleId, statements[0], null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
 
@@ -1254,8 +1273,8 @@
   // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
   // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
   // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
-  // script entero (el guard las lista). Despues corren en orden, cada una
-  // con autocommit, y el script se detiene en la primera que falle o al
+  // script entero (el guard muestra cuantas se ejecutaran). Despues corren
+  // en orden, cada una con autocommit, y el script se detiene si falla o al
   // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
   // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
   const MAX_SCRIPT_RESULT_TABS = 10;
@@ -1326,6 +1345,7 @@
           ? $t("workspace.output.cancelled")
           : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
       });
+      await refreshAfterDdl(statement, result, cancelled);
 
       const stopped = result.type === "error" || cancelled;
       if (stopped || index === statements.length - 1) {
@@ -1357,10 +1377,9 @@
     selectTab(consoleId, outcome === "error" || !lastResultTab ? "output" : lastResultTab);
   }
 
-  // Unica via de confirmacion: el click explicito en "Ejecutar de todos
-  // modos" del guard. takeQueryConfirmation() retira el pendiente de forma
-  // atomica antes del await, asi que un doble click no puede confirmar dos
-  // veces.
+  // La confirmacion del guard llama aqui. takeQueryConfirmation() retira el
+  // pendiente de forma atomica antes del await: un doble click no confirma
+  // dos veces.
   async function confirmPendingExecution(consoleId: string) {
     const pending = takeQueryConfirmation(consoleId);
     if (!pending || !beginQueryExecution(consoleId)) return;
@@ -1553,13 +1572,10 @@
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}
-      <!-- Cada confirmacion nueva monta el guard otra vez: su entrada avisa
-           que ahora es otro bloque. -->
+      <!-- Cada confirmacion nueva abre su propio modal. -->
       {#key liveExecution.pendingConfirmation}
         <ExecutionGuard
-          sql={liveExecution.pendingConfirmation.sql}
-          statement={liveExecution.pendingConfirmation.statement}
-          script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
+          count={liveExecution.pendingConfirmation.script?.statements.length ?? 1}
           production={$isProduction}
           oncancel={() => cancelPendingExecution(activeConsole.id)}
           onconfirm={() => confirmPendingExecution(activeConsole.id)}
