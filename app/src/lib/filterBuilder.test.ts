@@ -28,6 +28,17 @@ describe("sqlLiteral", () => {
 });
 
 describe("quoteIdentifier", () => {
+  // Comprobado contra MySQL 8.4.11 y PostgreSQL 18.6: sin comillas,
+  // `WHERE order = 1` es error de sintaxis en los dos y `WHERE Name` en
+  // Postgres busca la columna `name`.
+  it("quotes reserved words in every engine and mixed case in Postgres", () => {
+    expect(quoteIdentifier("order", "mysql")).toBe("`order`");
+    expect(quoteIdentifier("order", "mariadb")).toBe("`order`");
+    expect(quoteIdentifier("order", "postgres")).toBe('"order"');
+    expect(quoteIdentifier("Name", "postgres")).toBe('"Name"');
+    expect(quoteIdentifier("Name", "mysql")).toBe("Name");
+  });
+
   it("deja los nombres simples y escapa los demas segun el motor", () => {
     expect(quoteIdentifier("created_at", "mysql")).toBe("created_at");
     expect(quoteIdentifier("fecha alta", "mysql")).toBe("`fecha alta`");
