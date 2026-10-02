@@ -792,6 +792,12 @@ fn validate_mysql_declare(
         .iter()
         .position(|word| word == "DEFAULT")
         .unwrap_or(tokens.len());
+    // A medio escribir (`DECLARE`, `DECLARE a,`, `DECLARE DEFAULT`): aun no
+    // hay nombre ni tipo que revisar.
+    if i > end {
+        found.push(routine_incomplete(tokens[tokens.len() - 1]));
+        return;
+    }
     validate_mysql_type(
         &tokens[i..end],
         tokens
@@ -1267,10 +1273,19 @@ fn structural_errors(tokens: &[&TokenWithSpan]) -> Vec<Diagnostic> {
             && next.is_none_or(|next| keyword_of(next) != Keyword::BY)
             && previous.is_none_or(|previous| keyword_of(previous) != Keyword::WITHIN)
         {
-            found.push(at_token(
-                token,
-                DiagnosticMessage::key("diagnostic.missingBy").with("keyword", keyword_text(token)),
-            ));
+            // `ORDER B` al final: se esta escribiendo el BY.
+            let typing_by = index + 2 == tokens.len()
+                && next.is_some_and(|next| {
+                    matches!(&next.token, Token::Word(word) if word.quote_style.is_none()
+                        && "BY".starts_with(&word.value.to_uppercase()))
+                });
+            let message = if typing_by {
+                DiagnosticMessage::key("diagnostic.incomplete")
+                    .with("after", token_text(&token.token))
+            } else {
+                DiagnosticMessage::key("diagnostic.missingBy").with("keyword", keyword_text(token))
+            };
+            found.push(at_token(token, message));
         }
 
         // FROM o JOIN sin tabla: `FROM WHERE ...`, `JOIN ON ...`.
@@ -2864,6 +2879,20 @@ mod tests {
         }
     }
 
+    // A medio escribir, cualquier prefijo: con panic = "abort" en release, un
+    // panico del analizador cierra la app.
+    #[test]
+    fn no_prefix_of_a_routine_panics() {
+        let routine = "CREATE PROCEDURE p(IN a INT, OUT b INT)\nBEGIN\n  DECLARE done, other INT DEFAULT FALSE;\n  DECLARE v VARCHAR(10);\n  DECLARE c CONDITION FOR SQLSTATE '45000';\n  DECLARE cur CURSOR FOR SELECT id FROM t WHERE x = a;\n  DECLARE CONTINUE HANDLER FOR NOT FOUND, SQLSTATE VALUE '23000' SET done = TRUE;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END;\n  OPEN cur;\n  lp: LOOP\n    FETCH cur INTO v;\n    IF done THEN LEAVE lp; ELSEIF v = 'x' THEN ITERATE lp; END IF;\n    WHILE a > 0 DO SET a = a - 1; END WHILE;\n    REPEAT SET a = a + 1; UNTIL a > 3 END REPEAT;\n    CASE v WHEN 'a' THEN SET b = 1; ELSE SET b = 2; END CASE;\n    SELECT COUNT(*) INTO b FROM t;\n  END LOOP lp;\n  CLOSE cur;\nEND";
+        let chars: Vec<char> = routine.chars().collect();
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for end in 1..=chars.len() {
+                let prefix: String = chars[..end].iter().collect();
+                let _ = analyze_statement(&prefix, dialect, None);
+            }
+        }
+    }
+
     #[test]
     fn a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is() {
         for dialect in [Dialect::MySql, Dialect::MariaDb] {
@@ -3088,6 +3117,10 @@ mod contract {
             (
                 "SELECT * FROM t ORDER a",
                 Same(Error("diagnostic.missingBy", at(1, 17))),
+            ),
+            (
+                "SELECT * FROM t ORDER B",
+                Same(Error("diagnostic.incomplete", at(1, 17))),
             ),
             (
                 "SELECT a COUNT(*) FROM t",

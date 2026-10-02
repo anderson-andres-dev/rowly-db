@@ -3,7 +3,8 @@
 //! `cargo test -p rowly-server-tests -- --ignored --test-threads=1`.
 
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, QueryExecutionOptions, QueryExecutionResult, TlsMode,
+    ConnectionConfig, DbConnector, QueryExecutionOptions, QueryExecutionResult, SchemaObjects,
+    TlsMode,
 };
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
@@ -135,6 +136,15 @@ impl Conn {
                 let _ = sqlx::raw_sql(sql).execute(&mut conn).await;
             }
         }
+    }
+
+    /// Lo que la app lee de un schema para el explorador y el autocompletado.
+    pub async fn introspect(&self, schema: &str) -> SchemaObjects {
+        match self {
+            Conn::My(connector) => connector.introspect_schema(schema).await,
+            Conn::Pg(connector) => connector.introspect_schema(schema).await,
+        }
+        .expect("introspeccion")
     }
 
     pub async fn scalar(&self, sql: &str) -> Option<String> {

@@ -48,7 +48,9 @@ export function prefixStartForNames(names: Iterable<string>): (text: string, end
 // Tras CALL, un procedure con sus argumentos como campos: cada uno lleva el
 // nombre del parametro, Tab pasa al siguiente y del ultimo sale tras el ")".
 // Solo ahi: en una expresion, esos nombres se leerian como columnas que no
-// existen. Sin llaves en los nombres, que la plantilla leeria como campos.
+// existen. Cada nombre se escribe como identificador del motor (`Param Uno`
+// entre comillas): el CALL se lee aun sin reemplazarlo. Sin llaves en los
+// nombres, que la plantilla leeria como campos.
 function argumentsSnippet(name: string, params: readonly string[]) {
   if (/[{}]/.test(name) || params.some((param) => /[{}]/.test(param))) return null;
   return snippet(`${name}(${params.map((param) => `\${${param}}`).join(", ")})\${}`);
@@ -69,7 +71,7 @@ function option(entry: Entry, engine: SqlProfile, defaultSchema: string | undefi
       recordUsage(key);
       const name = (prefix ? `${engine.identifier(entry.schema)}.` : "") + engine.identifier(entry.name);
       const parens = invoke && entry.kind !== "sequence" && view.state.sliceDoc(to, to + 1) !== "(";
-      const fields = parens && entry.kind === "procedure" && entry.params?.length ? argumentsSnippet(name, entry.params) : null;
+      const fields = parens && entry.kind === "procedure" && entry.params?.length ? argumentsSnippet(name, entry.params.map(engine.identifier)) : null;
       if (fields) return fields(view, completion, from, to);
       const text = name + (parens ? "()" : "");
       view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (parens && !entry.noArgs ? 1 : 0) }, userEvent: "input.complete" });

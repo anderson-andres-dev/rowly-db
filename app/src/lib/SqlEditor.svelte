@@ -521,6 +521,19 @@
     "diagnostic.missingValue",
   ]);
 
+  // Los mensajes genericos de sqlparser ("Expected X, found Y" y los que no
+  // traducimos): con la sentencia a medias suele retroceder y senalar un
+  // token anterior al que falta (sqlDiagnostics.ts, whileTyping).
+  const VAGUE_KEYS: ReadonlySet<string> = new Set([
+    "",
+    "diagnostic.unexpected",
+    "diagnostic.expected",
+    "diagnostic.expectedStatement",
+    "diagnostic.expectedExpression",
+    "diagnostic.expectedIdentifier",
+    "diagnostic.expectedClose",
+  ]);
+
   const samePosition = (a: AnalysisPosition, b: AnalysisPosition) => a.line === b.line && a.column === b.column;
 
   // Lo que dijo el backend de una sentencia que empieza en `start`.
@@ -559,6 +572,7 @@
         fixes,
         unresolved: UNRESOLVED_KEYS.has(key),
         incomplete,
+        vague: VAGUE_KEYS.has(key),
       };
     });
   }

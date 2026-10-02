@@ -25,6 +25,7 @@ const schemas: SchemaObjects[] = [
       { name: "My Function", kind: "function", arguments: "", returnType: "int" },
       { name: "cobrar_recibo", kind: "procedure", arguments: "recibo int, valor decimal(8,2)", parameters: [{ name: "recibo", mode: "in", dataType: "int", hasDefault: false }, { name: "valor", mode: "in", dataType: "decimal(8,2)", hasDefault: false }] },
       { name: "sin_lista", kind: "procedure", arguments: "x int" },
+      { name: "raro_param", kind: "procedure", arguments: "`Param Uno` int, `select` int", parameters: [{ name: "Param Uno", mode: "in", dataType: "int", hasDefault: false }, { name: "select", mode: "in", dataType: "int", hasDefault: false }] },
     ],
     sequences: [{ name: "facturas_seq", dataType: "bigint" }], events: [], warnings: [],
   },
@@ -146,13 +147,16 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
         const text = view.state.doc.toString();
         return from === to ? text.slice(0, from) + "|" + text.slice(from) : `${text.slice(0, from)}[${text.slice(from, to)}]${text.slice(to)}`;
       };
-      const quoted = (name: string) => (driver === "postgres" ? `"${name}"` : name);
-      expect(await apply("CALL com_anular|", "com_anularFactura")).toBe(`CALL ${quoted("com_anularFactura")}([codiFactNume])`);
+      const quoted = (name: string, always = false) => (driver === "postgres" ? `"${name}"` : always ? `\`${name}\`` : name);
+      expect(await apply("CALL com_anular|", "com_anularFactura")).toBe(`CALL ${quoted("com_anularFactura")}([${quoted("codiFactNume")}])`);
       expect(await apply("CALL cobrar|", "cobrar_recibo")).toBe("CALL cobrar_recibo([recibo], valor)");
       expect(await apply("CALL cobrar|", "cobrar_recibo", 1)).toBe("CALL cobrar_recibo(recibo, [valor])");
       expect(await apply("CALL cobrar|", "cobrar_recibo", 2)).toBe("CALL cobrar_recibo(recibo, valor)|");
       expect(await apply("CALL other.com_anular|", "com_anularOtro")).toBe(`CALL other.${quoted("com_anularOtro")}()|`);
       expect(await apply("CALL com_anular|(1)", "com_anularFactura")).toBe(`CALL ${quoted("com_anularFactura")}|(1)`);
+      // Un nombre que no es un identificador simple va entre comillas: el CALL
+      // se lee aun sin reemplazarlo.
+      expect(await apply("CALL raro|", "raro_param")).toBe(`CALL raro_param([${quoted("Param Uno", true)}], ${quoted("select", true)})`);
       // Sin la lista de parametros del catalogo, solo el cursor dentro.
       expect(await apply("CALL sin_lista|", "sin_lista")).toBe("CALL sin_lista(|)");
       expect(await apply("DROP PROCEDURE com_anular|", "com_anularFactura")).toBe(`DROP PROCEDURE ${quoted("com_anularFactura")}|`);

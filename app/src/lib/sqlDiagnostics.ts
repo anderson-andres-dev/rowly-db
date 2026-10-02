@@ -51,6 +51,9 @@ export interface SqlDiagnostic {
   // Solo dice que la sentencia no esta terminada ("termina antes de
   // tiempo", una coma al final): no se muestra mientras se escribe en ella.
   incomplete?: boolean;
+  // Un mensaje generico del parser, cuya posicion no es fiable con la
+  // sentencia a medias: no se muestra mientras se escribe al final de ella.
+  vague?: boolean;
   // La ayuda de la app para el codigo del servidor (segun el motor).
   help?: ErrorHelp;
 }
@@ -373,7 +376,7 @@ export function diagnosticsIn(state: EditorState, from: number, to: number): Sql
   const { typing } = state.field(diagnosticsField);
   const head = state.selection.main.head;
   return found
-    .filter((item) => !(item.source === "server" && analyzed.has(item.from)) && !whileTyping(item, typing, head))
+    .filter((item) => !(item.source === "server" && analyzed.has(item.from)) && !whileTyping(state, item, typing, head))
     .sort(byPosition);
 }
 
@@ -382,10 +385,16 @@ export function visibleDiagnosticCount(state: EditorState): number {
   return diagnosticsIn(state, 0, state.doc.length).length;
 }
 
-// Lo que no se muestra mientras se escribe en `typing` (ver typingSpan).
-function whileTyping(item: SqlDiagnostic, typing: DiagnosticsState["typing"], head: number): boolean {
+// Lo que no se muestra mientras se escribe en `typing` (ver typingSpan): lo
+// que solo esta sin terminar, lo que cae sobre la palabra del cursor o justo
+// antes de el (`FROM |`), los nombres que no se encuentran, que pueden
+// definirse mas adelante (`SELECT a.f|` antes del FROM, un alias a medias), y
+// los mensajes genericos si se escribe al final de la sentencia.
+function whileTyping(state: EditorState, item: SqlDiagnostic, typing: DiagnosticsState["typing"], head: number): boolean {
   if (!typing || item.source !== "analysis" || item.to < typing.from || item.from > typing.to) return false;
-  return !!item.incomplete || (item.from <= head && head <= item.to);
+  if (item.incomplete || item.unresolved) return true;
+  if (item.vague && state.sliceDoc(head, typing.to).trim() === "") return true;
+  return item.from <= head && (head <= item.to || state.sliceDoc(item.to, head).trim() === "");
 }
 
 // Lo marcado de un punto: un error en espacios o en un simbolo suelto se
