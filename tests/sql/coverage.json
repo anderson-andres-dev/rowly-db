@@ -1,0 +1,764 @@
+{
+  "format": 1,
+  "about": "Fila de SQL_ENGINE §6 -> pruebas, ambito, motores y compuerta. `real` corre en cada version de `verified` (tools/test-dbs/lines.json); `lines` en cada probe; `e2e` en la app real; `driver-manual` necesita KHIPU_TEST_*. Lo valida tools/inventory/coverage.mjs.",
+  "scopes": {
+    "unit": "pr",
+    "e2e": "pr",
+    "real": "engine-pr",
+    "lines": "engine-pr",
+    "driver-manual": "manual"
+  },
+  "rows": {
+    "S1": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "un ; dentro de sus comillas o comentarios no corta",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/sqlStatements.test.ts",
+          "name": "splitStatements",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "S2": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "fuzzing_the_guard_against_the_real_servers_finds_no_second_statement",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "S3": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "what_damages_data_never_passes_as_not_destructive",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "delete_without_where_requires_confirmation",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/tests/e2e/run.mjs",
+          "name": "DELETE sin WHERE: Escape cancela sin tocar datos y Enter confirma",
+          "scope": "e2e",
+          "engines": [
+            "mysql"
+          ]
+        }
+      ]
+    },
+    "S4": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "executable_comments_are_classified_as_code",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "a_versioned_comment_is_read_both_ways_and_the_stricter_wins",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "S5": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        }
+      ],
+      "na": {
+        "postgres": "PostgreSQL no tiene NO_BACKSLASH_ESCAPES: la barra invertida solo escapa en E'...' (§6.5)"
+      }
+    },
+    "S6": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "valid_statements_sqlparser_cannot_read_are_judged_by_their_structure",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "S7": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "app/src-tauri/src/lib.rs",
+          "name": "in_production_every_write_needs_confirmation",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/execution_guard.rs",
+          "name": "production_writes_require_confirmation",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/dialogKeys.test.ts",
+          "name": "Enter confirma un modal de confirmacion",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/tests/e2e/run.mjs",
+          "name": "produccion: una escritura pide confirmacion en la app real",
+          "scope": "e2e",
+          "engines": [
+            "mysql"
+          ]
+        }
+      ],
+      "gap": "El recorrido integrado solo corre con MySQL 8.4.11 en Linux/WebKitGTK (§9)"
+    },
+    "A1": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "the_analyzer_marks_nothing_in_sql_the_real_servers_accept",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "common_valid_ddl_and_dml_is_never_objected_to",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "the_mixed_console_corpus_runs_through_guard_and_server",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/tests/corpus.rs",
+          "name": "corpus",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "A2": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "la_sintaxis_en_cada_motor",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "el_catalogo_en_cada_motor",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/tests/corpus.rs",
+          "name": "errores_ordinarios_siguen_detectandose",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "A3": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "typing_real_sql_shows_nothing_that_is_only_unfinished",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "no_prefix_of_a_routine_panics",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "A4": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "typing_real_sql_shows_nothing_that_is_only_unfinished",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/sqlDiagnostics.dom.test.ts",
+          "name": "errores en el editor",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "A5": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "valid_routine_structures_are_not_objected_to",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        },
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        }
+      ],
+      "gap": "PostgreSQL: los cuerpos de rutinas no se analizan (§8, §9)"
+    },
+    "A6": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "postgres_distingue_mayusculas_como_el_servidor",
+          "scope": "unit",
+          "engines": [
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "mysql_no_distingue_mayusculas",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        }
+      ]
+    },
+    "A7": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "FIXTURES",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/sqlDiagnostics.test.ts",
+          "name": "ubicar un error de ejecucion",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "A8": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/engine/src/diagnostics.rs",
+          "name": "select_into_keeps_positions_with_multibyte_characters",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "Unicode mas alla de SELECT INTO (§9)"
+    },
+    "A9": {
+      "status": "gap",
+      "tests": [],
+      "gap": "El analizador tiene un solo dialecto por motor (§9)"
+    },
+    "G1": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/engine/src/lib.rs",
+          "name": "mod contract",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "perfil",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "G2": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "completion_calls_run_on_the_real_servers",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/sqlCatalogCompletions.server.test.ts",
+          "name": "CALL escrito por el autocompletado",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "G3": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "name": "catalogo SQL",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "G4": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "name": "input.complete",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "G5": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "motor",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "name": "catalogo SQL",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "G6": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "reservedWords",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "Las palabras reservadas son una lista por motor, no por linea (§9)"
+    },
+    "G7": {
+      "status": "gap",
+      "tests": [
+        {
+          "file": "crates/engine/src/editing.rs",
+          "name": "fn ",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/export.rs",
+          "name": "fn ",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "El SQL de edicion, exportacion y filtros no se ejecuta en un servidor (§9); solo unitarios"
+    },
+    "D1": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/drivers/mysql/src/lib.rs",
+          "name": "execute_query_returns_result_set_with_null_and_types",
+          "scope": "driver-manual",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        },
+        {
+          "file": "crates/drivers/postgres/src/lib.rs",
+          "name": "execute_query_returns_result_set_with_null_and_types",
+          "scope": "driver-manual",
+          "engines": [
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "Tests de driver con KHIPU_TEST_*: segunda via a un servidor, fuera del CI (§9 P3)"
+    },
+    "D2": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "call_and_show_create_return_their_rows",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "D3": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/drivers/mysql/src/lib.rs",
+          "name": "introspect_schema_classifies_every_object_kind",
+          "scope": "driver-manual",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        },
+        {
+          "file": "crates/drivers/postgres/src/lib.rs",
+          "name": "introspect_schema_classifies_every_object_kind",
+          "scope": "driver-manual",
+          "engines": [
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "Solo con KHIPU_TEST_* (§9 P3)"
+    },
+    "D4": {
+      "status": "gap",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "completion_calls_run_on_the_real_servers",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "El contenido introspectado solo se comprueba a traves de G2 (§9)"
+    },
+    "D5": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/drivers/mysql/src/lib.rs",
+          "name": "tls_required_encrypts_or_fails_with_an_actionable_message",
+          "scope": "driver-manual",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        },
+        {
+          "file": "crates/drivers/postgres/src/lib.rs",
+          "name": "tls_required_encrypts_or_fails_with_an_actionable_message",
+          "scope": "driver-manual",
+          "engines": [
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/drivers/mysql/src/tls.rs",
+          "name": "tls_errors_get_their_own_cause",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        }
+      ],
+      "gap": "La negociacion real solo con KHIPU_TEST_* (§9 P3)"
+    },
+    "D6": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/drivers/mysql/src/version.rs",
+          "name": "#[test]",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
+        },
+        {
+          "file": "crates/drivers/postgres/src/version.rs",
+          "name": "#[test]",
+          "scope": "unit",
+          "engines": [
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "La asignacion de una version a su linea (§9)"
+    },
+    "D7": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/version_lines.rs",
+          "name": "every_version_line_is_told_apart_from_the_previous_one",
+          "scope": "lines",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "D8": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "crates/server-tests/tests/version_lines.rs",
+          "name": "every_column_type_a_line_returns_is_read",
+          "scope": "lines",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "D9": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "app/src-tauri/src/drivers.rs",
+          "name": "cada_motor_del_frontend_llega_como_el_suyo",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/stores/connectionCatalog.test.ts",
+          "name": "descarta los resultados si cambia la conexion durante el refresh",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ],
+      "gap": "Contexto tipado e invalidacion completos (M3, §9)"
+    }
+  }
+}

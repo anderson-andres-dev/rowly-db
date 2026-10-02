@@ -17,7 +17,19 @@ fn repo() -> PathBuf {
 
 struct Probe {
     image: String,
+    version: String,
     port: u16,
+}
+
+/// Lo que cada probe devuelve tiene que ser la version exacta que declara
+/// lines.json: una etiqueta movida o una imagen equivocada no prueba la linea.
+fn check_version(engine_name: &str, probe: &Probe, conn: &Conn) {
+    let actual = exact_version(&conn.server_version()).to_string();
+    assert_eq!(
+        actual, probe.version,
+        "{engine_name}: {} en 127.0.0.1:{} informa {actual}, lines.json declara {}",
+        probe.image, probe.port, probe.version
+    );
 }
 
 struct Line {
@@ -54,6 +66,7 @@ fn registry() -> Vec<(String, Vec<Line>)> {
                         .iter()
                         .map(|probe| Probe {
                             image: probe["image"].as_str().unwrap().to_string(),
+                            version: probe["version"].as_str().unwrap().to_string(),
                             port: probe["port"].as_u64().unwrap() as u16,
                         })
                         .collect(),
@@ -147,6 +160,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             line.name, probe.image, probe.port
                         )
                     });
+                check_version(&engine_name, probe, &conn);
                 for statement in &setup {
                     let _ = conn.raw(statement).await;
                 }
@@ -294,6 +308,7 @@ async fn every_column_type_a_line_returns_is_read() {
                 let conn = Conn::open_line(engine, probe.port).await.unwrap_or_else(|error| {
                     panic!("{engine_name} {} ({}): {error}\nlevantalo con tools/test-dbs/lines.sh up {engine_name}", line.name, probe.image)
                 });
+                check_version(&engine_name, probe, &conn);
                 let version = conn.server_version();
                 // Cada test prepara lo suyo (SQL_ENGINE.md §10.2).
                 for statement in &fixture(

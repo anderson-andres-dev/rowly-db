@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# "motor linea imagen puerto" por cada servidor de lines.json.
+# "motor linea imagen@digest puerto version" por cada servidor de lines.json.
 probes() {
   python3 - "$@" <<'PY'
 import json, sys
@@ -19,15 +19,15 @@ for engine in wanted:
         sys.exit(f"motor desconocido: {engine}")
     for line in registry["engines"][engine]:
         for probe in line["probes"]:
-            print(engine, line["line"], f'{registry["registry"]}/{probe["image"]}', probe["port"])
+            print(engine, line["line"], f'{registry["registry"]}/{probe["image"]}@{probe["digest"]}', probe["port"], probe["version"])
 PY
 }
 
-name() { echo "rowly-line-$1-${3##*:}"; }
+name() { echo "rowly-line-$1-$2"; }  # motor y version exacta
 
 up() {
-  probes "$@" | while read -r engine line image port; do
-    box=$(name "$engine" "$line" "$image")
+  probes "$@" | while read -r engine line image port version; do
+    box=$(name "$engine" "$version")
     if [ -n "$(docker ps -aq -f name="^$box$")" ]; then docker start "$box" >/dev/null; continue; fi
     case "$engine" in
       mysql|mariadb)
@@ -39,8 +39,8 @@ up() {
           -e POSTGRES_PASSWORD=rowly "$image" >/dev/null ;;
     esac
   done
-  probes "$@" | while read -r engine line image port; do
-    box=$(name "$engine" "$line" "$image")
+  probes "$@" | while read -r engine line image port version; do
+    box=$(name "$engine" "$version")
     printf "esperando %s " "$box"
     case "$engine" in
       mysql)    ready=(mysqladmin ping -h 127.0.0.1 -uroot -prowly --silent) ;;
@@ -53,8 +53,8 @@ up() {
 }
 
 down() {
-  probes "$@" | while read -r engine line image _; do
-    docker rm -f "$(name "$engine" "$line" "$image")" >/dev/null 2>&1 || true
+  probes "$@" | while read -r engine line image _ version; do
+    docker rm -f "$(name "$engine" "$version")" >/dev/null 2>&1 || true
   done
 }
 

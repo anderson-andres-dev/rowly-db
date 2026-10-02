@@ -75,7 +75,26 @@ pub enum Conn {
 }
 
 impl Conn {
+    /// La conexion de prueba del motor, despues de comprobar que el servidor
+    /// es exactamente la version que `tools/test-dbs/lines.json` declara para
+    /// la imagen del contenedor (SQL_ENGINE §10.1).
     pub async fn open(engine: Engine) -> Conn {
+        let conn = Conn::open_unchecked(engine).await;
+        let declared = declared_version(engine);
+        let actual = exact_version(&conn.server_version()).to_string();
+        assert_eq!(
+            actual,
+            declared.version,
+            "{}: el servidor informa {actual}, pero lines.json declara {} para {}",
+            engine.container(),
+            declared.version,
+            declared.image
+        );
+        evidence(engine, &declared);
+        conn
+    }
+
+    async fn open_unchecked(engine: Engine) -> Conn {
         let config = engine.config();
         match engine {
             Engine::Postgres => Conn::Pg(
@@ -184,6 +203,119 @@ impl Conn {
                 rows.first().and_then(|row| row.first().cloned()).flatten()
             }
             _ => None,
+        }
+    }
+}
+
+/// La version exacta de lo que muestra la app ("8.4.11" de "MySQL 8.4.11").
+pub fn exact_version(display: &str) -> &str {
+    display.rsplit(' ').next().unwrap_or(display)
+}
+
+/// Un servidor de lines.json: imagen fijada por digest y version declarada.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Declared {
+    pub image: String,
+    pub digest: String,
+    pub version: String,
+}
+
+pub fn lines_json() -> serde_json::Value {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/test-dbs/lines.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("tools/test-dbs/lines.json"))
+        .expect("lines.json valido")
+}
+
+/// Todo lo que lines.json declara, con su digest: versiones verificadas y
+/// probes de linea.
+pub fn declared_servers(json: &serde_json::Value) -> Vec<Declared> {
+    let mut found = Vec::new();
+    let mut push = |item: &serde_json::Value| {
+        if let (Some(image), Some(digest), Some(version)) = (
+            item["image"].as_str(),
+            item["digest"].as_str(),
+            item["version"].as_str(),
+        ) {
+            found.push(Declared {
+                image: image.into(),
+                digest: digest.into(),
+                version: version.into(),
+            });
+        }
+    };
+    for list in json["verified"]
+        .as_object()
+        .into_iter()
+        .flat_map(|o| o.values())
+    {
+        list.as_array().into_iter().flatten().for_each(&mut push);
+    }
+    for lines in json["engines"]
+        .as_object()
+        .into_iter()
+        .flat_map(|o| o.values())
+    {
+        for line in lines.as_array().into_iter().flatten() {
+            line["probes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .for_each(&mut push);
+        }
+    }
+    found
+}
+
+/// La version que lines.json declara para la imagen del contenedor del
+/// motor. Un contenedor sin digest o con una imagen no declarada no puede
+/// verificar nada: la prueba se detiene y lo dice.
+pub fn declared_version(engine: Engine) -> Declared {
+    let output = std::process::Command::new("docker")
+        .args(["inspect", "-f", "{{.Config.Image}}", engine.container()])
+        .output()
+        .expect("docker inspect");
+    let image = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let digest = image.split('@').nth(1).unwrap_or_else(|| {
+        panic!(
+            "{}: la imagen {image:?} no esta fijada por digest (tools/test-dbs/lines.json)",
+            engine.container()
+        )
+    });
+    declared_servers(&lines_json())
+        .into_iter()
+        .find(|server| server.digest == digest)
+        .unwrap_or_else(|| {
+            panic!(
+                "{}: {image} no esta declarada en tools/test-dbs/lines.json",
+                engine.container()
+            )
+        })
+}
+
+/// Una linea por servidor y corrida: la evidencia de la version exacta
+/// (SQL_ENGINE §7). Con ROWLY_EVIDENCE=<archivo> tambien se agrega ahi.
+fn evidence(engine: Engine, declared: &Declared) {
+    use std::sync::Mutex;
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let line = format!(
+        "{{\"engine\":\"{engine:?}\",\"version\":\"{}\",\"image\":\"{}\",\"digest\":\"{}\"}}",
+        declared.version, declared.image, declared.digest
+    );
+    let mut seen = SEEN.lock().unwrap();
+    if seen.contains(&line) {
+        return;
+    }
+    seen.push(line.clone());
+    eprintln!("servidor verificado: {line}");
+    if let Ok(path) = std::env::var("ROWLY_EVIDENCE") {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(file, "{line}");
         }
     }
 }
