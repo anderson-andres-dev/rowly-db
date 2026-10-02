@@ -89,7 +89,11 @@ async function write(session, text) {
   await (await session.find(".cm-content")).click();
   await session.keys({ chord: [KEYS.control, "a"] }, ""); // Backspace
   await session.keys(text);
-  await session.keys(KEYS.escape); // cierra el autocompletado si quedo abierto
+  // Escape solo si quedo abierto el autocompletado: sin el, Escape saca el
+  // foco del editor y Ctrl+Enter ya no ejecuta.
+  await sleep(200);
+  const popup = await session.script(`return !!document.querySelector(".cm-tooltip-autocomplete")`);
+  if (popup) await session.keys(KEYS.escape);
 }
 
 async function run(session, text) {
