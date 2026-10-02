@@ -107,3 +107,6 @@ CREATE PROCEDURE atk() BEGIN SELECT 1; END
 CREATE PROCEDURE atk() BEGIN SELECT 1; END
 /* c */
 ; {x}
+-- ---
+-- MySQL y MariaDB no anidan: el comentario acaba en el primer */ y lo demas se ejecuta.
+SELECT 1 /* a /* b */ ; {x} */

@@ -284,7 +284,7 @@ function createCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
 		{ tag: tags.typeName, color: palette.type ?? palette.keyword },
 		{ tag: tags.string, color: palette.string },
 		{ tag: tags.number, color: palette.number },
-		{ tag: [tags.lineComment, tags.blockComment], color: palette.comment, fontStyle: 'italic' },
+		{ tag: [tags.lineComment, tags.blockComment], color: palette.comment },
 		{ tag: [tags.bool, tags.null], color: palette.constant },
 		...(palette.builtin ? [{ tag: tags.standard(tags.name), color: palette.builtin }] : []),
 		...(palette.operator ? [{ tag: tags.operator, color: palette.operator }] : [])
