@@ -85,8 +85,10 @@ export class Session {
       if (typeof item === "string") {
         for (const char of item) actions.push({ type: "keyDown", value: char }, { type: "keyUp", value: char });
       } else {
-        // { chord: [KEYS.control, KEYS.enter] }
-        for (const key of item.chord) actions.push({ type: "keyDown", value: key });
+        // { chord: [KEYS.control, KEYS.enter] }. WebKitWebDriver pierde la
+        // segunda tecla si llega en el mismo instante que el modificador:
+        // una pausa corta entre cada una, como al pulsarlas de verdad.
+        for (const key of item.chord) actions.push({ type: "keyDown", value: key }, { type: "pause", duration: 30 });
         for (const key of [...item.chord].reverse()) actions.push({ type: "keyUp", value: key });
       }
     }
