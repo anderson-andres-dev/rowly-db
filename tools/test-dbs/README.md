@@ -22,6 +22,19 @@ Data lives in named volumes, so it survives `down`; `down -v` deletes it. `up.sh
 
 `rowly_test` holds a canary table the security tests check after running hostile text. Tests create their own routines through the same path as the app (guard, then driver).
 
+## Version lines
+
+`lines.sh` starts one empty server for each end of each version line listed in `lines.json` (SQL_ENGINE.md §5), with its data in memory. The test `version_lines` proves that each line is told apart from the previous one, with the fixtures in `tests/sql/<engine>/<line>/`.
+
+```bash
+tools/test-dbs/lines.sh up postgres      # or mysql, mariadb; no argument: all of them
+cargo test -p rowly-server-tests --test version_lines -- --ignored
+tools/test-dbs/lines.sh down postgres
+tools/test-dbs/lines.sh list             # lines, images and ports
+```
+
+They are pulled from `public.ecr.aws/docker/library`, the public mirror of the official images, so that twenty servers do not hit Docker Hub's anonymous pull limit. Ports go from 34001 (MySQL), 34101 (MariaDB) and 34201 (PostgreSQL). Root (or `postgres`) password: `rowly`. Starting a whole engine at once takes about 3 GB of RAM for MySQL, less for the others.
+
 ## Server tests
 
 - `the_routines_corpus_…`: a corpus of procedures, functions, triggers and events (`crates/server-tests/corpus`) goes through the guard and is created and called on each server.

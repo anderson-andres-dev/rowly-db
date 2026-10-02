@@ -1,0 +1,26 @@
+{
+  "registry": "public.ecr.aws/docker/library",
+  "engines": {
+    "mysql": [
+      { "line": "5.7", "probes": [{ "image": "mysql:5.7.44", "port": 34001 }] },
+      { "line": "8.0", "probes": [{ "image": "mysql:8.0.46", "port": 34002 }, { "image": "mysql:8.3.0", "port": 34003 }] },
+      { "line": "8.4", "probes": [{ "image": "mysql:8.4.11", "port": 34004 }] },
+      { "line": "9", "probes": [{ "image": "mysql:9.0.1", "port": 34005 }, { "image": "mysql:9.7.2", "port": 34006 }] }
+    ],
+    "mariadb": [
+      { "line": "10.3", "probes": [{ "image": "mariadb:10.3.39", "port": 34101 }, { "image": "mariadb:10.5.29", "port": 34102 }] },
+      { "line": "10.6", "probes": [{ "image": "mariadb:10.6.28", "port": 34103 }, { "image": "mariadb:11.4.13", "port": 34107 }] },
+      { "line": "11.7", "probes": [{ "image": "mariadb:11.7.2", "port": 34104 }, { "image": "mariadb:11.8.9", "port": 34105 }, { "image": "mariadb:13.0.2", "port": 34106 }] }
+    ],
+    "postgres": [
+      { "line": "10", "probes": [{ "image": "postgres:10", "port": 34201 }] },
+      { "line": "11", "probes": [{ "image": "postgres:11", "port": 34202 }] },
+      { "line": "12", "probes": [{ "image": "postgres:12.22", "port": 34203 }, { "image": "postgres:13.23", "port": 34204 }] },
+      { "line": "14", "probes": [{ "image": "postgres:14.24", "port": 34205 }] },
+      { "line": "15", "probes": [{ "image": "postgres:15.19", "port": 34206 }] },
+      { "line": "16", "probes": [{ "image": "postgres:16.15", "port": 34207 }] },
+      { "line": "17", "probes": [{ "image": "postgres:17.11", "port": 34208 }] },
+      { "line": "18", "probes": [{ "image": "postgres:18.6", "port": 34209 }] }
+    ]
+  }
+}

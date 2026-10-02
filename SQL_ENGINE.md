@@ -61,7 +61,7 @@ Testing links in isolation is necessary but not enough. The chain also has to be
 | **Stable** | Integrable, plus: released in several versions without a P0/P1 regression, and its gates (§7) run in CI. |
 | **Mature** | Stable, plus real-world use over several releases, where new bugs are edge cases rather than design flaws. Maturity takes history, not one green run. |
 
-Today MySQL, MariaDB and PostgreSQL meet every Integrable criterion except the two P1 gaps in §9. Closing them comes first; Stable also needs the real-server suite in CI.
+Today MySQL, MariaDB and PostgreSQL meet every Integrable criterion except the P1 gaps in §9. Closing them comes first; Stable also needs the real-server suite in CI.
 
 ## 5. Version lines
 
@@ -71,7 +71,7 @@ A **version line** is a range of server versions that behave the same for Rowly 
 
 With no fixture that tells them apart, versions belong to the same line. That keeps the list to the versions a user would actually choose between ("I need this one, it behaves differently"), never one entry per vendor release. Each line lists *why it exists*: its differences from the previous line.
 
-A difference that appears at a patch release inside a line (`CHECK` enforced from MySQL 8.0.16) is data of that line, not a new line.
+A smaller difference inside a line is data of that line, not a new line, and its fixture says from which version it holds (`-- since: 11.8`, §10.1). For example, `CHECK` enforced from MySQL 8.0.16, or `DEFAULT` on procedure parameters from MariaDB 11.8 inside the 11.7 line.
 
 Newer is not a superset. MySQL 8.4 rejects `SELECT 1 AS rank`, `GROUP BY a DESC`, `SHOW SLAVE STATUS`, `PASSWORD()` and `SQL_CACHE`, all valid on 5.7. PostgreSQL 18 rejects the postfix `5 !`, `pg_current_xlog_location()` and `WITH OIDS`, all valid on older majors. All of these were checked against the test servers.
 
@@ -91,17 +91,17 @@ The window is recalculated when preparing each release, from the vendors' end-of
 
 ### 5.3 Lines today
 
-Status as of 2026-10-02. **Every line is a candidate until its distinguishing fixtures exist** (§10). A candidate that no fixture separates merges with the previous line. Each line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine.
+Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine.
 
 | Engine | Line | Differences from the previous line | Status | Tested on |
 |---|---|---|---|---|
 | MySQL | 5.7 | Base: no CTE or window functions, `CHECK` parsed and ignored | Unsupported (EOL 2023-10) | — |
-| | 8.0–8.3 | CTE and window functions. `rank`, `row_number`, `window`… become reserved. `GROUP BY … DESC`, `PASSWORD()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-30 | 8.0.46 |
-| | 8.4 | Replication `MASTER`/`SLAVE` syntax removed. `mysql_native_password` disabled by default | Supported until 2032 | 8.4.11 |
-| | 9 | `mysql_native_password` removed. `VECTOR` type | Supported (9.7 LTS until 2034) | 9.7 |
+| | 8.0–8.3 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-30 | 8.0.46 |
+| | 8.4 | `SHOW SLAVE STATUS` and `SHOW MASTER STATUS` removed. `mysql_native_password` not loaded by default | Supported until 2032 | 8.4.11 |
+| | 9 | `VECTOR` type and vector functions | Supported (9.7 LTS until 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode | Unsupported (EOL 2025-06) | — |
-| | 10.6–11.7 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Supported (10.6 in grace until 2027-07-06; 10.11 and 11.4 LTS) | 10.6.28 |
-| | 11.8+ | `DEFAULT` on procedure parameters, `VECTOR` type | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
+| | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Supported (10.6 in grace until 2027-07-06; 10.11 and 11.4 LTS) | 10.6.28 |
+| | 11.7+ | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8 | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
 | PostgreSQL | 10 | Base: identity columns, declarative partitioning, `xlog` → `wal` functions | Unsupported (EOL 2022-11) | — |
 | | 11 | Procedures and `CALL` | Unsupported (EOL 2023-11) | — |
 | | 12–13 | Generated columns, `WITH OIDS` removed. 13 changes nothing Rowly DB depends on | Supported, 13 in grace until 2026-11-13 | 13.23 |
@@ -167,6 +167,8 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes | partly, through G2; a direct check is a **gap** (§9) |
 | D5 | TLS modes negotiate or fail with an actionable message | driver tests `tls_*` |
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
+| D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
+| D8 | Every column type a supported line can return is read by the driver | **gap** (§9): MySQL 9 `VECTOR` columns fail |
 
 ### 6.5 Capabilities
 
@@ -216,12 +218,17 @@ ROWLY_ENGINES=mysql,postgres     # limit to some engines
 ROWLY_FUZZ_CASES=20000           # cases per engine (default 4000)
 ROWLY_FUZZ_SEED=21               # base seed (default 0)
 
+# Version lines: one server per end of each line, no data (tools/test-dbs/lines.json)
+tools/test-dbs/lines.sh up postgres          # or mysql, mariadb; no argument: all
+cargo test -p rowly-server-tests --test version_lines -- --ignored
+tools/test-dbs/lines.sh down postgres
+
 # Driver tests (KHIPU_TEST_<ENGINE>_* variables, see CONTRIBUTING.md)
 cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Today the suite runs on one release per engine (§9); selecting a line is part of the test reorganization (§10).
+Today the full suite runs on one release per engine; only the line proof runs on every line (§9). Running the rest by line is part of the test reorganization (§10).
 
 The real-server tests share the table `rowly_test.victim`. Run them with `--test-threads=1`, and never two runs against the same server at the same time.
 
@@ -249,7 +256,8 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Gap | Severity | Note |
 |---|---|---|
 | CI does not run `npm test`, and runs clippy without `-D warnings` | P1 | More than a thousand frontend tests are not checked on pull requests, and a clippy warning does not fail the build. Both are one line in `.github/workflows/quality.yml`. |
-| Version lines are not implemented: the suite runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), every line of §5.3 is a candidate, and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | The test reorganization of §10 and the support window close it. |
+| MySQL 9: reading a `VECTOR` column fails (`SELECT *` on a table that has one) with "unknown column type 0xf2". `sqlx` 0.8.6 and 0.9.0 do not know the type; MariaDB sends vectors as binary and works | P1 | Needs a patch in `sqlx-mysql` (upstream or a maintained fork). Found by the line proof. |
+| Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | The test reorganization of §10 and the support window close it. |
 | The real-server suite does not run in CI | P2 | Needs Docker in CI; until then it is the manual engine PR gate. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
@@ -272,6 +280,7 @@ Shared by the Rust and TypeScript tests:
 tests/sql/
   common/                SQL valid on every line of every engine
   <engine>/
+    setup.sql            run on every server of the engine before its fixtures
     common/              valid on every line of the engine
     <line>/
       accepts.sql        new in this line: the server accepts it here and rejects it on the previous line
@@ -279,9 +288,11 @@ tests/sql/
   attacks/<engine>/      security corpus, versioned separately
 ```
 
-Unit cases stay next to the code they test. Entries in a `.sql` file are separated by a line `-- ---`.
+Unit cases stay next to the code they test. Entries in a `.sql` file are separated by a line `-- ---`; each one is a single statement with a comment saying what it proves. A `-- since: <version>` line in an entry marks a change inside the line (§5.1): before that version, the line behaves like the previous one, and the line needs servers on both sides of it.
 
-Today the corpus lives in `crates/server-tests/corpus/<engine>/` (`valid.sql`, `attacks.sql`, `routines.sql`) and `crates/engine/tests/corpus/` (`valid/`, `mixed/`); it moves to this layout (§9). Tests that no longer apply are deleted, not kept "just in case".
+The servers of each line are listed in `tools/test-dbs/lines.json`, pulled from the public mirror of the official images (`public.ecr.aws/docker/library`) to avoid Docker Hub's anonymous pull limit.
+
+The line fixtures already live here. The rest of the corpus still lives in `crates/server-tests/corpus/<engine>/` (`valid.sql`, `attacks.sql`, `routines.sql`) and `crates/engine/tests/corpus/` (`valid/`, `mixed/`), and moves to this layout (§9). Tests that no longer apply are deleted, not kept "just in case".
 
 ### 10.2 Rules
 

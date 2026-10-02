@@ -91,6 +91,37 @@ impl Conn {
         }
     }
 
+    /// Un servidor de linea de version (`tools/test-dbs/lines.sh`): sin
+    /// datos, como administrador.
+    pub async fn open_line(engine: Engine, port: u16) -> Result<Conn, String> {
+        let (username, database) = match engine {
+            Engine::Postgres => ("postgres", "postgres"),
+            _ => ("root", "mysql"),
+        };
+        let config = ConnectionConfig {
+            host: "127.0.0.1".into(),
+            port,
+            database: database.into(),
+            username: username.into(),
+            password: "rowly".into(),
+            tls_mode: TlsMode::Disabled,
+            ca_certificate_path: None,
+        };
+        match engine {
+            Engine::Postgres => PostgresConnector::connect(&config).await.map(Conn::Pg),
+            _ => MySqlConnector::connect(&config).await.map(Conn::My),
+        }
+        .map_err(|error| error.to_string())
+    }
+
+    /// La version que informa el servidor, como la muestra la app.
+    pub fn server_version(&self) -> String {
+        match self {
+            Conn::My(connector) => connector.server_version(),
+            Conn::Pg(connector) => connector.server_version(),
+        }
+    }
+
     /// Ejecuta tal cual, sin guard: lo que haria el servidor con el texto.
     pub async fn raw(&self, sql: &str) -> QueryExecutionResult {
         let options = QueryExecutionOptions { max_rows: 1000 };
@@ -154,6 +185,20 @@ impl Conn {
             }
             _ => None,
         }
+    }
+}
+
+/// ROWLY_ENGINES=mysql,postgres limita la prueba a esos motores.
+pub fn engine_selected(engine: Engine) -> bool {
+    match std::env::var("ROWLY_ENGINES") {
+        Ok(list) => list.split(',').any(|name| {
+            name.trim().eq_ignore_ascii_case(match engine {
+                Engine::MySql => "mysql",
+                Engine::MariaDb => "mariadb",
+                Engine::Postgres => "postgres",
+            })
+        }),
+        Err(_) => true,
     }
 }
 
