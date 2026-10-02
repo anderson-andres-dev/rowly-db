@@ -78,7 +78,7 @@ Newer is not a superset. MySQL 8.4 rejects `SELECT 1 AS rank`, `GROUP BY a DESC`
 ### 5.2 Support policy
 
 - **Supported:** the vendor still supports the release, or it is an LTS release (every PostgreSQL major counts as one) within 12 months after its end of life. Short-term releases (MySQL innovation, MariaDB rolling) get no grace period. A line is supported while any of its releases is.
-- **Unsupported:** older than that. The app still connects, with the warning that some objects may be missing. Its pack can be downloaded (§11), but the gates do not test it, and a failure there is not a bug.
+- **Unsupported:** older than that. **Nothing is removed**: the line, its pack and the connection stay, and the line proof (D7) keeps covering it. The editor shows a small "no official support" tag next to the server version, whose tooltip explains it. The engine PR gate no longer runs the full suite on it, and a failure there is not a bug.
 - **Newer than tested:** a release newer than every tested one. The app connects with no warning and applies the nearest line below it. The release gate checks it to find out whether it starts a new line.
 
 The window is recalculated when preparing each release, from the vendors' end-of-life dates (endoflife.date). Never from memory.
@@ -247,7 +247,7 @@ Where Rowly DB departs from the server on purpose. Changing one of these is a pr
 | While typing a statement, the editor hides what is only unfinished, the last word written, names that are not found yet, and generic parser messages when typing at the end. They appear when the cursor leaves the statement or the editor loses focus. | The parser rejects every prefix. Showing that is noise, and its generic messages often point at the wrong token. |
 | Valid syntax that `sqlparser` cannot read (MariaDB `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) gets no syntax diagnostic (`Dialect::unparsed_syntax`). | A missing parser feature is not the user's error. |
 | PostgreSQL routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
-| A server older than the supported window still connects. | Rowly DB never refuses a server. It warns and does what the nearest line allows. |
+| A server older than the supported window still connects, and its line is never removed. | Rowly DB never refuses a server. It marks it as having no official support and does what its line allows. |
 
 ## 9. Known gaps
 
@@ -331,7 +331,8 @@ Rules:
 - **A pack never relaxes the guard.** It can add destructive keywords; it cannot mark anything as safe. The worst a wrong pack can cause is a false diagnostic, never a safety hole.
 - **Packs are signed** with the same key as app updates, and checked against their format before they are installed.
 - **A pack that needs a mechanism the app does not have** declares the minimum app version it requires, and the app says so instead of installing it.
-- **The supported lines at release time ship inside the app** and work offline. The rest are downloadable.
+- **Every published line ships inside the app and stays there**, supported or not, and works offline. A pack weighs kilobytes; there is no reason to take one out. Downloading exists to receive new lines without waiting for a release.
+- **Removing or disabling a line is the user's decision, never Rowly DB's.**
 - **§5.3 is generated from the pack index**, so this document and what users can download never disagree.
 
 ## 12. Adding an engine, step by step

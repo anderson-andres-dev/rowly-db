@@ -92,6 +92,7 @@
     resolveCatalogTable,
   } from "$lib/sqlSchema";
   import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
+  import { vendorSupport } from "$lib/engines/vendorSupport";
   import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
@@ -698,6 +699,8 @@
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
   // que recorre F2.
   let diagnosticCount = $state(0);
+  // Sin soporte del fabricante: una etiqueta junto a la version, sin mas.
+  const serverSupport = $derived($databaseExplorer?.serverVersion ? vendorSupport($databaseExplorer.serverVersion) : null);
   let scrollbarWidth = $state(0);
   let scrollbarHeight = $state(0);
   // El fondo del editor (cambia con el tema): el contador lo toma para leerse
@@ -1034,6 +1037,25 @@
     style:right={`${scrollbarWidth + 10}px`}
     style:--problems-background={editorBackground || undefined}
   >
+    {#if $databaseExplorer?.serverVersion}
+      <span class="server-version" use:tooltip={{ label: $t("editor.serverVersion"), placement: "above" }}>
+        {$databaseExplorer.serverVersion}
+      </span>
+      {#if serverSupport?.status === "unsupported"}
+        <span
+          class="server-unsupported"
+          use:tooltip={{
+            label: $t("editor.serverUnsupportedHint", {
+              version: $databaseExplorer.serverVersion,
+              date: new Intl.DateTimeFormat($locale, { month: "long", year: "numeric" }).format(new Date(`${serverSupport.eol}T12:00:00Z`)),
+            }),
+            placement: "above",
+          }}
+        >
+          {$t("editor.serverUnsupported")}
+        </span>
+      {/if}
+    {/if}
     {#if diagnosticCount > 0}
       <span
         class="problems-count"
@@ -1131,7 +1153,28 @@
   .problems.clean {
     padding-right: 6px;
     color: var(--success);
+  }
+
+  .problems.clean .problems-count {
     opacity: 0.7;
+  }
+
+  /* La version del servidor, discreta: no compite con el contador. */
+  .server-version {
+    margin-right: 6px;
+    color: var(--text-secondary);
+    opacity: 0.75;
+    font-size: 0.6875rem;
+  }
+
+  .server-unsupported {
+    margin-right: 6px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--warning);
+    font-size: 0.625rem;
+    line-height: 1.4;
   }
 
   .problems-count {

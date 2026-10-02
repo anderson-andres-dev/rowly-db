@@ -78,7 +78,7 @@ Lo más nuevo no es un superconjunto. MySQL 8.4 rechaza `SELECT 1 AS rank`, `GRO
 ### 5.2 Política de soporte
 
 - **Soportada:** el fabricante todavía la soporta, o es una versión LTS (cada versión mayor de PostgreSQL cuenta como una) dentro de los 12 meses siguientes a su fin de soporte. Las versiones de ciclo corto (las innovation de MySQL, las rolling de MariaDB) no tienen gracia. Una línea está soportada mientras lo esté alguna de sus versiones.
-- **Sin soporte:** más vieja que eso. La app conecta igual, con el aviso de que pueden faltar objetos. Su paquete se puede descargar (§11), pero las compuertas no la prueban y un fallo ahí no es un bug.
+- **Sin soporte:** más vieja que eso. **No se quita nada**: la línea, su paquete y la conexión se quedan, y la demostración de líneas (D7) la sigue cubriendo. El editor muestra una etiqueta pequeña «sin soporte oficial» junto a la versión del servidor, con un tooltip que lo explica. La compuerta de PR de motor ya no corre en ella la suite completa, y un fallo ahí no es un bug.
 - **Más nueva que las probadas:** una versión más nueva que todas las probadas. La app conecta sin aviso y aplica la línea más cercana por debajo. La compuerta de release la revisa para saber si abre una línea nueva.
 
 La ventana se recalcula al preparar cada release, con las fechas de fin de soporte de los fabricantes (endoflife.date). Nunca de memoria.
@@ -247,7 +247,7 @@ Donde Rowly DB se aparta del servidor a propósito. Cambiar una de estas es una 
 | Mientras se escribe una sentencia, el editor oculta lo que solo está sin terminar, la última palabra escrita, los nombres que aún no se encuentran y, si se escribe al final, los mensajes genéricos del parser. Aparecen cuando el cursor sale de la sentencia o el editor pierde el foco. | El parser rechaza cada prefijo. Mostrarlo es ruido, y sus mensajes genéricos a menudo señalan el token equivocado. |
 | La sintaxis válida que `sqlparser` no lee (en MariaDB, `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) no recibe diagnóstico de sintaxis (`Dialect::unparsed_syntax`). | Que al parser le falte algo no es un error del usuario. |
 | Los cuerpos de las rutinas de PostgreSQL no se analizan. | Son textos en un lenguaje que el analizador no lee. Queda como hueco (§9). |
-| Un servidor más viejo que la ventana de soporte conecta igual. | Rowly DB nunca rechaza un servidor. Avisa y hace lo que permita la línea más cercana. |
+| Un servidor más viejo que la ventana de soporte conecta igual, y su línea nunca se quita. | Rowly DB nunca rechaza un servidor. Lo marca como sin soporte oficial y hace lo que permita su línea. |
 
 ## 9. Huecos conocidos
 
@@ -331,7 +331,8 @@ Reglas:
 - **Un paquete nunca relaja el guard.** Puede añadir palabras destructivas; no puede marcar nada como seguro. Lo peor que puede causar un paquete equivocado es un diagnóstico falso, nunca un hueco de seguridad.
 - **Los paquetes van firmados** con la misma clave que las actualizaciones de la app, y se comprueba su formato antes de instalarlos.
 - **Un paquete que necesita un mecanismo que la app no tiene** declara la versión mínima de la app que requiere, y la app lo dice en vez de instalarlo.
-- **Las líneas soportadas en el momento de cada release vienen dentro de la app** y funcionan sin conexión. Las demás se descargan.
+- **Cada línea publicada viene dentro de la app y se queda**, soportada o no, y funciona sin conexión. Un paquete pesa kilobytes; no hay razón para sacarlo. La descarga existe para recibir líneas nuevas sin esperar una release.
+- **Quitar o desactivar una línea es decisión del usuario, nunca de Rowly DB.**
 - **§5.3 se genera desde el índice de paquetes**, para que este documento y lo que los usuarios pueden descargar nunca discrepen.
 
 ## 12. Agregar un motor, paso a paso
