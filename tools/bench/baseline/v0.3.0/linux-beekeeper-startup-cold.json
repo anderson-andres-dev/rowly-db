@@ -1,0 +1,331 @@
+{
+  "format": 1,
+  "scenario": "startup",
+  "app": "Beekeeper Studio",
+  "label": "Beekeeper Studio 6.1.2",
+  "date": "2026-10-02T15:40:24-0500",
+  "environment": {
+    "os": "Omarchy",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "cores": 16,
+    "memory_gb": 15.3,
+    "governor": "powersave",
+    "platform_profile": "performance",
+    "power_supply": {
+      "ADP0": "1",
+      "ucsi-source-psy-USBC000:001": "0",
+      "BAT0": "Not charging"
+    },
+    "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)",
+    "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+    "compositor": "Hyprland v0.56.2",
+    "session": "wayland",
+    "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+    "workspace": "special:rowlybench (silent, fuera de pantalla)",
+    "binary": "/usr/bin/beekeeper-studio"
+  },
+  "mode": "cold",
+  "settle_rule": "<20 ms de CPU en el ultimo segundo",
+  "runs": [
+    {
+      "window_ms": 2310,
+      "settle_ms": 2892,
+      "pss_mb": 854.8,
+      "rss_mb": 1300.5,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2384,
+      "settle_ms": 2924,
+      "pss_mb": 856.1,
+      "rss_mb": 1303.4,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::65]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2401,
+      "settle_ms": 2938,
+      "pss_mb": 856.1,
+      "rss_mb": 1305.6,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2201,
+      "settle_ms": 2738,
+      "pss_mb": 850.6,
+      "rss_mb": 1294.2,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2183,
+      "settle_ms": 2771,
+      "pss_mb": 857.3,
+      "rss_mb": 1305.7,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "169.254.169.254:80",
+        "[2607:f8b0:400c:c1a::65]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2204,
+      "settle_ms": 2730,
+      "pss_mb": 855.6,
+      "rss_mb": 1304.1,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::71]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2185,
+      "settle_ms": 2760,
+      "pss_mb": 855.9,
+      "rss_mb": 1304.1,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2191,
+      "settle_ms": 2722,
+      "pss_mb": 857.5,
+      "rss_mb": 1304.4,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2246,
+      "settle_ms": 2772,
+      "pss_mb": 857.9,
+      "rss_mb": 1306.7,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2205,
+      "settle_ms": 2733,
+      "pss_mb": 855.3,
+      "rss_mb": 1300.1,
+      "processes": 7,
+      "threads": 106,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8a]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2202,
+      "settle_ms": 2784,
+      "pss_mb": 852.0,
+      "rss_mb": 1298.7,
+      "processes": 7,
+      "threads": 110,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2208,
+      "settle_ms": 2747,
+      "pss_mb": 857.9,
+      "rss_mb": 1306.3,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2262,
+      "settle_ms": 2843,
+      "pss_mb": 855.1,
+      "rss_mb": 1302.5,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2539,
+      "settle_ms": 3126,
+      "pss_mb": 846.0,
+      "rss_mb": 1294.8,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "169.254.169.254:80",
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2274,
+      "settle_ms": 2812,
+      "pss_mb": 842.8,
+      "rss_mb": 1292.4,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2214,
+      "settle_ms": 3524,
+      "pss_mb": 844.4,
+      "rss_mb": 1289.7,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8a]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2323,
+      "settle_ms": 2861,
+      "pss_mb": 844.5,
+      "rss_mb": 1292.8,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2273,
+      "settle_ms": 2804,
+      "pss_mb": 847.6,
+      "rss_mb": 1294.0,
+      "processes": 7,
+      "threads": 107,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2322,
+      "settle_ms": 2907,
+      "pss_mb": 845.5,
+      "rss_mb": 1293.6,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    {
+      "window_ms": 2262,
+      "settle_ms": 2845,
+      "pss_mb": 857.1,
+      "rss_mb": 1305.3,
+      "processes": 7,
+      "threads": 108,
+      "remotes": [
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    }
+  ],
+  "summary": {
+    "window_ms": {
+      "n": 20,
+      "median": 2254.0,
+      "p95": 2401,
+      "min": 2183,
+      "max": 2539,
+      "stdev": 90.7,
+      "dispersion_pct": 4.0
+    },
+    "settle_ms": {
+      "n": 20,
+      "median": 2808.0,
+      "p95": 3126,
+      "min": 2722,
+      "max": 3524,
+      "stdev": 183.8,
+      "dispersion_pct": 6.5
+    },
+    "pss_mb": {
+      "n": 20,
+      "median": 855.2,
+      "p95": 857.9,
+      "min": 842.8,
+      "max": 857.9,
+      "stdev": 5.3,
+      "dispersion_pct": 0.6
+    },
+    "rss_mb": {
+      "n": 20,
+      "median": 1301.5,
+      "p95": 1306.3,
+      "min": 1289.7,
+      "max": 1306.7,
+      "stdev": 5.6,
+      "dispersion_pct": 0.4
+    },
+    "threads": {
+      "n": 20,
+      "median": 107.0,
+      "p95": 108,
+      "min": 106,
+      "max": 110,
+      "stdev": 0.8,
+      "dispersion_pct": 0.8
+    }
+  },
+  "remotes": [
+    "169.254.169.254:80",
+    "[2607:f8b0:400c:c1a::64]:443",
+    "[2607:f8b0:400c:c1a::65]:443",
+    "[2607:f8b0:400c:c1a::66]:443",
+    "[2607:f8b0:400c:c1a::71]:443",
+    "[2607:f8b0:400c:c1a::8a]:443",
+    "[2607:f8b0:400c:c1a::8b]:443",
+    "[2803:2540:1:15::f]:443"
+  ]
+}

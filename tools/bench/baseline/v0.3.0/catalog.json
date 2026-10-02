@@ -1,0 +1,131 @@
+{
+  "engines": {
+    "mariadb": {
+      "analysisPerStatementMs": {
+        "max": 0.102,
+        "n": 340,
+        "p50": 0.011,
+        "p95": 0.031
+      },
+      "connectMs": {
+        "max": 2.062,
+        "n": 5,
+        "p50": 1.179,
+        "p95": 2.062
+      },
+      "corpusStatements": 68,
+      "guardPerStatementMs": {
+        "max": 0.109,
+        "n": 340,
+        "p50": 0.009,
+        "p95": 0.037
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 85.399,
+          "n": 5,
+          "p50": 79.29,
+          "p95": 85.399
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 4.389,
+          "n": 5,
+          "p50": 3.762,
+          "p95": 4.389
+        },
+        "schema": "sakila",
+        "tables": 23
+      },
+      "serverVersion": "MariaDB 11.8.9"
+    },
+    "mysql": {
+      "analysisPerStatementMs": {
+        "max": 0.376,
+        "n": 340,
+        "p50": 0.012,
+        "p95": 0.043
+      },
+      "connectMs": {
+        "max": 9.125,
+        "n": 5,
+        "p50": 5.775,
+        "p95": 9.125
+      },
+      "corpusStatements": 68,
+      "guardPerStatementMs": {
+        "max": 0.136,
+        "n": 340,
+        "p50": 0.009,
+        "p95": 0.043
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 26.321,
+          "n": 5,
+          "p50": 23.043,
+          "p95": 26.321
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 8.908,
+          "n": 5,
+          "p50": 2.315,
+          "p95": 8.908
+        },
+        "schema": "sakila",
+        "tables": 23
+      },
+      "serverVersion": "MySQL 8.4.11"
+    },
+    "postgres": {
+      "analysisPerStatementMs": {
+        "max": 0.081,
+        "n": 325,
+        "p50": 0.009,
+        "p95": 0.036
+      },
+      "connectMs": {
+        "max": 10.988,
+        "n": 5,
+        "p50": 8.957,
+        "p95": 10.988
+      },
+      "corpusStatements": 65,
+      "guardPerStatementMs": {
+        "max": 0.106,
+        "n": 325,
+        "p50": 0.013,
+        "p95": 0.043
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 74.362,
+          "n": 5,
+          "p50": 69.171,
+          "p95": 74.362
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 10.699,
+          "n": 5,
+          "p50": 4.989,
+          "p95": 10.699
+        },
+        "schema": "public",
+        "tables": 24
+      },
+      "serverVersion": "PostgreSQL 18.6"
+    }
+  },
+  "format": 1,
+  "note": "connect/introspect incluyen red local y servidor; guard/analisis son CPU de Rowly DB",
+  "repeat": 5,
+  "scenario": "catalog-and-engine"
+}

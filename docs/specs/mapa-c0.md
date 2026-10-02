@@ -12,7 +12,7 @@ Fuentes reproducibles:
 |---|---|---|
 | Inventario de tests, con dueño, propiedad, riesgo, compuerta y decisión | `tests/inventory.json` | `node tools/inventory/tests.mjs [--vitest <json>] [--cargo <log>]`; `--check` falla si un test no tiene dueño o decisión |
 | Código sin consumidor (candidatos) | salida de `tools/inventory/unused.mjs` | `node tools/inventory/unused.mjs [--json]` |
-| Referencia de rendimiento | `tools/bench/baseline/` | PR de referencia de C0 (aparte de este) |
+| Referencia de rendimiento de `v0.3.0` | `tools/bench/baseline/v0.3.0/summary.json` (y un JSON por escenario) | `tools/bench/README.es.md` |
 
 ## 1. Ejecución de SQL: todos los caminos de hoy
 
