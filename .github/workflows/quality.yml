@@ -30,13 +30,13 @@ jobs:
         run: cargo fmt --all --check
 
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --locked
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: cargo test
         run: cargo test --workspace --locked
 
   node:
-    name: Node (check, build)
+    name: Node (check, test, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +56,13 @@ jobs:
         working-directory: app
         run: npm run check
 
+      - name: npm test
+        working-directory: app
+        run: npm test
+
       - name: npm run build
         working-directory: app
         run: npm run build
+
+      - name: Inventario de tests al dia
+        run: node tools/inventory/tests.mjs --check
