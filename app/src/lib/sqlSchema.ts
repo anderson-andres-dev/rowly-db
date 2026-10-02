@@ -86,7 +86,7 @@ function buildFkIndex(tables: CatalogTable[]): FkIndex {
 function applyAndRecord(key: string, text: string): NonNullable<Completion["apply"]> {
   return (view, _completion, from, to) => {
     recordUsage(key);
-    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
   };
 }
 
@@ -439,6 +439,7 @@ function insertText(key: string): NonNullable<Completion["apply"]> {
     view.dispatch({
       changes: { from, to, insert: completion.label },
       selection: { anchor: from + completion.label.length },
+      userEvent: "input.complete",
     });
   };
 }
@@ -548,7 +549,7 @@ function withAlias(
       const after = ALIAS_AFTER.exec(view.state.sliceDoc(to, Math.min(view.state.doc.length, to + 80)));
       const hasAlias = !!after && !NOT_ALIAS_WORDS.has(after[1].toLowerCase());
       const insert = hasAlias ? text : `${text} ${alias}`;
-      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } });
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: "input.complete" });
     },
   };
 }
@@ -653,7 +654,7 @@ const COLUMN_TYPES = new Set(["column", "column-pk", "column-fk"]);
 
 function insertAs(text: string): NonNullable<Completion["apply"]> {
   return (view, _completion, from, to) => {
-    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
   };
 }
 

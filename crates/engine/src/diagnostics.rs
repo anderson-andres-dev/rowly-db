@@ -1582,6 +1582,15 @@ fn syntax_diagnostic(message: &str, tokens: &[TokenWithSpan]) -> Diagnostic {
         }
     }
 
+    // Un punto al final (`CALL core.`) es un nombre a medio escribir, no una
+    // coma que falta.
+    if token.token == Token::Period && index + 1 == significant.len() {
+        return at_token(
+            token,
+            DiagnosticMessage::key("diagnostic.incomplete").with("after", "."),
+        );
+    }
+
     // Falta una coma entre dos columnas que sqlparser tomo por columna y
     // alias: `SELECT a COUNT(*)` (error en el parentesis) o `a.x b.y` (en
     // el punto). Un alias nunca va seguido de `(` ni de `.`.
@@ -3087,6 +3096,14 @@ mod contract {
             (
                 "SELECT x.a x.b FROM t x",
                 Same(Error("diagnostic.missingCommaBefore", at(1, 12))),
+            ),
+            (
+                "CALL core.",
+                Same(Error("diagnostic.incomplete", at(1, 10))),
+            ),
+            (
+                "SELECT a, core.",
+                Same(Error("diagnostic.incomplete", at(1, 15))),
             ),
             (
                 "SELECT * FROM t JOIN ON t.a = 1",

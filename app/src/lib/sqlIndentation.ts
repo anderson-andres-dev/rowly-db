@@ -1,5 +1,5 @@
 import { indentLess, indentMore } from "@codemirror/commands";
-import { acceptCompletion, currentCompletions, moveCompletionSelection } from "@codemirror/autocomplete";
+import { acceptCompletion, currentCompletions, moveCompletionSelection, nextSnippetField, prevSnippetField } from "@codemirror/autocomplete";
 import { indentUnit } from "@codemirror/language";
 import { EditorSelection, EditorState, Prec } from "@codemirror/state";
 import { keymap, type EditorView, type KeyBinding } from "@codemirror/view";
@@ -44,10 +44,12 @@ export function tabCompletionBinding(navigates: boolean): KeyBinding {
   const popupOpen = (view: EditorView) => currentCompletions(view.state).length > 0;
   return {
     key: "Tab",
+    // Con el popup abierto manda el popup; si no, los argumentos de un CALL
+    // recien completado (sqlCatalogCompletions.ts); si no, la sangria.
     run: (view) => (navigates ? moveCompletionSelection(true)(view) : acceptCompletion(view)) ||
-      (popupOpen(view) || tabIndent(view)),
+      (popupOpen(view) || nextSnippetField(view) || tabIndent(view)),
     shift: (view) => (navigates && moveCompletionSelection(false)(view)) ||
-      (navigates && popupOpen(view)) || indentLess(view),
+      (navigates && popupOpen(view)) || prevSnippetField(view) || indentLess(view),
   };
 }
 

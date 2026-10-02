@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CompletionContext, type Completion } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
+import { CompletionContext, nextSnippetField, type Completion } from "@codemirror/autocomplete";
+import { EditorState, Transaction, type TransactionSpec } from "@codemirror/state";
 import { ENGINES } from "./engines";
 import { buildCatalogCompletions, catalogPosition } from "./sqlCatalogCompletions";
 import { buildCompletionSource, buildSqlSchema, dialectFor, extractDefaultTable } from "./sqlSchema";
@@ -23,6 +23,8 @@ const schemas: SchemaObjects[] = [
       { name: "total_hoy", kind: "function", arguments: "", returnType: "numeric" },
       { name: "my-proc", kind: "procedure", arguments: "" },
       { name: "My Function", kind: "function", arguments: "", returnType: "int" },
+      { name: "cobrar_recibo", kind: "procedure", arguments: "recibo int, valor decimal(8,2)", parameters: [{ name: "recibo", mode: "in", dataType: "int", hasDefault: false }, { name: "valor", mode: "in", dataType: "decimal(8,2)", hasDefault: false }] },
+      { name: "sin_lista", kind: "procedure", arguments: "x int" },
     ],
     sequences: [{ name: "facturas_seq", dataType: "bigint" }], events: [], warnings: [],
   },
@@ -48,6 +50,21 @@ async function complete(input: string, driver: "mysql" | "mariadb" | "postgres",
 // Lo justo de una EditorView para aplicar una opcion: el documento y dispatch.
 function fakeView(doc: string, dispatch: (value: never) => void) {
   return { state: EditorState.create({ doc }), dispatch } as never;
+}
+
+// Una que aplica lo que recibe (una transaccion o su especificacion).
+function liveView(doc: string) {
+  const view = {
+    state: EditorState.create({ doc }),
+    // Todo lo que inserta el autocompletado cuenta como escritura: mientras
+    // tanto no se muestra lo que aun no esta terminado (sqlDiagnostics.ts).
+    dispatch(value: Transaction | TransactionSpec) {
+      const transaction = value instanceof Transaction ? value : view.state.update(value);
+      if (transaction.docChanged) expect(transaction.isUserEvent("input.complete")).toBe(true);
+      view.state = transaction.state;
+    },
+  };
+  return view;
 }
 
 function options(result: Awaited<ReturnType<typeof complete>>): readonly Completion[] {
@@ -116,24 +133,33 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
       expect(found.every((o) => o.type === "procedure")).toBe(true);
     });
 
-    it("CALL deja los parentesis listos y el cursor dentro si hay argumentos", async () => {
-      const apply = async (input: string, label: string) => {
+    it("CALL deja los parentesis listos, con los argumentos como campos", async () => {
+      // El documento tras aplicar la opcion, con la seleccion entre [ ].
+      const apply = async (input: string, label: string, tabs = 0) => {
         const result = await complete(input, driver);
         const option = options(result).find((item) => item.label === label);
         expect(option, `${input} ${label}`).toBeDefined();
-        let change: { changes: { from: number; to: number; insert: string }; selection: { anchor: number } } | undefined;
-        const doc = input.replace("|", "");
-        if (typeof option?.apply === "function") option.apply(fakeView(doc, (value: typeof change) => { change = value; }), option, result!.from, input.indexOf("|"));
-        const text = doc.slice(0, change!.changes.from) + change!.changes.insert + doc.slice(change!.changes.to);
-        return text.slice(0, change!.selection.anchor) + "|" + text.slice(change!.selection.anchor);
+        const view = liveView(input.replace("|", ""));
+        if (typeof option?.apply === "function") option.apply(view as never, option, result!.from, input.indexOf("|"));
+        for (let i = 0; i < tabs; i++) expect(nextSnippetField(view as never), `Tab ${i + 1}`).toBe(true);
+        const { from, to } = view.state.selection.main;
+        const text = view.state.doc.toString();
+        return from === to ? text.slice(0, from) + "|" + text.slice(from) : `${text.slice(0, from)}[${text.slice(from, to)}]${text.slice(to)}`;
       };
-      const name = driver === "postgres" ? '"com_anularFactura"' : "com_anularFactura";
-      expect(await apply("CALL com_anular|", "com_anularFactura")).toBe(`CALL ${name}(|)`);
-      expect(await apply("CALL other.com_anular|", "com_anularOtro")).toBe(`CALL other.${driver === "postgres" ? '"com_anularOtro"' : "com_anularOtro"}()|`);
-      expect(await apply("CALL com_anular|(1)", "com_anularFactura")).toBe(`CALL ${name}|(1)`);
-      expect(await apply("DROP PROCEDURE com_anular|", "com_anularFactura")).toBe(`DROP PROCEDURE ${name}|`);
-      expect(await apply("DROP FUNCTION com_anular|", "com_anularTotal")).toBe(`DROP FUNCTION ${driver === "postgres" ? '"com_anularTotal"' : "com_anularTotal"}|`);
-      expect(await apply("GRANT EXECUTE ON com_anular|", "com_anularFactura")).toBe(`GRANT EXECUTE ON ${name}|`);
+      const quoted = (name: string) => (driver === "postgres" ? `"${name}"` : name);
+      expect(await apply("CALL com_anular|", "com_anularFactura")).toBe(`CALL ${quoted("com_anularFactura")}([codiFactNume])`);
+      expect(await apply("CALL cobrar|", "cobrar_recibo")).toBe("CALL cobrar_recibo([recibo], valor)");
+      expect(await apply("CALL cobrar|", "cobrar_recibo", 1)).toBe("CALL cobrar_recibo(recibo, [valor])");
+      expect(await apply("CALL cobrar|", "cobrar_recibo", 2)).toBe("CALL cobrar_recibo(recibo, valor)|");
+      expect(await apply("CALL other.com_anular|", "com_anularOtro")).toBe(`CALL other.${quoted("com_anularOtro")}()|`);
+      expect(await apply("CALL com_anular|(1)", "com_anularFactura")).toBe(`CALL ${quoted("com_anularFactura")}|(1)`);
+      // Sin la lista de parametros del catalogo, solo el cursor dentro.
+      expect(await apply("CALL sin_lista|", "sin_lista")).toBe("CALL sin_lista(|)");
+      expect(await apply("DROP PROCEDURE com_anular|", "com_anularFactura")).toBe(`DROP PROCEDURE ${quoted("com_anularFactura")}|`);
+      expect(await apply("DROP FUNCTION com_anular|", "com_anularTotal")).toBe(`DROP FUNCTION ${quoted("com_anularTotal")}|`);
+      expect(await apply("GRANT EXECUTE ON com_anular|", "com_anularFactura")).toBe(`GRANT EXECUTE ON ${quoted("com_anularFactura")}|`);
+      // En una expresion, los nombres serian columnas: solo los parentesis.
+      expect(await apply("SELECT com_anular|", "com_anularTotal")).toBe(`SELECT ${quoted("com_anularTotal")}(|)`);
     });
 
     it("donde va una rutina tambien ofrece el schema para calificarla", async () => {

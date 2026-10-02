@@ -1,4 +1,4 @@
-import { startCompletion, type Completion, type CompletionResult } from "@codemirror/autocomplete";
+import { snippet, startCompletion, type Completion, type CompletionResult } from "@codemirror/autocomplete";
 import type { SchemaObjects } from "$lib/types";
 import type { SqlProfile } from "$lib/engines";
 import { ENGINES } from "$lib/engines";
@@ -19,6 +19,8 @@ interface Entry {
   kind: "procedure" | "function" | "sequence";
   detail?: string;
   noArgs?: boolean;
+  // Los nombres de lo que se pasa al llamarla, si el catalogo los trae.
+  params?: string[];
 }
 
 export function prefixStartForNames(names: Iterable<string>): (text: string, end: number) => number {
@@ -43,6 +45,15 @@ export function prefixStartForNames(names: Iterable<string>): (text: string, end
   };
 }
 
+// Tras CALL, un procedure con sus argumentos como campos: cada uno lleva el
+// nombre del parametro, Tab pasa al siguiente y del ultimo sale tras el ")".
+// Solo ahi: en una expresion, esos nombres se leerian como columnas que no
+// existen. Sin llaves en los nombres, que la plantilla leeria como campos.
+function argumentsSnippet(name: string, params: readonly string[]) {
+  if (/[{}]/.test(name) || params.some((param) => /[{}]/.test(param))) return null;
+  return snippet(`${name}(${params.map((param) => `\${${param}}`).join(", ")})\${}`);
+}
+
 // Tras CALL y en expresiones el nombre va con sus parentesis, con el cursor
 // dentro si la rutina recibe argumentos; en DROP/ALTER/GRANT va solo. No se
 // duplican si el parentesis ya esta escrito.
@@ -54,12 +65,14 @@ function option(entry: Entry, engine: SqlProfile, defaultSchema: string | undefi
     type: entry.kind,
     detail: entry.detail ?? entry.schema,
     boost: boostFor(key) + (entry.schema === defaultSchema ? 3 : 0),
-    apply: (view, _completion, from, to) => {
+    apply: (view, completion, from, to) => {
       recordUsage(key);
       const name = (prefix ? `${engine.identifier(entry.schema)}.` : "") + engine.identifier(entry.name);
       const parens = invoke && entry.kind !== "sequence" && view.state.sliceDoc(to, to + 1) !== "(";
+      const fields = parens && entry.kind === "procedure" && entry.params?.length ? argumentsSnippet(name, entry.params) : null;
+      if (fields) return fields(view, completion, from, to);
       const text = name + (parens ? "()" : "");
-      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (parens && !entry.noArgs ? 1 : 0) } });
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (parens && !entry.noArgs ? 1 : 0) }, userEvent: "input.complete" });
     },
   };
 }
@@ -71,7 +84,7 @@ function schemaOption(schema: string, engine: SqlProfile): Completion {
     type: "schema",
     apply: (view, _completion, from, to) => {
       const text = `${engine.identifier(schema)}.`;
-      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
       startCompletion(view);
     },
   };
@@ -86,6 +99,7 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
       schema: objects.schema, name: routine.name, kind: routine.kind,
       detail: `(${routine.arguments})${routine.returnType ? `: ${routine.returnType}` : ""}`,
       noArgs: routine.parameters ? routine.parameters.filter((p) => engine.passedInCall(p.mode, routine.kind)).length === 0 : routine.arguments.trim() === "",
+      params: routine.parameters?.filter((p) => engine.passedInCall(p.mode, routine.kind)).map((p, index) => p.name || `arg${index + 1}`),
     });
     if (engine === ENGINES.postgres) {
       for (const sequence of objects.sequences) entries.push({ schema: objects.schema, name: sequence.name, kind: "sequence", detail: sequence.dataType ?? undefined });
@@ -99,7 +113,7 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
     apply: (view, _completion, from, to) => {
       const noArgs = name === "NOW" || name === "CURDATE" || name === "UUID";
       const text = `${name}()`;
-      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (noArgs ? 0 : 1) } });
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (noArgs ? 0 : 1) }, userEvent: "input.complete" });
     },
   }));
 

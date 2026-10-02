@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { basicSetup, EditorView } from "codemirror";
 import { sql } from "@codemirror/lang-sql";
-import { autocompletion, completionStatus, startCompletion } from "@codemirror/autocomplete";
+import { autocompletion, completionStatus, snippet, startCompletion } from "@codemirror/autocomplete";
 import { insertNewlineAndIndent } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import { Compartment, EditorSelection } from "@codemirror/state";
@@ -91,6 +91,24 @@ describe("Tab en el editor SQL", () => {
         });
       }
     }
+  }
+
+  for (const navigates of [true, false]) {
+    it(`sin popup, ${navigates}: Tab recorre los argumentos de un CALL y luego sangra`, () => {
+      const { view, tab } = editor("CALL ", navigates);
+      snippet("p(${a}, ${b})${}")(view, null as never, 5, 5);
+      const selected = () => view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
+      expect(selected()).toBe("a");
+      tab.run!(view);
+      expect(selected()).toBe("b");
+      tab.shift!(view);
+      expect(selected()).toBe("a");
+      tab.run!(view);
+      tab.run!(view);
+      expect(view.state.selection.main.head).toBe("CALL p(a, b)".length);
+      tab.run!(view);
+      expect(view.state.doc.toString()).toBe("CALL p(a, b)  ");
+    });
   }
 
   for (const style of ["spaces", "tabs"] as const) {

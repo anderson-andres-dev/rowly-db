@@ -617,8 +617,10 @@ const diagnosticsTheme = EditorView.baseTheme({
   // Lo que no existe, ademas de la onda, en rojo (como DataGrip).
   "&.cm-editor .cm-unresolved, &.cm-editor .cm-unresolved *": { color: "var(--danger) !important" },
   ".cm-lensBand": { backgroundColor: "color-mix(in srgb, var(--danger) 9%, transparent)" },
+  // Relleno y no margen: CodeMirror dibuja el cursor del final de la linea
+  // en el borde del widget, y con margen quedaba separado del texto.
   ".cm-lensMessage": {
-    marginLeft: "3ch",
+    paddingLeft: "3ch",
     color: "color-mix(in srgb, var(--danger) 85%, var(--text-primary))",
     fontFamily: "var(--font-family)",
     fontSize: "0.9em",
