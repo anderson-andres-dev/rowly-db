@@ -4510,7 +4510,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -4521,7 +4521,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -4556,7 +4556,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4568,7 +4568,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "dotenvy",
  "either",
@@ -4591,7 +4591,7 @@ dependencies = [
 [[package]]
 name = "sqlx-mysql"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -4632,7 +4632,7 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.8.6"
-source = "git+https://github.com/anderson-andres-dev/sqlx?rev=79152f4c03305bfeebbb20fb3415267fd62d1229#79152f4c03305bfeebbb20fb3415267fd62d1229"
+source = "git+https://github.com/anderson-andres-dev/sqlx?rev=df7b88024b73bb9c4d346cfffb52106c11c27f41#df7b88024b73bb9c4d346cfffb52106c11c27f41"
 dependencies = [
  "atoi",
  "base64 0.22.1",

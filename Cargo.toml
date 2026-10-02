@@ -45,9 +45,9 @@ strip = true
 # fallaba. Todos los crates de sqlx salen del mismo commit, o habria dos copias
 # de sqlx-core. Se quita cuando sqlx publique el arreglo (enviado upstream).
 [patch.crates-io]
-sqlx = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
-sqlx-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
-sqlx-macros = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
-sqlx-macros-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
-sqlx-mysql = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
-sqlx-postgres = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "79152f4c03305bfeebbb20fb3415267fd62d1229" }
+sqlx = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-macros = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-macros-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-mysql = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
+sqlx-postgres = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
