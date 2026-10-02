@@ -94,10 +94,31 @@ fn text_column(row: &MySqlRow, index: usize) -> Result<String, DriverError> {
 /// the grid always has something displayable without losing data.
 fn mysql_cell_to_query_value(row: &MySqlRow, index: usize) -> Result<QueryValue, sqlx::Error> {
     let raw: Option<Vec<u8>> = row.try_get_unchecked(index)?;
-    Ok(raw.map(|bytes| match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(error) => format!("0x{}", hex_encode(error.as_bytes())),
+    let vector = row.column(index).type_info().name() == "VECTOR";
+    Ok(raw.map(|bytes| {
+        if vector {
+            if let Some(text) = vector_text(&bytes) {
+                return text;
+            }
+        }
+        match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(error) => format!("0x{}", hex_encode(error.as_bytes())),
+        }
     }))
+}
+
+/// A MySQL 9 `VECTOR` arrives as its float32 values, little-endian. It is
+/// shown as `[1,2.5,3]`, the text `STRING_TO_VECTOR` reads back.
+fn vector_text(bytes: &[u8]) -> Option<String> {
+    if bytes.len() % 4 != 0 {
+        return None;
+    }
+    let values: Vec<String> = bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]).to_string())
+        .collect();
+    Some(format!("[{}]", values.join(",")))
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -699,6 +720,17 @@ async fn read_result_set(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_vector_reads_as_the_text_string_to_vector_accepts() {
+        let bytes: Vec<u8> = [1.0f32, 2.5, -3.0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        assert_eq!(vector_text(&bytes).as_deref(), Some("[1,2.5,-3]"));
+        assert_eq!(vector_text(&[]).as_deref(), Some("[]"));
+        assert_eq!(vector_text(&[1, 2, 3]), None);
+    }
 
     fn config_from_env() -> ConnectionConfig {
         let host = std::env::var("KHIPU_TEST_MYSQL_HOST")

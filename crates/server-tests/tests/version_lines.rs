@@ -4,7 +4,8 @@
 //! `tests/sql/<motor>/<linea>/{accepts,rejects}.sql`.
 //!
 //! `tools/test-dbs/lines.sh up [motor]` y luego
-//! `cargo test -p rowly-server-tests --test version_lines -- --ignored`.
+//! `cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1`:
+//! los dos tests preparan los mismos servidores y no pueden correr a la vez.
 
 use khipu_driver_core::QueryExecutionResult;
 use rowly_server_tests::*;
@@ -75,7 +76,7 @@ fn label(entry: &str) -> String {
     entry
         .lines()
         .take_while(|line| line.starts_with("--"))
-        .filter(|line| since(line).is_none())
+        .filter(|line| since(line).is_none() && !line.starts_with("-- expect:"))
         .map(|line| line.trim_start_matches('-').trim())
         .collect::<Vec<_>>()
         .join(" ")
@@ -248,6 +249,90 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
         }
     }
     println!("{}", report.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "\n{} problemas:\n{}\n",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// `-- expect: valor`: lo que debe mostrar la primera celda.
+fn expected(entry: &str) -> Option<String> {
+    entry
+        .lines()
+        .take_while(|line| line.starts_with("--"))
+        .find_map(|line| line.strip_prefix("-- expect:"))
+        .map(|value| value.trim().to_string())
+}
+
+/// Lo que devuelve cada linea lo lee el driver (SQL_ENGINE.md, D8): las
+/// consultas de `tests/sql/<motor>/<linea>/reads.sql` devuelven filas en
+/// cada servidor de la linea, con el valor de `-- expect:` si lo hay.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/lines.sh up"]
+async fn every_column_type_a_line_returns_is_read() {
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for (engine_name, lines) in registry() {
+        let engine = engine_named(&engine_name);
+        if !engine_selected(engine) {
+            continue;
+        }
+        for line in &lines {
+            let reads = fixture(
+                &repo()
+                    .join("tests/sql")
+                    .join(&engine_name)
+                    .join(&line.name)
+                    .join("reads.sql"),
+            );
+            if reads.is_empty() {
+                continue;
+            }
+            for probe in &line.probes {
+                let conn = Conn::open_line(engine, probe.port).await.unwrap_or_else(|error| {
+                    panic!("{engine_name} {} ({}): {error}\nlevantalo con tools/test-dbs/lines.sh up {engine_name}", line.name, probe.image)
+                });
+                let version = conn.server_version();
+                // Cada test prepara lo suyo (SQL_ENGINE.md §10.2).
+                for statement in &fixture(
+                    &repo()
+                        .join("tests/sql")
+                        .join(&engine_name)
+                        .join("setup.sql"),
+                ) {
+                    let _ = conn.raw(statement).await;
+                }
+                for sql in &reads {
+                    if entry_since(sql).is_some_and(|from| numbers(&version) < from) {
+                        continue;
+                    }
+                    checked += 1;
+                    let problem = match conn.raw(sql).await {
+                        QueryExecutionResult::ResultSet { rows, .. } => {
+                            let first = rows.first().and_then(|row| row.first().cloned()).flatten();
+                            match expected(sql) {
+                                Some(want) if first.as_deref() != Some(want.as_str()) => {
+                                    Some(format!("mostro {first:?} y debia mostrar {want:?}"))
+                                }
+                                _ => None,
+                            }
+                        }
+                        other => Some(error_text(&other)),
+                    };
+                    if let Some(problem) = problem {
+                        failures.push(format!(
+                            "{engine_name} {} ({version}): «{}» {problem}",
+                            line.name,
+                            label(sql)
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    println!("lecturas comprobadas: {checked}");
     assert!(
         failures.is_empty(),
         "\n{} problemas:\n{}\n",

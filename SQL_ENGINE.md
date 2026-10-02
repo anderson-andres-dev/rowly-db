@@ -168,7 +168,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D5 | TLS modes negotiate or fail with an actionable message | driver tests `tls_*` |
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
-| D8 | Every column type a supported line can return is read by the driver | **gap** (§9): MySQL 9 `VECTOR` columns fail |
+| D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`) |
 
 ### 6.5 Capabilities
 
@@ -220,7 +220,7 @@ ROWLY_FUZZ_SEED=21               # base seed (default 0)
 
 # Version lines: one server per end of each line, no data (tools/test-dbs/lines.json)
 tools/test-dbs/lines.sh up postgres          # or mysql, mariadb; no argument: all
-cargo test -p rowly-server-tests --test version_lines -- --ignored
+cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1
 tools/test-dbs/lines.sh down postgres
 
 # Driver tests (KHIPU_TEST_<ENGINE>_* variables, see CONTRIBUTING.md)
@@ -247,6 +247,7 @@ Where Rowly DB departs from the server on purpose. Changing one of these is a pr
 | While typing a statement, the editor hides what is only unfinished, the last word written, names that are not found yet, and generic parser messages when typing at the end. They appear when the cursor leaves the statement or the editor loses focus. | The parser rejects every prefix. Showing that is noise, and its generic messages often point at the wrong token. |
 | Valid syntax that `sqlparser` cannot read (MariaDB `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) gets no syntax diagnostic (`Dialect::unparsed_syntax`). | A missing parser feature is not the user's error. |
 | PostgreSQL routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
+| `sqlx` comes from a fork (`anderson-andres-dev/sqlx`, `[patch.crates-io]` in `Cargo.toml`): 0.8.6 plus reading MySQL 9 `VECTOR` columns, which neither 0.8.6 nor 0.9.0 can do. | Without it, a `SELECT` on a table with a vector fails. The same fix is sent upstream ([transact-rs/sqlx#4441](https://github.com/transact-rs/sqlx/pull/4441)); the fork goes away when sqlx publishes it. |
 | A server older than the supported window still connects, and its line is never removed. | Rowly DB never refuses a server. It marks it as having no official support and does what its line allows. |
 
 ## 9. Known gaps
@@ -256,7 +257,6 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Gap | Severity | Note |
 |---|---|---|
 | CI does not run `npm test`, and runs clippy without `-D warnings` | P1 | More than a thousand frontend tests are not checked on pull requests, and a clippy warning does not fail the build. Both are one line in `.github/workflows/quality.yml`. |
-| MySQL 9: reading a `VECTOR` column fails (`SELECT *` on a table that has one) with "unknown column type 0xf2". `sqlx` 0.8.6 and 0.9.0 do not know the type; MariaDB sends vectors as binary and works | P1 | Needs a patch in `sqlx-mysql` (upstream or a maintained fork). Found by the line proof. |
 | Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | The test reorganization of §10 and the support window close it. |
 | The real-server suite does not run in CI | P2 | Needs Docker in CI; until then it is the manual engine PR gate. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
@@ -268,6 +268,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
 | Datasets are not pinned (`tools/test-dbs/fetch.sh` downloads the latest Sakila and Pagila from `master`), and real-server runs do not print the server version | P3 | Both rules of §5 and §10. |
 | Two ways to reach a real server: the driver tests (`KHIPU_TEST_*`) and `rowly-server-tests` (`tools/test-dbs`) | P3 | One suite on `tools/test-dbs` (§10). |
+| MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 
 ## 10. Tests, fixtures and simulations
