@@ -101,7 +101,7 @@ Status as of 2026-10-02. **Every line below is proven** against real servers at 
 | | 9 | `VECTOR` type and vector functions | Supported (9.7 LTS until 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode | Unsupported (EOL 2025-06) | — |
 | | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Supported (10.6 in grace until 2027-07-06; 10.11 and 11.4 LTS) | 10.6.28 |
-| | 11.7+ | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8 | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
+| | 11.7+ | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8. Optimizer hints `/*+ … */` from 12.0 | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
 | PostgreSQL | 10 | Base: identity columns, declarative partitioning, `xlog` → `wal` functions | Unsupported (EOL 2022-11) | — |
 | | 11 | Procedures and `CALL` | Unsupported (EOL 2023-11) | — |
 | | 12–13 | Generated columns, `WITH OIDS` removed. 13 changes nothing Rowly DB depends on | Supported, 13 in grace until 2026-11-13 | 13.23 |

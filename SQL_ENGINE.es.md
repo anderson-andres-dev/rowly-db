@@ -101,7 +101,7 @@ Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra serv
 | | 9 | Tipo `VECTOR` y funciones vectoriales | Soportada (9.7 LTS hasta 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: secuencias, `INTERSECT`/`EXCEPT`, tablas versionadas, modo Oracle | Sin soporte (EOL 2025-06) | — |
 | | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Soportada (10.6 en gracia hasta 2027-07-06; 10.11 y 11.4 LTS) | 10.6.28 |
-| | 11.7+ | Tipo `VECTOR`. `DEFAULT` en parámetros de procedures desde 11.8 | Soportada (11.8 y 12.3 LTS, 13.0 rolling) | 11.8.9 |
+| | 11.7+ | Tipo `VECTOR`. `DEFAULT` en parámetros de procedures desde 11.8. Pistas del optimizador `/*+ … */` desde 12.0 | Soportada (11.8 y 12.3 LTS, 13.0 rolling) | 11.8.9 |
 | PostgreSQL | 10 | Base: columnas identity, particionado declarativo, funciones `xlog` → `wal` | Sin soporte (EOL 2022-11) | — |
 | | 11 | Procedures y `CALL` | Sin soporte (EOL 2023-11) | — |
 | | 12–13 | Columnas generadas, se elimina `WITH OIDS`. La 13 no cambia nada de lo que usa Rowly DB | Soportada, 13 en gracia hasta 2026-11-13 | 13.23 |
