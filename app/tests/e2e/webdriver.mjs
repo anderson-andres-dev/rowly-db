@@ -4,11 +4,13 @@
 const ELEMENT = "element-6066-11e4-a52e-4f735466cecc";
 
 export const KEYS = {
-  enter: "",
-  escape: "",
-  control: "",
-  shift: "",
-  tab: "",
+  null: "\uE000",
+  backspace: "\uE003",
+  tab: "\uE004",
+  enter: "\uE007",
+  shift: "\uE008",
+  control: "\uE009",
+  escape: "\uE00C",
 };
 
 export class Session {
