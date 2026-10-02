@@ -96,7 +96,7 @@ async function editorText(session) {
 // Reemplaza el texto de la consola escribiendolo con el teclado.
 async function write(session, text) {
   await (await session.find(".cm-content")).click();
-  await session.keys({ chord: [KEYS.control, "a"] }, ""); // Backspace
+  await session.keys({ chord: [KEYS.control, "a"] }, KEYS.backspace);
   await session.keys(text);
   // Escape solo si quedo abierto el autocompletado: sin el, Escape saca el
   // foco del editor y Ctrl+Enter ya no ejecuta.
