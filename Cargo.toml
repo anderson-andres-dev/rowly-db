@@ -43,7 +43,8 @@ strip = true
 # sqlx 0.8.6 con soporte para las columnas VECTOR de MySQL 9 (tipo 0xf2), que
 # ni la 0.8.6 ni la 0.9.0 saben leer: un SELECT sobre una tabla con una de ellas
 # fallaba. Todos los crates de sqlx salen del mismo commit, o habria dos copias
-# de sqlx-core. Se quita cuando sqlx publique el arreglo (enviado upstream).
+# de sqlx-core. Se quita cuando sqlx publique el arreglo:
+# https://github.com/transact-rs/sqlx/pull/4441
 [patch.crates-io]
 sqlx = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }
 sqlx-core = { git = "https://github.com/anderson-andres-dev/sqlx", rev = "df7b88024b73bb9c4d346cfffb52106c11c27f41" }

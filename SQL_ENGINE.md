@@ -247,7 +247,7 @@ Where Rowly DB departs from the server on purpose. Changing one of these is a pr
 | While typing a statement, the editor hides what is only unfinished, the last word written, names that are not found yet, and generic parser messages when typing at the end. They appear when the cursor leaves the statement or the editor loses focus. | The parser rejects every prefix. Showing that is noise, and its generic messages often point at the wrong token. |
 | Valid syntax that `sqlparser` cannot read (MariaDB `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) gets no syntax diagnostic (`Dialect::unparsed_syntax`). | A missing parser feature is not the user's error. |
 | PostgreSQL routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
-| `sqlx` comes from a fork (`anderson-andres-dev/sqlx`, `[patch.crates-io]` in `Cargo.toml`): 0.8.6 plus reading MySQL 9 `VECTOR` columns, which neither 0.8.6 nor 0.9.0 can do. | Without it, a `SELECT` on a table with a vector fails. The same fix is sent upstream; the fork goes away when sqlx publishes it. |
+| `sqlx` comes from a fork (`anderson-andres-dev/sqlx`, `[patch.crates-io]` in `Cargo.toml`): 0.8.6 plus reading MySQL 9 `VECTOR` columns, which neither 0.8.6 nor 0.9.0 can do. | Without it, a `SELECT` on a table with a vector fails. The same fix is sent upstream ([transact-rs/sqlx#4441](https://github.com/transact-rs/sqlx/pull/4441)); the fork goes away when sqlx publishes it. |
 | A server older than the supported window still connects, and its line is never removed. | Rowly DB never refuses a server. It marks it as having no official support and does what its line allows. |
 
 ## 9. Known gaps
