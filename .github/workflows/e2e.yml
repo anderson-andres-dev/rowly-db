@@ -33,7 +33,7 @@ jobs:
       - name: Dependencias de Tauri, WebKitWebDriver y Xvfb
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev libgtk-3-dev webkit2gtk-driver xvfb mysql-client
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev libgtk-3-dev webkit2gtk-driver xvfb xdotool mysql-client
 
       - uses: dtolnay/rust-toolchain@1.90
 
@@ -58,10 +58,5 @@ jobs:
         working-directory: app
         env:
           E2E_MYSQL_PORT: "3306"
-        # tauri-driver lanza la app: tiene que correr dentro del mismo display.
-        run: |
-          xvfb-run --auto-servernum bash -c '
-            tauri-driver --port 4444 &
-            sleep 2
-            node tests/e2e/run.mjs --app "$GITHUB_WORKSPACE/target/debug/rowly-db"
-          '
+        # run.mjs arranca un tauri-driver por recorrido, dentro de este display.
+        run: xvfb-run --auto-servernum node tests/e2e/run.mjs --app "$GITHUB_WORKSPACE/target/debug/rowly-db"

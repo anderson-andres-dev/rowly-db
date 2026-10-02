@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+
 // Cliente WebDriver minimo (W3C) sobre fetch, para hablar con tauri-driver
 // sin dependencias. Solo lo que usan los flujos E2E.
 
@@ -80,18 +82,34 @@ export class Session {
     throw new Error(`${description}: no se cumplio en ${timeout} ms (ultimo valor: ${JSON.stringify(value)})`);
   }
 
-  // Teclas al elemento con foco, como las pulsaria una persona. Los acordes
-  // ({ chord: [KEYS.control, KEYS.enter] }) van por "Element Send Keys": con
-  // las acciones de teclado, WebKitWebDriver entrega el modificador pero
-  // pierde la tecla siguiente. Ahi, una tecla modificadora queda pulsada
-  // hasta NULL (\uE000), como define W3C.
+  // Teclas al elemento con foco. El texto va por "Element Send Keys". Los
+  // acordes ({ chord: [KEYS.control, KEYS.enter] }) van como eventos X11
+  // reales (xdotool, XTEST) a la ventana de la app: WebKitWebDriver pierde o
+  // desfigura la tecla que acompaña al modificador ("Unidentified").
   async keys(...sequence) {
     for (const item of sequence) {
-      const focused = await this.script("return document.activeElement");
-      const element = new Element(this, elementId(focused));
-      await element.type(typeof item === "string" ? item : `${item.chord.join("")}${KEYS.null}`);
+      if (typeof item === "string" && X11_KEYS[item]) {
+        x11Chord([item]);
+        await sleep(100);
+      } else if (typeof item === "string") {
+        const focused = await this.script("return document.activeElement");
+        await new Element(this, elementId(focused)).type(item);
+      } else {
+        x11Chord(item.chord);
+        await sleep(100);
+      }
     }
   }
+}
+
+const X11_KEYS = { [KEYS.control]: "ctrl", [KEYS.shift]: "shift", [KEYS.enter]: "Return", [KEYS.escape]: "Escape" };
+
+function x11Chord(chord) {
+  const combo = chord.map((key) => X11_KEYS[key] ?? key).join("+");
+  execFileSync("xdotool", [
+    "search", "--sync", "--onlyvisible", "--name", "^Rowly DB$", "windowfocus", "--sync",
+    "key", "--clearmodifiers", combo,
+  ]);
 }
 
 export class Element {

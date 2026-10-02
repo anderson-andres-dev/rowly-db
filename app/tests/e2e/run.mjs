@@ -1,6 +1,10 @@
 // Recorridos criticos en la app real (tauri-driver + WebKitWebDriver).
 //
-//   node tests/e2e/run.mjs --app <binario> [--driver http://127.0.0.1:4444]
+//   node tests/e2e/run.mjs --app <binario> [--tauri-driver tauri-driver]
+//
+// Cada recorrido arranca su propio tauri-driver con un perfil vacio
+// (XDG_* en un directorio temporal): no depende de lo que dejo el anterior.
+// Necesita un display X (xvfb-run) y xdotool para los acordes.
 //
 // Necesita un MySQL desechable en E2E_MYSQL_PORT (por defecto 3306) con
 // root/rowly; el propio script crea la base `rowly_e2e`. Nunca se apunta a una
@@ -14,7 +18,10 @@
 //   - en produccion toda escritura pide confirmacion en la app real (S7)
 //   - el texto de la consola sobrevive a reiniciar la app
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { KEYS, Session, sleep } from "./webdriver.mjs";
 
 const args = process.argv.slice(2);
@@ -23,7 +30,8 @@ const option = (name, fallback) => {
   return i >= 0 ? args[i + 1] : fallback;
 };
 const APP = option("--app");
-const DRIVER = option("--driver", "http://127.0.0.1:4444");
+const TAURI_DRIVER = option("--tauri-driver", "tauri-driver");
+const DRIVER = "http://127.0.0.1:4444";
 const PORT = Number(process.env.E2E_MYSQL_PORT ?? 3306);
 const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
 if (!APP) throw new Error("falta --app <binario>");
@@ -166,9 +174,26 @@ flow("el texto de la consola sobrevive a reiniciar la app", async (session, rest
   return next;
 });
 
+async function startDriver(profile) {
+  const env = {
+    ...process.env,
+    XDG_DATA_HOME: join(profile, "data"),
+    XDG_CONFIG_HOME: join(profile, "config"),
+    XDG_CACHE_HOME: join(profile, "cache"),
+  };
+  const driver = spawn(TAURI_DRIVER, ["--port", "4444"], { env, stdio: "ignore" });
+  for (let i = 0; i < 100; i += 1) {
+    if (await fetch(`${DRIVER}/status`).then((r) => r.ok, () => false)) return driver;
+    await sleep(100);
+  }
+  throw new Error("tauri-driver no respondio en 10 s");
+}
+
 let failures = 0;
 for (const { name, body } of flows) {
   resetData();
+  const profile = mkdtempSync(join(tmpdir(), "rowly-e2e-"));
+  const driver = await startDriver(profile);
   let session = await Session.start(DRIVER, APP);
   const restart = async () => {
     await session.quit();
@@ -195,6 +220,9 @@ for (const { name, body } of flows) {
     console.log(`      teclas: ${JSON.stringify(keys)}`);
   } finally {
     await session.quit();
+    driver.kill();
+    await new Promise((resolve) => driver.once("exit", resolve));
+    rmSync(profile, { recursive: true, force: true });
   }
 }
 process.exit(failures === 0 ? 0 : 1);
