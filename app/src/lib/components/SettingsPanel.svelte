@@ -48,12 +48,11 @@
   let dialogEl: HTMLDialogElement | undefined = $state();
   let navEl: HTMLElement | undefined = $state();
 
-  // Al abrir, el foco va al modal (no a un boton con su anillo); las
-  // flechas ya recorren las secciones desde ahi.
+  // Al abrir, el foco visible queda en la seccion actual.
   $effect(() => {
     if (dialogEl && !dialogEl.open) {
       dialogEl.showModal();
-      dialogEl.focus();
+      navEl?.querySelector<HTMLButtonElement>(`[data-section="${activeSection}"]`)?.focus();
     }
   });
 
@@ -61,15 +60,16 @@
     if (event.target === dialogEl) dialogEl?.close();
   }
 
-  // Flechas arriba/abajo recorren la lista de secciones (con el foco en el
-  // modal o en la lista).
+  // Las flechas recorren la lista de secciones.
   function handleNavKeydown(event: KeyboardEvent) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(event.key)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.isComposing) return;
     const target = event.target as HTMLElement;
     if (target !== dialogEl && !target.classList.contains("nav-item")) return;
     event.preventDefault();
     const index = sections.findIndex((section) => section.id === activeSection);
-    const next = sections[(index + (event.key === "ArrowDown" ? 1 : -1) + sections.length) % sections.length];
+    const forward = event.key === "ArrowDown" || event.key === "ArrowRight";
+    const next = sections[(index + (forward ? 1 : -1) + sections.length) % sections.length];
     activeSection = next.id;
     navEl?.querySelector<HTMLButtonElement>(`[data-section="${next.id}"]`)?.focus();
   }
@@ -648,7 +648,7 @@
     color: var(--accent);
   }
 
-  .nav-item:focus-visible {
+  .nav-item:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
   }

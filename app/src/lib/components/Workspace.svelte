@@ -1273,8 +1273,8 @@
   // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
   // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
   // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
-  // script entero (el guard las lista). Despues corren en orden, cada una
-  // con autocommit, y el script se detiene en la primera que falle o al
+  // script entero (el guard muestra cuantas se ejecutaran). Despues corren
+  // en orden, cada una con autocommit, y el script se detiene si falla o al
   // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
   // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
   const MAX_SCRIPT_RESULT_TABS = 10;
@@ -1377,10 +1377,9 @@
     selectTab(consoleId, outcome === "error" || !lastResultTab ? "output" : lastResultTab);
   }
 
-  // Unica via de confirmacion: el click explicito en "Ejecutar de todos
-  // modos" del guard. takeQueryConfirmation() retira el pendiente de forma
-  // atomica antes del await, asi que un doble click no puede confirmar dos
-  // veces.
+  // La confirmacion del guard llama aqui. takeQueryConfirmation() retira el
+  // pendiente de forma atomica antes del await: un doble click no confirma
+  // dos veces.
   async function confirmPendingExecution(consoleId: string) {
     const pending = takeQueryConfirmation(consoleId);
     if (!pending || !beginQueryExecution(consoleId)) return;
@@ -1576,9 +1575,7 @@
       <!-- Cada confirmacion nueva abre su propio modal. -->
       {#key liveExecution.pendingConfirmation}
         <ExecutionGuard
-          sql={liveExecution.pendingConfirmation.sql}
-          statement={liveExecution.pendingConfirmation.statement}
-          script={liveExecution.pendingConfirmation.script?.confirmations ?? null}
+          count={liveExecution.pendingConfirmation.script?.statements.length ?? 1}
           production={$isProduction}
           oncancel={() => cancelPendingExecution(activeConsole.id)}
           onconfirm={() => confirmPendingExecution(activeConsole.id)}

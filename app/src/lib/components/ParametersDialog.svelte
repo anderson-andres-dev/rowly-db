@@ -46,13 +46,17 @@
 
   let dialog = $state<HTMLDialogElement>();
   let inputs = $state<HTMLInputElement[]>([]);
+  let cancelButton = $state<HTMLButtonElement>();
 
   $effect(() => {
     void tick().then(() => {
       dialog?.showModal();
       const first = rows.findIndex((row) => !row.isNull);
-      inputs[Math.max(0, first)]?.focus();
-      inputs[Math.max(0, first)]?.select();
+      if (first < 0) cancelButton?.focus();
+      else {
+        inputs[first]?.focus();
+        inputs[first]?.select();
+      }
     });
   });
 
@@ -96,9 +100,11 @@
   // Como en ConfirmDialog, la respuesta sale en el evento close (despues de
   // la animacion de salida).
   let confirmed = false;
+  let answered = false;
 
   function respond(confirm: boolean) {
-    if (confirm && !complete) return;
+    if (answered || (confirm && !complete)) return;
+    answered = true;
     confirmed = confirm;
     dialog?.close();
   }
@@ -185,8 +191,8 @@
       </div>
     {/each}
   </div>
-  <div class="alert-actions">
-    <button type="button" class="action-button secondary" onclick={() => respond(false)}>{$t("common.cancel")}</button>
+  <div class="alert-actions" data-dialog-actions>
+    <button type="button" class="action-button secondary" bind:this={cancelButton} onclick={() => respond(false)}>{$t("common.cancel")}</button>
     <button type="button" class="action-button primary" disabled={!complete} onclick={() => respond(true)}>
       {$t("workspace.parameters.run")}
     </button>

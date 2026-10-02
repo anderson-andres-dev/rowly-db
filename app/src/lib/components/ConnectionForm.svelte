@@ -706,7 +706,7 @@
         {/if}
       </div>
 
-      <div class="primary-actions">
+      <div class="primary-actions" data-dialog-actions>
         <Button type="button" variant="secondary" onclick={requestClose} disabled={busy}>
           {$t("common.cancel")}
         </Button>

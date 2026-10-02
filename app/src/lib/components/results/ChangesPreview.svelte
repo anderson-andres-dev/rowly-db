@@ -1,8 +1,9 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
+  import { FilePenLine } from "@lucide/svelte";
   import { t, type MessageKey } from "$lib/i18n";
-  import { confirmsOnEnter } from "$lib/dialogKeys";
+  import { blocksHeldEnter, confirmsOnEnter } from "$lib/dialogKeys";
   import { highlightSql } from "$lib/sqlHighlight";
   import type { ChangeError, ResultChanges } from "$lib/resultEditing";
 
@@ -35,6 +36,7 @@
   } = $props();
 
   let dialog = $state<HTMLDialogElement>();
+  let confirmButton = $state<HTMLButtonElement>();
 
   const errorDetail = $derived(
     error
@@ -105,7 +107,7 @@
   $effect(() => {
     void tick().then(() => {
       dialog?.showModal();
-      dialog?.focus();
+      confirmButton?.focus();
     });
   });
 
@@ -124,11 +126,17 @@
     event.preventDefault();
     onapply();
   }
+
+  function onKeydownCapture(event: KeyboardEvent) {
+    if (blocksHeldEnter(event)) event.preventDefault();
+  }
 </script>
 
 <dialog
-  class="changes-dialog"
+  class="review-dialog changes-dialog"
+  class:production
   tabindex="-1"
+  aria-labelledby="changes-preview-title"
   bind:this={dialog}
   oncancel={(event) => {
     event.preventDefault();
@@ -136,19 +144,23 @@
   }}
   onclose={onclose}
   onkeydown={onKeydown}
+  onkeydowncapture={onKeydownCapture}
 >
   <!-- Titulo y, debajo, una pastilla por tipo de sentencia: la palabra SQL
        (igual en cualquier idioma) y la cantidad en su bolita. El mismo color
        marca en el margen donde empieza cada sentencia de ese tipo. -->
-  <header>
-    <h2>{$t("results.changes.title")}</h2>
-    <div class="summary">
-      {#each summary as item (item.tone)}
-        {@const label = $t(item.count === 1 ? item.one : item.many, { count: item.count })}
-        <span class={`kind ${item.tone}`} use:tooltip={label} aria-label={label}>
-          {item.keyword}<span class="count" aria-hidden="true">{item.count}</span>
-        </span>
-      {/each}
+  <header class="review-heading">
+    <span class="review-heading-icon" aria-hidden="true"><FilePenLine size={16} strokeWidth={2.25} /></span>
+    <div class="review-heading-content">
+      <h2 id="changes-preview-title">{$t("results.changes.title")}</h2>
+      <div class="summary">
+        {#each summary as item (item.tone)}
+          {@const label = $t(item.count === 1 ? item.one : item.many, { count: item.count })}
+          <span class={`kind ${item.tone}`} use:tooltip={label} aria-label={label}>
+            {item.keyword}<span class="count" aria-hidden="true">{item.count}</span>
+          </span>
+        {/each}
+      </div>
     </div>
   </header>
 
@@ -181,9 +193,15 @@
     {/key}
   {/if}
 
-  <footer>
+  <footer data-dialog-actions>
     <button type="button" class="action-button secondary" disabled={applying} onclick={close}>{$t("common.cancel")}</button>
-    <button type="button" class="action-button {production ? 'danger' : 'primary'}" disabled={applying} onclick={onapply}>
+    <button
+      type="button"
+      class="action-button {production ? 'danger' : 'primary'}"
+      disabled={applying}
+      onclick={onapply}
+      bind:this={confirmButton}
+    >
       <!-- El texto no cambia mientras aplica: un reintento rapido no hace
            saltar el boton; basta con que quede deshabilitado. -->
       {production ? $t("results.changes.applyInProduction") : $t("results.applyChanges")}
@@ -194,48 +212,6 @@
 <style>
   .changes-dialog {
     width: min(46rem, calc(100vw - 2rem));
-    max-height: calc(100vh - 4rem);
-    padding: var(--space-5);
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    outline: none;
-  }
-
-  .changes-dialog[open] {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    animation: dialog-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  @keyframes dialog-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px) scale(0.98);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .changes-dialog[open] {
-      animation: none;
-    }
-  }
-
-  header {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    letter-spacing: var(--tracking-heading);
   }
 
   .summary {
@@ -422,11 +398,5 @@
   .apply-error strong {
     color: var(--danger);
     font-weight: 600;
-  }
-
-  footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
   }
 </style>

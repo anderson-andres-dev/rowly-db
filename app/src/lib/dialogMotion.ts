@@ -20,6 +20,8 @@
 // lenta puede tardar bastante) o soltar el mouse afuera despues de
 // seleccionar texto adentro lo cerraban.
 
+import { moveDialogActionFocus } from "./dialogKeys";
+
 const CLOSE_DURATION_MS = 150;
 // Lo que tarda en aparecer un modal y un poco mas: un clic en el fondo antes
 // de eso es el mismo clic que lo abrio repetido, no una decision de cerrar.
@@ -120,6 +122,16 @@ export function installDialogMotion(): void {
       // Despues de que el componente procese su propio oncancel (que suele
       // llamar a close() el mismo; el segundo llamado no hace nada).
       queueMicrotask(() => target.close());
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.closest("dialog[open]")) return;
+      moveDialogActionFocus(event);
     },
     true,
   );

@@ -80,7 +80,7 @@
     })();
     void tick().then(() => {
       dialog?.showModal();
-      dialog?.focus();
+      dialog?.querySelector<HTMLButtonElement>(".formats button.selected")?.focus();
     });
   });
 
@@ -220,7 +220,7 @@
     </div>
   </div>
 
-  <footer>
+  <footer data-dialog-actions>
     <button type="button" class="action-button secondary" disabled={exporting} onclick={() => void copyPage()}>
       {$t("results.export.copyPage")}
     </button>
@@ -475,7 +475,7 @@
     flex: 1;
   }
 
-  .format:focus-visible,
+  .format:focus,
   .icon-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
