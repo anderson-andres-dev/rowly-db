@@ -316,9 +316,11 @@
   color: var(--text-primary) !important;
 }
 
+/* El nombre se ve entero; si no cabe junto a una firma larga, es el detail
+   el que se recorta. */
 .sql-editor .cm-completionLabel {
-  min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -345,7 +347,11 @@
  * y la cursiva lo separa del label sin subirle contraste ni peso.
  */
 .sql-editor .cm-completionDetail {
-  margin-left: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
   padding-left: 6px;
   color: var(--text-secondary);
   font-size: 0.6875rem;

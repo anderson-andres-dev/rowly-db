@@ -29,13 +29,13 @@ const schemas: SchemaObjects[] = [
   { schema: "other", tables: [], routines: [{ name: "com_anularOtro", kind: "procedure", arguments: "" }], sequences: [], events: [], warnings: [] },
 ];
 
-async function complete(input: string, driver: "mysql" | "mariadb" | "postgres") {
+async function complete(input: string, driver: "mysql" | "mariadb" | "postgres", explicit = true) {
   const pos = input.indexOf("|");
   const doc = input.replace("|", "");
   const engine = ENGINES[driver];
   const dialect = dialectFor(engine);
   const state = EditorState.create({ doc, selection: { anchor: pos }, extensions: [dialect.language] });
-  const context = new CompletionContext(state, pos, true);
+  const context = new CompletionContext(state, pos, explicit);
   const tables: CatalogTable[] = schemas.flatMap((objects) => objects.tables.map((relation) => ({
     schema: objects.schema, name: relation.name,
     columns: relation.columns.map((column) => ({ ...column, comment: column.comment ?? undefined })),
@@ -43,6 +43,11 @@ async function complete(input: string, driver: "mysql" | "mariadb" | "postgres")
   })));
   const { schema, defaultSchema, fkIndex, tableIndex } = buildSqlSchema(tables, { defaultSchema: "core", engine, explorerSchemas: schemas, availableSchemas: ["core", "other", "unloaded"] });
   return buildCompletionSource({ dialect, engine, schema, defaultSchema, fkIndex, tableIndex, defaultTable: extractDefaultTable(doc, pos), catalogCompletions: buildCatalogCompletions(schemas, engine, defaultSchema) })(context);
+}
+
+// Lo justo de una EditorView para aplicar una opcion: el documento y dispatch.
+function fakeView(doc: string, dispatch: (value: never) => void) {
+  return { state: EditorState.create({ doc }), dispatch } as never;
 }
 
 function options(result: Awaited<ReturnType<typeof complete>>): readonly Completion[] {
@@ -69,8 +74,9 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
     it("reemplaza el nombre completo con guiones, espacios y mayusculas", async () => {
       const quote = driver === "postgres" ? '"' : "`";
       for (const [input, label, expected] of [
-        ["CALL my-|", "my-proc", `CALL ${quote}my-proc${quote}`],
-        ["CALL core.my-|", "my-proc", `CALL core.${quote}my-proc${quote}`],
+        ["CALL my-|", "my-proc", `CALL ${quote}my-proc${quote}()`],
+        ["CALL core.my-|", "my-proc", `CALL core.${quote}my-proc${quote}()`],
+        ["DROP PROCEDURE my-|", "my-proc", `DROP PROCEDURE ${quote}my-proc${quote}`],
         ["SELECT * FROM my-|", "my-table", `SELECT * FROM ${quote}my-table${quote}`],
         ["SELECT * FROM core.my-|", "my-table", `SELECT * FROM core.${quote}my-table${quote}`],
         ["SELECT * FROM My V|", "My View", `SELECT * FROM ${quote}My View${quote}`],
@@ -82,7 +88,7 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
         const option = options(result).find((item) => item.label === label);
         expect(option, input).toBeDefined();
         let change: { changes: { from: number; to: number; insert: string } } | undefined;
-        if (typeof option?.apply === "function") option.apply({ dispatch: (value: typeof change) => { change = value; } } as never, option, result!.from, input.indexOf("|"));
+        if (typeof option?.apply === "function") option.apply(fakeView(input.replace("|", ""), (value: typeof change) => { change = value; }), option, result!.from, input.indexOf("|"));
         const original = input.replace("|", "");
         expect(original.slice(0, change!.changes.from) + change!.changes.insert + original.slice(change!.changes.to), input).toBe(expected);
       }
@@ -92,7 +98,7 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
       const engine = ENGINES[driver];
       for (const sql of ["CALL /*hi*/ pro", "CALL --hi\n pro", "CALL #hi\n pro"]) {
         if (sql.includes("#") && driver === "postgres") continue;
-        expect(catalogPosition(sql, sql.length - 3, engine, "unknown").position, sql).toBe("procedure");
+        expect(catalogPosition(sql, sql.length - 3, engine, "unknown").position, sql).toBe("call");
       }
       for (const [sql, position] of [["SELECT * FROM /*hi*/ my", "relation"], ["SELECT * FROM t JOIN --hi\n my", "relation"], ["DROP PROCEDURE /*hi*/ pro", "procedure"], ["GRANT EXECUTE ON /*hi*/ pro", "routine"]] as const) {
         expect(catalogPosition(sql, sql.length - (sql.endsWith("pro") ? 3 : 2), engine, "unknown").position, sql).toBe(position);
@@ -101,13 +107,50 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
     it("CALL solo ofrece procedures del schema indicado y muestra la firma", async () => {
       const unqualified = options(await complete("CALL com_anular|", driver));
       expect(unqualified.some((o) => o.label === "com_anularFactura" && o.type === "procedure")).toBe(true);
-      expect(unqualified.every((o) => o.type === "procedure")).toBe(true);
+      expect(unqualified.every((o) => o.type === "procedure" || o.type === "schema")).toBe(true);
       expect(unqualified.some((o) => o.label === "other.com_anularOtro" && o.type === "procedure")).toBe(true);
       const result = await complete("CALL core.com_anular|", driver);
       const found = options(result);
       expect(found.some((o) => o.label === "com_anularFactura" && o.type === "procedure" && o.detail?.includes("varchar(4)"))).toBe(true);
       expect(found.some((o) => o.label === "com_anular_facturas_nc" || o.label === "com_anularTotal" || o.label === "com_anularOtro")).toBe(false);
       expect(found.every((o) => o.type === "procedure")).toBe(true);
+    });
+
+    it("CALL deja los parentesis listos y el cursor dentro si hay argumentos", async () => {
+      const apply = async (input: string, label: string) => {
+        const result = await complete(input, driver);
+        const option = options(result).find((item) => item.label === label);
+        expect(option, `${input} ${label}`).toBeDefined();
+        let change: { changes: { from: number; to: number; insert: string }; selection: { anchor: number } } | undefined;
+        const doc = input.replace("|", "");
+        if (typeof option?.apply === "function") option.apply(fakeView(doc, (value: typeof change) => { change = value; }), option, result!.from, input.indexOf("|"));
+        const text = doc.slice(0, change!.changes.from) + change!.changes.insert + doc.slice(change!.changes.to);
+        return text.slice(0, change!.selection.anchor) + "|" + text.slice(change!.selection.anchor);
+      };
+      const name = driver === "postgres" ? '"com_anularFactura"' : "com_anularFactura";
+      expect(await apply("CALL com_anular|", "com_anularFactura")).toBe(`CALL ${name}(|)`);
+      expect(await apply("CALL other.com_anular|", "com_anularOtro")).toBe(`CALL other.${driver === "postgres" ? '"com_anularOtro"' : "com_anularOtro"}()|`);
+      expect(await apply("CALL com_anular|(1)", "com_anularFactura")).toBe(`CALL ${name}|(1)`);
+      expect(await apply("DROP PROCEDURE com_anular|", "com_anularFactura")).toBe(`DROP PROCEDURE ${name}|`);
+      expect(await apply("DROP FUNCTION com_anular|", "com_anularTotal")).toBe(`DROP FUNCTION ${driver === "postgres" ? '"com_anularTotal"' : "com_anularTotal"}|`);
+      expect(await apply("GRANT EXECUTE ON com_anular|", "com_anularFactura")).toBe(`GRANT EXECUTE ON ${name}|`);
+    });
+
+    it("donde va una rutina tambien ofrece el schema para calificarla", async () => {
+      for (const input of ["CALL cor|", "CALL oth|", "DROP PROCEDURE cor|", "DROP FUNCTION oth|"]) {
+        const wanted = input.endsWith("cor|") ? "core" : "other";
+        const found = options(await complete(input, driver)).filter((o) => o.label === wanted && o.type === "schema");
+        expect(found, input).toHaveLength(1);
+      }
+      expect(options(await complete("CALL core.com|", driver)).some((o) => o.type === "schema")).toBe(false);
+      const option = options(await complete("CALL cor|", driver)).find((o) => o.label === "core" && o.type === "schema");
+      let change: { changes: { from: number; to: number; insert: string } } | undefined;
+      if (typeof option?.apply === "function") option.apply(fakeView("CALL cor", (value: typeof change) => { change = value; }), option, 5, 8);
+      expect(change?.changes.insert).toBe("core.");
+      // Al teclear el punto (no explicito).
+      const afterDot = options(await complete("CALL core.|", driver, false));
+      expect(afterDot.some((o) => o.label === "com_anularFactura" && o.type === "procedure"), "CALL core.").toBe(true);
+      expect(afterDot.some((o) => o.label === "com_anularOtro" || o.type === "table"), "CALL core.").toBe(false);
     });
 
     it("FROM, JOIN, INTO, UPDATE y TABLE ofrecen relaciones y vistas", async () => {
@@ -160,17 +203,17 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
       expect(found.some((o) => o.label === (driver === "postgres" ? "DATE_FORMAT" : "GENERATE_SERIES"))).toBe(false);
       const functionOption = options(await complete("SELECT com_anular|", driver)).find((o) => o.label === "com_anularTotal");
       let transaction: { changes: { insert: string }; selection: { anchor: number } } | undefined;
-      if (typeof functionOption?.apply === "function") functionOption.apply({ dispatch: (value: typeof transaction) => { transaction = value; } } as never, functionOption, 0, 0);
+      if (typeof functionOption?.apply === "function") functionOption.apply(fakeView("", (value: typeof transaction) => { transaction = value; }), functionOption, 0, 0);
       const written = driver === "postgres" ? '"com_anularTotal"' : "com_anularTotal";
       expect(transaction?.changes.insert).toBe(`${written}()`);
       expect(transaction?.selection.anchor).toBe(`${written}(`.length);
       const noArgs = options(await complete("SELECT total_hoy|", driver)).find((o) => o.label === "total_hoy");
-      if (typeof noArgs?.apply === "function") noArgs.apply({ dispatch: (value: typeof transaction) => { transaction = value; } } as never, noArgs, 0, 0);
+      if (typeof noArgs?.apply === "function") noArgs.apply(fakeView("", (value: typeof transaction) => { transaction = value; }), noArgs, 0, 0);
       expect(transaction?.changes.insert).toBe("total_hoy()");
       expect(transaction?.selection.anchor).toBe("total_hoy()".length);
       const reserved = options(await complete("CALL sel|", driver)).find((o) => o.label === "select");
-      if (typeof reserved?.apply === "function") reserved.apply({ dispatch: (value: typeof transaction) => { transaction = value; } } as never, reserved, 0, 0);
-      expect(transaction?.changes.insert).toBe(driver === "postgres" ? '"select"' : "`select`");
+      if (typeof reserved?.apply === "function") reserved.apply(fakeView("", (value: typeof transaction) => { transaction = value; }), reserved, 0, 0);
+      expect(transaction?.changes.insert).toBe(driver === "postgres" ? '"select"()' : "`select`()");
     });
   });
 }
@@ -183,6 +226,6 @@ it("Postgres ofrece secuencias y vistas materializadas que llegan del explorador
 
 it("reutiliza las opciones preparadas entre pulsaciones", () => {
   const catalog = buildCatalogCompletions(schemas, ENGINES.mysql, "core");
-  const first = catalog.complete("procedure", 5)?.options[0];
-  expect(catalog.complete("procedure", 6)?.options[0]).toBe(first);
+  const first = catalog.complete("call", 5)?.options[0];
+  expect(catalog.complete("call", 6)?.options[0]).toBe(first);
 });

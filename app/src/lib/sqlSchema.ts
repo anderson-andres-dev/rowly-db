@@ -880,7 +880,9 @@ export function buildCompletionSource(options: {
       engine.nameMatches(target.schema!, target.schemaQuoted ?? false, relation.alias ?? relation.table),
     );
     const schemaQualified = !!target.schema && !relationQualifier && catalog.hasSchema(target.schema, target.schemaQuoted);
-    const catalogResult = word && typing && current.text.length <= MAX_SMART_STATEMENT && clauseContext.lexical === "code" && clauseContext.position !== "statement-start" && clauseContext.position !== "alias" && clauseContext.position !== "select-tail" && clauseContext.position !== "relation-tail" && clauseContext.position !== "keyword-continuation"
+    // Tras "schema." en CALL o DDL de rutinas, la lista sale con solo el punto.
+    const routineAfterDot = schemaQualified && ["call", "procedure", "function", "routine"].includes(target.position);
+    const catalogResult = word && (typing || routineAfterDot) && current.text.length <= MAX_SMART_STATEMENT && clauseContext.lexical === "code" && clauseContext.position !== "statement-start" && clauseContext.position !== "alias" && clauseContext.position !== "select-tail" && clauseContext.position !== "relation-tail" && clauseContext.position !== "keyword-continuation"
       ? catalog.complete(target.position, absoluteWordFrom, schemaQualified ? target.schema : undefined, target.schemaQuoted)
       : null;
 
@@ -952,8 +954,8 @@ export function buildCompletionSource(options: {
     let keywordResult = schemaQualified ? null : rankKeywordResult(keywordResultRaw, policy);
     // Tras CALL solo hay procedures; tras DROP|ALTER PROCEDURE|FUNCTION, ademas
     // IF y EXISTS.
-    if (keywordResult && (target.position === "procedure" || target.position === "function" || target.position === "routine")) {
-      const keep = /^\s*call\b/i.test(current.text) ? /^$/ : /^(?:IF|EXISTS)$/i;
+    if (keywordResult && (target.position === "call" || target.position === "procedure" || target.position === "function" || target.position === "routine")) {
+      const keep = target.position === "call" ? /^$/ : /^(?:IF|EXISTS)$/i;
       const options = keywordResult.options.filter((option) => keep.test(option.label));
       keywordResult = options.length > 0 ? { ...keywordResult, options } : null;
     }

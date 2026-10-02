@@ -1,11 +1,13 @@
-import type { Completion, CompletionResult } from "@codemirror/autocomplete";
+import { startCompletion, type Completion, type CompletionResult } from "@codemirror/autocomplete";
 import type { SchemaObjects } from "$lib/types";
 import type { SqlProfile } from "$lib/engines";
 import { ENGINES } from "$lib/engines";
 import { boostFor, recordUsage } from "$lib/usageStats";
 import { sqlTokens } from "$lib/sqlContext";
 
-export type CatalogPosition = "procedure" | "function" | "relation" | "expression" | "routine" | "unknown";
+// "call": tras CALL; "procedure"/"function"/"routine": el nombre en
+// DROP/ALTER/CREATE/GRANT, sin parentesis.
+export type CatalogPosition = "call" | "procedure" | "function" | "relation" | "expression" | "routine" | "unknown";
 
 const COMMON_FUNCTIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "LOWER", "UPPER", "LENGTH", "SUBSTRING", "TRIM", "ABS", "ROUND"];
 const MYSQL_FUNCTIONS = ["NOW", "CONCAT", "IFNULL", "IF", "DATE_FORMAT", "JSON_EXTRACT", "JSON_OBJECT", "JSON_ARRAY", "GROUP_CONCAT", "UUID", "CURDATE"];
@@ -41,18 +43,10 @@ export function prefixStartForNames(names: Iterable<string>): (text: string, end
   };
 }
 
-function insert(entry: Entry, engine: SqlProfile): Exclude<NonNullable<Completion["apply"]>, string> {
-  return (view, _completion, from, to) => {
-    const key = `${entry.kind}:${entry.schema}.${entry.name}`;
-    recordUsage(key);
-    const name = engine.identifier(entry.name);
-    const suffix = entry.kind === "function" ? "()" : "";
-    const text = name + suffix;
-    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (entry.kind === "function" && !entry.noArgs ? 1 : 0) } });
-  };
-}
-
-function option(entry: Entry, engine: SqlProfile, defaultSchema?: string, qualified = false): Completion {
+// Tras CALL y en expresiones el nombre va con sus parentesis, con el cursor
+// dentro si la rutina recibe argumentos; en DROP/ALTER/GRANT va solo. No se
+// duplican si el parentesis ya esta escrito.
+function option(entry: Entry, engine: SqlProfile, defaultSchema: string | undefined, qualified: boolean, invoke: boolean): Completion {
   const prefix = !qualified && entry.schema !== defaultSchema ? `${entry.schema}.` : "";
   const key = `${entry.kind}:${entry.schema}.${entry.name}`;
   return {
@@ -60,13 +54,25 @@ function option(entry: Entry, engine: SqlProfile, defaultSchema?: string, qualif
     type: entry.kind,
     detail: entry.detail ?? entry.schema,
     boost: boostFor(key) + (entry.schema === defaultSchema ? 3 : 0),
-    apply: (view, completion, from, to) => {
-      if (prefix) {
-        const name = `${engine.identifier(entry.schema)}.${engine.identifier(entry.name)}`;
-        const suffix = entry.kind === "function" ? "()" : "";
-        recordUsage(key);
-        view.dispatch({ changes: { from, to, insert: name + suffix }, selection: { anchor: from + name.length + suffix.length - (entry.kind === "function" && !entry.noArgs ? 1 : 0) } });
-      } else insert(entry, engine)(view, completion, from, to);
+    apply: (view, _completion, from, to) => {
+      recordUsage(key);
+      const name = (prefix ? `${engine.identifier(entry.schema)}.` : "") + engine.identifier(entry.name);
+      const parens = invoke && entry.kind !== "sequence" && view.state.sliceDoc(to, to + 1) !== "(";
+      const text = name + (parens ? "()" : "");
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length - (parens && !entry.noArgs ? 1 : 0) } });
+    },
+  };
+}
+
+// El schema seguido del punto, y la lista se reabre con sus rutinas.
+function schemaOption(schema: string, engine: SqlProfile): Completion {
+  return {
+    label: schema,
+    type: "schema",
+    apply: (view, _completion, from, to) => {
+      const text = `${engine.identifier(schema)}.`;
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+      startCompletion(view);
     },
   };
 }
@@ -97,26 +103,35 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
     },
   }));
 
-  const prepared = entries.map((entry) => ({
-    entry,
-    plain: option(entry, engine, defaultSchema),
-    qualified: option(entry, engine, defaultSchema, true),
-  }));
+  // Una variante por combinacion, creada al pedirla: las pulsaciones
+  // siguientes reutilizan las mismas opciones.
+  const variants = new Map<string, Completion[]>();
+  const optionsFor = (qualified: boolean, invoke: boolean) => {
+    const key = `${qualified}:${invoke}`;
+    let built = variants.get(key);
+    if (!built) variants.set(key, built = entries.map((entry) => option(entry, engine, defaultSchema, qualified, invoke)));
+    return built;
+  };
+  const schemaOptions = [...schemaNames].map((schema) => schemaOption(schema, engine));
   const prefixStart = prefixStartForNames(entries.map((entry) => entry.name));
   return {
     hasSchema: (name: string, quoted = false) => [...schemaNames].some((schema) => engine.nameMatches(name, quoted, schema)),
     prefixStart,
     complete(position: CatalogPosition, wordFrom: number, schema?: string, schemaQuoted = false): CompletionResult | null {
       if (position === "relation") return null;
-      const visible = prepared.filter(({ entry }) => {
+      const invoke = position === "call" || position === "expression" || position === "unknown";
+      const prepared = optionsFor(!!schema, invoke);
+      const options = prepared.filter((_, index) => {
+        const entry = entries[index];
         if (schema && !engine.nameMatches(schema, schemaQuoted, entry.schema)) return false;
-        if (position === "procedure") return entry.kind === "procedure";
+        if (position === "call" || position === "procedure") return entry.kind === "procedure";
         if (position === "function" || position === "expression") return entry.kind === "function";
         if (position === "routine") return entry.kind === "procedure" || entry.kind === "function";
         return true;
       });
-      const options = visible.map((candidate) => schema ? candidate.qualified : candidate.plain);
       if (!schema && (position === "expression" || position === "unknown")) options.push(...builtin);
+      // Donde solo cabe una rutina, tambien el schema para calificarla.
+      if (!schema && ["call", "procedure", "function", "routine"].includes(position)) options.push(...schemaOptions);
       return options.length ? { from: wordFrom, options } : null;
     },
   };
@@ -131,7 +146,7 @@ export function catalogPosition(text: string, wordFrom: number, engine: SqlProfi
   const before = sqlTokens(text, engine.lexical, prefix ? prefix.from : wordFrom);
   const words = before.map((token) => token.text);
   const ends = (...suffix: string[]) => suffix.every((part, index) => words[words.length - suffix.length + index] === part);
-  if (ends("call")) return { position: "procedure", schema, schemaQuoted };
+  if (ends("call")) return { position: "call", schema, schemaQuoted };
   const routineKind = ends("procedure") || ends("procedure", "if", "exists") ? "procedure"
     : ends("function") || ends("function", "if", "exists") ? "function" : undefined;
   if (routineKind && (words.includes("drop") || words.includes("alter") || words.includes("create") || words.includes("grant"))) {
