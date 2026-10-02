@@ -1,7 +1,7 @@
 # Graph Report - khipu  (2026-10-02)
 
 ## Corpus Check
-- 364 files · ~439,999 words
+- 364 files · ~439,829 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 20 file(s) not represented in the graph (top: (none) 9, .css 7, .icns 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d96e6b2f`
+- Built from commit: `ea81720c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -21,7 +21,7 @@
 - assembly.rs
 - postgres/src/lib.rs
 - sqlFiles.ts
-- AppState
+- commands.ts
 - driver-core/src/lib.rs
 - queryConsoles.ts
 - docs/ARCHITECTURE.md
@@ -68,9 +68,9 @@
 - diagnostics.rs
 - editing.rs
 - updates.rs
-- connection_error.rs
+- AppState
 - Engine
-- sqlFormatLayout.ts
+- connection_error.rs
 - serde
 - sqlExecutionMarker.ts
 - sqlSchema.ts
@@ -83,7 +83,7 @@
 - gridClipboard.ts
 - onPointerDown
 - columnFilters.ts
-- editorSettings.ts
+- stores/shortcuts.ts
 - Asistente integrado con memoria de negocio — diseño
 - filterBuilder.ts
 - i18n/index.ts
@@ -94,7 +94,7 @@
 - src-tauri/src/lib.rs
 - version_lines.rs
 - v0.2.0 — Pulido de la experiencia
-- withExecution
+- sqlFormatLayout.ts
 - TablePlus UX & Architecture Analysis (design reference for Khipu)
 - resultEdits.ts
 - Dialect
@@ -108,7 +108,7 @@
 - gridSelectionSummary.ts
 - Diagnósticos en el editor — diseño (tarea 4)
 - invoke
-- Theme bootstrap IIFE (pre-paint CSS var injection)
+- editorSettings.ts
 - engines/index.ts
 - Autocompletado inteligente — diseño (tarea 16)
 - sqlContext.ts
@@ -134,15 +134,15 @@
 - sqlIndentation.ts
 - result_editing.rs
 - DestructiveClassification
-- commands.ts
+- text_encoding.rs
 - dialogMotion.ts
 - replace.ts
 - Diagnostic
 - Soporte de versiones por línea — diseño
 - DataGrid.svelte
-- text_encoding.rs
+- withExecution
 - +layout.svelte
-- textEncoding.ts
+- sidebarLayout.ts
 - webkit_env.rs
 - gridNavigation.ts
 - sqlCallHints.ts
@@ -154,7 +154,7 @@
 - catalog.rs
 - .new
 - editorSearchPanel.ts
-- sidebarLayout.ts
+- Theme bootstrap IIFE (pre-paint CSS var injection)
 - real_sql
 - @codemirror/search
 - contract.test.ts
@@ -168,21 +168,21 @@
 - ConnectionConfig
 - parser.rs
 - FindBarActions
-- stores/shortcuts.ts
+- khipu_driver_core
 - SQL_ENGINE.md
 - up.sh script
 - error_text
+- textEncoding.ts
 - 6. The matrix
 - Test databases
 - Bases de datos de prueba
+- currentQueryConsole
 - Message
 - 6. La matriz
 - mysqlconnector
 - postgresconnector
-- currentQueryConsole
 - lines.sh
 - 2. JOIN completo con alias automático
-- khipu_driver_core
 
 ## God Nodes (most connected - your core abstractions)
 1. `Dialect` - 84 edges
@@ -238,9 +238,9 @@ Nodes (58): TransactionStatement, cancelled_before_start(), config_from_env(), c
 Cohesion: 0.17
 Nodes (20): finishEdit(), onEditKeydown(), createSqlFile(), openSqlFileAtPath(), openSqlFileWithDialog(), renameConsoleFile(), renameSqlFile(), saveConsole() (+12 more)
 
-### Community 5 - "AppState"
-Cohesion: 0.22
-Nodes (22): analyze_sql(), apply_result_changes(), AppState, cancel_query(), count_query_rows(), database_explorer(), disconnect(), export_query_to_file() (+14 more)
+### Community 5 - "commands.ts"
+Cohesion: 0.14
+Nodes (21): commandDefinitions, CommandGroup, CommandHandler, commandsCollide(), CommandZone, definitionsById, handlerKey(), handlers (+13 more)
 
 ### Community 6 - "driver-core/src/lib.rs"
 Cohesion: 0.11
@@ -410,17 +410,17 @@ Nodes (32): ast, analyze_editable_query(), build_change_statements(), CellValue,
 Cohesion: 0.10
 Nodes (44): command_succeeds(), current_version(), detect_install_kind(), DOWNLOAD_BASE_ENV, GithubAsset, GithubRelease, http_client(), install_package() (+36 more)
 
-### Community 56 - "connection_error.rs"
-Cohesion: 0.13
-Nodes (16): ConnectionErrorKind, DriverError, io_error_kind(), is_lookup_failure(), probe_reports_a_closed_port_at_once(), probe_tcp(), Duration, ErrorKind (+8 more)
+### Community 56 - "AppState"
+Cohesion: 0.22
+Nodes (22): analyze_sql(), apply_result_changes(), AppState, cancel_query(), count_query_rows(), database_explorer(), disconnect(), export_query_to_file() (+14 more)
 
 ### Community 57 - "Engine"
 Cohesion: 0.13
 Nodes (17): admin(), classification(), classification_with(), Conn, Engine, .ALL, engine_selected(), ConnectionConfig (+9 more)
 
-### Community 58 - "sqlFormatLayout.ts"
-Cohesion: 0.32
-Nodes (18): alignColumnDefinitions(), alignConditionsPass(), alignJoinsPass(), alignPass(), hasComment(), indentOf(), joinConditionPass(), LayoutOptions (+10 more)
+### Community 58 - "connection_error.rs"
+Cohesion: 0.13
+Nodes (16): ConnectionErrorKind, DriverError, io_error_kind(), is_lookup_failure(), probe_reports_a_closed_port_at_once(), probe_tcp(), Duration, ErrorKind (+8 more)
 
 ### Community 59 - "serde"
 Cohesion: 0.19
@@ -470,9 +470,9 @@ Nodes (9): prefersReducedMotion(), onPointerDown(), cleanup(), onMove(), onUp(),
 Cohesion: 0.29
 Nodes (10): collator, ColumnFilters, columnValueCounts(), NULL_KEY, rowsHiddenByFilters(), ROWS, ValueCount, valueKey() (+2 more)
 
-### Community 72 - "editorSettings.ts"
-Cohesion: 0.16
-Nodes (14): DEFAULT_INDENT_SIZE, DEFAULT_FORMATTER_LINE_WIDTH, defaultEditorSettings(), loadEditorSettings(), MAX_FORMATTER_LINE_WIDTH, MIN_FORMATTER_LINE_WIDTH, normalizeIndentSize(), normalizeIndentStyle() (+6 more)
+### Community 72 - "stores/shortcuts.ts"
+Cohesion: 0.12
+Nodes (10): handleRecordKeydown(), shortcutText(), $t(), setFormatterLineWidth(), MODIFIER_KEYS, ResolvedShortcut, setShortcutKeys(), ShortcutDefinition (+2 more)
 
 ### Community 73 - "Asistente integrado con memoria de negocio — diseño"
 Cohesion: 0.04
@@ -514,9 +514,9 @@ Nodes (21): engine_named(), entry_since(), every_column_type_a_line_returns_is_r
 Cohesion: 0.07
 Nodes (30): 10. Cancelar una consulta larga — ✅, 11. Scripts de varias sentencias — ✅, 13. Modelo de foco por teclado — ✅, 14. Pulido tras la primera prueba — 🧪, 1. Recordar la ventana — ✅, 2. Timeout de conexión — ✅, 3. Ctrl+Enter duplicado — descartado, 4. Posición del error en el editor — ✅ (+22 more)
 
-### Community 83 - "withExecution"
-Cohesion: 0.22
-Nodes (13): beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation(), setQueryCounting(), setQuerySort() (+5 more)
+### Community 83 - "sqlFormatLayout.ts"
+Cohesion: 0.32
+Nodes (18): alignColumnDefinitions(), alignConditionsPass(), alignJoinsPass(), alignPass(), hasComment(), indentOf(), joinConditionPass(), LayoutOptions (+10 more)
 
 ### Community 84 - "TablePlus UX & Architecture Analysis (design reference for Khipu)"
 Cohesion: 0.25
@@ -570,9 +570,9 @@ Nodes (23): QuickFix, 1. Qué se ve, 2. Estados, 3.1 Dos fuentes, un solo format
 Cohesion: 0.13
 Nodes (18): BackendMessage, backendText(), invoke(), isKeyed(), rustFiles, translatedRejection(), forgetConnectionPassword(), loadConnectionPassword() (+10 more)
 
-### Community 97 - "Theme bootstrap IIFE (pre-paint CSS var injection)"
-Cohesion: 0.25
-Nodes (8): CSS_VAR_NAMES field-to-CSS-variable mapping, app/src/app.html (SvelteKit shell HTML), SHELL_PALETTES literal (datagrip/vscode x dark/light), palettes.ts palette definitions (external reference, file not read in this chunk), theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk), Theme bootstrap IIFE (pre-paint CSS var injection), Rationale: palette literals duplicated inline to avoid flash-of-unstyled-theme before SvelteKit ES modules load, app/src frontend layer (Svelte + CodeMirror 6)
+### Community 97 - "editorSettings.ts"
+Cohesion: 0.16
+Nodes (14): DEFAULT_INDENT_SIZE, DEFAULT_FORMATTER_LINE_WIDTH, defaultEditorSettings(), loadEditorSettings(), MAX_FORMATTER_LINE_WIDTH, MIN_FORMATTER_LINE_WIDTH, normalizeIndentSize(), normalizeIndentStyle() (+6 more)
 
 ### Community 98 - "engines/index.ts"
 Cohesion: 0.12
@@ -674,9 +674,9 @@ Nodes (18): edit_info(), EditableColumn, EditTarget, find_table(), names(), Resu
 Cohesion: 0.20
 Nodes (15): AlterTableOperation, classify(), classify_alter_table(), classify_drop(), classify_production(), classify_query(), classify_selection(), classify_set_expr() (+7 more)
 
-### Community 123 - "commands.ts"
-Cohesion: 0.14
-Nodes (21): commandDefinitions, CommandGroup, CommandHandler, commandsCollide(), CommandZone, definitionsById, handlerKey(), handlers (+13 more)
+### Community 123 - "text_encoding.rs"
+Cohesion: 0.16
+Nodes (13): cada_encoding_va_y_vuelve_igual(), decode(), decode_utf16(), encode(), Result, String, Vec, SAMPLE (+5 more)
 
 ### Community 124 - "dialogMotion.ts"
 Cohesion: 0.29
@@ -698,17 +698,17 @@ Nodes (14): reservedWords(), 1. Qué hay en un paquete, 2. Dónde viven, 3. De l
 Cohesion: 0.17
 Nodes (9): onMove(), onUp(), selectCell(), toggleInSelection(), installNumpadFix(), onKeydown(), isTextTarget(), NUMPAD_TEXT (+1 more)
 
-### Community 129 - "text_encoding.rs"
-Cohesion: 0.16
-Nodes (13): cada_encoding_va_y_vuelve_igual(), decode(), decode_utf16(), encode(), Result, String, Vec, SAMPLE (+5 more)
+### Community 129 - "withExecution"
+Cohesion: 0.22
+Nodes (13): beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation(), setQueryCounting(), setQuerySort() (+5 more)
 
 ### Community 130 - "+layout.svelte"
 Cohesion: 0.11
 Nodes (17): initLocaleEffects(), onePerFrame(), frames, setFilePanelHeight(), app_src_lib_styles_alert_dialog, app_src_lib_styles_buttons, app_src_lib_styles_controls, app_src_lib_styles_tokens (+9 more)
 
-### Community 131 - "textEncoding.ts"
+### Community 131 - "sidebarLayout.ts"
 Cohesion: 0.33
-Nodes (4): QueryConsole, DEFAULT_TEXT_ENCODING, TEXT_ENCODINGS, TextEncoding
+Nodes (8): clampSidebarWidth(), DEFAULT_SIDEBAR_WIDTH, loadSidebarWidth(), MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, releaseSidebarDrag(), sidebarWidth, onSidebarHandleKeydown()
 
 ### Community 132 - "webkit_env.rs"
 Cohesion: 0.40
@@ -750,9 +750,9 @@ Nodes (9): distance(), offset_at(), Position, postgres_opaque_definition(), Repa
 Cohesion: 0.13
 Nodes (19): exclusionMarks, newlineMarkers, addExclusion, clearExclusions, exclusionField, inScope(), isExcluded(), matchFilter() (+11 more)
 
-### Community 143 - "sidebarLayout.ts"
-Cohesion: 0.33
-Nodes (8): clampSidebarWidth(), DEFAULT_SIDEBAR_WIDTH, loadSidebarWidth(), MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, releaseSidebarDrag(), sidebarWidth, onSidebarHandleKeydown()
+### Community 143 - "Theme bootstrap IIFE (pre-paint CSS var injection)"
+Cohesion: 0.25
+Nodes (8): CSS_VAR_NAMES field-to-CSS-variable mapping, app/src/app.html (SvelteKit shell HTML), SHELL_PALETTES literal (datagrip/vscode x dark/light), palettes.ts palette definitions (external reference, file not read in this chunk), theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk), Theme bootstrap IIFE (pre-paint CSS var injection), Rationale: palette literals duplicated inline to avoid flash-of-unstyled-theme before SvelteKit ES modules load, app/src frontend layer (Svelte + CodeMirror 6)
 
 ### Community 144 - "real_sql"
 Cohesion: 0.18
@@ -802,9 +802,9 @@ Nodes (4): ConnectionConfig, Self, TlsMode, Debug
 Cohesion: 0.25
 Nodes (3): ParserError, Result, validate()
 
-### Community 157 - "stores/shortcuts.ts"
-Cohesion: 0.12
-Nodes (10): handleRecordKeydown(), shortcutText(), $t(), setFormatterLineWidth(), MODIFIER_KEYS, ResolvedShortcut, setShortcutKeys(), ShortcutDefinition (+2 more)
+### Community 157 - "khipu_driver_core"
+Cohesion: 0.38
+Nodes (6): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, Item, tables_to_catalog(), khipu_driver_core
 
 ### Community 159 - "up.sh script"
 Cohesion: 0.50
@@ -814,7 +814,11 @@ Nodes (3): fetch.sh script, pg(), up.sh script
 Cohesion: 0.67
 Nodes (3): error_text(), is_syntax_error(), QueryExecutionResult
 
-### Community 161 - "6. The matrix"
+### Community 161 - "textEncoding.ts"
+Cohesion: 0.33
+Nodes (4): QueryConsole, DEFAULT_TEXT_ENCODING, TEXT_ENCODINGS, TextEncoding
+
+### Community 162 - "6. The matrix"
 Cohesion: 0.33
 Nodes (6): 6.1 Safety, 6.2 Analysis and diagnostics, 6.3 Generated SQL and autocomplete, 6.4 Drivers and introspection, 6.5 Capabilities, 6. The matrix
 
@@ -826,6 +830,10 @@ Nodes (4): Server tests, Test databases, Use, Version lines
 Cohesion: 0.40
 Nodes (4): Bases de datos de prueba, Líneas de versión, Pruebas contra servidor, Uso
 
+### Community 165 - "currentQueryConsole"
+Cohesion: 0.67
+Nodes (4): currentQueryConsole(), flushConsoleTexts(), registerConsoleTextFlush(), 15b — Texto al store y guardado (2026-09-27)
+
 ### Community 166 - "Message"
 Cohesion: 0.16
 Nodes (23): create_sql_file(), delete_connection_password(), list_sql_dir(), load_connection_password(), prune_console_texts(), read_console_text(), read_sql_file(), rename_sql_file() (+15 more)
@@ -834,10 +842,6 @@ Nodes (23): create_sql_file(), delete_connection_password(), list_sql_dir(), loa
 Cohesion: 0.33
 Nodes (6): 6.1 Seguridad, 6.2 Análisis y diagnósticos, 6.3 SQL generado y autocompletado, 6.4 Drivers e introspección, 6.5 Capacidades, 6. La matriz
 
-### Community 173 - "currentQueryConsole"
-Cohesion: 0.67
-Nodes (4): currentQueryConsole(), flushConsoleTexts(), registerConsoleTextFlush(), 15b — Texto al store y guardado (2026-09-27)
-
 ### Community 175 - "lines.sh"
 Cohesion: 0.73
 Nodes (5): down(), name(), probes(), lines.sh script, up()
@@ -845,10 +849,6 @@ Nodes (5): down(), name(), probes(), lines.sh script, up()
 ### Community 176 - "2. JOIN completo con alias automático"
 Cohesion: 0.29
 Nodes (7): t(), 2. JOIN completo con alias automático, Alias también en el FROM, Cuándo aparece, El alias, Orden, Qué inserta
-
-### Community 177 - "khipu_driver_core"
-Cohesion: 0.38
-Nodes (6): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, Item, tables_to_catalog(), khipu_driver_core
 
 ## Ambiguous Edges - Review These
 - `CSS_VAR_NAMES field-to-CSS-variable mapping` → `theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk)`  [AMBIGUOUS]
@@ -868,12 +868,12 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
 - **What is the exact relationship between `SHELL_PALETTES literal (datagrip/vscode x dark/light)` and `palettes.ts palette definitions (external reference, file not read in this chunk)`?**
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **Why does `vitest` connect `vitest` to `DataGrid.svelte`, `+layout.svelte`, `gridNavigation.ts`, `sqlCallHints.ts`, `@codemirror/state`, `sqlPreviewFormat.ts`, `editorSearchPanel.ts`, `sidebarLayout.ts`, `connection.ts`, `package.json`, `contract.test.ts`, `sqlStatements.ts`, `queryConsoles.test.ts`, `svelte`, `vendorSupport.ts`, `gridWindow.test.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `sqlParameterTypes.ts`, `resultEditing.ts`, `focusZones.ts`, `sqlExecutionMarker.ts`, `sqlSchema.ts`, `cellTypes.ts`, `explorerTree.ts`, `editorSearchPanel.dom.test.ts`, `connectionTest.ts`, `gridClipboard.ts`, `columnFilters.ts`, `filterBuilder.ts`, `i18n/index.ts`, `queryHistory.ts`, `resultEdits.ts`, `pinnedResults.ts`, `theme.ts`, `gridSelectionSummary.ts`, `invoke`, `engines/index.ts`, `sqlContext.ts`, `sqlFormatter.ts`, `gridFind.ts`, `sqlDiagnostics.ts`, `lib/types.ts`, `ExportDialog.svelte`, `sqlIndentation.ts`, `commands.ts`, `dialogMotion.ts`?**
-  _High betweenness centrality (0.049) - this node is a cross-community bridge._
-- **Why does `Dialect` connect `Dialect` to `execution_guard.rs`, `classify_sql_with`, `corpus.rs`, `export.rs`, `Vec`, `.new`, `src-tauri/src/lib.rs`, `ActiveConnection`, `pagination.rs`, `diagnostics.rs`, `editing.rs`, `drivers.rs`, `result_editing.rs`, `DestructiveClassification`, `parser.rs`, `Diagnostic`, `Engine`?**
-  _High betweenness centrality (0.028) - this node is a cross-community bridge._
+- **Why does `vitest` connect `vitest` to `DataGrid.svelte`, `+layout.svelte`, `sidebarLayout.ts`, `commands.ts`, `gridNavigation.ts`, `sqlCallHints.ts`, `@codemirror/state`, `sqlPreviewFormat.ts`, `editorSearchPanel.ts`, `connection.ts`, `package.json`, `contract.test.ts`, `sqlStatements.ts`, `queryConsoles.test.ts`, `svelte`, `vendorSupport.ts`, `gridWindow.test.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `sqlParameterTypes.ts`, `resultEditing.ts`, `focusZones.ts`, `sqlExecutionMarker.ts`, `sqlSchema.ts`, `cellTypes.ts`, `explorerTree.ts`, `editorSearchPanel.dom.test.ts`, `connectionTest.ts`, `gridClipboard.ts`, `columnFilters.ts`, `filterBuilder.ts`, `i18n/index.ts`, `queryHistory.ts`, `resultEdits.ts`, `pinnedResults.ts`, `theme.ts`, `gridSelectionSummary.ts`, `invoke`, `engines/index.ts`, `sqlContext.ts`, `sqlFormatter.ts`, `gridFind.ts`, `sqlDiagnostics.ts`, `lib/types.ts`, `ExportDialog.svelte`, `sqlIndentation.ts`, `dialogMotion.ts`?**
+  _High betweenness centrality (0.043) - this node is a cross-community bridge._
 - **Why does `SqlProfile` connect `engines/index.ts` to `6. The matrix`, `sqlContext.ts`, `sqlCallHints.ts`, `sqlFormatter.ts`, `6. La matriz`, `SQL engine quality contract`, `Contrato de calidad de los motores SQL`, `contract.test.ts`, `sqlSchema.ts`, `Soporte de versiones por línea — diseño`?**
-  _High betweenness centrality (0.028) - this node is a cross-community bridge._
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
+- **Why does `Dialect` connect `Dialect` to `execution_guard.rs`, `classify_sql_with`, `corpus.rs`, `export.rs`, `Vec`, `.new`, `src-tauri/src/lib.rs`, `ActiveConnection`, `pagination.rs`, `diagnostics.rs`, `editing.rs`, `drivers.rs`, `result_editing.rs`, `DestructiveClassification`, `parser.rs`, `Diagnostic`, `Engine`?**
+  _High betweenness centrality (0.025) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
   _683 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `execution_guard.rs` be split into smaller, more focused modules?**
