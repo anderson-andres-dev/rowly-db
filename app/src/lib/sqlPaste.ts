@@ -1,3 +1,4 @@
+import { commentAt } from "$lib/sqlComments";
 import type { SqlLexical } from "$lib/sqlStatements";
 
 // Lo que llega al pegar desde Slack, Teams, Word o una pagina web trae
@@ -51,7 +52,7 @@ export function normalizePastedSql(text: string, lexical: SqlLexical): string {
 
   while (index < text.length) {
     const char = text[index];
-    const next = text[index + 1];
+    const comment = commentAt(text, index, lexical);
 
     if (char === "'") {
       // E'...' (Postgres): la barra invertida escapa aunque en el resto no.
@@ -60,12 +61,8 @@ export function normalizePastedSql(text: string, lexical: SqlLexical): string {
       keep(quotedEnd(text, index, "'", lexical.backslashEscapes || prefixed));
     } else if (lexical.identifierQuotes.includes(char as '"' | "`" | "[")) {
       keep(quotedEnd(text, index, IDENTIFIER_CLOSE[char], lexical.backslashEscapes && char === '"'));
-    } else if ((char === "-" && next === "-") || (char === "#" && lexical.hashComments)) {
-      const end = text.indexOf("\n", index);
-      keep(end === -1 ? text.length : end);
-    } else if (char === "/" && next === "*") {
-      const end = text.indexOf("*/", index + 2);
-      keep(end === -1 ? text.length : end + 2);
+    } else if (comment) {
+      keep(comment.end);
     } else if (char === "$" && lexical.dollarQuotes && !isWordChar(text[index - 1])) {
       DOLLAR_TAG.lastIndex = index;
       const tag = DOLLAR_TAG.exec(text)?.[0];

@@ -14,6 +14,7 @@
 // degrada a "unknown" ante cualquier cosa que no reconozca (CTEs, DDL,
 // bloques procedurales, anidamiento malformado) en vez de adivinar mal.
 
+import { commentAt } from "$lib/sqlComments";
 import type { SqlLexical } from "$lib/sqlStatements";
 
 export type ClauseKind =
@@ -93,27 +94,13 @@ function lex(doc: string, end: number, rules: SqlLexical): { tokens: Token[]; le
       continue;
     }
 
-    // Comentario de linea: "--" (todos los motores) o "#" (si el motor lo
-    // usa: MySQL/MariaDB; en Postgres es un operador).
-    if ((ch === "-" && doc[i + 1] === "-") || (ch === "#" && rules.hashComments)) {
-      i += ch === "#" ? 1 : 2;
-      while (i < end && doc[i] !== "\n") i++;
-      lexicalAtEnd = i >= end ? "comment" : "code";
-      continue;
-    }
-
-    if (ch === "/" && doc[i + 1] === "*") {
-      i += 2;
-      let closed = false;
-      while (i < end) {
-        if (doc[i] === "*" && doc[i + 1] === "/") {
-          i += 2;
-          closed = true;
-          break;
-        }
-        i++;
-      }
-      lexicalAtEnd = closed ? "code" : "comment";
+    // Un comentario, con las reglas del motor (sqlComments.ts).
+    const comment = commentAt(doc, i, rules);
+    if (comment) {
+      // Llega al cursor si no se cierra antes de el.
+      const reachesEnd = comment.kind === "line" ? comment.end >= end : !comment.closed || comment.end > end;
+      i = Math.min(comment.end, end);
+      lexicalAtEnd = reachesEnd ? "comment" : "code";
       continue;
     }
 

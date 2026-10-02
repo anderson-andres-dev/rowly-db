@@ -38,6 +38,11 @@ export const postgres: EngineProfile = {
     hashComments: false,
     dollarQuotes: true,
     escapeStringPrefix: true,
+    nestedComments: true,
+    dashCommentNeedsSpace: false,
+    executableComments: [],
+    // Solo con la extension pg_hint_plan: para el motor es un comentario.
+    optimizerHints: false,
   },
   quoteIdentifier: (name) => quoteWith('"', '"', name),
   // Sin comillas se lee en minusculas: "Users" las necesita.

@@ -19,6 +19,8 @@
 // En el editor no se usa sobre el texto entero: sqlStatementIndex.ts lleva
 // las sentencias del documento al dia por partes, con este mismo escaner.
 
+import { commentAt, executablePrefix, opensDashComment } from "$lib/sqlComments";
+
 export interface StatementRange {
   from: number;
   to: number;
@@ -48,6 +50,13 @@ export interface SqlLexical {
   // E'...': un texto donde la barra invertida escapa aunque en el resto no
   // (Postgres).
   escapeStringPrefix: boolean;
+  // Comentarios (sqlComments.ts): /* /* */ */ (Postgres); "-- " y no "--x"
+  // (MySQL, MariaDB); los que el motor ejecuta, "/*!" (MySQL y MariaDB) y
+  // "/*M!" (MariaDB); pistas del optimizador /*+ ... */.
+  nestedComments: boolean;
+  dashCommentNeedsSpace: boolean;
+  executableComments: readonly ("/*!" | "/*M!")[];
+  optimizerHints: boolean;
 }
 
 // El SQL estandar: sin conexion no hay motor (engines/standard.ts).
@@ -57,6 +66,10 @@ export const STANDARD_LEXICAL: SqlLexical = {
   hashComments: false,
   dollarQuotes: false,
   escapeStringPrefix: false,
+  nestedComments: false,
+  dashCommentNeedsSpace: false,
+  executableComments: [],
+  optimizerHints: false,
 };
 
 // Donde quedo el escaner al cortar un trozo: el documento se escanea por
@@ -224,13 +237,6 @@ function isWordChar(code: number): boolean {
   return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 95;
 }
 
-function opensDashComment(text: string, at: number, mysql: boolean): boolean {
-  if (text.charCodeAt(at + 1) !== DASH) return false;
-  if (!mysql) return true;
-  const after = text.charCodeAt(at + 2);
-  return after <= 32 || after === 127;
-}
-
 // Las reglas de un motor, ya compiladas: lo que puede abrir o cerrar algo en
 // codigo (una regex para saltar rapido lo demas) y, por cada comilla, la
 // que la cierra y como buscarla.
@@ -238,6 +244,8 @@ interface ScanRules {
   special: RegExp;
   closeOf: Map<number, number>;
   closer: Map<number, RegExp>;
+  // El motor: las reglas de comentarios salen de aqui (sqlComments.ts).
+  lexical: SqlLexical;
   hash: boolean;
   dollar: boolean;
   escapePrefix: boolean;
@@ -286,6 +294,7 @@ function rulesFor(lexical: SqlLexical): ScanRules {
     special,
     closeOf,
     closer,
+    lexical,
     hash: lexical.hashComments,
     dollar: lexical.dollarQuotes,
     escapePrefix: lexical.escapeStringPrefix,
@@ -363,7 +372,7 @@ function nextLineContinues(
   text: string,
   from: number,
   final: boolean,
-  hash: boolean,
+  lexical: SqlLexical,
   follows: ReadonlySet<string> | undefined,
   alwaysFollows: ReadonlySet<string> | undefined,
 ): boolean | null {
@@ -373,18 +382,11 @@ function nextLineContinues(
     while (at < text.length && isSpace(text.charCodeAt(at))) at += 1;
     if (at >= text.length) return unknown;
     const code = text.charCodeAt(at);
-    const next = text.charCodeAt(at + 1);
     if ((code === DASH || code === SLASH) && at + 1 >= text.length) return unknown;
-    if ((code === DASH && opensDashComment(text, at, hash)) || (code === HASH && hash)) {
-      const end = text.indexOf("\n", at);
-      if (end === -1) return unknown;
-      at = end + 1;
-      continue;
-    }
-    if (code === SLASH && next === STAR) {
-      const end = text.indexOf("*/", at + 2);
-      if (end === -1) return unknown;
-      at = end + 2;
+    const comment = commentAt(text, at, lexical);
+    if (comment) {
+      if (!comment.closed) return unknown;
+      at = comment.kind === "line" ? comment.end + 1 : comment.end;
       continue;
     }
     break;
@@ -627,7 +629,7 @@ export function scanChunk(
         continue;
       }
       case BLOCK_COMMENT: {
-        if (rules.dollar) {
+        if (rules.lexical.nestedComments) {
           let at = index;
           while (at < length) {
             const open = text.indexOf("/*", at);
@@ -865,7 +867,7 @@ export function scanChunk(
               text,
               cut + 1,
               final,
-              rules.hash,
+              rules.lexical,
               mainStarted ? undefined : FOLLOWS_LEAD.get(lead),
               ALWAYS_FOLLOWS_LEAD.get(lead),
             );
@@ -933,17 +935,20 @@ export function scanChunk(
       // Un comentario, una comilla o un simbolo cortan la palabra en curso.
       wordOpen = false;
       leadOpen = false;
-      if (code === DASH && opensDashComment(text, index, rules.hash)) {
+      if (code === DASH && opensDashComment(text, index, rules.lexical)) {
         mode = LINE_COMMENT;
         index += 2;
         continue scan;
       }
       if (code === SLASH && text.charCodeAt(index + 1) === STAR) {
-        versionedComment = rules.hash && text.charCodeAt(index + 2) === 33;
+        // /*! y /*M!: el motor ejecuta su contenido. La sentencia empieza en
+        // el "/"; el contenido se lee desde el "!", asi la "M" no es una palabra.
+        const executable = executablePrefix(text, index, rules.lexical);
+        versionedComment = executable !== null;
         if (versionedComment && codeStart < 0) codeStart = base + index;
         commentDepth = 1;
         mode = BLOCK_COMMENT;
-        index += 2;
+        index += executable === "/*M!" ? 3 : 2;
         continue scan;
       }
       if (code === HASH && rules.hash) {

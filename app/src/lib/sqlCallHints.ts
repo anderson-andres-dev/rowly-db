@@ -1,5 +1,7 @@
 import type { SqlProfile } from "$lib/engines";
+import { commentAt } from "$lib/sqlComments";
 import { sqlTokens, type Token } from "$lib/sqlContext";
+import type { SqlLexical } from "$lib/sqlStatements";
 import type { ExplorerRoutine, SchemaObjects } from "$lib/types";
 
 // Hints de parametros: el nombre de cada parametro delante de su argumento
@@ -62,19 +64,13 @@ function nameOf(token: Token): Name {
 }
 
 // Salta espacios y comentarios desde `at`.
-function skipBlank(text: string, at: number, hashComments: boolean): number {
+function skipBlank(text: string, at: number, lexical: SqlLexical): number {
   let index = at;
   for (;;) {
     while (index < text.length && /\s/.test(text[index])) index += 1;
-    if (text.startsWith("--", index) || (hashComments && text[index] === "#")) {
-      const end = text.indexOf("\n", index);
-      index = end === -1 ? text.length : end + 1;
-    } else if (text.startsWith("/*", index)) {
-      const end = text.indexOf("*/", index + 2);
-      index = end === -1 ? text.length : end + 2;
-    } else {
-      return index;
-    }
+    const comment = commentAt(text, index, lexical);
+    if (!comment) return index;
+    index = comment.kind === "line" && comment.closed ? comment.end + 1 : comment.end;
   }
 }
 
@@ -101,7 +97,7 @@ export function findCalls(text: string, engine: SqlProfile): RoutineCall[] {
     let argFrom = tokens[index].to;
     let argTokens: Token[] = [];
     const closeArg = (end: number) => {
-      const from = skipBlank(text, argFrom, engine.lexical.hashComments);
+      const from = skipBlank(text, argFrom, engine.lexical);
       if (from >= end) return;
       const only = argTokens.length === 1 && isName(argTokens[0]) ? argTokens[0] : undefined;
       const bare =

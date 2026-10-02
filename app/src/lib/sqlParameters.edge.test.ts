@@ -1,23 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { findParameters, parameterValue, substituteParameters } from "./sqlParameters";
 import { parameterColumns } from "./sqlParameterTypes";
-import type { SqlLexical } from "./sqlStatements";
+import { ENGINES } from "./engines";
 import type { CatalogTable } from "./types";
 
-const MYSQL: SqlLexical = {
-  identifierQuotes: ["`"],
-  backslashEscapes: true,
-  hashComments: true,
-  dollarQuotes: false,
-  escapeStringPrefix: false,
-};
-const POSTGRES: SqlLexical = {
-  identifierQuotes: ['"'],
-  backslashEscapes: false,
-  hashComments: false,
-  dollarQuotes: true,
-  escapeStringPrefix: true,
-};
+const MYSQL = ENGINES.mysql.lexical;
+const POSTGRES = ENGINES.postgres.lexical;
 const names = (sql: string, lexical = MYSQL) => findParameters(sql, lexical).map((p) => p.name);
 
 describe("findParameters: bordes", () => {

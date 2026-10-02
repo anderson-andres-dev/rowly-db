@@ -1,4 +1,5 @@
 import type { SqlProfile } from "$lib/engines";
+import { opensLineComment } from "$lib/sqlComments";
 import { refineLayout, upperOperatorWords } from "$lib/sqlFormatLayout";
 import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
 import { DEFAULT_INDENT_SIZE, indentationUnit, type IndentSize, type IndentStyle } from "$lib/sqlIndentationConfig";
@@ -179,9 +180,11 @@ function applyIndentation(text: string, style: IndentStyle, size: IndentSize, le
   if (style === "spaces" && size === DEFAULT_INDENT_SIZE) return text;
   const unit = indentationUnit(style, size);
   let quote: string | null = null;
-  let blockComment = false;
+  // Profundidad del comentario de bloque abierto (solo pasa de 1 donde el
+  // motor anida, sqlComments.ts).
+  let commentDepth = 0;
   return text.split("\n").map((line) => {
-    const protectedLine = quote !== null || blockComment;
+    const protectedLine = quote !== null || commentDepth > 0;
     for (let index = 0; index < line.length; index++) {
       const char = line[index];
       const next = line[index + 1];
@@ -193,15 +196,18 @@ function applyIndentation(text: string, style: IndentStyle, size: IndentSize, le
             quote = null;
           }
         } else if (char === "\\" && quote === "'" && next) index++;
-      } else if (blockComment) {
+      } else if (commentDepth > 0) {
         if (char === "*" && next === "/") {
-          blockComment = false;
+          commentDepth--;
+          index++;
+        } else if (char === "/" && next === "*" && lexical.nestedComments) {
+          commentDepth++;
           index++;
         }
-      } else if ((char === "-" && next === "-") || (char === "#" && lexical.hashComments)) {
+      } else if (opensLineComment(line, index, lexical)) {
         break;
       } else if (char === "/" && next === "*") {
-        blockComment = true;
+        commentDepth = 1;
         index++;
       } else if (char === "'" || char === '"' || char === "`" || char === "[") {
         quote = char === "[" ? "]" : char;

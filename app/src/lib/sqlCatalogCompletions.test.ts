@@ -114,11 +114,11 @@ for (const driver of ["mysql", "mariadb", "postgres"] as const) {
 
     it("conserva el contexto despues de comentarios y saltos", () => {
       const engine = ENGINES[driver];
-      for (const sql of ["CALL /*hi*/ pro", "CALL --hi\n pro", "CALL #hi\n pro"]) {
+      for (const sql of ["CALL /*hi*/ pro", "CALL -- hi\n pro", "CALL #hi\n pro"]) {
         if (sql.includes("#") && driver === "postgres") continue;
         expect(catalogPosition(sql, sql.length - 3, engine, "unknown").position, sql).toBe("call");
       }
-      for (const [sql, position] of [["SELECT * FROM /*hi*/ my", "relation"], ["SELECT * FROM t JOIN --hi\n my", "relation"], ["DROP PROCEDURE /*hi*/ pro", "procedure"], ["GRANT EXECUTE ON /*hi*/ pro", "routine"]] as const) {
+      for (const [sql, position] of [["SELECT * FROM /*hi*/ my", "relation"], ["SELECT * FROM t JOIN -- hi\n my", "relation"], ["DROP PROCEDURE /*hi*/ pro", "procedure"], ["GRANT EXECUTE ON /*hi*/ pro", "routine"]] as const) {
         expect(catalogPosition(sql, sql.length - (sql.endsWith("pro") ? 3 : 2), engine, "unknown").position, sql).toBe(position);
       }
     });
