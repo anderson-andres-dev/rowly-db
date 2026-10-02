@@ -3,7 +3,7 @@ import { ENGINES } from "./engines";
 import { blockCommentEnd, commentAt, executablePrefix, opensLineComment } from "./sqlComments";
 import { splitStatements } from "./sqlStatements";
 
-// Cada fila de la tabla de docs/specs/v0.3-comentarios.md, por motor. Lo que
+// Casos de comentarios ejecutables y no ejecutables por motor. Lo que
 // dice cada servidor esta comprobado contra tools/test-dbs.
 const mysql = ENGINES.mysql.lexical;
 const mariadb = ENGINES.mariadb.lexical;

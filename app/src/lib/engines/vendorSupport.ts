@@ -3,7 +3,7 @@ import data from "./vendorSupport.json";
 // El soporte del fabricante de la version del servidor conectado, con la
 // regla de SQL_ENGINE.md §5.2: gracia de 12 meses tras el fin de soporte,
 // solo en las LTS. Las fechas salen de tools/support/vendor-support.py.
-// Pasan a los paquetes de cada linea (docs/specs/v0.3-soporte-de-versiones.md).
+// Pasan a los paquetes de cada linea (SQL_ENGINE.es.md).
 
 interface Release {
   release: string;

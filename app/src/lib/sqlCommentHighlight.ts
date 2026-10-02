@@ -4,8 +4,7 @@ import type { SqlLexical } from "$lib/sqlStatements";
 
 // El resaltado de @codemirror/lang-sql anida /* */ en todos los dialectos y
 // pinta como comentario lo que MySQL y MariaDB ejecutan. Esta envoltura del
-// parser vuelve a leer como SQL lo que el motor ejecuta
-// (docs/specs/v0.3-comentarios.md, Parte 1):
+// parser vuelve a leer como SQL lo que el motor ejecuta:
 // - el contenido de /*! ... */ y /*M! ... */, tras el numero de version;
 // - sin anidamiento, lo que sigue al primer */ de un comentario que lang-sql
 //   alargo por un /* interno (en MySQL eso es codigo y se ejecuta).

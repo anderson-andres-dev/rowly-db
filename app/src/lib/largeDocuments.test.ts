@@ -14,7 +14,7 @@ import { splitStatements } from "./sqlStatements";
 import { uppercaseKeywordEdit } from "./sqlEditorBehavior";
 import { classifyContext } from "./sqlContext";
 
-// Documentos de 1M lineas (docs/specs/v0.2-documentos-grandes.md, 15f): lo
+// Documentos de 1M lineas: lo
 // que corre en cada tecla no puede depender del tamaño del documento. Los
 // umbrales son holgados (una maquina lenta o cargada no debe dar falsos
 // fallos) pero atrapan cualquier vuelta a recorrer los 30 MB: eso cuesta

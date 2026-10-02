@@ -135,6 +135,8 @@ Packages are written to `target/release/bundle/`.
 
 Bug reports and pull requests are welcome. Start with the [development guide](CONTRIBUTING.md) or [open an issue](https://github.com/anderson-andres-dev/rowly-db/issues).
 
+For SQL engine work, read the [permanent quality contract](SQL_ENGINE.md) before changing code or claiming support for a server release.
+
 ## License
 
 Rowly DB is dual licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your choice.

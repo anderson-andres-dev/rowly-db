@@ -1,5 +1,5 @@
 // Que tramos del cuerpo del grid tienen que estar montados (ver la
-// virtualizacion en DataGrid.svelte, y docs/specs/v0.2-rendimiento.md, 21a).
+// virtualizacion en DataGrid.svelte).
 //
 // El cuerpo se divide en tramos de CHUNK_ROWS filas. Con "Filtrar filas"
 // algunas filas no ocupan lugar: la posicion en pantalla es la fila

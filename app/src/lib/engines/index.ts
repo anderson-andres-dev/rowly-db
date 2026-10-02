@@ -9,7 +9,7 @@ export { standardSql } from "./standard";
 
 // Un perfil por motor. El tipo obliga a que cada ConnectionDriver tenga el
 // suyo: agregar un motor sin su perfil no compila (guia en
-// docs/specs/v0.2-perfiles-de-motor.md, §6).
+// SQL_ENGINE.es.md).
 export const ENGINES: Readonly<Record<ConnectionDriver, EngineProfile>> = { mysql, mariadb, postgres };
 
 export function engineFor(driver: ConnectionDriver): EngineProfile {

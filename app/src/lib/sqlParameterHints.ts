@@ -4,7 +4,7 @@ import type { SqlProfile } from "$lib/engines";
 import { callHints, type RoutineIndex } from "$lib/sqlCallHints";
 import { statementsIn } from "$lib/sqlStatementIndex";
 
-// Los hints de parametros en el editor (docs/specs/v0.2-hints-de-parametros.md):
+// Los hints de parametros en el editor:
 // solo las sentencias que tocan lo visible, cada una con el lexer liviano de
 // sqlCallHints.ts.
 

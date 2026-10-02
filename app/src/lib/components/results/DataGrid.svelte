@@ -1532,7 +1532,7 @@
   }
 
   // --- Cuerpo virtualizado por tramos -------------------------------------
-  // (docs/specs/v0.2-rendimiento.md, 21a.) Con la pagina entera en el DOM
+  // Con la pagina entera en el DOM
   // (500 x 43 = 21.500 celdas, hasta 10.000 filas) cualquier cambio de
   // tamaño del area principal — mover el sidebar, el splitter — volvia a
   // maquetar todas las celdas en cada frame.

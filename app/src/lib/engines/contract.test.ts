@@ -12,8 +12,9 @@ import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/sqlSchem
 import type { CatalogTable, SchemaObjects } from "$lib/types";
 import { buildRoutineIndex, callHints } from "$lib/sqlCallHints";
 
-// El contrato que cumple cada perfil de motor (docs/specs/v0.2-perfiles-de-motor.md,
-// §5). Un motor nuevo se suma a ENGINES y a FIXTURES (el tipo lo exige) y
+// El contrato que cumple cada perfil de motor
+// (SQL_ENGINE.es.md). Un motor nuevo se suma a
+// ENGINES y a FIXTURES (el tipo lo exige) y
 // tiene que pasar todo esto sin tocar nada mas.
 
 interface Fixture {

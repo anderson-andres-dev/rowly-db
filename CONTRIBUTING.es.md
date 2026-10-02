@@ -19,6 +19,8 @@ npm run tauri dev
 
 Necesitas Rust 1.85+ y Node.js 20.19+. En [ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) está cómo se organiza el código y dónde va cada tipo de cambio.
 
+Si tocas un motor, un driver, SQL generado, análisis o ejecución, lee primero [SQL_ENGINE.es.md](SQL_ENGINE.es.md). Es el contrato permanente de calidad: matriz S/A/G/D, versiones, pruebas reales, compuertas y huecos conocidos. Las notas de diseño son planes de trabajo y no sustituyen ese contrato.
+
 ## Flujo de trabajo
 
 `main` guarda las versiones publicadas y `develop` es donde se integra el trabajo. Ninguna acepta push directo.
@@ -32,9 +34,9 @@ Antes de abrir el pull request, ejecuta:
 
 ```bash
 cargo fmt --all
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cd app && npm run check && npm test
+cd app && npm run check && npm test && npm run build
 ```
 
 ## Pruebas contra una base real
@@ -62,16 +64,20 @@ Si falta alguna, la prueba se detiene y te dice cuál. `EXPECT_TLS` es lo que el
 
 El guard, el divisor de sentencias y los drivers también se prueban juntos contra servidores reales (MySQL, MariaDB y PostgreSQL con las bases de ejemplo Sakila / Pagila). `tools/test-dbs/up.sh` las levanta en Docker y `cargo test -p rowly-server-tests -- --ignored --test-threads=1` corre las pruebas; ver `tools/test-dbs/README.es.md`.
 
+`tools/test-dbs/lines.json` y `tools/test-dbs/lines.sh` comprueban los límites de las líneas de versión. El comando completo y sus límites actuales están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). Hoy la suite real no corre completa por cada versión exacta ni en CI; informa las versiones probadas en el PR y no anuncia una versión como verificada sin toda la matriz aplicable.
+
+Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `app/src/lib/engines/vendorSupport.json` y actualiza la tabla de [SQL_ENGINE.es.md, §5](SQL_ENGINE.es.md#5-líneas-de-versión) con la misma evidencia.
+
 ## Agregar un motor de base de datos
 
-Todo lo que cambia de un motor a otro vive en el enum `Dialect` de `crates/engine/src/lib.rs` y en el perfil del motor en `app/src/lib/engines/`. Ningún motor usa lo de otro por defecto, así que si falta algo, la compilación falla y te dice qué.
+Sigue [SQL_ENGINE.es.md, §12](SQL_ENGINE.es.md#12-agregar-un-motor-paso-a-paso) para separar **motor**, **driver**, **línea** y **versión exacta**. Estas son las rutas del código actual; el compilador señala parte de las decisiones pendientes, y la matriz S/A/G/D detecta las restantes.
 
-1. **Driver.** Crea `crates/drivers/<motor>`, implementa `DbConnector` de `khipu-driver-core` y agrega el crate al workspace. Un motor que habla el protocolo de otro ya soportado (MariaDB y MySQL) reutiliza su driver.
+1. **Driver.** Si necesita protocolo propio, crea `crates/drivers/<motor>`, implementa `DbConnector` de `khipu-driver-core` y agrega el crate al workspace. Si habla el protocolo de otro motor soportado, reutiliza su driver después de probar tipos, TLS e introspección.
 2. **Rust.** Agrega el motor a `DatabaseKind` en `app/src-tauri/src/drivers.rs`, que elige su driver, y a `Dialect` y su lista `ALL` en `crates/engine/src/lib.rs`. El compilador marca cada decisión pendiente. El motor se llama igual en `DatabaseKind`, en `Dialect` y en `ConnectionDriver` del frontend.
 3. **Frontend.** Agrégalo a `app/src/lib/connections.ts` con su nombre, logo y puerto por defecto, y escribe su perfil en `app/src/lib/engines/<motor>.ts`.
-4. **Contrato.** Completa sus `FIXTURES` en `app/src/lib/engines/contract.test.ts`, decide su respuesta en cada caso `PerEngine` del contrato de `crates/engine/src/diagnostics.rs` (el compilador los marca) y ejecuta las dos suites de pruebas. Los casos comunes corren en el motor nuevo sin escribir nada.
+4. **Contrato.** Completa sus `FIXTURES` en `app/src/lib/engines/contract.test.ts`, decide su respuesta en cada caso `PerEngine` de `crates/engine/src/diagnostics.rs` y añade corpus y servidores exactos en `tests/sql/` y `tools/test-dbs/lines.json`. Revisa cada fila aplicable de `SQL_ENGINE.es.md` y documenta `N/A` con motivo.
 
-Con eso, el autocompletado, los JOIN por clave foránea, los diagnósticos, el pegado y los archivos grandes funcionan con el motor nuevo. Si `sqlparser` no tiene un dialecto para él, usa el más cercano, como MariaDB usa el de MySQL, y anota en `Dialect::unparsed_syntax` la sintaxis válida que ese parser rechaza, para que no se marque como error.
+Después corre la compuerta de motor de `SQL_ENGINE.es.md` en cada versión exacta que quieras anunciar y comprueba que los motores existentes siguen verdes. Un parser cercano, como el que MariaDB comparte con MySQL, solo es válido si las pruebas demuestran que no oculta SQL destructivo ni produce diagnósticos falsos; registra la sintaxis válida que no lee en `Dialect::unparsed_syntax`. Una integración sin matriz completa queda como experimental, no como soporte verificado.
 
 ## Publicar una versión
 
@@ -102,4 +108,4 @@ La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés 
 
 - Commits cortos en imperativo, en español o inglés.
 - Nada de abstracciones antes de necesitarlas. Si un motor necesita algo que `DbConnector` no cubre, plantéalo antes en un issue.
-- La documentación pública se escribe en inglés con una copia en español en `*.es.md`. Mantén las dos al día. Las notas de diseño de `docs/specs` y `docs/design` están en español.
+- La documentación pública se escribe en inglés con una copia en español en `*.es.md`. Mantén las dos al día. Las notas temporales de diseño están en español.

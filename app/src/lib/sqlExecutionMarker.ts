@@ -39,8 +39,8 @@ export interface ExecutionMarkerInput extends ExecutionPart {
   parts?: ExecutionPart[];
 }
 
-// Las partes van en un RangeSet (docs/specs/v0.2-documentos-grandes.md,
-// 15e): con 250 000 sentencias, mapearlas en cada tecla o marcar una no
+// Las partes van en un RangeSet: con 250 000 sentencias, mapearlas en cada
+// tecla o marcar una no
 // recorre ni copia las demas.
 class PartValue extends RangeValue {
   startSide = 1;

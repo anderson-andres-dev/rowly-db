@@ -3,8 +3,7 @@ import { Prec, type EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 
-// Cierre automatico de /* */, como en otros editores
-// (docs/specs/v0.3-comentarios.md, Parte 2):
+// Cierre automatico de /* */, como en otros editores:
 // - "/*" escribe "/*│*/";
 // - Enter entre "/*" y "*/" abre el bloque en tres lineas, con " * ";
 // - Enter en una linea " * " de un bloque sigue con " * ";

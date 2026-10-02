@@ -1,5 +1,5 @@
 //! Ajustes de WebKitGTK (el motor del WebView en Linux) antes de crear la
-//! ventana (docs/specs/v0.2-rendimiento.md, 21c).
+//! ventana.
 //!
 //! Con el driver propietario de NVIDIA, el renderizador DMA-BUF de
 //! WebKitGTK degrada el pintado con el uso (tirones al mover paneles, cada

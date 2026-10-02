@@ -5,8 +5,8 @@ import { executablePrefix } from "$lib/sqlComments";
 import { sqlLexical } from "$lib/sqlStatementIndex";
 import type { SqlLexical } from "$lib/sqlStatements";
 
-// Jerarquia tipografica dentro de los comentarios, siempre en su gris
-// (docs/specs/v0.3-comentarios.md, Parte 3): marcadores tenues; TODO, FIXME…,
+// Jerarquia tipografica dentro de los comentarios, siempre en su gris:
+// marcadores tenues; TODO, FIXME…,
 // etiquetas @ y **texto** en negrita; *texto* y _texto_ en cursiva; las
 // comillas de `texto`, tenues; en /*+ … */, el nombre de cada pista en
 // negrita. Solo lo visible, y nunca el codigo de /*! o /*M!.
