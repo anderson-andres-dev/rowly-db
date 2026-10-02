@@ -16,12 +16,13 @@
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
-  import { catalogTables, connection, isProduction } from "$lib/stores/connection";
+  import { catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
   import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
+  import { sqlTokens } from "$lib/sqlContext";
   import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
   import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
   import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
@@ -783,6 +784,20 @@
     return true;
   }
 
+  const CATALOG_DDL = new Set(["create", "drop", "alter", "rename", "comment"]);
+
+  async function refreshAfterDdl(sql: string, result: QueryExecutionResult, cancelled: boolean) {
+    if (cancelled || result.type === "error") return;
+    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
+    const first = sqlTokens(sql, lexical).find((token) => token.kind === "word");
+    if (!first || !CATALOG_DDL.has(first.text)) return;
+    try {
+      await refreshCatalog();
+    } catch (error) {
+      notifyError(error);
+    }
+  }
+
   // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
   // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
   // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
@@ -824,6 +839,7 @@
     applyExecuteQueryResponse(key, sql, response, paging);
     if (response.type === "completed") {
       selectTab(consoleId, response.result.type === "resultSet" ? key : "output");
+      await refreshAfterDdl(sql, response.result, cancelled);
     }
   }
 
@@ -1209,18 +1225,21 @@
     // Con las reglas del motor: las mismas con que el editor marca cada
     // sentencia del script.
     const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    // Lo que se ejecuta (y queda en la Salida y el historial) es la consulta
-    // con los valores de sus parametros.
+    // Los parametros se reemplazan antes de dividir el script.
     const sql = await fillParameters(requested, lexical);
     if (sql === null || !beginQueryExecution(consoleId)) return;
     // Consulta nueva: arranca sin el orden de los encabezados.
     setQuerySort(consoleId, []);
     const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
+    if (statements.length === 0) {
+      stopQueryExecution(consoleId);
+      return;
+    }
     if (statements.length > 1) {
       await startScript(consoleId, sql, statements);
       return;
     }
-    await runQuery(consoleId, sql, null, firstPage(consoleId), false, true);
+    await runQuery(consoleId, statements[0], null, firstPage(consoleId), false, true);
     dropUnpinnedResults(consoleId);
   }
 
@@ -1326,6 +1345,7 @@
           ? $t("workspace.output.cancelled")
           : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
       });
+      await refreshAfterDdl(statement, result, cancelled);
 
       const stopped = result.type === "error" || cancelled;
       if (stopped || index === statements.length - 1) {

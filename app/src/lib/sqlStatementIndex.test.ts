@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { splitStatements, statementAt, type SqlLexical } from "./sqlStatements";
 import { ENGINES, standardSql } from "./engines";
+import mysqlFixture from "../../../crates/engine/tests/corpus/mixed/mysql.json";
 import {
   statementIndexComplete,
   statementIndexField,
@@ -74,9 +75,38 @@ const PIECES = [
   ")",
   ",",
   "SELECT 2",
+  "CREATE PROCEDURE p() ",
+  "CREATE FUNCTION f() RETURNS int ",
+  "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW ",
+  "BEGIN ",
+  "BEGIN ATOMIC ",
+  "END",
+  "END;",
+  "END IF;",
+  "CASE WHEN a THEN begin ELSE 0 END",
+  "IF a THEN SELECT 1; END IF;",
+  "DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END;",
+  "lbl: LOOP LEAVE lbl; END LOOP lbl;",
+  "RETURN 1",
+  "AS $$ BEGIN SELECT 1; ",
+  "$$ LANGUAGE sql",
+  "DELIMITER $$\n",
+  "DELIMITER ;\n",
+  "$$",
 ];
 
 describe("indice de sentencias", () => {
+  it("conserva DELIMITER y rutinas al editar antes, dentro y despues", () => {
+    lexical = ENGINES.mysql.lexical;
+    let state = create(mysqlFixture.sql);
+    expect(indexed(state)).toEqual(split(state.doc.toString()));
+    for (const needle of ["SELECT @total", "DECLARE v_clie", "CALL core.sp"]) {
+      const at = state.doc.toString().indexOf(needle);
+      state = state.update({ changes: { from: at, insert: " " } }).state;
+      expect(indexed(state)).toEqual(split(state.doc.toString()));
+    }
+  });
+
   it.each(LEXICALS)("coincide con el escaneo completo tras ediciones al azar (%s)", (_name, rules) => {
     lexical = rules;
     const next = random(7);

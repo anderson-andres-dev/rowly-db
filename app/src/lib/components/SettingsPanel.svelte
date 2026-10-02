@@ -19,10 +19,13 @@
     setAutoUppercaseKeywords,
     setFormatterAlignColumns,
     setFormatterLineWidth,
+    setIndentSize,
+    setIndentStyle,
     setTabNavigatesCompletion,
     setTableAliases,
     type TableAliasMode,
   } from "$lib/stores/editorSettings";
+  import type { IndentSize, IndentStyle } from "$lib/sqlIndentationConfig";
   import { GRID_ROW_STYLES, gridSettings, setGridRowStyle } from "$lib/stores/gridSettings";
 
   // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
@@ -106,6 +109,11 @@
       label: $t(`settings.editor.tableAliases.${mode}`),
     })),
   );
+  const indentStyleOptions = $derived([
+    { value: "spaces", label: $t("settings.editor.indent.spaces") },
+    { value: "tabs", label: $t("settings.editor.indent.tabs") },
+  ]);
+  const indentSizeOptions = [2, 4, 8].map((size) => ({ value: String(size), label: String(size) }));
 
   // --- Atajos -------------------------------------------------------------
   // Agrupados como en el registro de comandos (lib/commands.ts). Dos
@@ -352,6 +360,24 @@
         {:else if activeSection === "editor"}
           <h3 class="set-caption">{$t("settings.editor.format")}</h3>
           <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.type")}</span></div>
+              <Select
+                value={$editorSettings.indentStyle}
+                options={indentStyleOptions}
+                label={$t("settings.editor.indent.type")}
+                onchange={(value) => setIndentStyle(value as IndentStyle)}
+              />
+            </div>
+            <div class="set-row">
+              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.size")}</span></div>
+              <Select
+                value={String($editorSettings.indentSize)}
+                options={indentSizeOptions}
+                label={$t("settings.editor.indent.size")}
+                onchange={(value) => setIndentSize(Number(value) as IndentSize)}
+              />
+            </div>
             <div class="set-row">
               <div class="set-text">
                 <span class="set-label">{$t("settings.editor.lineWidth")}</span>

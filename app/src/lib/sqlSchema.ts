@@ -6,7 +6,7 @@ import {
   type SQLNamespace,
 } from "@codemirror/lang-sql";
 import { foldNodeProp } from "@codemirror/language";
-import type { CatalogTable, ForeignKey } from "$lib/types";
+import type { CatalogTable, ForeignKey, RelationKind, SchemaObjects } from "$lib/types";
 import { boostFor, recordUsage } from "$lib/usageStats";
 import { classifyContext, sqlTokens } from "$lib/sqlContext";
 import { statementTextAt } from "$lib/sqlStatementIndex";
@@ -16,6 +16,7 @@ import { translate, type MessageKey } from "$lib/i18n";
 import { completionPolicy, type CompletionPolicy } from "$lib/sqlCompletionPolicy";
 import { standardSql, type SqlProfile } from "$lib/engines";
 import type { SqlLexical } from "$lib/sqlStatements";
+import { buildCatalogCompletions, catalogPosition, prefixStartForNames } from "$lib/sqlCatalogCompletions";
 
 // @codemirror/lang-sql pliega cada "Statement" de nivel superior desde
 // min(inicio + 100, fin de su primera linea) hasta su fin. Con una consulta
@@ -85,11 +86,11 @@ function buildFkIndex(tables: CatalogTable[]): FkIndex {
 function applyAndRecord(key: string, text: string): NonNullable<Completion["apply"]> {
   return (view, _completion, from, to) => {
     recordUsage(key);
-    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
   };
 }
 
-// Traduce el catalogo (tablas + columnas) al SQLNamespace que espera
+// Traduce relaciones y columnas al SQLNamespace que espera
 // @codemirror/lang-sql, para que el completado de tablas/columnas y la
 // resolucion de "alias.columna" los resuelva la libreria en vez de
 // reinventarlo en Rust. Tambien arma el indice de FK (ver buildFkIndex) que
@@ -110,12 +111,12 @@ function applyAndRecord(key: string, text: string): NonNullable<Completion["appl
 // sqlCompletionPolicy.ts, consumidos aca mismo en buildCompletionSource.
 //
 // `defaultSchema`: el de la conexion (current_schema: search_path en
-// Postgres, la base elegida en MySQL). Sus tablas van sin prefijo; las de los
-// demas schemas, calificadas. `engine` decide cuando un nombre necesita
+// Postgres, la base elegida en MySQL). Sus relaciones van sin prefijo; las de
+// los demas schemas, calificadas. `engine` decide cuando un nombre necesita
 // comillas al insertarlo.
 export function buildSqlSchema(
   tables: CatalogTable[],
-  options: { defaultSchema?: string; engine?: SqlProfile } = {},
+  options: { defaultSchema?: string; engine?: SqlProfile; explorerSchemas?: readonly SchemaObjects[]; availableSchemas?: readonly string[] } = {},
 ): {
   schema: SQLNamespace;
   defaultSchema?: string;
@@ -128,7 +129,37 @@ export function buildSqlSchema(
   const byKey = new Map<string, TableEntry>();
   const byName = new Map<string, TableEntry[]>();
 
-  for (const table of tables) {
+  for (const name of options.availableSchemas ?? []) {
+    schemaNames.add(name);
+    schema[name] ??= {};
+  }
+
+  const kinds = new Map((options.explorerSchemas ?? []).flatMap((objects) =>
+    objects.tables.map((relation) => [tableKey(objects.schema, relation.name), relation.kind] as const),
+  ));
+  const relations: (CatalogTable & { kind: RelationKind })[] = tables.map((table) => ({
+    ...table,
+    kind: kinds.get(tableKey(table.schema, table.name)) ?? "table",
+  }));
+  const known = new Set(tables.map((table) => tableKey(table.schema, table.name)));
+  for (const objects of options.explorerSchemas ?? []) {
+    schemaNames.add(objects.schema);
+    schema[objects.schema] ??= {};
+    for (const relation of objects.tables) {
+      const key = tableKey(objects.schema, relation.name);
+      if (known.has(key)) continue;
+      known.add(key);
+      relations.push({
+        schema: objects.schema,
+        name: relation.name,
+        kind: relation.kind,
+        columns: relation.columns.map((column) => ({ ...column, comment: column.comment ?? undefined })),
+        foreignKeys: relation.foreignKeys.map((fk) => ({ column: fk.column, referencedTable: fk.referencedTable, referencedColumn: fk.referencedColumn })),
+      });
+    }
+  }
+
+  for (const table of relations) {
     schemaNames.add(table.schema);
     schema[table.schema] ??= {};
     // "type" distingue PK/FK (icono propio en el tooltip de autocompletado,
@@ -138,7 +169,7 @@ export function buildSqlSchema(
     schema[table.schema][table.name] = {
       self: {
         label: table.name,
-        type: "table",
+        type: table.kind,
         detail: table.schema,
         boost: boostFor(`table:${table.name}`),
         apply: applyAndRecord(`table:${table.name}`, engine.identifier(table.name)),
@@ -151,7 +182,7 @@ export function buildSqlSchema(
         apply: applyAndRecord(`column:${table.name}.${column.name}`, engine.identifier(column.name)),
       })),
     };
-    const entry: TableEntry = { schema: table.schema, name: table.name, columns: schema[table.schema][table.name].children };
+    const entry: TableEntry = { schema: table.schema, name: table.name, kind: table.kind, columns: schema[table.schema][table.name].children };
     byKey.set(tableKey(table.schema, table.name), entry);
     byName.set(table.name.toLowerCase(), [...(byName.get(table.name.toLowerCase()) ?? []), entry]);
   }
@@ -170,6 +201,7 @@ export function buildSqlSchema(
 interface TableEntry {
   schema: string;
   name: string;
+  kind: RelationKind;
   columns: Completion[];
 }
 
@@ -407,6 +439,7 @@ function insertText(key: string): NonNullable<Completion["apply"]> {
     view.dispatch({
       changes: { from, to, insert: completion.label },
       selection: { anchor: from + completion.label.length },
+      userEvent: "input.complete",
     });
   };
 }
@@ -516,7 +549,7 @@ function withAlias(
       const after = ALIAS_AFTER.exec(view.state.sliceDoc(to, Math.min(view.state.doc.length, to + 80)));
       const hasAlias = !!after && !NOT_ALIAS_WORDS.has(after[1].toLowerCase());
       const insert = hasAlias ? text : `${text} ${alias}`;
-      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } });
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: "input.complete" });
     },
   };
 }
@@ -621,7 +654,7 @@ const COLUMN_TYPES = new Set(["column", "column-pk", "column-fk"]);
 
 function insertAs(text: string): NonNullable<Completion["apply"]> {
   return (view, _completion, from, to) => {
-    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+    view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
   };
 }
 
@@ -635,7 +668,7 @@ function otherSchemaTables(env: SmartEnv, info: StatementInfo): Completion[] {
     const text = writtenName(env, entry.name, entry.schema);
     const option: Completion = {
       label: `${entry.schema}.${entry.name}`,
-      type: "table",
+      type: entry.kind,
       detail: entry.schema,
       boost: boostFor(`table:${entry.name}`) - 2,
       apply: insertAs(text),
@@ -655,8 +688,8 @@ function afterCompleteCondition(text: string, wordFrom: number): boolean {
   return !/\b(on|and|or|not|in|is|like|between|when|then|else)\s+$/i.test(before);
 }
 
-// Tablas/columnas del catalogo propio (buildSqlSchema) solo llevan type
-// "table"/"column"/"column-pk"/"column-fk"; "type" (nombre de schema
+// Relaciones/columnas del catalogo propio llevan un type por clase de
+// objeto; "type" (nombre de schema
 // intermedio) y "constant" (alias conocido) los agrega la propia libreria en
 // completeFromSchema.
 // Filtrar por esto es lo que hace que "SELECT * fro|"/"se|" dejen de
@@ -668,7 +701,7 @@ function filterSchemaResult(result: CompletionResult | null, policy: CompletionP
   if (policy.schemaMode === "none") return null;
 
   const options = result.options.filter((option) => {
-    if (option.type === "table" || option.type === "type") return policy.schemaMode === "relations";
+    if (option.type === "table" || option.type === "view" || option.type === "materializedView" || option.type === "schema" || option.type === "type") return policy.schemaMode === "relations";
     // "constant" (alias) y todo lo demas (columnas) son utiles para armar
     // una expresion ("alias.columna"), no para nombrar una relacion.
     return policy.schemaMode === "expressions";
@@ -803,12 +836,16 @@ export function buildCompletionSource(options: {
   fkIndex: FkIndex;
   tableIndex?: TableIndex;
   tableAliases?: TableAliasMode;
+  catalogCompletions?: ReturnType<typeof buildCatalogCompletions>;
 }): CompletionSource {
   const { dialect, engine, schema, defaultSchema, defaultTable, fkIndex } = options;
   const schemaSource = schemaCompletionSource({ dialect, schema, defaultSchema, defaultTable });
+  const schemaNames = new Set(Object.keys(schema as Record<string, unknown>));
   // Las keywords se muestran e insertan en mayusculas. Identificadores del
   // catalogo conservan exactamente el nombre que entrega la base de datos.
   const keywordSource = keywordCompletionSource(dialect, true, buildKeywordCompletion);
+  const catalog = options.catalogCompletions ?? buildCatalogCompletions([], engine, defaultSchema);
+  const tablePrefixStart = prefixStartForNames([...(options.tableIndex?.byKey.values() ?? [])].map((entry) => entry.name));
   const env: SmartEnv = {
     lexical: engine.lexical,
     nameMatches: engine.nameMatches,
@@ -829,19 +866,45 @@ export function buildCompletionSource(options: {
     const clauseContext = classifyContext(current.text, current.offset, engine.lexical);
     const policy = completionPolicy(clauseContext, engine);
     const word = context.matchBefore(/\w*/);
-    const typing = !!word && (word.from < word.to || context.explicit);
+    const catalogStart = catalog.prefixStart(current.text, current.offset);
+    const baseWordFrom = current.offset - (context.pos - (word?.from ?? context.pos));
+    const wordFrom = Math.min(baseWordFrom, catalogStart, tablePrefixStart(current.text, current.offset));
+    const absoluteWordFrom = context.pos - (current.offset - wordFrom);
+    const typing = !!word && (absoluteWordFrom < context.pos || context.explicit);
     const smart = current.text.length <= MAX_SMART_STATEMENT && clauseContext.confidence !== "unknown";
-    const start = current.offset - (context.pos - (word?.from ?? context.pos));
+    const start = wordFrom;
     const info = smart && word ? statementInfo(current.text, { from: start, to: current.offset }, engine.lexical) : null;
+    const target = current.text.length <= MAX_SMART_STATEMENT
+      ? catalogPosition(current.text, start, engine, clauseContext.position)
+      : { position: "unknown" as const };
+    const relationQualifier = !!target.schema && !!info?.relations.some((relation) =>
+      engine.nameMatches(target.schema!, target.schemaQuoted ?? false, relation.alias ?? relation.table),
+    );
+    const schemaQualified = !!target.schema && !relationQualifier && catalog.hasSchema(target.schema, target.schemaQuoted);
+    // Tras "schema." en CALL o DDL de rutinas, la lista sale con solo el punto.
+    const routineAfterDot = schemaQualified && ["call", "procedure", "function", "routine"].includes(target.position);
+    const catalogResult = word && (typing || routineAfterDot) && current.text.length <= MAX_SMART_STATEMENT && clauseContext.lexical === "code" && clauseContext.position !== "statement-start" && clauseContext.position !== "alias" && clauseContext.position !== "select-tail" && clauseContext.position !== "relation-tail" && clauseContext.position !== "keyword-continuation"
+      ? catalog.complete(target.position, absoluteWordFrom, schemaQualified ? target.schema : undefined, target.schemaQuoted)
+      : null;
 
     // "alias.columna"/"schema.tabla" ya escritos: la libreria resuelve esto
     // mejor de lo que nosotros podriamos, no hay que filtrarlo.
-    if (clauseContext.qualified) {
+    if (clauseContext.qualified && !schemaQualified) {
       return schemaSource(context);
     }
 
-    const [schemaResultRaw, keywordResultRaw] = await Promise.all([schemaSource(context), keywordSource(context)]);
-    let schemaResult = filterSchemaResult(schemaResultRaw, policy);
+    const [rawSchema, keywordResultRaw] = await Promise.all([schemaSource(context), keywordSource(context)]);
+    const schemaResultRaw = rawSchema && {
+      ...rawSchema,
+      options: rawSchema.options.map((option) => option.type === "type" && schemaNames.has(option.label) ? { ...option, type: "schema" } : option),
+    };
+    const schemaMode = target.position === "relation" ? "relations" : target.position === "expression" || target.position === "function" ? "expressions" : target.position === "unknown" ? policy.schemaMode : "none";
+    let schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode });
+    if (schemaResult && target.position === "relation" && absoluteWordFrom < schemaResult.from) {
+      schemaResult = { ...schemaResult, from: absoluteWordFrom };
+    }
+    if (schemaQualified && target.position === "unknown") schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode: "relations" });
+    if (schemaQualified && target.position === "relation") schemaResult = filterSchemaResult(schemaResultRaw, { ...policy, schemaMode: "relations" });
     const extra: Completion[] = [];
     // La keyword JOIN sola, por encima de los JOIN completos.
     let joinFirst = false;
@@ -868,7 +931,7 @@ export function buildCompletionSource(options: {
           const result: CompletionResult = schemaResult;
           schemaResult = {
             ...result,
-            options: result.options.map((option) => (option.type === "table" ? withAlias(option, env, info) : option)),
+            options: result.options.map((option) => (["table", "view", "materializedView"].includes(option.type ?? "") ? withAlias(option, env, info) : option)),
           };
         }
       }
@@ -888,8 +951,20 @@ export function buildCompletionSource(options: {
     }
 
     const extraResult: CompletionResult | null = extra.length > 0 && word ? { from: word.from, options: extra } : null;
-    const withExtra = mergeCompatibleResults(schemaResult, extraResult);
-    let keywordResult = rankKeywordResult(keywordResultRaw, policy);
+    const withExtra = mergeCompatibleResults(mergeCompatibleResults(schemaResult, catalogResult), extraResult);
+    let keywordResult = schemaQualified ? null : rankKeywordResult(keywordResultRaw, policy);
+    // Tras CALL solo hay procedures; tras DROP|ALTER PROCEDURE|FUNCTION, ademas
+    // IF y EXISTS.
+    if (keywordResult && (target.position === "call" || target.position === "procedure" || target.position === "function" || target.position === "routine")) {
+      const keep = target.position === "call" ? /^$/ : /^(?:IF|EXISTS)$/i;
+      const options = keywordResult.options.filter((option) => keep.test(option.label));
+      keywordResult = options.length > 0 ? { ...keywordResult, options } : null;
+    }
+    if (keywordResult && catalogResult) {
+      const functions = new Set(catalogResult.options.filter((option) => option.type === "function").map((option) => option.label.toLowerCase()));
+      keywordResult = { ...keywordResult, options: keywordResult.options.filter((option) => !functions.has(option.label.toLowerCase())) };
+      if (keywordResult.options.length === 0) keywordResult = null;
+    }
     if (joinFirst && keywordResult) {
       const result: CompletionResult = keywordResult;
       keywordResult = {

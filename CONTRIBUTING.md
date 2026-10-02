@@ -60,6 +60,8 @@ They read the connection from these variables, where `<ENGINE>` is `MYSQL` or `P
 
 If one is missing, the test stops and tells you which. `EXPECT_TLS` is what the server should negotiate in automatic mode: `fallback` covers servers with TLS that rustls cannot negotiate, like MySQL 5.7. With `CA_CERT` set, the CA verification modes are tested too, and the certificate must include the test host.
 
+The guard, the statement splitter and the drivers are also tested together against real servers (MySQL, MariaDB and PostgreSQL with the Sakila / Pagila sample databases). `tools/test-dbs/up.sh` starts them in Docker and `cargo test -p rowly-server-tests -- --ignored --test-threads=1` runs the tests; see `tools/test-dbs/README.md`.
+
 ## Adding a database engine
 
 Everything that changes from one engine to another lives in the `Dialect` enum in `crates/engine/src/lib.rs` and in the engine profile in `app/src/lib/engines/`. Nothing falls back to another engine, so if something is missing, the build fails and tells you what.

@@ -6,6 +6,7 @@ members = [
     "crates/driver-core",
     "crates/drivers/mysql",
     "crates/drivers/postgres",
+    "crates/server-tests",
     "app/src-tauri",
 ]
 

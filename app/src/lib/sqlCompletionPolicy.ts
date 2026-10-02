@@ -8,7 +8,7 @@ import type { ClauseContext } from "./sqlContext";
 import type { SqlProfile } from "./engines";
 
 export interface CompletionPolicy {
-  /** Que tan permisivo es el completado de catalogo (tablas/columnas). */
+  /** Que tan permisivo es el completado de relaciones y columnas. */
   schemaMode: "none" | "relations" | "expressions" | "fallback";
   /** undefined = sin restriccion (vocabulario completo del dialecto). */
   allowedKeywords?: ReadonlySet<string>;

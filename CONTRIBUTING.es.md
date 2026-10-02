@@ -60,6 +60,8 @@ Leen la conexión de estas variables, donde `<MOTOR>` es `MYSQL` o `POSTGRES`:
 
 Si falta alguna, la prueba se detiene y te dice cuál. `EXPECT_TLS` es lo que el servidor debería negociar en modo automático: `fallback` es para servidores con un TLS que rustls no puede negociar, como MySQL 5.7. Con `CA_CERT` también se prueban los modos que verifican la CA, y el certificado tiene que incluir el host de la prueba.
 
+El guard, el divisor de sentencias y los drivers también se prueban juntos contra servidores reales (MySQL, MariaDB y PostgreSQL con las bases de ejemplo Sakila / Pagila). `tools/test-dbs/up.sh` las levanta en Docker y `cargo test -p rowly-server-tests -- --ignored --test-threads=1` corre las pruebas; ver `tools/test-dbs/README.es.md`.
+
 ## Agregar un motor de base de datos
 
 Todo lo que cambia de un motor a otro vive en el enum `Dialect` de `crates/engine/src/lib.rs` y en el perfil del motor en `app/src/lib/engines/`. Ningún motor usa lo de otro por defecto, así que si falta algo, la compilación falla y te dice qué.

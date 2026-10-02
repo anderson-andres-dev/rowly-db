@@ -118,9 +118,21 @@ pub fn analyze_statement(
     dialect: Dialect,
     catalog: Option<&CatalogView>,
 ) -> Vec<Diagnostic> {
+    if let Some(found) = mysql_routine_errors(sql, dialect) {
+        return found;
+    }
     // Lo que el parser rechaza o lee mal no es del usuario.
     if has_unparsed_syntax(sql, dialect) {
         return Vec::new();
+    }
+    // Los cuerpos de PostgreSQL pueden ser cadenas con otro lenguaje.
+    if postgres_opaque_definition(sql, dialect) {
+        return Vec::new();
+    }
+    if matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+        if let Some(found) = mysql_select_into_errors(sql, dialect, catalog) {
+            return found;
+        }
     }
     let sqlparser_dialect = dialect.as_sqlparser_dialect();
     let mut copy = Repaired::new(sql);
@@ -180,6 +192,758 @@ pub fn analyze_statement(
     }
     found.sort_by_key(|diagnostic| diagnostic.start);
     found
+}
+
+/// Lee una rutina MySQL completa. Cada fragmento conserva su offset original.
+fn mysql_routine_errors(sql: &str, dialect: Dialect) -> Option<Vec<Diagnostic>> {
+    if !matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+        return None;
+    }
+    let all = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize_with_location()
+        .ok()?;
+    let tokens: Vec<&TokenWithSpan> = all
+        .iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let create = tokens
+        .iter()
+        .position(|token| keyword_text(token) == "CREATE")?;
+    if create > 3
+        || tokens[..create]
+            .iter()
+            .any(|token| !matches!(token.token, Token::Whitespace(_)))
+    {
+        return None;
+    }
+    let kind = (create + 1..tokens.len().min(create + 20)).find(|&i| {
+        matches!(
+            keyword_text(tokens[i]).as_str(),
+            "PROCEDURE"
+                | "FUNCTION"
+                | "TRIGGER"
+                | "EVENT"
+                | "TABLE"
+                | "VIEW"
+                | "INDEX"
+                | "DATABASE"
+                | "SCHEMA"
+                | "USER"
+        )
+    })?;
+    let name = keyword_text(tokens[kind]);
+    if !matches!(
+        name.as_str(),
+        "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
+    ) {
+        return None;
+    }
+    let mut found = Vec::new();
+    let body = if matches!(name.as_str(), "PROCEDURE" | "FUNCTION") {
+        let open = (kind + 1..tokens.len()).find(|&i| tokens[i].token == Token::LParen)?;
+        let mut depth = 0usize;
+        let mut close = None;
+        for (i, token) in tokens.iter().enumerate().skip(open) {
+            match token.token {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let close = match close {
+            Some(i) => i,
+            None => {
+                found.push(at_token(
+                    tokens[open],
+                    DiagnosticMessage::key("diagnostic.unclosedParen"),
+                ));
+                return Some(found);
+            }
+        };
+        let mut start = open + 1;
+        depth = 0;
+        for i in open + 1..=close {
+            match tokens[i].token {
+                Token::LParen => depth += 1,
+                Token::RParen if depth > 0 => depth -= 1,
+                _ => {}
+            }
+            if (tokens[i].token == Token::Comma && depth == 0) || i == close {
+                if start == i && i != close || i == close && start == i && i > open + 1 {
+                    let at = if i == close { tokens[i - 1] } else { tokens[i] };
+                    found.push(at_token(
+                        at,
+                        DiagnosticMessage::key("diagnostic.extraComma"),
+                    ));
+                } else if start < i {
+                    validate_mysql_parameter(&tokens[start..i], &mut found);
+                }
+                start = i + 1;
+            }
+        }
+        (close + 1..tokens.len())
+            .find(|&i| matches!(keyword_text(tokens[i]).as_str(), "BEGIN" | "RETURN"))
+    } else if name == "TRIGGER" {
+        (kind + 1..tokens.len()).find(|&i| {
+            matches!(
+                keyword_text(tokens[i]).as_str(),
+                "BEGIN" | "SET" | "INSERT" | "UPDATE" | "DELETE" | "IF" | "REPLACE"
+            ) && (keyword_text(tokens[i]) == "BEGIN"
+                || (i > kind + 1 && keyword_text(tokens[i - 1]) == "ROW"))
+        })
+    } else {
+        (kind + 1..tokens.len())
+            .find(|&i| keyword_text(tokens[i]) == "DO")
+            .map(|i| i + 1)
+    };
+    if let Some(body) = body.filter(|&body| body < tokens.len()) {
+        let from = byte_offset(sql, tokens[body].span.start)?;
+        for diagnostic in routine_body_errors(&sql[from..], dialect) {
+            found.push(shifted(diagnostic, position_at(sql, from)));
+        }
+    }
+    found.sort_by_key(|d| d.start);
+    Some(found)
+}
+
+fn validate_mysql_parameter(tokens: &[&TokenWithSpan], found: &mut Vec<Diagnostic>) {
+    let mut i = 0;
+    if matches!(keyword_text(tokens[0]).as_str(), "IN" | "OUT" | "INOUT") {
+        i += 1;
+    }
+    if i >= tokens.len() {
+        return;
+    }
+    i += 1; // Nombre del parametro.
+    validate_mysql_type(&tokens[i..], tokens.last().copied().unwrap(), found);
+}
+
+const MYSQL_TYPES: &[&str] = &[
+    "BIT",
+    "BOOL",
+    "BOOLEAN",
+    "TINYINT",
+    "SMALLINT",
+    "MEDIUMINT",
+    "INT",
+    "INTEGER",
+    "INT1",
+    "INT2",
+    "INT3",
+    "INT4",
+    "INT8",
+    "MIDDLEINT",
+    "BIGINT",
+    "DECIMAL",
+    "DEC",
+    "NUMERIC",
+    "FIXED",
+    "FLOAT",
+    "DOUBLE",
+    "REAL",
+    "DATE",
+    "TIME",
+    "DATETIME",
+    "TIMESTAMP",
+    "YEAR",
+    "CHAR",
+    "CHARACTER",
+    "NATIONAL",
+    "LONG",
+    "VARCHAR",
+    "NCHAR",
+    "NVARCHAR",
+    "BINARY",
+    "VARBINARY",
+    "TINYTEXT",
+    "TEXT",
+    "MEDIUMTEXT",
+    "LONGTEXT",
+    "TINYBLOB",
+    "BLOB",
+    "MEDIUMBLOB",
+    "LONGBLOB",
+    "ENUM",
+    "SET",
+    "JSON",
+    "GEOMETRY",
+    "POINT",
+    "LINESTRING",
+    "POLYGON",
+    "MULTIPOINT",
+    "MULTILINESTRING",
+    "MULTIPOLYGON",
+    "GEOMETRYCOLLECTION",
+    "SERIAL",
+    "UUID",
+    "INET4",
+    "INET6",
+];
+
+fn validate_mysql_type(
+    tokens: &[&TokenWithSpan],
+    previous: &TokenWithSpan,
+    found: &mut Vec<Diagnostic>,
+) {
+    let Some(first) = tokens.first() else {
+        found.push(routine_incomplete(previous));
+        return;
+    };
+    // MariaDB: `TYPE OF t.a` y `ROW TYPE OF t` toman el tipo de una columna.
+    if matches!(keyword_text(first).as_str(), "TYPE" | "ROW") {
+        return;
+    }
+    if !MYSQL_TYPES.contains(&keyword_text(first).as_str()) {
+        let word = keyword_text(first);
+        if let Some(suggestion) = closest_keyword(&word, MYSQL_TYPES) {
+            let (start, end) = span_of(first);
+            found.push(typo(start, end, &word, suggestion));
+        } else {
+            found.push(at_token(
+                first,
+                DiagnosticMessage::key("diagnostic.unexpected").with("found", word),
+            ));
+        }
+        return;
+    }
+    if let Some(open) = tokens.iter().position(|t| t.token == Token::LParen) {
+        let mut depth = 0usize;
+        for (i, token) in tokens.iter().enumerate().skip(open) {
+            match token.token {
+                Token::LParen => depth += 1,
+                Token::RParen => depth = depth.saturating_sub(1),
+                Token::Comma
+                    if depth == 1
+                        && tokens
+                            .get(i + 1)
+                            .is_some_and(|next| next.token == Token::RParen) =>
+                {
+                    found.push(at_token(
+                        token,
+                        DiagnosticMessage::key("diagnostic.extraComma"),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        if depth > 0 {
+            found.push(at_token(
+                tokens[open],
+                DiagnosticMessage::key("diagnostic.unclosedParen"),
+            ));
+        }
+    }
+}
+
+/// El punto y coma separa instrucciones tambien dentro de bloques anidados.
+/// Los prefijos de control se retiran antes de entregar SQL ordinario al parser.
+fn routine_body_errors(sql: &str, dialect: Dialect) -> Vec<Diagnostic> {
+    let all = match Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql).tokenize_with_location() {
+        Ok(all) => all,
+        Err(_) => return Vec::new(),
+    };
+    let tokens: Vec<&TokenWithSpan> = all
+        .iter()
+        .filter(|t| !matches!(t.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    let mut found = Vec::new();
+    let mut start = 0;
+    for i in 0..=tokens.len() {
+        if i == tokens.len() || tokens[i].token == Token::SemiColon {
+            if start < i {
+                inspect_routine_chunk(sql, &tokens[start..i], dialect, &mut found);
+            }
+            start = i + 1;
+        }
+    }
+    routine_block_errors(&tokens, &mut found);
+    found
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Open {
+    Block,
+    If,
+    Case,
+    CaseExpr,
+    While,
+    Loop,
+    Repeat,
+}
+
+impl Open {
+    fn closer(self) -> &'static str {
+        match self {
+            Open::Block => "END",
+            Open::If => "END IF",
+            Open::Case | Open::CaseExpr => "END CASE",
+            Open::While => "END WHILE",
+            Open::Loop => "END LOOP",
+            Open::Repeat => "END REPEAT",
+        }
+    }
+}
+
+// Un END que no cierra lo que esta abierto (IF ... END; en vez de END IF).
+// BEGIN y END solo cuentan al inicio de una sentencia: `begin` y `end` pueden
+// ser alias o columnas, y un CASE de expresion tambien cierra con END. Ante
+// cualquier duda no se marca nada.
+fn routine_block_errors(tokens: &[&TokenWithSpan], found: &mut Vec<Diagnostic>) {
+    let plain = |index: usize| -> String {
+        match tokens.get(index).map(|token| &token.token) {
+            Some(Token::Word(word)) if word.quote_style.is_none() => word.value.to_uppercase(),
+            _ => String::new(),
+        }
+    };
+    let mut stack: Vec<Open> = Vec::new();
+    let mut start = true;
+    let mut declaring = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let dotted = index > 0 && tokens[index - 1].token == Token::Period;
+        let word = if dotted { String::new() } else { plain(index) };
+        if start
+            && !word.is_empty()
+            && tokens.get(index + 1).map(|t| &t.token) == Some(&Token::Colon)
+        {
+            index += 2;
+            continue;
+        }
+        if tokens[index].token == Token::SemiColon {
+            start = true;
+            declaring = false;
+            index += 1;
+            continue;
+        }
+        let top = stack.last().copied();
+        match word.as_str() {
+            "BEGIN" if start => stack.push(Open::Block),
+            "IF" if start => {
+                stack.push(Open::If);
+                start = false;
+            }
+            "CASE" => {
+                stack.push(if start { Open::Case } else { Open::CaseExpr });
+                start = false;
+            }
+            "WHILE" if start => {
+                stack.push(Open::While);
+                start = false;
+            }
+            "LOOP" if start => stack.push(Open::Loop),
+            "REPEAT" if start => stack.push(Open::Repeat),
+            "THEN" | "ELSE" => start = matches!(top, Some(Open::If | Open::Case)),
+            "DO" if top == Some(Open::While) => start = true,
+            "UNTIL" if top == Some(Open::Repeat) => start = false,
+            "DECLARE" if start => {
+                declaring = true;
+                start = false;
+            }
+            "HANDLER"
+                if declaring
+                    && index > 0
+                    && matches!(plain(index - 1).as_str(), "CONTINUE" | "EXIT" | "UNDO") =>
+            {
+                let mut at = index + 2;
+                loop {
+                    match plain(at).as_str() {
+                        "SQLSTATE" => {
+                            at += 1;
+                            if plain(at) == "VALUE" {
+                                at += 1;
+                            }
+                            at += 1;
+                        }
+                        "NOT" => at += 2,
+                        _ => at += 1,
+                    }
+                    if tokens.get(at).map(|t| &t.token) == Some(&Token::Comma) {
+                        at += 1;
+                    } else {
+                        break;
+                    }
+                }
+                index = at;
+                start = true;
+                declaring = false;
+                continue;
+            }
+            "END" => {
+                let named = match plain(index + 1).as_str() {
+                    "IF" => Some(Open::If),
+                    "WHILE" => Some(Open::While),
+                    "LOOP" => Some(Open::Loop),
+                    "REPEAT" => Some(Open::Repeat),
+                    "CASE" => Some(Open::Case),
+                    _ => None,
+                };
+                if top == Some(Open::CaseExpr) {
+                    stack.pop();
+                } else if named.is_some() && named == top {
+                    stack.pop();
+                    index += 1;
+                } else if start && top == Some(Open::Block) {
+                    stack.pop();
+                } else if let (Some(open), true) = (top, start || named.is_some()) {
+                    let wrote = match plain(index + 1).as_str() {
+                        "IF" | "WHILE" | "LOOP" | "REPEAT" | "CASE" => {
+                            format!("END {}", plain(index + 1))
+                        }
+                        _ => "END".to_string(),
+                    };
+                    found.push(at_token(
+                        tokens[index],
+                        DiagnosticMessage::key("diagnostic.expected")
+                            .with("expected", open.closer())
+                            .with("found", wrote),
+                    ));
+                    stack.pop();
+                    if named.is_some() {
+                        index += 1;
+                    }
+                }
+                start = false;
+            }
+            _ => start = false,
+        }
+        index += 1;
+    }
+}
+
+fn inspect_routine_chunk(
+    sql: &str,
+    tokens: &[&TokenWithSpan],
+    dialect: Dialect,
+    found: &mut Vec<Diagnostic>,
+) {
+    let mut start = 0;
+    while start < tokens.len() {
+        if start + 1 < tokens.len() && tokens[start + 1].token == Token::Colon {
+            start += 2;
+            continue;
+        }
+        let word = keyword_text(tokens[start]);
+        match word.as_str() {
+            "BEGIN" | "LOOP" | "REPEAT" | "ELSE" => {
+                start += 1;
+                continue;
+            }
+            "END" | "UNTIL" => return,
+            "IF" | "ELSEIF" | "WHILE" | "WHEN" => {
+                let terminal = if word == "WHILE" { "DO" } else { "THEN" };
+                let Some(end) =
+                    (start + 1..tokens.len()).find(|&i| keyword_text(tokens[i]) == terminal)
+                else {
+                    // Solo IF/WHILE al inicio son sentencias de control seguras.
+                    if matches!(word.as_str(), "IF" | "ELSEIF" | "WHILE") {
+                        found.push(routine_incomplete(tokens[start]));
+                    }
+                    return;
+                };
+                if end == start + 1 {
+                    found.push(routine_incomplete(tokens[start]));
+                }
+                validate_control_condition(&tokens[start + 1..end], found);
+                start = end + 1;
+            }
+            "CASE" => {
+                if let Some(end) =
+                    (start + 1..tokens.len()).find(|&i| keyword_text(tokens[i]) == "THEN")
+                {
+                    start = end + 1;
+                } else {
+                    return;
+                }
+            }
+            "DECLARE" => {
+                validate_mysql_declare(sql, &tokens[start..], dialect, found);
+                return;
+            }
+            "SIGNAL" | "RESIGNAL" | "GET" | "CALL" | "LEAVE" | "ITERATE" | "RETURN" | "OPEN"
+            | "FETCH" | "CLOSE" | "PREPARE" | "EXECUTE" | "DEALLOCATE" => return,
+            "SET"
+                if tokens
+                    .get(start + 1)
+                    .is_some_and(|t| t.token == Token::AtSign) =>
+            {
+                return;
+            }
+            "SET" if tokens.iter().any(|t| t.token == Token::Assignment) => return,
+            "SET" | "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "REPLACE" | "WITH" => {
+                let from = byte_offset(sql, tokens[start].span.start).unwrap_or(0);
+                let to = byte_offset(sql, tokens.last().unwrap().span.end).unwrap_or(sql.len());
+                for diagnostic in analyze_statement(&sql[from..to], dialect, None) {
+                    found.push(shifted(diagnostic, position_at(sql, from)));
+                }
+                return;
+            }
+            _ => {
+                // Un verbo que no existe pero se parece a uno que si: `SELEC 1`.
+                if let Token::Word(typed) = &tokens[start].token {
+                    if typed.quote_style.is_none()
+                        && typed.value.chars().all(|c| c.is_ascii_alphabetic())
+                    {
+                        if let Some(suggestion) =
+                            closest_keyword(&typed.value, dialect.statement_starters())
+                        {
+                            let (from, to) = span_of(tokens[start]);
+                            found.push(typo(from, to, &typed.value, suggestion));
+                        }
+                    }
+                }
+                return;
+            }
+        }
+    }
+}
+
+fn validate_control_condition(tokens: &[&TokenWithSpan], found: &mut Vec<Diagnostic>) {
+    let mut parens = Vec::new();
+    for token in tokens {
+        match token.token {
+            Token::LParen => parens.push(*token),
+            Token::RParen => {
+                parens.pop();
+            }
+            _ => {}
+        }
+    }
+    if let Some(open) = parens.last() {
+        found.push(at_token(
+            open,
+            DiagnosticMessage::key("diagnostic.unclosedParen"),
+        ));
+    }
+    if let Some(last) = tokens.last() {
+        if matches!(
+            last.token,
+            Token::Eq | Token::Neq | Token::Lt | Token::Gt | Token::LtEq | Token::GtEq
+        ) {
+            found.push(at_token(
+                last,
+                DiagnosticMessage::key("diagnostic.missingValue")
+                    .with("operator", token_text(&last.token)),
+            ));
+        }
+    }
+}
+
+fn validate_mysql_declare(
+    sql: &str,
+    tokens: &[&TokenWithSpan],
+    dialect: Dialect,
+    found: &mut Vec<Diagnostic>,
+) {
+    let words: Vec<String> = tokens.iter().map(|t| keyword_text(t)).collect();
+    if let Some(kind) = words
+        .iter()
+        .position(|word| matches!(word.as_str(), "CURSOR" | "HANDLER" | "CONDITION"))
+    {
+        let word = words[kind].as_str();
+        let Some(for_at) = words.iter().position(|word| word == "FOR") else {
+            found.push(routine_incomplete(tokens[kind]));
+            return;
+        };
+        if for_at + 1 >= tokens.len() {
+            found.push(routine_incomplete(tokens[for_at]));
+            return;
+        }
+        if word == "CURSOR" {
+            if !matches!(words[for_at + 1].as_str(), "SELECT" | "WITH") {
+                found.push(routine_incomplete(tokens[for_at + 1]));
+            } else {
+                let from = byte_offset(sql, tokens[for_at + 1].span.start).unwrap_or(0);
+                let to = byte_offset(sql, tokens.last().unwrap().span.end).unwrap_or(sql.len());
+                for diagnostic in analyze_statement(&sql[from..to], dialect, None) {
+                    found.push(shifted(diagnostic, position_at(sql, from)));
+                }
+            }
+        } else if word == "CONDITION" {
+            if (!matches!(words[for_at + 1].as_str(), "SQLSTATE")
+                && !matches!(tokens[for_at + 1].token, Token::Number(..)))
+                || (words[for_at + 1] == "SQLSTATE" && for_at + 2 >= tokens.len())
+            {
+                found.push(routine_incomplete(tokens[for_at + 1]));
+            }
+        } else {
+            // Tras las condiciones, la accion es cualquier sentencia: un bloque,
+            // un SET, un CLOSE, un LEAVE...
+            let action = handler_action(tokens, for_at);
+            if action < tokens.len() {
+                inspect_routine_chunk(sql, &tokens[action..], dialect, found);
+            } else {
+                found.push(routine_incomplete(tokens.last().copied().unwrap()));
+            }
+        }
+        return;
+    }
+    let mut i = 1;
+    while i + 1 < tokens.len() && tokens[i + 1].token == Token::Comma {
+        i += 2;
+    }
+    i += 1;
+    let end = words
+        .iter()
+        .position(|word| word == "DEFAULT")
+        .unwrap_or(tokens.len());
+    // A medio escribir (`DECLARE`, `DECLARE a,`, `DECLARE DEFAULT`): aun no
+    // hay nombre ni tipo que revisar.
+    if i > end {
+        found.push(routine_incomplete(tokens[tokens.len() - 1]));
+        return;
+    }
+    validate_mysql_type(
+        &tokens[i..end],
+        tokens
+            .get(i.saturating_sub(1))
+            .copied()
+            .unwrap_or(tokens[0]),
+        found,
+    );
+    if end < tokens.len() {
+        if end + 1 == tokens.len() {
+            found.push(routine_incomplete(tokens[end]));
+        } else {
+            validate_control_condition(&tokens[end + 1..], found);
+        }
+    }
+}
+
+/// Donde empieza la accion de un `DECLARE ... HANDLER FOR condicion[, ...]`.
+fn handler_action(tokens: &[&TokenWithSpan], for_at: usize) -> usize {
+    let word = |index: usize| tokens.get(index).map(|token| keyword_text(token));
+    let mut index = for_at + 1;
+    loop {
+        match word(index).as_deref() {
+            Some("SQLSTATE") => {
+                index += 1;
+                if word(index).as_deref() == Some("VALUE") {
+                    index += 1;
+                }
+                index += 1;
+            }
+            Some("NOT") => index += 2,
+            _ => index += 1,
+        }
+        if tokens
+            .get(index)
+            .is_some_and(|token| token.token == Token::Comma)
+        {
+            index += 1;
+        } else {
+            return index.min(tokens.len());
+        }
+    }
+}
+
+fn routine_incomplete(token: &TokenWithSpan) -> Diagnostic {
+    at_token(
+        token,
+        DiagnosticMessage::key("diagnostic.incomplete").with("after", token_text(&token.token)),
+    )
+}
+
+fn postgres_opaque_definition(sql: &str, dialect: Dialect) -> bool {
+    if dialect != Dialect::Postgres {
+        return false;
+    }
+    if !sql
+        .trim_start()
+        .get(..6)
+        .is_some_and(|start| start.eq_ignore_ascii_case("CREATE"))
+    {
+        return false;
+    }
+    let tokens = match Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql).tokenize() {
+        Ok(tokens) => tokens,
+        Err(_) => return false,
+    };
+    let words: Vec<String> = tokens
+        .into_iter()
+        .filter_map(|token| match token {
+            Token::Word(word) if word.quote_style.is_none() => Some(word.value.to_uppercase()),
+            Token::Whitespace(_) => None,
+            _ => Some(String::new()),
+        })
+        .collect();
+    if words.first().map(String::as_str) != Some("CREATE") {
+        return false;
+    }
+    for word in words.iter().skip(1).take(32).map(String::as_str) {
+        match word {
+            "PROCEDURE" | "FUNCTION" | "TRIGGER" => return true,
+            "EVENT" => return false,
+            "RULE" => return dialect == Dialect::Postgres,
+            "TABLE" | "VIEW" | "INDEX" | "DATABASE" | "SCHEMA" | "TYPE" | "DOMAIN" | "SEQUENCE"
+            | "EXTENSION" | "POLICY" => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// sqlparser solo admite un nombre en SELECT INTO; MySQL acepta variables
+/// separadas por comas. Se quita esa lista sin mover las posiciones.
+fn mysql_select_into_errors(
+    sql: &str,
+    dialect: Dialect,
+    catalog: Option<&CatalogView>,
+) -> Option<Vec<Diagnostic>> {
+    let tokens = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize_with_location()
+        .ok()?;
+    let tokens: Vec<&TokenWithSpan> = tokens
+        .iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    if keyword_of(tokens.first()?) != Keyword::SELECT {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut into = None;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth = depth.saturating_sub(1),
+            _ if depth == 0 && keyword_of(token) == Keyword::INTO => {
+                into = Some(index);
+                break;
+            }
+            _ => {}
+        }
+    }
+    // Lista de variables: `a`, `a, b` o `@x, @y`, antes del FROM o al final.
+    let into = into?;
+    let mut end = into + 1;
+    loop {
+        if !matches!(tokens.get(end)?.token, Token::Word(_)) {
+            return None;
+        }
+        end += 1;
+        if tokens
+            .get(end)
+            .is_some_and(|token| token.token == Token::Comma)
+        {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    let start = byte_offset(sql, tokens[into].span.start)?;
+    let stop = byte_offset(sql, tokens[end - 1].span.end)?;
+    // Se borra la lista sin mover las posiciones: un espacio por caracter.
+    let blank: String = sql[start..stop]
+        .chars()
+        .map(|c| if c == '\n' || c == '\r' { c } else { ' ' })
+        .collect();
+    let copy = format!("{}{}{}", &sql[..start], blank, &sql[stop..]);
+    Some(analyze_statement(&copy, dialect, catalog))
 }
 
 /// La sentencia con los arreglos aplicados, y como volver de sus posiciones
@@ -509,10 +1273,19 @@ fn structural_errors(tokens: &[&TokenWithSpan]) -> Vec<Diagnostic> {
             && next.is_none_or(|next| keyword_of(next) != Keyword::BY)
             && previous.is_none_or(|previous| keyword_of(previous) != Keyword::WITHIN)
         {
-            found.push(at_token(
-                token,
-                DiagnosticMessage::key("diagnostic.missingBy").with("keyword", keyword_text(token)),
-            ));
+            // `ORDER B` al final: se esta escribiendo el BY.
+            let typing_by = index + 2 == tokens.len()
+                && next.is_some_and(|next| {
+                    matches!(&next.token, Token::Word(word) if word.quote_style.is_none()
+                        && "BY".starts_with(&word.value.to_uppercase()))
+                });
+            let message = if typing_by {
+                DiagnosticMessage::key("diagnostic.incomplete")
+                    .with("after", token_text(&token.token))
+            } else {
+                DiagnosticMessage::key("diagnostic.missingBy").with("keyword", keyword_text(token))
+            };
+            found.push(at_token(token, message));
         }
 
         // FROM o JOIN sin tabla: `FROM WHERE ...`, `JOIN ON ...`.
@@ -822,6 +1595,15 @@ fn syntax_diagnostic(message: &str, tokens: &[TokenWithSpan]) -> Diagnostic {
                 }],
             };
         }
+    }
+
+    // Un punto al final (`CALL core.`) es un nombre a medio escribir, no una
+    // coma que falta.
+    if token.token == Token::Period && index + 1 == significant.len() {
+        return at_token(
+            token,
+            DiagnosticMessage::key("diagnostic.incomplete").with("after", "."),
+        );
     }
 
     // Falta una coma entre dos columnas que sqlparser tomo por columna y
@@ -2030,6 +2812,147 @@ mod tests {
         assert!(analyze_mixed_case("SELECT id FROM users", Dialect::MySql).is_empty());
         assert!(analyze_mixed_case("SELECT `Id` FROM `Users`", Dialect::MySql).is_empty());
     }
+
+    #[test]
+    fn valid_handlers_assignments_and_select_into_forms_have_no_diagnostics() {
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for sql in [
+                "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND CLOSE c; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION GET DIAGNOSTICS CONDITION 1 @m = MESSAGE_TEXT; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR SQLSTATE '23000', NOT FOUND LEAVE lbl; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLWARNING SET x = 1; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; END",
+                "CREATE PROCEDURE p() BEGIN SET x := 1; SET @y := x + 1; END",
+                "CREATE PROCEDURE p() BEGIN DECLARE x INT4 DEFAULT 0; DECLARE y MIDDLEINT; END",
+                "SELECT COUNT(*) FROM inventory WHERE film_id = 1 AND store_id = 2 INTO v_count",
+                "SELECT COUNT(*) INTO v_count FROM inventory",
+                "SELECT inventory_in_stock(1) INTO @ok",
+                "SELECT 1, 2 INTO a, b",
+                "SELECT a, b FROM t LIMIT 1 INTO a, b",
+                "SELECT a, b FROM t INTO @x, @y",
+                "SELECT 1, 2 INTO @x, @y",
+            ] {
+                let found = analyze_statement(sql, dialect, None);
+                assert!(found.is_empty(), "{dialect:?}: {sql}: {found:?}");
+            }
+        }
+        let sql = "CREATE PROCEDURE p() BEGIN DECLARE v TYPE OF t.a; DECLARE r ROW TYPE OF t; END";
+        let found = analyze_statement(sql, Dialect::MariaDb, None);
+        assert!(found.is_empty(), "{sql}: {found:?}");
+    }
+
+    #[test]
+    fn select_into_keeps_positions_with_multibyte_characters() {
+        let found = analyze_statement(
+            "SELECT a, b INTO vñ, w FROM t WHER a = 1",
+            Dialect::MySql,
+            None,
+        );
+        assert_eq!(found.first().map(|d| d.start), Some(at(1, 31)), "{found:?}");
+        let found = analyze_statement(
+            "SELECT '😀', b INTO v, w FROM t WHER a = 1",
+            Dialect::MySql,
+            None,
+        );
+        assert_eq!(found.first().map(|d| d.start), Some(at(1, 32)), "{found:?}");
+    }
+
+    #[test]
+    fn handlers_and_select_into_still_report_real_errors() {
+        for (sql, expected) in [
+            (
+                "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION; END",
+                "diagnostic.incomplete",
+            ),
+            (
+                "SELECT a, b INTO x, y FROM t WHER a = 1",
+                "diagnostic.didYouMean",
+            ),
+            (
+                "SELECT a, b FROM t WHERE c = AND d = 1 INTO x, y",
+                "diagnostic.missingValue",
+            ),
+        ] {
+            let found = analyze_statement(sql, Dialect::MySql, None);
+            assert!(!found.is_empty(), "debia detectar: {sql}");
+            assert_eq!(key(&found[0]), expected, "{sql}: {found:?}");
+        }
+    }
+
+    // A medio escribir, cualquier prefijo: con panic = "abort" en release, un
+    // panico del analizador cierra la app.
+    #[test]
+    fn no_prefix_of_a_routine_panics() {
+        let routine = "CREATE PROCEDURE p(IN a INT, OUT b INT)\nBEGIN\n  DECLARE done, other INT DEFAULT FALSE;\n  DECLARE v VARCHAR(10);\n  DECLARE c CONDITION FOR SQLSTATE '45000';\n  DECLARE cur CURSOR FOR SELECT id FROM t WHERE x = a;\n  DECLARE CONTINUE HANDLER FOR NOT FOUND, SQLSTATE VALUE '23000' SET done = TRUE;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END;\n  OPEN cur;\n  lp: LOOP\n    FETCH cur INTO v;\n    IF done THEN LEAVE lp; ELSEIF v = 'x' THEN ITERATE lp; END IF;\n    WHILE a > 0 DO SET a = a - 1; END WHILE;\n    REPEAT SET a = a + 1; UNTIL a > 3 END REPEAT;\n    CASE v WHEN 'a' THEN SET b = 1; ELSE SET b = 2; END CASE;\n    SELECT COUNT(*) INTO b FROM t;\n  END LOOP lp;\n  CLOSE cur;\nEND";
+        let chars: Vec<char> = routine.chars().collect();
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            for end in 1..=chars.len() {
+                let prefix: String = chars[..end].iter().collect();
+                let _ = analyze_statement(&prefix, dialect, None);
+            }
+        }
+    }
+
+    #[test]
+    fn a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is() {
+        for dialect in [Dialect::MySql, Dialect::MariaDb] {
+            let at_start = |sql: &str, dialect| analyze_statement(sql, dialect, None);
+            let found = at_start("CREATE PROCEDURE p() BEGIN\n  SELEC 1;\nEND", dialect);
+            assert_eq!(
+                found.first().map(|d| (d.start, key(d))),
+                Some((at(2, 3), "diagnostic.didYouMean")),
+                "{found:?}"
+            );
+            let found = at_start("CREATE PROCEDURE p() BEGIN\n  SETT @a = 1;\nEND", dialect);
+            assert_eq!(
+                found.first().map(|d| (d.start, key(d))),
+                Some((at(2, 3), "diagnostic.didYouMean")),
+                "{found:?}"
+            );
+            let found = at_start(
+                "CREATE PROCEDURE p() BEGIN\n  INSRT INTO t VALUES (1);\nEND",
+                dialect,
+            );
+            assert_eq!(
+                found.first().map(key),
+                Some("diagnostic.didYouMean"),
+                "{found:?}"
+            );
+            // END donde iba END IF / END WHILE / END LOOP / END REPEAT / END CASE.
+            for (body, line) in [
+                ("IF 1 THEN\n    SET @a = 1;\n  END;", 4),
+                ("WHILE 1 DO\n    SET @a = 1;\n  END;", 4),
+                ("lp: LOOP\n    LEAVE lp;\n  END;", 4),
+                ("REPEAT\n    SET @a = 1;\n  UNTIL 1 END;", 5),
+                ("CASE 1 WHEN 1 THEN\n    SET @a = 1;\n  END;", 4),
+                ("IF 1 THEN\n    SET @a = 1;\n  END WHILE;", 4),
+            ] {
+                let sql = format!("CREATE PROCEDURE p() BEGIN\n  {body}\nEND");
+                let found = at_start(&sql, dialect);
+                let hit = found.iter().find(|d| key(d) == "diagnostic.expected");
+                assert!(
+                    hit.is_some_and(|d| d.start.line == line),
+                    "{dialect:?}: {sql}\n{found:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn valid_routine_structures_are_not_objected_to() {
+        for sql in [
+            "CREATE PROCEDURE p() BEGIN IF 1 THEN SET @a = 1; ELSEIF 2 THEN SET @a = 2; ELSE SET @a = 3; END IF; END",
+            "CREATE PROCEDURE p() BEGIN lp: LOOP LEAVE lp; END LOOP lp; WHILE 0 DO SET @a = 1; END WHILE; REPEAT SET @a = 1; UNTIL @a > 1 END REPEAT; END",
+            "CREATE PROCEDURE p() BEGIN CASE @a WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE; SELECT CASE WHEN @a THEN 1 END, c.end, c.begin FROM t c; END",
+            "CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END; DECLARE CONTINUE HANDLER FOR NOT FOUND SET @d = 1; SELECT 1 AS begin, 2 AS end; END",
+            "CREATE PROCEDURE p() outer_b: BEGIN BEGIN SELECT 1; END; LEAVE outer_b; END outer_b",
+        ] {
+            for dialect in [Dialect::MySql, Dialect::MariaDb] {
+                let found = analyze_statement(sql, dialect, None);
+                assert!(found.is_empty(), "{dialect:?}: {sql}\n{found:?}");
+            }
+        }
+    }
 }
 
 /// El contrato de los diagnosticos (docs/specs/v0.2-perfiles-de-motor.md,
@@ -2196,12 +3119,24 @@ mod contract {
                 Same(Error("diagnostic.missingBy", at(1, 17))),
             ),
             (
+                "SELECT * FROM t ORDER B",
+                Same(Error("diagnostic.incomplete", at(1, 17))),
+            ),
+            (
                 "SELECT a COUNT(*) FROM t",
                 Same(Error("diagnostic.missingCommaBefore", at(1, 10))),
             ),
             (
                 "SELECT x.a x.b FROM t x",
                 Same(Error("diagnostic.missingCommaBefore", at(1, 12))),
+            ),
+            (
+                "CALL core.",
+                Same(Error("diagnostic.incomplete", at(1, 10))),
+            ),
+            (
+                "SELECT a, core.",
+                Same(Error("diagnostic.incomplete", at(1, 15))),
             ),
             (
                 "SELECT * FROM t JOIN ON t.a = 1",
