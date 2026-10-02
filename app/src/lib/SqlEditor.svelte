@@ -93,6 +93,7 @@
   } from "$lib/sqlSchema";
   import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
   import { vendorSupport } from "$lib/engines/vendorSupport";
+  import { commentEditing } from "$lib/sqlCommentEditing";
   import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
@@ -830,6 +831,8 @@
         completionCompartment.of(autocompletion()),
         definitionLinkCompartment.of(buildDefinitionLink()),
         tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        // /* se cierra solo (sqlCommentEditing.ts).
+        commentEditing,
         indentationCompartment.of(indentationExtension(get(editorSettings).indentStyle, get(editorSettings).indentSize)),
         lexicalCompartment.of(sqlLexical.of(engine.lexical)),
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
