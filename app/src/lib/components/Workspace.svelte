@@ -1215,9 +1215,9 @@
   }
 
   // Solicita una ejecucion nueva (Ctrl+Enter o el boton "Ejecutar"). No hace
-  // nada si esa consola ya esta ejecutando. Con un guard visible, la
-  // ejecucion nueva lo reemplaza: confirmar ejecuta siempre lo ultimo que se
-  // pidio, nunca un bloque anterior (y el guard se vuelve a mostrar, ver el
+  // nada si esa consola ya esta ejecutando. Con una confirmacion pendiente,
+  // la ejecucion nueva la reemplaza: confirmar ejecuta siempre lo ultimo que
+  // se pidio, nunca un bloque anterior (y su modal se abre de nuevo, ver el
   // {#key} de ExecutionGuard). Nada se confirma por si solo.
   async function requestExecution(consoleId: string, requested: string) {
     if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
@@ -1573,8 +1573,7 @@
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}
-      <!-- Cada confirmacion nueva monta el guard otra vez: su entrada avisa
-           que ahora es otro bloque. -->
+      <!-- Cada confirmacion nueva abre su propio modal. -->
       {#key liveExecution.pendingConfirmation}
         <ExecutionGuard
           sql={liveExecution.pendingConfirmation.sql}
