@@ -176,6 +176,12 @@ for (const { name, body } of flows) {
     console.log(`FALLO ${name}\n      ${error.message}`);
     const html = await session.script(`return document.body.innerText.slice(0, 2000)`).catch(() => "");
     console.log(`      pantalla: ${String(html).replace(/\s+/g, " ").slice(0, 600)}`);
+    const dialogs = await session
+      .script(`return [...document.querySelectorAll("dialog")].map((d) => d.className + (d.open ? " [open]" : ""))`)
+      .catch((e) => e.message);
+    console.log(`      dialogs: ${JSON.stringify(dialogs)}; filas en victim: ${count()}`);
+    const active = await session.script(`return document.activeElement?.className ?? ""`).catch(() => "");
+    console.log(`      foco: ${active}`);
   } finally {
     await session.quit();
   }
