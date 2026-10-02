@@ -42,13 +42,19 @@ export class Session {
     while (Date.now() < deadline) {
       try {
         const found = await this.command("POST", "/element", { using: "css selector", value: css });
-        return new Element(this, found[ELEMENT]);
+        return new Element(this, elementId(found));
       } catch (error) {
         last = error;
         await sleep(100);
       }
     }
     throw new Error(`no aparecio "${css}" en ${timeout} ms: ${last?.message ?? ""}`);
+  }
+
+  // El elemento que devuelve un script (o null): para elegir por contenido.
+  async findBy(description, source, ...args) {
+    const found = await this.waitFor(description, () => this.script(source, ...args));
+    return new Element(this, elementId(found));
   }
 
   async absent(css, { timeout = 15000 } = {}) {
@@ -106,6 +112,13 @@ export class Element {
   async text() {
     return await this.session.command("GET", `/element/${this.id}/text`);
   }
+}
+
+// W3C usa la clave ELEMENT; algunos drivers devuelven otra (o la vieja "ELEMENT").
+export function elementId(found) {
+  const id = found?.[ELEMENT] ?? found?.ELEMENT ?? Object.values(found ?? {})[0];
+  if (typeof id !== "string") throw new Error(`referencia de elemento ilegible: ${JSON.stringify(found)}`);
+  return id;
 }
 
 async function request(base, method, path, body) {

@@ -37,7 +37,12 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cd app && npm run check && npm test && npm run build
+cd .. && node tools/inventory/tests.mjs --check
 ```
+
+El CI corre la misma compuerta con Rust 1.90 (`.github/workflows/quality.yml`); un clippy local más nuevo puede no ver un aviso que la 1.90 sí marca, así que `cargo +1.90 clippy --workspace --all-targets -- -D warnings` lo reproduce tal cual. Cada archivo de test necesita una entrada en `tests/inventory.json` con su dueño, la propiedad que protege, su riesgo, su compuerta y una decisión; el `--check` falla hasta que la tenga.
+
+El workflow **E2E** compila la app y la maneja en Linux/WebKitGTK con `tauri-driver` y un MySQL desechable (`app/tests/e2e/run.mjs`): conectar, ejecutar con Ctrl+Enter, confirmar y cancelar una sentencia destructiva, la confirmación de producción y el texto de la consola tras reiniciar. Necesita `WebKitWebDriver` y `tauri-driver`, así que normalmente solo corre en el CI. Windows/WebView2 y macOS/WKWebView siguen siendo humo manual antes de una release.
 
 ## Pruebas contra una base real
 

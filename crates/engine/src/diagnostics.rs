@@ -275,7 +275,7 @@ fn mysql_routine_errors(sql: &str, dialect: Dialect) -> Option<Vec<Diagnostic>> 
                 _ => {}
             }
             if (tokens[i].token == Token::Comma && depth == 0) || i == close {
-                if start == i && i != close || i == close && start == i && i > open + 1 {
+                if start == i && (i != close || i > open + 1) {
                     let at = if i == close { tokens[i - 1] } else { tokens[i] };
                     found.push(at_token(
                         at,

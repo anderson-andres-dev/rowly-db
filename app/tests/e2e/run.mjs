@@ -68,14 +68,12 @@ async function seedProfiles(session, profiles) {
 }
 
 async function connect(session, name) {
-  const card = await session.waitFor(`la tarjeta "${name}"`, async () => {
-    const found = await session.script(
-      `return [...document.querySelectorAll(".card-main")].findIndex((card) => card.textContent.includes(arguments[0]))`,
-      name,
-    );
-    return found >= 0 ? found + 1 : 0;
-  });
-  await (await session.find(`.card:nth-of-type(${card}) .card-main`)).click();
+  const card = await session.findBy(
+    `la tarjeta "${name}"`,
+    `return [...document.querySelectorAll(".card-main")].find((card) => card.textContent.includes(arguments[0])) ?? null`,
+    name,
+  );
+  await card.click();
   // Perfil sin contrasena guardada: la app abre el formulario para pedirla.
   await (await session.find("#password")).type("rowly");
   await (await session.find('form button[type="submit"]')).click();
