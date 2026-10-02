@@ -135,6 +135,8 @@ Los paquetes quedan en `target/release/bundle/`.
 
 Los reportes de errores y los pull requests son bienvenidos. Empieza por la [guía de desarrollo](CONTRIBUTING.es.md) o [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues).
 
+Para trabajar en los motores SQL, lee el [contrato permanente de calidad](SQL_ENGINE.es.md) antes de cambiar código o anunciar soporte para una versión del servidor.
+
 ## Licencia
 
 Rowly DB tiene licencia dual: [MIT](LICENSE-MIT) o [Apache 2.0](LICENSE-APACHE), a tu elección.

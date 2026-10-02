@@ -1,8 +1,8 @@
 //! Texto de las consolas grandes, fuera del `localStorage` del WebView.
 //!
 //! `localStorage` admite unos 5–10 MB; una consola de 100 000 líneas o más no
-//! cabe (docs/specs/v0.2-documentos-grandes.md, 15b). Esos textos se guardan
-//! como archivos en `<datos de la app>/consoles/<clave>.sql`. La clave la
+//! cabe. Esos textos se guardan como archivos en
+//! `<datos de la app>/consoles/<clave>.sql`. La clave la
 //! arma el frontend a partir del id de la consola; solo se aceptan letras,
 //! números, `-` y `_`, así que no puede salir de esa carpeta.
 

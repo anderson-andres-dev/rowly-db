@@ -281,8 +281,7 @@ export const queryConsoles = writable<QueryConsoleState>(loadState());
 //
 // localStorage admite unos 5–10 MB: un texto de mas de LARGE_TEXT va a un
 // archivo en los datos de la app (console_texts.rs), escrito con un retraso,
-// y en localStorage queda solo la marca. Diseño en
-// docs/specs/v0.2-documentos-grandes.md (15b).
+// y en localStorage queda solo la marca.
 export const LARGE_TEXT = 256 * 1024;
 const DISK_DELAY_MS = 1000;
 

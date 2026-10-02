@@ -5,7 +5,7 @@ import type { SqlLexical } from "$lib/sqlStatements";
 import type { ExplorerRoutine, SchemaObjects } from "$lib/types";
 
 // Hints de parametros: el nombre de cada parametro delante de su argumento
-// en una llamada a una rutina del catalogo (docs/specs/v0.2-hints-de-parametros.md).
+// en una llamada a una rutina del catalogo.
 // Funciones puras sobre el texto de UNA sentencia; lo propio del motor
 // (como se leen los nombres, que parametros se pasan) sale de su perfil.
 

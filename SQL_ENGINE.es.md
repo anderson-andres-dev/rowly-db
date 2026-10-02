@@ -4,7 +4,7 @@
 
 Este es el estándar que debe cumplir cada motor SQL de Rowly DB: hoy MySQL, MariaDB y PostgreSQL, y mañana SQLite o cualquier otro. Define qué hay que demostrar, en qué versiones, qué test lo demuestra y cuándo debe correr.
 
-Responde a *qué demostrar*. *Cómo conectar un motor en el código* está en [CONTRIBUTING.es.md](CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos) y en el diseño de los perfiles de motor ([docs/specs/v0.2-perfiles-de-motor.md](docs/specs/v0.2-perfiles-de-motor.md)).
+Este es el **contrato permanente** de calidad SQL. Responde a *qué demostrar* y contiene las compuertas y el proceso para motores, líneas y versiones exactas. Para ubicar el código y preparar el entorno, empieza por [Arquitectura](docs/ARCHITECTURE.es.md) y [Contribuir](CONTRIBUTING.es.md). Las propuestas de implementación pueden cambiar; las obligaciones de este documento siguen vigentes hasta que un PR las modifique con evidencia.
 
 Hay que leerlo antes de:
 
@@ -14,6 +14,8 @@ Hay que leerlo antes de:
 - llamar «sólida» a una rama que toque cualquiera de esas partes.
 
 Si este documento y el código no coinciden, uno de los dos está mal. Se corrige el que sea en el mismo pull request.
+
+**Ruta rápida para contribuir:** identifica la propiedad S/A/G/D de §6, consulta los huecos de §9, añade o ajusta un fixture de §10, ejecuta la compuerta de §7 y registra motor, línea y versión exacta en el PR. §12 indica los pasos adicionales para un motor o una versión nueva. Las rutas y comandos marcados como «hoy» describen el repositorio actual; los requisitos de calidad no se consideran cumplidos por estar escritos aquí.
 
 ---
 
@@ -77,17 +79,24 @@ Lo más nuevo no es un superconjunto. MySQL 8.4 rechaza `SELECT 1 AS rank`, `GRO
 
 ### 5.2 Política de soporte
 
+Aquí «soporte del fabricante» significa que aún publica correcciones nuevas,
+incluidas las de seguridad; un contrato de *Sustaining Support* sin nuevos
+parches no cuenta como mantenimiento activo.
+
 - **Soportada:** el fabricante todavía la soporta, o es una versión LTS (cada versión mayor de PostgreSQL cuenta como una) dentro de los 12 meses siguientes a su fin de soporte. Las versiones de ciclo corto (las innovation de MySQL, las rolling de MariaDB) no tienen gracia. Una línea está soportada mientras lo esté alguna de sus versiones.
 - **Sin soporte:** más vieja que eso. **No se quita nada**: la línea, su paquete y la conexión se quedan, y la demostración de líneas (D7) la sigue cubriendo. El editor muestra una etiqueta pequeña «sin soporte oficial» junto a la versión del servidor, con un tooltip que lo explica. La compuerta de PR de motor ya no corre en ella la suite completa, y un fallo ahí no es un bug.
-- **Más nueva que las probadas:** una versión más nueva que todas las probadas. La app conecta sin aviso y aplica la línea más cercana por debajo. La compuerta de release la revisa para saber si abre una línea nueva.
+- **Más nueva que las probadas:** una versión más nueva que todas las probadas. La app no bloquea la conexión, aplica la línea más cercana por debajo y muestra «no verificada». La compuerta de release la revisa para saber si abre una línea nueva.
 
-La ventana se recalcula al preparar cada release, con las fechas de fin de soporte de los fabricantes (endoflife.date). Nunca de memoria.
+La ventana se recalcula al preparar cada release, con las fechas oficiales del [ciclo de MySQL](https://www.mysql.com/support/eol-notice.html), [MariaDB Community](https://mariadb.org/about/) y [PostgreSQL](https://www.postgresql.org/support/versioning/). `endoflife.date` sirve para contrastar, nunca como única autoridad.
+
+El soporte del fabricante y la verificación de Rowly DB son datos distintos. **Cada versión exacta anunciada como verificada** debe pasar todas las filas aplicables de §6, con evidencia de §7 y §10. Una versión sin esa evidencia puede conectar con reglas conservadoras de su línea, pero no se anuncia como verificada. La tabla de §5.3 refleja las pruebas disponibles hoy; no certifica todos los parches de sus rangos. Una línea de comportamiento agrupa reglas; la versión exacta identifica el servidor probado. Ningún parche hereda automáticamente la verificación de otro.
 
 **Reglas según el uso:**
 
 - **SQL generado** (comillas, alias, `CALL`): se aplica la regla más estricta de todas las líneas del motor. Poner comillas a `rank` sobra en 5.7 y no hace daño; no ponerlas rompe en 8.0.
 - **Diagnósticos:** se aplica la línea exacta del servidor conectado, para que el editor pueda decir que `SHOW SLAVE STATUS` ya no existe en 8.4 sin molestar a quien trabaja con un 5.7.
-- **Cuando la línea del servidor no tiene paquete**, se aplica la línea más cercana por debajo, nunca una de arriba. Las reglas de una línea más nueva pueden no existir en ese servidor.
+- **Cuando la línea del servidor no tiene paquete**, se aplica la línea más cercana por debajo, nunca una de arriba. Si no existe una anterior, se usa la más antigua disponible, se informa de la incertidumbre y se desactivan las capacidades que ese servidor no haya demostrado; el guard conserva su política más estricta. Las reglas de una línea más nueva pueden no existir en ese servidor.
+- **Contexto de conexión:** motor, versión exacta, modo SQL, línea y revisión efectivos se fijan juntos para la conexión. El editor y el guard usan esa misma identidad; cambiar conexión o modo invalida análisis y cachés dependientes. Una etiqueta visible no decide el dialecto.
 
 ### 5.3 Las líneas hoy
 
@@ -96,7 +105,7 @@ Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra serv
 | Motor | Línea | Diferencias con la línea anterior | Estado | Probada en |
 |---|---|---|---|---|
 | MySQL | 5.7 | Base: sin CTE ni funciones de ventana, `CHECK` se lee y se ignora | Sin soporte (EOL 2023-10) | — |
-| | 8.0–8.3 | CTE, funciones de ventana y `LATERAL`. `rank` pasa a ser reservada. Se eliminan `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` y `SQL_CACHE`. `CHECK` real desde 8.0.16 | Soportada, en gracia hasta 2027-04-30 | 8.0.46 |
+| | 8.0–8.3 | CTE, funciones de ventana y `LATERAL`. `rank` pasa a ser reservada. Se eliminan `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` y `SQL_CACHE`. `CHECK` real desde 8.0.16 | Soportada, en gracia hasta 2027-04-21 | 8.0.46 |
 | | 8.4 | Se eliminan `SHOW SLAVE STATUS` y `SHOW MASTER STATUS`. `mysql_native_password` no se carga por defecto | Soportada hasta 2032 | 8.4.11 |
 | | 9 | Tipo `VECTOR` y funciones vectoriales | Soportada (9.7 LTS hasta 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: secuencias, `INTERSECT`/`EXCEPT`, tablas versionadas, modo Oracle | Sin soporte (EOL 2025-06) | — |
@@ -116,7 +125,7 @@ Datasets: Sakila en MySQL y MariaDB, Pagila en PostgreSQL, cada uno fijado a un 
 
 ## 6. La matriz
 
-Cada fila es una propiedad que el motor debe tener **en cada línea soportada**. **Lo demuestra** nombra el test que lo demuestra hoy. Una fila sin test es un hueco, no un acierto.
+Cada fila es una propiedad que el motor debe tener **en cada línea soportada y en cada versión exacta anunciada como verificada** donde aplique. **Lo demuestra** nombra el test disponible hoy; su presencia no implica que ya corra en todas esas versiones. Una fila sin test es un hueco, no un acierto.
 
 Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `front/` = `app/src/lib/`. Son las ubicaciones de hoy; §10 describe la estructura a la que se mueven.
 
@@ -130,6 +139,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | S4 | Los comentarios ejecutables y con versión se clasifican como código | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
 | S5 | Las reglas de los textos siguen el modo del servidor (`NO_BACKSLASH_ESCAPES`) | `real` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
 | S6 | La sintaxis que el parser no lee se juzga por su estructura, nunca se deja pasar sin más | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
+| S7 | En producción cada escritura requiere confirmación explícita; el backend vuelve a clasificar antes de ejecutar y teclas repetidas o modificadas no la suplen | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; falta una prueba integrada (§9) |
 
 ### 6.2 Análisis y diagnósticos
 
@@ -169,6 +179,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D6 | La versión del servidor se lee y se asigna a su línea, incluidas formas como `5.5.5-10.11.6-MariaDB` | la lectura de la versión: tests unitarios de `crates/drivers/*/src/version.rs`; la asignación a una línea es un **hueco** (§9) |
 | D7 | Cada línea de §5.3 se distingue de la anterior, en sus dos extremos | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | El driver lee cada tipo de columna que puede devolver una línea soportada | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<motor>/<línea>/reads.sql`) |
+| D9 | Motor, versión exacta, modo SQL, línea y revisión son coherentes entre backend y frontend; reconectar o cambiar modo invalida cachés y nunca aplica reglas de otro motor | `front/connectionIdentity.test.ts` cubre parte de la identidad; contexto e invalidación completos son un **hueco** (§9) |
 
 ### 6.5 Capacidades
 
@@ -189,16 +200,16 @@ Lo que tiene cada motor. N/A es correcto donde el motor de verdad no tiene la ca
 | Barra invertida como escape en textos | sí (salvo con `NO_BACKSLASH_ESCAPES`) | sí (igual) | solo en `E'…'` | no |
 | Comentarios `#` / dollar quotes / `DELIMITER` | sí / no / lo resuelve el cliente | sí / no / lo resuelve el cliente | no / sí / no | no / no / no |
 
-Dónde se declara en el código: las reglas léxicas y las de llamada, en cada `SqlProfile` (`front/engines/*.ts`); las reglas del lenguaje, en `Dialect` (`crates/engine/src/lib.rs`); lo del catálogo que depende de la versión, en el `version.rs` de cada driver (`Capabilities`). Todo pasa a una sola declaración por línea (§9).
+Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`app/src/lib/engines/*.ts`); las reglas del lenguaje, en `Dialect` (`crates/engine/src/lib.rs`); el catálogo dependiente de versión, en el `version.rs` de cada driver (`Capabilities`). Las diferencias de línea deben tener una sola declaración de datos; el motor y el driver siguen siendo código de la app (§9 y §12).
 
 ## 7. Compuertas
 
 | Compuerta | Cuándo | Qué corre | Automática |
 |---|---|---|---|
-| **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test` | En parte: el CI todavía no corre `npm test` ni clippy con `-D warnings` (§9) |
-| **PR de motor** | Un PR que toca el divisor, el analizador, el guard, la introspección, el autocompletado, un driver o la ejecución | La compuerta de PR, más la suite contra servidor real en **cada línea soportada**, con el fuzz por defecto (4000 casos por línea) | No: se corre a mano y se informa en la descripción del PR |
-| **Paquete** | Antes de publicar o actualizar un paquete de soporte de versión (§11) | La compuerta de PR de motor en esa línea | No |
-| **Release** | Antes de publicar una versión | La compuerta de PR de motor, más: un fuzz extendido con al menos tres semillas, los tests de driver, la versión más nueva de cada motor (¿abre una línea nueva?), recalcular la ventana de soporte (§5.2) y una prueba manual de la interfaz (escribir, Tab, autocompletado, crear y llamar una rutina) | No |
+| **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build` | En parte: CI todavía omite `npm test` y `-D warnings` (§9) |
+| **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | No: la suite real aún es manual (§9) |
+| **Versión exacta o paquete** | Antes de anunciar una versión verificada o publicar su paquete de línea (§11) | Matriz completa en esa versión y en las demás versiones verificadas de la línea afectada; D7 frente a línea anterior si cambia el comportamiento | No |
+| **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | No |
 
 Comandos, hoy:
 
@@ -207,7 +218,7 @@ Comandos, hoy:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cd app && npm run check && npm test
+cd app && npm run check && npm test && npm run build
 
 # Suite contra servidor real (levanta MySQL, MariaDB y PostgreSQL en Docker)
 tools/test-dbs/up.sh
@@ -228,7 +239,7 @@ cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Hoy la suite completa corre con una sola versión por motor; solo la demostración de las líneas corre en cada línea (§9). Correr el resto por línea es parte de la reorganización de los tests (§10).
+Hoy la suite completa corre con una sola versión por motor; solo la demostración de líneas corre en los probes de `lines.json` (§9). **Los comandos anteriores no certifican todos los parches ni cumplen aún la compuerta por versión exacta.** Hasta automatizarla, el PR debe adjuntar la evidencia manual de cada versión afectada y no anunciar una versión como verificada si falta una fila aplicable.
 
 Las pruebas contra servidor real comparten la tabla `rowly_test.victim`. Se corren con `--test-threads=1` y nunca dos corridas a la vez contra el mismo servidor.
 
@@ -257,8 +268,9 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | Hueco | Severidad | Nota |
 |---|---|---|
 | El CI no corre `npm test`, y corre clippy sin `-D warnings` | P1 | Más de mil tests del frontend no se comprueban en los pull requests, y un aviso de clippy no hace fallar el build. Cada cosa es una línea en `.github/workflows/quality.yml`. |
-| Las líneas están demostradas, pero el resto de la suite (escritura, `CALL` generado, fuzz del guard, destructividad) corre con una versión por motor (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), y los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Lo cierran la reorganización de los tests de §10 y la ventana de soporte. |
+| Las líneas están demostradas, pero el resto de la suite (escritura, `CALL` generado, fuzz del guard, destructividad) corre con una versión por motor (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), no hay reporte completo por versión exacta y los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Completar el mapa de §10, fijar y ejecutar cada versión declarada, automatizar §7 y ajustar la ventana de soporte. |
 | La suite contra servidor real no corre en el CI | P2 | Necesita Docker en el CI; mientras tanto, es la compuerta manual de PR de motor. |
+| No hay prueba integrada de confirmación entre teclado, UI y ejecución en el backend (S7), ni contexto tipado e invalidación completos por conexión (D9) | P2 | Añadir casos por motor y versión, incluida reconexión y cambio de modo; los unitarios actuales solo cubren partes del recorrido. La UI aún no distingue versión exacta verificada de no verificada. |
 | El analizador tiene un solo dialecto por motor: no puede marcar la sintaxis que una línea eliminó (A9), y las palabras reservadas son una lista por motor (G6) | P2 | Llega con la declaración por línea de abajo. |
 | Las capacidades se declaran en tres lugares (§6.5), en código y no por línea | P2 | Una sola declaración por línea, como datos. Es también lo que llevan los paquetes de soporte de versión (§11). |
 | La clasificación de incompleto / no encontrado / genérico vive en el frontend (listas de claves en `SqlEditor.svelte`), y `real` la replica para simular la escritura | P2 | El analizador debería emitir una categoría con cada diagnóstico. Eso elimina la copia (principio 5). |
@@ -266,7 +278,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | El resto del SQL generado (G7) no se ejecuta en un servidor | P2 | |
 | Los cuerpos de las rutinas de PostgreSQL no se analizan (A5) | P2 | |
 | Unicode más allá de `SELECT INTO`: nombres, posiciones, UTF-8 ↔ UTF-16 entre Rust y el editor (A8) | P2 | |
-| Los datasets no están fijados (`tools/test-dbs/fetch.sh` descarga el último Sakila y el Pagila de `master`), y las corridas contra servidor real no muestran la versión del servidor | P3 | Las reglas de §5 y §10. |
+| Los datasets no están fijados (`tools/test-dbs/fetch.sh` descarga el último Sakila y el Pagila de `master`), las imágenes de `lines.json` no tienen digest y las corridas reales no muestran la versión del servidor | P3 | Fijar entradas y emitir evidencia según §5 y §10. |
 | Dos maneras de llegar a un servidor real: los tests de driver (`KHIPU_TEST_*`) y `rowly-server-tests` (`tools/test-dbs`) | P3 | Una sola suite sobre `tools/test-dbs` (§10). |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | Los vectores de MySQL 9 se ven como `[1,2.5,-3]`. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
@@ -275,10 +287,11 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 
 ### 10.1 Estructura
 
-Compartida por los tests de Rust y de TypeScript:
+Árbol destino compartido por las pruebas de Rust y TypeScript:
 
 ```text
 tests/sql/
+  coverage.json          fila de §6 → test, ámbito y compuerta
   common/                SQL válido en cada línea de cada motor
   <motor>/
     setup.sql            corre en cada servidor del motor antes de sus fixtures
@@ -286,14 +299,20 @@ tests/sql/
     <línea>/
       accepts.sql        lo nuevo de esta línea: el servidor lo acepta aquí y lo rechaza en la línea anterior
       rejects.sql        lo que esta línea elimina: el servidor lo rechaza aquí y lo aceptaba en la línea anterior
-  attacks/<motor>/       corpus de seguridad, versionado aparte
+      reads.sql          tipos y catálogo devueltos por esta línea
+      generated.sql      SQL escrito por Rowly DB, si difiere en esta línea
+      attacks.sql        seguridad propia de la línea, si difiere
 ```
 
 Los casos unitarios quedan junto al código que prueban. Las entradas de un `.sql` se separan con una línea `-- ---`; cada una es una sola sentencia con un comentario que dice qué demuestra. Una línea `-- since: <versión>` en una entrada marca un cambio dentro de la línea (§5.1): antes de esa versión, la línea se comporta como la anterior, y la línea necesita servidores a los dos lados de ella.
 
-Los servidores de cada línea están en `tools/test-dbs/lines.json` y se descargan del espejo público de las imágenes oficiales (`public.ecr.aws/docker/library`), para no depender del límite de descargas anónimas de Docker Hub.
+`tools/test-dbs/lines.json` es la fuente única de motores, líneas y versiones exactas de prueba. Cada imagen debe quedar fijada por digest, y el harness comprueba la versión que devuelve el servidor antes de ejecutar. Las imágenes actuales vienen del espejo público de las oficiales (`public.ecr.aws/docker/library`); fijar digest y añadir evidencia por versión exacta sigue pendiente (§9).
 
 Los fixtures de las líneas ya viven aquí. El resto del corpus sigue en `crates/server-tests/corpus/<motor>/` (`valid.sql`, `attacks.sql`, `routines.sql`) y en `crates/engine/tests/corpus/` (`valid/`, `mixed/`), y pasa a esta estructura (§9). Los tests que ya no aplican se borran, no se guardan «por si acaso».
+
+`coverage.json` asigna cada fila S/A/G/D de §6 a una prueba, su fixture, los motores y versiones donde aplica y la compuerta que la ejecuta. Una fila sin prueba o un `N/A` sin motivo falla la revisión del mapa. El harness de `crates/server-tests` prepara un esquema efímero por motor, versión y caso, restaura el modo de sesión, recoge la versión exacta y emite un reporte reproducible con commit, fila, SQL mínimo, semilla y resultado. Los tests unitarios siguen junto al código.
+
+Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en el árbol destino, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia. Las ubicaciones de las tablas de §6 y los comandos de §7 siguen indicando **lo que existe hoy** hasta que se actualicen con cada PR de migración.
 
 ### 10.2 Reglas
 
@@ -301,13 +320,13 @@ Los fixtures de las líneas ya viven aquí. El resto del corpus sigue en `crates
 - **Primero el SQL real.** Mejor lo que devuelve el propio servidor (definiciones de Sakila y Pagila, `SHOW CREATE`, `pg_get_functiondef`) que SQL escrito a mano.
 - **Determinista.** Nada de hora actual, resultados sin orden, supuestos de locale o zona horaria, ni entradas aleatorias sin una semilla fija. Una semilla que falla se guarda como fixture.
 - **Aislado.** Cada test prepara lo que necesita y limpia después. Las pruebas destructivas solo corren contra los contenedores de prueba, nunca contra la base de un usuario.
-- **Una sola manera de llegar a un servidor:** `tools/test-dbs`, un contenedor por línea, elegido por línea.
+- **Una sola manera de llegar a un servidor:** `tools/test-dbs`, un contenedor por versión exacta declarada, elegido por el registro. Las versiones no enumeradas no se anuncian como verificadas.
 - **Fallos legibles.** Un fallo nombra el motor, la línea y la versión exacta, el SQL (o el prefijo y la posición, si es de escritura), lo esperado y lo que pasó.
 - **Nombres uniformes.** El nombre de un test dice la propiedad que demuestra, en inglés y con el mismo estilo en Rust y en TypeScript.
 
 ### 10.3 Simulaciones
 
-Una simulación es un test fijo, nunca un script de una sola vez. Cada una corre en cada línea soportada, con el catálogo y las reglas de esa línea, y tiene una semilla fija y un resultado registrado.
+Una simulación es un test fijo, nunca un script de una sola vez. Cada una corre en cada versión exacta declarada verificada, con el catálogo y las reglas de su línea, y tiene una semilla fija y un resultado registrado.
 
 | Simulación | Qué demuestra |
 |---|---|
@@ -324,35 +343,47 @@ PostgreSQL 14 (14.24)  escritura 49 706 prefijos ✓  CALL 11 ✓  fuzz 4000 sem
 
 ## 11. Paquetes de soporte de versión
 
-Lo que se sabe de cada línea de versión se distribuye como un **paquete**: datos, nunca código. Sus capacidades, palabras reservadas, ayuda de errores, sintaxis que el parser no lee, sintaxis que la línea eliminó, sus fechas de soporte y con qué se probó. Permite que Rowly DB soporte una versión nueva de un servidor sin publicar una versión nueva de la app, y que el usuario vea, descargue y quite el soporte que tiene. El diseño está en [docs/specs/v0.3-soporte-de-versiones.md](docs/specs/v0.3-soporte-de-versiones.md).
+Cuando se implemente la distribución por línea, lo que se sabe de ella viajará como un **paquete de datos, nunca código**: capacidades, palabras reservadas, ayuda de errores, sintaxis que el parser no lee o la línea eliminó, fechas de soporte y evidencia de prueba. Una línea nueva podrá llegar sin publicar otra app solo si los mecanismos que necesita ya están en ella. Hoy las reglas siguen compiladas en la app (§6.5 y §9).
 
 Reglas:
 
-- **Un paquete se publica solo después de que la compuerta de paquete (§7) pase en su línea**, y registra la versión exacta del servidor, la fecha y el commit con que se probó.
-- **Un paquete nunca relaja el guard.** Puede añadir palabras destructivas; no puede marcar nada como seguro. Lo peor que puede causar un paquete equivocado es un diagnóstico falso, nunca un hueco de seguridad.
+- **Un paquete se publica solo después de que la compuerta de §7 pase en cada versión exacta declarada verificada de su línea.** Registra versión, fecha, commit y reporte de prueba; la condición de soporte del fabricante se guarda aparte.
+- **Un paquete nunca relaja el guard.** Puede añadir motivos de confirmación; no puede marcar nada como seguro ni reemplazar el parser o el driver. Un dato erróneo puede causar diagnósticos o SQL generado incorrectos, por lo que se valida también contra el servidor real.
 - **Los paquetes van firmados** con la misma clave que las actualizaciones de la app, y se comprueba su formato antes de instalarlos.
 - **Un paquete que necesita un mecanismo que la app no tiene** declara la versión mínima de la app que requiere, y la app lo dice en vez de instalarlo.
-- **Cada línea publicada viene dentro de la app y se queda**, soportada o no, y funciona sin conexión. Un paquete pesa kilobytes; no hay razón para sacarlo. La descarga existe para recibir líneas nuevas sin esperar una release.
+- **Cada línea publicada se incluye en la siguiente release de la app y se conserva**, soportada o no, para funcionar sin conexión. La descarga permite recibir líneas nuevas antes de esa release; quitar la revisión descargada devuelve la incluida.
 - **Quitar o desactivar una línea es decisión del usuario, nunca de Rowly DB.**
-- **§5.3 se genera desde el índice de paquetes**, para que este documento y lo que los usuarios pueden descargar nunca discrepen.
+- **§5.3 se generará desde la fuente versionada de paquetes**, no desde una lista mantenida a mano, cuando exista el sistema de distribución. El índice publicado y la tabla deben salir de la misma fuente.
 
 ## 12. Agregar un motor, paso a paso
 
-El mismo proceso vale para todos los motores. Solo se marca N/A lo que el motor de verdad no tiene.
+Estas operaciones son distintas: **motor** = reglas SQL y catálogo; **driver** = protocolo y transporte; **línea** = rango de comportamiento demostrado; **versión exacta** = binario del servidor probado. MariaDB y MySQL comparten driver, pero no identidad ni dialecto. El estado del fabricante (§5.2) tampoco equivale a verificación de Rowly DB.
 
-1. **Declarar.** Añadir la columna del motor en §6.5 y sus líneas en §5.3, con las diferencias que justifican cada una.
-2. **Conectarlo.** Seguir [CONTRIBUTING.es.md](CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos): driver, `DatabaseKind`, `Dialect`, `SqlProfile`. El compilador y los tests de contrato señalan cada decisión pendiente.
-3. **Entorno de prueba.** Añadir un contenedor por línea a `tools/test-dbs/` (en SQLite, un archivo de base por línea, construido con el dataset fijado).
-4. **Llenar la matriz.** En cada fila de §6.1 a §6.4, sumar el motor al test que ya existe. Los casos `PerEngine` y los `FIXTURES` hacen que el compilador pida sus respuestas. Una fila que no puede aplicarse se marca N/A aquí, con el motivo.
-5. **Corpus.** Añadir `tests/sql/<motor>/` con su SQL común, el `accepts.sql` y el `rejects.sql` de cada línea, y `tests/sql/attacks/<motor>/` para sus reglas de textos y comentarios. En SQLite: `PRAGMA`, `ATTACH`, `WITHOUT ROWID`, `STRICT`, `ON CONFLICT`, `RETURNING`.
-6. **Correr la compuerta de PR de motor** (§7) en cada línea. Con P0 = 0, P1 = 0 y cada fila aplicable en verde, el motor es Integrable (§4) y sus paquetes se pueden publicar.
+### 12.1 Motor nuevo
 
-SQLite no tiene un proceso servidor. «Servidor real» significa la biblioteca de SQLite que enlaza el driver, en la versión de cada línea. Tener menos objetos de servidor no baja el listón del divisor, el guard, la escritura, las comillas ni la seguridad.
+1. **Elegir identidad y protocolo.** Darle un ID estable en `DatabaseKind`, `Dialect` y `ConnectionDriver`; actualizar los registros exhaustivos. Reutilizar un driver solo si habla el mismo protocolo y los tests de tipos, TLS e introspección lo permiten. La [guía de desarrollo](CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos) enumera las rutas actuales.
+2. **Implementar decisiones de motor.** Léxico, parser o política de sintaxis no leída, citas, SQL generado, guard y catálogo se resuelven explícitamente. Un parser «cercano» solo se usa tras demostrar que no oculta SQL destructivo ni marca sintaxis válida como error. Ningún caso cae silenciosamente a otro motor.
+3. **Registrar pruebas.** Añadir su columna de capacidades en §6.5, fixtures comunes y por línea en §10, y una respuesta para cada fila S/A/G/D. Los `PerEngine` y `FIXTURES` actuales ayudan, pero no sustituyen la matriz real. `N/A` exige motivo documentado.
+4. **Validar y anunciar.** Ejecutar §7 en todas las versiones exactas que se pretendan anunciar, volver a correr contratos compartidos de los motores existentes y registrar P0/P1/P2. Solo con P0 = 0, P1 = 0 y cada fila aplicable cubierta llega a Integrable (§4).
+
+### 12.2 Línea nueva de un motor existente
+
+1. Añadir al corpus un caso que pase en la línea nueva y falle en la anterior, o viceversa. Sin diferencia observable para Rowly DB, ambas versiones comparten línea (§5.1).
+2. Declarar rango, motivo y capacidades; agregar probes en los extremos y a ambos lados de cualquier `since` en `tools/test-dbs/lines.json`. Si hacen falta parser, protocolo, tipo o consulta de catálogo nuevos, primero publicar la app que los implementa (§11).
+3. Ejecutar D7 y toda la matriz aplicable en cada versión exacta que se vaya a anunciar como verificada. Actualizar §5.3 y el reporte de §10; el estado del fabricante se calcula aparte.
+
+### 12.3 Versión exacta nueva dentro de una línea
+
+1. Fijar la imagen o biblioteca de esa versión por digest en el registro de pruebas, leer su versión real y comprobar que coincide. No inferir soporte del número en el nombre de la imagen.
+2. Ejecutar todas las filas aplicables de §6 y guardar la evidencia de §10. Si aparece una diferencia de comportamiento, volver a 12.2; si no, conservar la línea y añadir la versión al conjunto verificado.
+3. Una versión aún no probada puede conectar con la línea conservadora de §5.2, pero no se muestra como «verificada» ni se añade a `tested` de un paquete.
+
+SQLite no tiene proceso servidor: en estas compuertas «servidor real» significa la biblioteca SQLite enlazada por el driver, con versión y dataset fijados. Tener menos objetos no reduce el listón del divisor, guard, escritura, citas ni seguridad.
 
 ## 13. Trabajar en un motor (personas e IA)
 
 No pidas «el mayor número de simulaciones posible»: eso da una cobertura desigual. Pide:
 
-> Aplica SQL_ENGINE.md a `<motor>` `<línea>`: corre la compuerta `<PR | PR de motor | paquete | release>`, informa cada P0/P1 con una reproducción SQL mínima, convierte cada bug nuevo en un test permanente y actualiza §5, §6 y §9.
+> Aplica SQL_ENGINE.es.md a `<motor>` `<línea>` `<versión exacta>`: corre la compuerta `<PR | PR de motor | versión exacta | release>`, informa cada P0/P1 con una reproducción SQL mínima, convierte cada bug nuevo en un test permanente y actualiza §5, §6, §9 y §10.
 
 Las pruebas exploratorias son bienvenidas, y aquí encontraron bugs reales: un pánico con un `DECLARE` a medio escribir y las comillas de los argumentos de un `CALL` generado. Pero lo que encuentran se convierte en fixture. Nunca reemplazan la matriz.

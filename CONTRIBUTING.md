@@ -19,6 +19,8 @@ npm run tauri dev
 
 You need Rust 1.85+ and Node.js 20.19+. [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is laid out and where each kind of change goes.
 
+If you change an engine, driver, generated SQL, analysis or execution, first read [SQL_ENGINE.md](SQL_ENGINE.md). It is the permanent quality contract: the S/A/G/D matrix, versions, real-server tests, gates and known gaps. Design notes are work plans and do not replace that contract.
+
 ## Workflow
 
 `main` holds released versions and `develop` is where work comes together. Neither accepts direct pushes.
@@ -32,9 +34,9 @@ Before opening the pull request, run:
 
 ```bash
 cargo fmt --all
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cd app && npm run check && npm test
+cd app && npm run check && npm test && npm run build
 ```
 
 ## Tests against a real database
@@ -62,16 +64,20 @@ If one is missing, the test stops and tells you which. `EXPECT_TLS` is what the 
 
 The guard, the statement splitter and the drivers are also tested together against real servers (MySQL, MariaDB and PostgreSQL with the Sakila / Pagila sample databases). `tools/test-dbs/up.sh` starts them in Docker and `cargo test -p rowly-server-tests -- --ignored --test-threads=1` runs the tests; see `tools/test-dbs/README.md`.
 
+`tools/test-dbs/lines.json` and `tools/test-dbs/lines.sh` check version-line boundaries. The full command and its current limits are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Today the real-server suite does not run completely for every exact release or in CI; report tested releases in the PR and do not advertise a release as verified without its entire applicable matrix.
+
+When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `app/src/lib/engines/vendorSupport.json` and update the table in [SQL_ENGINE.md, §5](SQL_ENGINE.md#5-version-lines) from the same evidence.
+
 ## Adding a database engine
 
-Everything that changes from one engine to another lives in the `Dialect` enum in `crates/engine/src/lib.rs` and in the engine profile in `app/src/lib/engines/`. Nothing falls back to another engine, so if something is missing, the build fails and tells you what.
+Follow [SQL_ENGINE.md, §12](SQL_ENGINE.md#12-adding-an-engine-step-by-step) to distinguish **engine**, **driver**, **line** and **exact release**. These are the current code paths; the compiler flags some missing decisions, and the S/A/G/D matrix catches the rest.
 
-1. **Driver.** Create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace. An engine that speaks the protocol of one already supported (MariaDB and MySQL) reuses its driver.
+1. **Driver.** If it needs its own protocol, create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace. If it speaks a supported engine's protocol, reuse that driver after testing types, TLS and introspection.
 2. **Rust.** Add the engine to `DatabaseKind` in `app/src-tauri/src/drivers.rs`, which picks its driver, and to `Dialect` and its `ALL` list in `crates/engine/src/lib.rs`. The compiler points at each decision left. The engine has the same name in `DatabaseKind`, `Dialect` and the frontend's `ConnectionDriver`.
 3. **Frontend.** Add it to `app/src/lib/connections.ts` with its name, logo and default port, and write its profile in `app/src/lib/engines/<engine>.ts`.
-4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts`, decide its answer in each `PerEngine` case of the contract in `crates/engine/src/diagnostics.rs` (the compiler lists them), and run both test suites. The shared cases run on the new engine without writing anything.
+4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts`, decide its answer in each `PerEngine` case in `crates/engine/src/diagnostics.rs`, and add corpus and exact servers in `tests/sql/` and `tools/test-dbs/lines.json`. Review every applicable row of `SQL_ENGINE.md` and document each `N/A` with a reason.
 
-With that, autocomplete, JOINs by foreign key, diagnostics, pasting and large files work on the new engine. If `sqlparser` has no dialect for it, use the closest one, as MariaDB uses MySQL's, and list the valid syntax that parser rejects in `Dialect::unparsed_syntax`, so it is not flagged as an error.
+Then run the `SQL_ENGINE.md` engine gate on every exact release you intend to advertise and check that existing engines remain green. A nearby parser, such as the one MariaDB shares with MySQL, is acceptable only if tests prove it neither hides destructive SQL nor produces false diagnostics; list valid syntax it cannot read in `Dialect::unparsed_syntax`. An integration without the full matrix remains experimental, not verified support.
 
 ## Releasing
 
@@ -102,4 +108,4 @@ The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `s
 
 - Short commit messages in the imperative, in English or Spanish.
 - No abstractions ahead of need. If an engine needs something `DbConnector` does not cover, raise it in an issue first.
-- Public docs are written in English with a Spanish copy in `*.es.md`. Keep both in sync. Design notes in `docs/specs` and `docs/design` are in Spanish.
+- Public docs are written in English with a Spanish copy in `*.es.md`. Keep both in sync. Temporary design notes are in Spanish.

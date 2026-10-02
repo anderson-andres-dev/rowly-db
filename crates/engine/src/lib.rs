@@ -6,11 +6,11 @@ pub mod execution_guard;
 pub mod pagination;
 pub mod parser;
 
-/// El SQL de cada motor (docs/specs/v0.2-perfiles-de-motor.md). Todo lo que
-/// cambia de uno a otro se decide aca, con `match` exhaustivos: un motor
-/// nuevo en el enum no compila hasta que cada decision tenga su respuesta, y
-/// nada cae en silencio al SQL de otro motor. Del lado del frontend, lo mismo
-/// es `app/src/lib/engines`.
+/// El SQL de cada motor (SQL_ENGINE.es.md).
+/// Todo lo que cambia de uno a otro se decide aca, con `match` exhaustivos:
+/// un motor nuevo en el enum no compila hasta que cada decision tenga su
+/// respuesta, y nada cae en silencio al SQL de otro motor. En el frontend,
+/// las decisiones equivalentes viven en `app/src/lib/engines`.
 ///
 /// Los mismos motores que `ConnectionDriver` del frontend. MariaDB es uno
 /// propio aunque use el driver y casi todo el SQL de MySQL: donde coincide,
@@ -333,7 +333,7 @@ const POSTGRES_UNPARSED: &[&[&str]] = &[
 
 #[cfg(test)]
 mod contract {
-    //! El contrato de cada motor (docs/specs/v0.2-perfiles-de-motor.md, §5):
+    //! El contrato de cada motor (SQL_ENGINE.es.md):
     //! lo que la app escribe en su SQL, su propio parser lo vuelve a leer
     //! igual.
 

@@ -20,8 +20,8 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 
-// Diagnosticos de SQL en el editor, al estilo de Error Lens (diseño en
-// docs/specs/v0.2-diagnosticos.md): la linea con error queda con un fondo
+// Diagnosticos de SQL en el editor, al estilo de Error Lens: la linea con
+// error queda con un fondo
 // rojo tenue y el mensaje al final de la misma linea, siempre a la vista; el
 // subrayado ondulado marca el token exacto. F2 / Shift+F2 saltan entre
 // errores.
@@ -175,8 +175,8 @@ export function firstLocated(...locators: ErrorLocator[]): ErrorLocator {
 
 // --- Estado en el editor --------------------------------------------------
 //
-// Los diagnosticos viven en un RangeSet (docs/specs/v0.2-documentos-grandes.md,
-// 15d): mapearlo en cada tecla no recorre la lista, y lo que se pinta se
+// Los diagnosticos viven en un RangeSet: mapearlo en cada tecla no recorre la
+// lista, y lo que se pinta se
 // busca solo en lo visible. Cada uno ocupa su "tramo": el rango marcado mas
 // el de sus correcciones, con estas guardadas relativas al inicio del tramo.
 // Editar dentro del tramo lo deja viejo y se descarta (el analisis vuelve a

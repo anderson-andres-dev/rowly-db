@@ -375,7 +375,7 @@ export function resolveCatalogTable(
   return entry ? { schema: entry.schemaName, table: entry.tableName } : undefined;
 }
 
-// --- Completado inteligente (docs/specs/v0.2-autocompletado.md) -------------
+// --- Completado inteligente -------------
 //
 // Todo sale del texto de la sentencia actual (statementTextAt) y del
 // catalogo ya cargado: el JOIN completo con alias y condicion, el alias al

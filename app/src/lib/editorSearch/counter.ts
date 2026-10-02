@@ -15,7 +15,7 @@ export type MatchStatus =
 
 // Se cuenta por trozos de COUNT_CHUNK, cediendo entre ellos: con un
 // documento de 30 MB y pocas coincidencias, contar de una vez congela la
-// escritura (docs/specs/v0.2-documentos-grandes.md, 15e). Un conteo nuevo
+// escritura. Un conteo nuevo
 // deja sin efecto al anterior.
 export function createMatchCounter(view: EditorView, onStatus: (status: MatchStatus) => void) {
   let run = 0;
