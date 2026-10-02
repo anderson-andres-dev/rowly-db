@@ -78,22 +78,17 @@ export class Session {
     throw new Error(`${description}: no se cumplio en ${timeout} ms (ultimo valor: ${JSON.stringify(value)})`);
   }
 
-  // Teclas al elemento con foco, como las pulsaria una persona.
+  // Teclas al elemento con foco, como las pulsaria una persona. Los acordes
+  // ({ chord: [KEYS.control, KEYS.enter] }) van por "Element Send Keys": con
+  // las acciones de teclado, WebKitWebDriver entrega el modificador pero
+  // pierde la tecla siguiente. Ahi, una tecla modificadora queda pulsada
+  // hasta NULL (\uE000), como define W3C.
   async keys(...sequence) {
-    const actions = [];
     for (const item of sequence) {
-      if (typeof item === "string") {
-        for (const char of item) actions.push({ type: "keyDown", value: char }, { type: "keyUp", value: char });
-      } else {
-        // { chord: [KEYS.control, KEYS.enter] }. WebKitWebDriver pierde la
-        // segunda tecla si llega en el mismo instante que el modificador:
-        // una pausa corta entre cada una, como al pulsarlas de verdad.
-        for (const key of item.chord) actions.push({ type: "keyDown", value: key }, { type: "pause", duration: 30 });
-        for (const key of [...item.chord].reverse()) actions.push({ type: "keyUp", value: key });
-      }
+      const focused = await this.script("return document.activeElement");
+      const element = new Element(this, elementId(focused));
+      await element.type(typeof item === "string" ? item : `${item.chord.join("")}${KEYS.null}`);
     }
-    await this.command("POST", "/actions", { actions: [{ type: "key", id: "keyboard", actions }] });
-    await this.command("DELETE", "/actions");
   }
 }
 
