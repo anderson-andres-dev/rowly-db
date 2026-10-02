@@ -15,7 +15,8 @@
 //   - conectar con un perfil y ejecutar una consulta (Ctrl+Enter)
 //   - un DELETE sin WHERE pide confirmacion; Escape lo cancela y no toca datos;
 //     Enter lo confirma y se ejecuta (SQL_ENGINE S3)
-//   - en produccion toda escritura pide confirmacion en la app real (S7)
+//   - en produccion toda escritura pide confirmacion en la app real (S7),
+//     tambien los cambios del grid, que el backend rechaza sin ella
 //   - el texto de la consola sobrevive a reiniciar la app
 
 import { execFileSync, spawn } from "node:child_process";
@@ -169,6 +170,28 @@ flow("produccion: una escritura pide confirmacion en la app real", async (sessio
   await session.keys(KEYS.escape);
   await session.absent("dialog.execution-guard[open]");
   if (count() !== 3) throw new Error("Escape no debia escribir en produccion");
+});
+
+flow("produccion: editar el grid se aplica solo tras confirmar la vista previa", async (session) => {
+  await seedProfiles(session, [profile("e2e-prod", "E2E produccion", "production")]);
+  await connect(session, "E2E produccion");
+  await run(session, "SELECT id, name FROM victim ORDER BY id");
+  const cell = await session.findBy(
+    "la celda 'uno'",
+    `return [...document.querySelectorAll('[role="grid"] td')].find((td) => td.textContent.trim() === "uno") ?? null`,
+  );
+  await cell.doubleClick();
+  await session.find(".cell-editor");
+  await session.keys({ chord: [KEYS.control, "a"] }, "UNO", KEYS.enter);
+  await session.keys({ chord: [KEYS.control, KEYS.enter] });
+  await session.find("dialog.changes-dialog[open]");
+  await session.keys(KEYS.escape);
+  await session.absent("dialog.changes-dialog[open]");
+  if (sql("SELECT name FROM rowly_e2e.victim WHERE id = 1") !== "uno") throw new Error("se aplico sin confirmar");
+  await session.keys({ chord: [KEYS.control, KEYS.enter] });
+  await session.find("dialog.changes-dialog[open]");
+  await session.keys(KEYS.enter);
+  await session.waitFor("el cambio confirmado", async () => sql("SELECT name FROM rowly_e2e.victim WHERE id = 1") === "UNO");
 });
 
 flow("el texto de la consola sobrevive a reiniciar la app", async (session, restart) => {

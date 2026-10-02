@@ -163,6 +163,23 @@ export class Element {
     return this.session.command("POST", `/element/${this.id}/click`, {});
   }
 
+  // Doble clic real del puntero en el centro del elemento.
+  async doubleClick() {
+    const origin = { [ELEMENT]: this.id };
+    const click = [{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }];
+    await this.session.command("POST", "/actions", {
+      actions: [
+        {
+          type: "pointer",
+          id: "mouse",
+          parameters: { pointerType: "mouse" },
+          actions: [{ type: "pointerMove", origin, x: 0, y: 0 }, ...click, ...click],
+        },
+      ],
+    });
+    await this.session.command("DELETE", "/actions");
+  }
+
   type(text) {
     return this.session.command("POST", `/element/${this.id}/value`, { text });
   }

@@ -230,9 +230,10 @@ export async function previewChanges(target: EditTarget, changes: ResultChanges)
 }
 
 // Resuelve con las filas afectadas; rechaza con un ChangeError (todo se
-// revirtio: nada quedo aplicado).
-export async function applyChanges(target: EditTarget, changes: ResultChanges): Promise<number> {
-  return await invoke<number>("apply_result_changes", { target, changes });
+// revirtio: nada quedo aplicado). En produccion el backend exige
+// `confirmed`: que el usuario confirmo estos cambios en la vista previa.
+export async function applyChanges(target: EditTarget, changes: ResultChanges, confirmed: boolean): Promise<number> {
+  return await invoke<number>("apply_result_changes", { target, changes, confirmed });
 }
 
 // --- Pegar --------------------------------------------------------------
