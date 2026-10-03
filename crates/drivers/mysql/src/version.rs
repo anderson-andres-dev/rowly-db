@@ -19,10 +19,14 @@ pub struct ServerVersion {
     pub patch: u32,
 }
 
-/// Oldest versions introspection is written against. Older servers still
-/// connect and load whatever their catalog supports, with a warning.
-const MIN_MYSQL: (u32, u32) = (5, 7);
-const MIN_MARIADB: (u32, u32) = (10, 3);
+/// Compatibility floor: the oldest versions whose catalog introspection is
+/// written against. It is not a support threshold: vendor support comes from
+/// the support window (SQL_ENGINE.md §5.2, `vendorSupport.json`) and
+/// verification from `verified` in `tools/test-dbs/lines.json`. Older servers
+/// still connect, with their line, and load what their catalog has, with a
+/// warning.
+const COMPATIBILITY_FLOOR_MYSQL: (u32, u32) = (5, 7);
+const COMPATIBILITY_FLOOR_MARIADB: (u32, u32) = (10, 3);
 
 impl ServerVersion {
     /// Parses what `SELECT VERSION()` returns: `"8.0.35"`, `"5.7.44-log"`,
@@ -67,10 +71,10 @@ impl ServerVersion {
         format!("{product} {}.{}.{}", self.major, self.minor, self.patch)
     }
 
-    pub fn is_below_minimum(&self) -> bool {
+    pub fn is_below_compatibility_floor(&self) -> bool {
         let (major, minor) = match self.flavor {
-            Flavor::MySql => MIN_MYSQL,
-            Flavor::MariaDb => MIN_MARIADB,
+            Flavor::MySql => COMPATIBILITY_FLOOR_MYSQL,
+            Flavor::MariaDb => COMPATIBILITY_FLOOR_MARIADB,
         };
         !self.at_least(major, minor, 0)
     }
@@ -172,7 +176,7 @@ mod tests {
     fn unparseable_version_is_treated_as_oldest() {
         let parsed = ServerVersion::parse("garbage");
         assert_eq!(parsed, version(Flavor::MySql, 0, 0, 0));
-        assert!(parsed.is_below_minimum());
+        assert!(parsed.is_below_compatibility_floor());
         assert_eq!(
             parsed.capabilities().check_constraints,
             CheckConstraints::Unsupported
@@ -209,9 +213,9 @@ mod tests {
 
     #[test]
     fn minimum_versions_per_flavor() {
-        assert!(version(Flavor::MySql, 5, 6, 51).is_below_minimum());
-        assert!(!version(Flavor::MySql, 5, 7, 0).is_below_minimum());
-        assert!(version(Flavor::MariaDb, 10, 2, 44).is_below_minimum());
-        assert!(!version(Flavor::MariaDb, 10, 3, 0).is_below_minimum());
+        assert!(version(Flavor::MySql, 5, 6, 51).is_below_compatibility_floor());
+        assert!(!version(Flavor::MySql, 5, 7, 0).is_below_compatibility_floor());
+        assert!(version(Flavor::MariaDb, 10, 2, 44).is_below_compatibility_floor());
+        assert!(!version(Flavor::MariaDb, 10, 3, 0).is_below_compatibility_floor());
     }
 }

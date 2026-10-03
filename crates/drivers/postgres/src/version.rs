@@ -7,10 +7,14 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ServerVersion(pub u32);
 
-/// Oldest major version introspection is written against: the one that
-/// introduced `pg_sequence`, `relispartition` and declarative partitioning.
-/// Older servers still connect and load what they can, with a warning.
-const MIN_MAJOR: u32 = 10;
+/// Compatibility floor: the oldest major version introspection is written
+/// against, the one that introduced `pg_sequence`, `relispartition` and
+/// declarative partitioning. It is not a support threshold: vendor support
+/// comes from the support window (SQL_ENGINE.md §5.2, `vendorSupport.json`)
+/// and verification from `verified` in `tools/test-dbs/lines.json`. Older
+/// servers still connect, with their line, and load what they can, with a
+/// warning.
+const COMPATIBILITY_FLOOR_MAJOR: u32 = 10;
 
 impl ServerVersion {
     /// Parses `SHOW server_version_num`. Unparseable values become 0, which
@@ -34,8 +38,8 @@ impl ServerVersion {
         }
     }
 
-    pub fn is_below_minimum(&self) -> bool {
-        self.0 < MIN_MAJOR * 10_000
+    pub fn is_below_compatibility_floor(&self) -> bool {
+        self.0 < COMPATIBILITY_FLOOR_MAJOR * 10_000
     }
 
     pub fn capabilities(&self) -> Capabilities {
@@ -81,9 +85,9 @@ mod tests {
 
     #[test]
     fn minimum_is_postgres_10() {
-        assert!(ServerVersion(90624).is_below_minimum());
-        assert!(!ServerVersion(100000).is_below_minimum());
-        assert!(ServerVersion(0).is_below_minimum());
+        assert!(ServerVersion(90624).is_below_compatibility_floor());
+        assert!(!ServerVersion(100000).is_below_compatibility_floor());
+        assert!(ServerVersion(0).is_below_compatibility_floor());
     }
 
     #[test]

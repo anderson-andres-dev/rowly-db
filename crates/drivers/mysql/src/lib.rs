@@ -264,12 +264,12 @@ impl DbConnector for MySqlConnector {
     async fn introspect_schema(&self, schema: &str) -> Result<SchemaObjects, DriverError> {
         let mut objects =
             introspect::introspect_schema(&self.pool, schema, self.version.capabilities()).await?;
-        if self.version.is_below_minimum() {
+        if self.version.is_below_compatibility_floor() {
             objects.warnings.insert(
                 0,
-                Message::key("introspect.unsupportedVersion")
+                Message::key("introspect.belowCompatibilityFloor")
                     .with("version", self.version.display())
-                    .with("minimum", "MySQL 5.7, MariaDB 10.3"),
+                    .with("floor", "MySQL 5.7, MariaDB 10.3"),
             );
         }
         Ok(objects)
