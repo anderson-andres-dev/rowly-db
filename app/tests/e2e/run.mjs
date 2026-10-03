@@ -176,11 +176,18 @@ flow("produccion: editar el grid se aplica solo tras confirmar la vista previa",
   await seedProfiles(session, [profile("e2e-prod", "E2E produccion", "production")]);
   await connect(session, "E2E produccion");
   await run(session, "SELECT id, name FROM victim ORDER BY id");
-  const cell = await session.findBy(
-    "la celda 'uno'",
-    `return [...document.querySelectorAll('[role="grid"] td')].find((td) => td.textContent.trim() === "uno") ?? null`,
+  // Enter sobre la celda con foco la selecciona y abre su editor, como al
+  // llegar a ella con el teclado. (WebKitWebDriver no acepta un elemento
+  // como origen de una accion de puntero, y el doble clic no es lo que se
+  // prueba aqui.)
+  await session.waitFor("la celda 'uno' con foco", () =>
+    session.script(`
+      const cell = [...document.querySelectorAll('[role="grid"] td')].find((td) => td.textContent.trim() === "uno");
+      cell?.focus();
+      return !!cell && document.activeElement === cell;
+    `),
   );
-  await cell.doubleClick();
+  await session.keys(KEYS.enter);
   await session.find(".cell-editor");
   await session.keys({ chord: [KEYS.control, "a"] }, "UNO", KEYS.enter);
   await session.keys({ chord: [KEYS.control, KEYS.enter] });
