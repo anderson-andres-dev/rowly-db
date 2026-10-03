@@ -283,6 +283,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
 | `VerifyCa` and `VerifyIdentity` accepting a configured CA are not tested (D5): no test server uses a certificate from a CA of our own, and the PostgreSQL and MariaDB 10.6 images offer no TLS | P2 | Generate a CA in `tools/test-dbs` and serve its certificate. |
+| The guard fuzz on PostgreSQL 13 generates 37 dangerous cases out of 4000, and the test needs more than 30 to measure anything (S2) | P2 | Little headroom: a corpus or skeleton change can fail it without the guard changing. Add PostgreSQL skeletons or set the minimum per release. |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 

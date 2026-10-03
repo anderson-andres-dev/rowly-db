@@ -42,7 +42,9 @@ cd .. && node tools/inventory/tests.mjs --check
 
 CI runs the same gate with Rust 1.90 (`.github/workflows/quality.yml`); a newer local clippy can miss a lint that 1.90 reports, so `cargo +1.90 clippy --workspace --all-targets -- -D warnings` reproduces it exactly. Every test file needs an entry in `tests/inventory.json` with its owner, the property it protects, its risk, its gate and a decision; the `--check` fails until it has one.
 
-The **E2E** workflow builds the app and drives it on Linux/WebKitGTK through `tauri-driver` with a disposable MySQL (`app/tests/e2e/run.mjs`): connecting, running with Ctrl+Enter, confirming and cancelling a destructive statement, the production confirmation and the console text surviving a restart. It needs `WebKitWebDriver` and `tauri-driver`, so it normally runs in CI only. Windows/WebView2 and macOS/WKWebView stay a manual smoke test before a release.
+The **E2E** workflow builds the app and drives it on Linux/WebKitGTK against disposable MySQL and PostgreSQL servers. `app/tests/e2e/run.mjs` uses the keyboard through `tauri-driver`: connecting, running with Ctrl+Enter, confirming and cancelling a destructive statement, the production confirmation in the console and the grid, counting the total, and the console text after a restart. It needs `WebKitWebDriver`, so it usually runs only in CI. `app/tests/e2e/resources.mjs` opens the app with the WebKit inspector and checks that reconnecting, opening and closing consoles and idling leave no memory, editors or work behind; it also runs locally with `xvfb-run` ([tools/bench/README.md](tools/bench/README.md#resource-cycles)). Windows/WebView2 and macOS/WKWebView remain a manual smoke test before a release.
+
+New code goes in its domain folder ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#inside-the-app)): `workspace/`, `editor/`, `results/` or `connections/` in the frontend; `commands/` adapts and `services/` does the work in the backend. Its test lives next to it. A new backend command is registered in `lib.rs` and added, with its single owner module, to `app/src/lib/backend.test.ts`.
 
 ## Tests against a real database
 

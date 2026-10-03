@@ -1,6 +1,6 @@
 # Mapa C0/M0 — estado actual antes de mover código
 
-**Nota temporal** de las fases C0 ([consolidación](consolidacion-y-rendimiento.md))
+**Nota temporal** de las fases C0 (consolidación, cerrada: ver [arquitectura](../ARCHITECTURE.es.md))
 y M0 ([motores y versiones](contrato-motores-y-versiones.md)). Describe el
 código de `v0.3.0` tal como está, no el destino. Se elimina junto con esas
 specs; lo que siga vigente al cerrar C5/M5 pasa a `docs/ARCHITECTURE*.md`,

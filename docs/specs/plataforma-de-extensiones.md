@@ -3,7 +3,7 @@
 ## Estado y decisión de producto
 
 **Diseño futuro, sin implementación** (2026-10-02). La prioridad actual es
-[consolidar y medir el núcleo](consolidacion-y-rendimiento.md). Esta spec
+consolidar y medir el núcleo (hecho: [arquitectura](../ARCHITECTURE.es.md), [mediciones](../../tools/bench/README.es.md)). Esta spec
 define dónde podrán conectarse las extensiones para que esa consolidación no
 cierre la puerta a Vim, Better Comments u otras funciones de nicho. No se
 añaden tienda, gestor, SDK, dependencia de runtime ni descarga al producto
@@ -175,7 +175,7 @@ desactivación revierte sus atajos, decoraciones y estado sin dejar registros.
 
 ## 5. Presupuesto de ligereza
 
-La medición sigue [la base de rendimiento](consolidacion-y-rendimiento.md#3-presupuesto-y-medición):
+La medición sigue [el presupuesto de rendimiento](../../tools/bench/README.es.md#presupuesto):
 
 - **Vanilla, cero extensiones activas:** sin petición a tienda, sin worker,
   sin módulos de paquete importados, sin listener/timer de extensiones y sin

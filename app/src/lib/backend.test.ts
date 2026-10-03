@@ -38,3 +38,65 @@ describe("mensajes del backend", () => {
     expect([...keys].filter((key) => !known.has(key))).toEqual([]);
   });
 });
+
+// Un solo camino por comando del backend: cada invoke("…") tiene un dueño.
+// Ejecutar SQL, cargar el catalogo o guardar una consola por otra ruta se
+// saltaria lo que ese dueño hace antes (el guard, la generacion de la
+// conexion, el volcado con retraso). Un comando nuevo se agrega aqui con su
+// dueño.
+const OWNERS: Record<string, string> = {
+  analyze_sql: "lib/editor/analysisSession.ts",
+  apply_result_changes: "lib/results/resultEditing.ts",
+  cancel_query: "lib/queryExecution.ts",
+  classify_statements: "lib/queryExecution.ts",
+  connect: "lib/stores/connection.ts",
+  count_query_rows: "lib/queryExecution.ts",
+  create_sql_file: "lib/sqlFiles.ts",
+  database_explorer: "lib/stores/connection.ts",
+  delete_connection_password: "lib/credentials.ts",
+  disconnect: "lib/stores/connection.ts",
+  execute_query: "lib/queryExecution.ts",
+  export_query_to_file: "lib/components/results/ExportDialog.svelte",
+  install_release: "lib/stores/updates.ts",
+  list_releases: "lib/stores/updates.ts",
+  list_sql_dir: "lib/sqlFiles.ts",
+  list_tables: "lib/stores/connection.ts",
+  load_connection_password: "lib/credentials.ts",
+  preview_result_changes: "lib/results/resultEditing.ts",
+  prune_console_texts: "lib/stores/queryConsoles.ts",
+  read_console_text: "lib/stores/queryConsoles.ts",
+  read_sql_file: "lib/sqlFiles.ts",
+  rename_sql_file: "lib/sqlFiles.ts",
+  restart_app: "lib/stores/updates.ts",
+  result_edit_info: "lib/results/resultEditing.ts",
+  save_connection_password: "lib/credentials.ts",
+  set_visible_schemas: "lib/stores/connection.ts",
+  table_definition: "lib/tableDefinition.ts",
+  test_connection: "lib/stores/connection.ts",
+  trash_sql_file: "lib/sqlFiles.ts",
+  update_context: "lib/stores/updates.ts",
+  write_console_text: "lib/stores/queryConsoles.ts",
+  write_sql_file: "lib/sqlFiles.ts",
+};
+
+const sources = import.meta.glob(["../**/*.ts", "../**/*.svelte", "!../**/*.test.ts"], {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+describe("superficie IPC", () => {
+  it("each backend command is invoked from a single owner module", () => {
+    const found: Record<string, Set<string>> = {};
+    for (const [path, source] of Object.entries(sources)) {
+      if (path.includes("/routes/dev-preview/")) continue;
+      for (const match of source.matchAll(/invoke(?:<[^(]*>)?\(\s*"([a-z_]+)"/g)) {
+        // Rutas desde src/: el glob las da relativas a src/lib.
+        (found[match[1]] ??= new Set()).add(path.startsWith("./") ? `lib/${path.slice(2)}` : path.replace(/^\.\.\//, ""));
+      }
+    }
+    expect(Object.fromEntries(Object.entries(found).map(([command, files]) => [command, [...files]]))).toEqual(
+      Object.fromEntries(Object.entries(OWNERS).map(([command, owner]) => [command, [owner]])),
+    );
+  });
+});

@@ -2,7 +2,7 @@
 
 [English](README.md) | Español
 
-Mediciones reproducibles contra las que se compara cada fase de la consolidación. Son **compuertas de regresión**, no promesas de latencia: cada fase se compara con la referencia en la misma máquina, y un resultado dentro de la dispersión medida de la referencia se repite antes de decidir. Los benchmarks van aparte de los tests funcionales para que un runner compartido y cargado no haga fallar un pull request.
+Mediciones reproducibles contra las que se compara cada cambio que toca rendimiento. Son **compuertas de regresión**, no promesas de latencia: cada cambio se compara con la referencia en la misma máquina, y un resultado dentro de la dispersión medida de la referencia se repite antes de decidir. Los benchmarks van aparte de los tests funcionales para que un runner compartido y cargado no haga fallar un pull request.
 
 ```text
 tools/bench/
@@ -13,6 +13,18 @@ tools/bench/
 crates/server-tests/examples/catalog_bench.rs
                             conexión, introspección, guard y análisis por motor (servidores reales)
 ```
+
+## Presupuesto
+
+| Escenario | Qué se mide | Regla |
+|---|---|---|
+| Arranque frío y caliente, 20 repeticiones | Tiempo hasta la ventana, PSS al quedar estable, JS inicial | No más de 5 % sobre la mediana de la referencia; dentro de la dispersión de la máquina, se repite antes de decidir |
+| Cinco minutos sin interacción, sin conexión y con una | CPU, memoria, timers, llamadas al backend | Sin pendiente creciente; sin trabajo ni red de extensiones desactivadas |
+| Escribir con 10 000 líneas y abrir un documento de 1 M | Coste por tecla del índice, análisis, contexto | Dentro de la dispersión de la referencia; los documentos grandes no empeoran más de 10 % ni bloquean la UI |
+| 300 reconexiones y 300 ciclos de consola | Heap vivo, objetos, backend, editores y estilos montados | Tras calentar, sin pendiente sostenida; todo crecimiento se explica y se acota (ver [Ciclos de recursos](#ciclos-de-recursos)) |
+| MySQL, MariaDB y PostgreSQL con catálogos pequeños y grandes | Conexión, introspección, análisis | Un cambio de UI o una extensión desactivada no suma consultas SQL |
+
+Los porcentajes son compuertas de **regresión**, no promesas de latencia en todo hardware. Un fallo se reproduce en el mismo equipo y se acompaña de un perfil de CPU, memoria o traza de frames.
 
 ## Cómo se ejecuta
 
@@ -45,6 +57,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 |---|---|---|
 | `baseline/v0.3.0` | El binario publicado (`rowly-db-bin 0.3.0-1`), con Beekeeper Studio y el banco de motores | Omarchy, kernel 7.2.5, perfil `performance` |
 | `baseline/v0.3.0-cachyos` | `v0.3.0` compilado desde su etiqueta (`npx tauri build --no-bundle`), igual que la rama con la que se compara | CachyOS, kernel 7.1.8, perfil `balanced` (misma CPU) |
+| `baseline/c5-cachyos` | El cierre de la consolidación, medido alternado con `v0.3.0-cachyos` en la misma sesión; `node-editor.json` es la mediana de 5 corridas | CachyOS, kernel 7.1.8, perfil `balanced` |
 
 `node-editor.json` no guarda su dispersión, así que una corrida suelta contra otra puede marcar como regresión el ruido de microsegundos. Antes de llamarlo regresión, repite los dos lados (cinco corridas alternadas) y compara las medianas.
 
