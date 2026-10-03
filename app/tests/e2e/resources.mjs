@@ -30,7 +30,9 @@ const option = (name, fallback) => {
 };
 const APP = option("--app");
 if (!APP) throw new Error("falta --app <binario>");
-const INSPECTOR = "127.0.0.1:9333";
+// El inspector de cada app: un puerto por ciclo, para no chocar con el de
+// la anterior mientras termina de cerrarse.
+let INSPECTOR = "127.0.0.1:9333";
 const MYSQL_PORT = Number(process.env.E2E_MYSQL_PORT ?? 3306);
 const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
 const PG_PORT = Number(process.env.E2E_PG_PORT ?? 5432);
@@ -51,8 +53,11 @@ function sql(statement) {
 
 // --- La app -----------------------------------------------------------------
 
-async function startApp(profileDir) {
+async function startApp(profileDir, port) {
+  INSPECTOR = `127.0.0.1:${port}`;
   const app = spawn(APP, [], {
+    // Su propio grupo: al terminar se cierran tambien sus procesos de WebKit.
+    detached: true,
     env: {
       ...process.env,
       XDG_DATA_HOME: join(profileDir, "data"),
@@ -112,6 +117,7 @@ function pss(pid) {
     }
   }
   const byName = {};
+  const anonymousByName = {};
   const ticksByName = {};
   let total = 0;
   let ticks = 0;
@@ -124,15 +130,18 @@ function pss(pid) {
       ticks += own;
       const comm = readFileSync(`/proc/${process}/comm`, "utf8").trim();
       ticksByName[comm] = (ticksByName[comm] ?? 0) + own;
-      const mb = Number(readFileSync(`/proc/${process}/smaps_rollup`, "utf8").match(/^Pss:\s+(\d+)/m)?.[1] ?? 0) / 1024;
+      const rollup = readFileSync(`/proc/${process}/smaps_rollup`, "utf8");
+      const mb = Number(rollup.match(/^Pss:\s+(\d+)/m)?.[1] ?? 0) / 1024;
+      const anonymous = Number(rollup.match(/^Anonymous:\s+(\d+)/m)?.[1] ?? 0) / 1024;
       const name = readFileSync(`/proc/${process}/comm`, "utf8").trim();
       byName[name] = (byName[name] ?? 0) + mb;
+      anonymousByName[name] = (anonymousByName[name] ?? 0) + anonymous;
       total += mb;
     } catch {
       // Termino mientras se leia.
     }
   }
-  return { total, byName, ticks, ticksByName };
+  return { total, byName, anonymousByName, ticks, ticksByName };
 }
 
 const DOM = `({
@@ -146,7 +155,7 @@ async function sample(page, app, index) {
 }
 
 const format = ({ index, heap, pss, dom }) =>
-  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
+  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; backend propio ${(pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0).toFixed(1)} MB; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
     pss.byName,
   )
     .map(([name, mb]) => `${name} ${mb.toFixed(1)}`)
@@ -178,14 +187,16 @@ function assertStable(samples) {
   };
   grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
   grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
-  // El PSS del backend sube y baja con cada conexion (en CI, entre ~142 y
-  // ~165 MB de una muestra a otra): una fuga sube su piso. Se compara el
-  // minimo de la segunda mitad de las muestras con el de la primera.
-  const backend = (s) => s.pss.byName[basename(APP).slice(0, 15)] ?? 0;
+  // La memoria propia del backend (Anonymous: su heap y su pila), no su
+  // PSS: el PSS reparte las bibliotecas compartidas entre quienes las usan, y
+  // sube solo cuando muere otro proceso que las compartia. Sube y baja con
+  // cada conexion; una fuga sube su piso, asi que se compara el minimo de la
+  // segunda mitad de las muestras con el de la primera.
+  const backend = (s) => s.pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0;
   const half = Math.ceil(samples.length / 2);
   const floor = (part) => Math.min(...part.map(backend));
   const before = floor(samples.slice(0, half));
-  grew("el piso del PSS del backend (MB)", before, floor(samples.slice(half)), Math.max(2, before * 0.05));
+  grew("el piso de la memoria propia del backend (MB)", before, floor(samples.slice(half)), Math.max(2, before * 0.05));
   for (const key of ["editors", "styles"])
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
@@ -420,15 +431,23 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
 // --- Ejecucion --------------------------------------------------------------
 
 async function stop(app) {
-  if (app.exitCode !== null) return;
-  app.kill("SIGTERM");
+  const group = (signal) => {
+    try {
+      process.kill(-app.pid, signal);
+    } catch {
+      // Ya no queda nadie en el grupo.
+    }
+  };
+  group("SIGTERM");
   for (let i = 0; i < 50 && app.exitCode === null; i += 1) await sleep(100);
-  if (app.exitCode === null) app.kill("SIGKILL");
+  group("SIGKILL");
 }
 
 const only = process.env.E2E_ONLY;
 let failures = 0;
+let port = 9333;
 for (const { name, body } of cycles.filter((candidate) => !only || candidate.name.includes(only))) {
+  port += 1;
   sql(
     "DROP DATABASE IF EXISTS rowly_e2e; CREATE DATABASE rowly_e2e; " +
       "CREATE TABLE rowly_e2e.victim (id INT PRIMARY KEY, name VARCHAR(20)); " +
@@ -439,7 +458,7 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
   let app = null;
   let page = null;
   try {
-    ({ app, page } = await startApp(profileDir).catch((error) => {
+    ({ app, page } = await startApp(profileDir, port).catch((error) => {
       app = error.app ?? null;
       throw error;
     }));

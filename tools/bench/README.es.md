@@ -58,7 +58,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | 300 consolas | Abrir (Ctrl+Shift+Q), ejecutar (Ctrl+Enter), cambiar de paleta en Ajustes y cerrar (Ctrl+F4) | Al final queda un solo editor |
 | Reposo con una conexión | 300 s con un resultado en pantalla | Ninguna llamada al backend ni `setInterval`; menos del 10 % de un núcleo |
 
-En todos, desde el calentamiento (ciclo 50), no crecen el heap de JavaScript vivo tras recolectar (±10 % o 2 MB), los objetos vivos (±5 %), el piso del PSS del backend (±5 % o 2 MB) ni los editores y estilos montados. Si el heap crece, el error dice qué clases sumaron objetos.
+En todos, desde el calentamiento (ciclo 50), no crecen el heap de JavaScript vivo tras recolectar (±10 % o 2 MB), los objetos vivos (±5 %), el piso de la memoria propia del backend (`Anonymous`, ±5 % o 2 MB) ni los editores y estilos montados. Si el heap crece, el error dice qué clases sumaron objetos.
 
 El PSS del WebKitWebProcess se informa, pero no es compuerta: sube con la memoria que el recolector ya liberó y WebKit retiene, y se aplana solo (con 1500 reconexiones, hacia la 600–700, con JIT y sin él), mientras el heap vivo queda plano. En reposo, bajo Xvfb y sin GPU, el cursor que parpadea y el compositor de GTK son ~3 % de un núcleo.
 
