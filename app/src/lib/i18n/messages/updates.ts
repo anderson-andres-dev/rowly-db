@@ -3,8 +3,6 @@ import { defineMessages } from "../define";
 // Ajustes > Actualizaciones.
 export default defineMessages({
   es: {
-    title: "Actualizaciones",
-    installed: "Versión instalada",
     check: "Buscar",
     checking: "Buscando…",
     upToDate: "Estás al día",
@@ -49,8 +47,6 @@ export default defineMessages({
     "error.notInstallable": "Esta copia no puede actualizarse desde la app.",
   },
   en: {
-    title: "Updates",
-    installed: "Installed version",
     check: "Check",
     checking: "Checking…",
     upToDate: "Up to date",
@@ -95,8 +91,6 @@ export default defineMessages({
     "error.notInstallable": "This copy can’t be updated from the app.",
   },
   "pt-BR": {
-    title: "Atualizações",
-    installed: "Versão instalada",
     check: "Procurar",
     checking: "Procurando…",
     upToDate: "Está atualizado",
@@ -141,8 +135,6 @@ export default defineMessages({
     "error.notInstallable": "Esta cópia não pode ser atualizada pelo app.",
   },
   fr: {
-    title: "Mises à jour",
-    installed: "Version installée",
     check: "Rechercher",
     checking: "Recherche…",
     upToDate: "À jour",
@@ -187,8 +179,6 @@ export default defineMessages({
     "error.notInstallable": "Cette copie ne peut pas être mise à jour depuis l’app.",
   },
   de: {
-    title: "Updates",
-    installed: "Installierte Version",
     check: "Suchen",
     checking: "Wird gesucht…",
     upToDate: "Aktuell",
