@@ -874,15 +874,27 @@ fn preview_result_changes(
     })
 }
 
+/// In production every write needs the user's explicit confirmation, and the
+/// backend checks it: the UI shows the preview, but does not decide alone.
+fn production_write_allowed(production: bool, confirmed: bool) -> Result<(), Message> {
+    if production && !confirmed {
+        return Err(Message::key("changes.productionNeedsConfirmation"));
+    }
+    Ok(())
+}
+
 /// Applies the pending grid changes in one transaction (all or nothing).
+/// `confirmed`: the user confirmed this exact set of changes in the preview.
 #[tauri::command]
 async fn apply_result_changes(
     target: result_editing::EditTarget,
     changes: khipu_engine::editing::ResultChanges,
+    confirmed: Option<bool>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<u64, khipu_driver_core::TransactionError> {
     let (connector, statements) = with_active_connection(&window, &state, |active| {
+        production_write_allowed(active.production, confirmed.unwrap_or(false))?;
         let statements =
             result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
         Ok((Arc::clone(&active.connector), statements))
@@ -1097,5 +1109,12 @@ mod tests {
         );
         let select = check_statement("SELECT 1", Dialect::Postgres, true, GuardOptions::default());
         assert!(select.confirmation.is_none());
+    }
+
+    #[test]
+    fn grid_changes_in_production_need_the_users_confirmation() {
+        assert!(production_write_allowed(true, false).is_err());
+        assert!(production_write_allowed(true, true).is_ok());
+        assert!(production_write_allowed(false, false).is_ok());
     }
 }
