@@ -83,17 +83,15 @@ struct ActiveConnection {
     catalog: Arc<SchemaCatalog>,
 }
 
-/// MySQL y MariaDB: ¿el `sql_mode` de la sesion lleva NO_BACKSLASH_ESCAPES?
-/// Cambia como se parten las cadenas, y con ello lo que el guard ve.
+/// ¿El modo de la sesion lleva NO_BACKSLASH_ESCAPES? Solo en los motores
+/// con `sql_mode_query` (MySQL, MariaDB). Cambia como se parten las cadenas, y
+/// con ello lo que el guard ve.
 async fn uses_no_backslash_escapes(connector: &dyn DbConnector, dialect: Dialect) -> bool {
-    if dialect == Dialect::Postgres {
+    let Some(query) = dialect.definition().sql_mode_query else {
         return false;
-    }
+    };
     match connector
-        .execute_query(
-            "SELECT @@SESSION.sql_mode",
-            QueryExecutionOptions { max_rows: 1 },
-        )
+        .execute_query(query, QueryExecutionOptions { max_rows: 1 })
         .await
     {
         QueryExecutionResult::ResultSet { rows, .. } => rows
