@@ -73,6 +73,7 @@ async function startApp(profileDir, port) {
   app.stdout.on("data", keep);
   app.stderr.on("data", keep);
   const page = await connectInspector(INSPECTOR).catch((error) => {
+    error.message += ` (la app ${app.exitCode === null ? "seguia viva" : `termino con ${app.exitCode}`})`;
     error.app = app;
     throw error;
   });
@@ -475,7 +476,14 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
   let app = null;
   let page = null;
   try {
-    ({ app, page } = await startApp(profileDir, port).catch((error) => {
+    // Si la app no llega a mostrar su pagina (paso alguna vez en CI en el
+    // tercer arranque), se cierra y se intenta una vez mas, en otro puerto.
+    ({ app, page } = await startApp(profileDir, port).catch(async (error) => {
+      console.log(`      reintento: ${error.message}`);
+      if (error.app) await stop(error.app);
+      port += 100;
+      return startApp(profileDir, port);
+    }).catch((error) => {
       app = error.app ?? null;
       throw error;
     }));
