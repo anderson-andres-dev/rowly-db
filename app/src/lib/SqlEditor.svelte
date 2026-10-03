@@ -1,114 +1,62 @@
-<script module lang="ts">
-  import type { SqlProfile as ModuleSqlProfile } from "$lib/engines";
-
-  // Los resultados del analisis (analyze_sql) por texto de sentencia, para
-  // el catalogo y el motor vigentes. Viven fuera del editor: cada pestaña
-  // monta su propio editor, y con la cache adentro volver a una pestaña
-  // reanalizaba el documento entero en el backend. Otro catalogo u otro
-  // motor, cache nueva.
-  let sharedAnalysis: {
-    profileId: string | null;
-    tables: unknown;
-    engine: ModuleSqlProfile;
-    created: string;
-    cache: Map<string, unknown>;
-  } | null = null;
-
-  // Por conexion tambien: dos conexiones del mismo motor con el catalogo
-  // todavia vacio no comparten resultados. Y por las tablas que crea el
-  // documento (`created`): con otras, lo que se dijo de una sentencia cambia.
-  function analysisCacheFor<Raw>(
-    profileId: string | null,
-    tables: unknown,
-    engine: ModuleSqlProfile,
-    created: string,
-  ): Map<string, Raw> {
-    if (
-      !sharedAnalysis ||
-      sharedAnalysis.profileId !== profileId ||
-      sharedAnalysis.tables !== tables ||
-      sharedAnalysis.engine !== engine ||
-      sharedAnalysis.created !== created
-    ) {
-      sharedAnalysis = { profileId, tables, engine, created, cache: new Map() };
-    }
-    return sharedAnalysis.cache as Map<string, Raw>;
-  }
-</script>
-
 <script lang="ts">
   import { Check, ChevronDown, ChevronUp, CircleX } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
-  import { splitStatements } from "$lib/sqlStatements";
   import {
     sqlLexical,
     statementIndex,
-    statementNear,
     statementsChangedIn,
     statementTextAt,
   } from "$lib/sqlStatementIndex";
-  import { AnalysisRunner } from "$lib/sqlAnalysis";
-  import { createdTables } from "$lib/sqlCreatedTables";
+  import { createAnalysisSession } from "$lib/editor/analysisSession";
+  import { createEditorConfiguration } from "$lib/editor/configuration";
+  import { createEditorCommands, currentSqlRange } from "$lib/editor/commands";
+  import {
+    createDiagnosticPopup,
+    diagnosticCounter,
+    jump,
+    serverDiagnostics,
+    stopTypingIn,
+  } from "$lib/editor/diagnosticPresentation";
   import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
-  import { parameterHintConfig, parameterHints } from "$lib/sqlParameterHints";
+  import { parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
-    applyQuickFix,
-    clearDiagnosticsIn,
-    diagnosticAt,
-    jumpToDiagnostic,
-    visibleDiagnosticCount,
-    diagnosticsField,
-    lineColumnToOffset,
-    diagnosticUnder,
     sqlDiagnostics,
-    stopTyping,
-    type QuickFix,
     type SqlDiagnostic,
   } from "$lib/sqlDiagnostics";
-  import { groupByFixes } from "$lib/sqlErrorHelp";
   import { engineFor, standardSql, type SqlProfile } from "$lib/engines";
-  import { backendText, invoke, type BackendMessage } from "$lib/backend";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
   import { onMount, onDestroy, untrack } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
-  import { sql } from "@codemirror/lang-sql";
-  import { autocompletion } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
   import { scrollPastEnd } from "@codemirror/view";
-  import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
-  import { buildCmTheme } from "$lib/theming/codemirrorTheme";
+  import { EditorSelection } from "@codemirror/state";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
   import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import {
-    buildCompletionSource,
     buildSqlSchema,
     dialectFor,
     extractDefaultTable,
-    resolveCatalogTable,
   } from "$lib/sqlSchema";
   import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
   import { vendorSupport } from "$lib/engines/vendorSupport";
   import { commentEditing } from "$lib/sqlCommentEditing";
   import { commentStyle } from "$lib/sqlCommentStyle";
-  import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
+  import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
-  import { buildTabCompletionKeymap, indentationExtension } from "$lib/sqlIndentation";
-  import { formatSqlText } from "$lib/sqlFormatter";
   import { notifyError } from "$lib/stores/notifications";
-  import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
+  import { activeStatementHighlight } from "$lib/sqlEditorBehavior";
   import {
     executionMarker,
     executionMarkerField,
     executionPart,
     markerFromResult,
-    setExecutionMarker,
     setPartStatus,
     updateExecutionMarker,
     type ExecutionPart,
@@ -121,33 +69,7 @@
   import "$lib/sqlEditorIcons.css";
   import "$lib/styles/editorSearch.css";
   import { editorSearch, openReplacePanel, toggleSearchPanel } from "$lib/editorSearchPanel";
-  import { locale, t, translate, type MessageKey } from "$lib/i18n";
-
-  // Frases propias de CodeMirror (plegado, anuncios de lector de pantalla,
-  // "ir a linea"...) que se muestran o anuncian en el editor.
-  const CODEMIRROR_PHRASES: Record<string, MessageKey> = {
-    "Fold line": "editor.cm.foldLine",
-    "Unfold line": "editor.cm.unfoldLine",
-    "Folded lines": "editor.cm.foldedLines",
-    "Unfolded lines": "editor.cm.unfoldedLines",
-    to: "editor.cm.to",
-    "folded code": "editor.cm.foldedCode",
-    unfold: "editor.cm.unfold",
-    Completions: "editor.cm.completions",
-    "Control character": "editor.cm.controlCharacter",
-    "Selection deleted": "editor.cm.selectionDeleted",
-    "current match": "editor.cm.currentMatch",
-    "on line": "editor.cm.onLine",
-    "Go to line": "editor.cm.goToLine",
-    go: "editor.cm.go",
-    close: "editor.cm.close",
-  };
-
-  function buildPhrases() {
-    return EditorState.phrases.of(
-      Object.fromEntries(Object.entries(CODEMIRROR_PHRASES).map(([phrase, key]) => [phrase, translate(key)])),
-    );
-  }
+  import { locale, t } from "$lib/i18n";
 
   let {
     value = $bindable(""),
@@ -167,19 +89,6 @@
 
   let container: HTMLDivElement;
   let view: EditorView | undefined;
-  const themeCompartment = new Compartment();
-  const sqlCompartment = new Compartment();
-  // Las comillas y comentarios del motor, para cortar en sentencias.
-  const lexicalCompartment = new Compartment();
-  // El motor y las rutinas de la conexion, para los hints de parametros.
-  const hintsCompartment = new Compartment();
-  const completionCompartment = new Compartment();
-  const definitionLinkCompartment = new Compartment();
-  const behaviorCompartment = new Compartment();
-  const tabCompletionCompartment = new Compartment();
-  const indentationCompartment = new Compartment();
-  const phrasesCompartment = new Compartment();
-
   // Config vigente. schema/dialect/fkIndex cambian poco (catalogo o conexion
   // activa); defaultTable cambia con cada tecla, asi que se separan para no
   // reconstruir el SQLNamespace completo en cada keystroke.
@@ -189,9 +98,6 @@
   let engine: SqlProfile = standardSql;
   let routineIndex: RoutineIndex = buildRoutineIndex([]);
 
-  function hintConfig() {
-    return { engine, routines: routineIndex };
-  }
   let sqlDialect = dialectFor(engine);
   let defaultTable: string | undefined;
   // Ejecucion lanzada desde este editor cuyo resultado todavia no llego:
@@ -228,116 +134,21 @@
     };
   }
 
-  async function writeClipboard(text: string): Promise<boolean> {
-    const copied = await copyToClipboard(text);
-    view?.focus();
-    return copied;
-  }
-
-  async function copySelection() {
-    if (!view) return;
-    const selection = view.state.selection.main;
-    if (selection.empty) return;
-    await writeClipboard(view.state.sliceDoc(selection.from, selection.to));
-  }
-
-  async function cutSelection() {
-    if (!view) return;
-    const selection = view.state.selection.main;
-    if (selection.empty) return;
-    const copied = await writeClipboard(view.state.sliceDoc(selection.from, selection.to));
-    if (copied) view.dispatch({ changes: { from: selection.from, to: selection.to } });
-    view.focus();
-  }
-
-  async function pasteClipboard() {
-    if (!view) return;
-    try {
-      // Mismo filtro que Ctrl+V (clipboardInputFilter), que este camino no
-      // pasa.
-      const text = normalizePastedSql(await navigator.clipboard.readText(), view.state.facet(sqlLexical));
-      view.dispatch({ ...view.state.replaceSelection(text), userEvent: "input.paste", scrollIntoView: true });
-      view.focus();
-    } catch {
-      // El permiso del portapapeles puede estar bloqueado por el sistema.
-    }
-  }
-
-  function selectEverything() {
-    if (!view) return;
-    selectAll(view);
-    view.focus();
-  }
-
-  function currentSqlRange(): { from: number; to: number; selected: boolean } | null {
-    if (!view) return null;
-    const selection = view.state.selection.main;
-    if (!selection.empty) return { from: selection.from, to: selection.to, selected: true };
-
-    // Sentencia bajo el cursor (sqlStatementIndex.ts): nunca el documento
-    // entero; sin sentencias, nada que ejecutar.
-    const range = statementNear(view.state, selection.head);
-    return range ? { ...range, selected: false } : null;
-  }
-
-  function mappedCursorOffset(source: string, offset: number, formatted: string): number {
-    const significantBeforeCursor = [...source.slice(0, offset)].filter((char) => !/\s/.test(char)).length;
-    if (significantBeforeCursor === 0) return 0;
-
-    let seen = 0;
-    for (let index = 0; index < formatted.length; index += 1) {
-      if (!/\s/.test(formatted[index])) seen += 1;
-      if (seen === significantBeforeCursor) return index + 1;
-    }
-    return formatted.length;
-  }
-
-  function formatCurrentSql(): boolean {
-    if (!view) return false;
-    const range = currentSqlRange();
-    if (!range) return false;
-
-    const originalDoc = view.state.doc;
-    const source = view.state.sliceDoc(range.from, range.to);
-    const originalCursor = view.state.selection.main.head;
-    const settings = get(editorSettings);
-    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns, settings.indentStyle, settings.indentSize).then((result) => {
-      // La primera ejecución carga el formateador bajo demanda. Si el usuario
-      // escribió durante esos milisegundos, no se reemplaza una versión vieja.
-      if (!view || view.state.doc !== originalDoc) return;
-      // Lo que el parser no entiende queda igual y se dice por que (antes no
-      // pasaba nada y parecia que el formato no se aplicaba). Con varias
-      // consultas, las demas si se formatean.
-      const firstLine = view.state.doc.lineAt(range.from).number;
-      const failure = result.failures[0];
-      if (failure) {
-        const line = firstLine + failure.line - 1;
-        const params = { token: failure.token ?? "", line, count: result.failures.length, formatted: result.formatted };
-        notifyError(
-          result.formatted === 0
-            ? $t(failure.token ? "editor.format.failedAt" : "editor.format.failed", params)
-            : $t(result.failures.length === 1 ? "editor.format.partialOne" : "editor.format.partialOther", params),
-        );
-        if (result.formatted === 0) return;
-      }
-      const formatted = result.text;
-      if (formatted === source) {
-        view.focus();
-        return;
-      }
-
-      const cursorOffset = mappedCursorOffset(source, originalCursor - range.from, formatted);
-      view.dispatch({
-        changes: { from: range.from, to: range.to, insert: formatted },
-        selection: range.selected
-          ? EditorSelection.range(range.from, range.from + formatted.length)
-          : EditorSelection.cursor(range.from + cursorOffset),
-        userEvent: "input.format",
-      });
-      view.focus();
-    });
-    return true;
-  }
+  // Portapapeles, formatear y preparar una ejecucion (editor/commands.ts).
+  const commands = createEditorCommands({
+    view: () => view,
+    engine: () => engine,
+    formatSettings: () => get(editorSettings),
+    text: (key, params) => $t(key, params),
+    notifyError,
+    writeClipboard: copyToClipboard,
+    readClipboard: () => navigator.clipboard.readText(),
+  });
+  const copySelection = commands.copy;
+  const cutSelection = commands.cut;
+  const pasteClipboard = commands.paste;
+  const selectEverything = commands.selectEverything;
+  const formatCurrentSql = commands.format;
 
   // Ejecuta la seleccion o la sentencia bajo el cursor. Ignorado mientras
   // esta consola ya esta ejecutando (el boton se deshabilita, pero el atajo
@@ -346,7 +157,7 @@
   // otra vez del lado del store antes de invocar el backend.
   function executeCurrentSql(): boolean {
     if (!view || executing) return true;
-    const range = currentSqlRange();
+    const range = currentSqlRange(view.state);
     return range ? executeRange(range) : true;
   }
 
@@ -358,27 +169,8 @@
   }
 
   function executeRange(range: { from: number; to: number }): boolean {
-    if (!view) return true;
-    const raw = view.state.sliceDoc(range.from, range.to);
-    const sql = raw.trim();
-    if (!sql) return true;
-    const statements = splitStatements(raw, engine.lexical);
-    if (statements.length === 0) return true;
-
-    const from = range.from + (raw.length - raw.trimStart().length);
-    // Varias sentencias: el Workspace las corre como script y va marcando
-    // cada una (markStatement), con su icono y su tiempo.
-    const parts =
-      statements.length > 1
-        ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
-        : undefined;
-    view.dispatch({
-      effects: [
-        setExecutionMarker.of({ from, to: from + sql.length, status: "pending", parts }),
-        // Volver a ejecutar la sentencia quita sus errores anteriores.
-        clearDiagnosticsIn.of({ from, to: from + sql.length }),
-      ],
-    });
+    const sql = commands.execute(range);
+    if (sql === null) return true;
     awaitingResult = { result };
     onexecute?.(sql);
     return true;
@@ -397,44 +189,28 @@
     "format-sql": whenFocused(formatCurrentSql),
     "execute-query": whenFocused(executeCurrentSql),
     "execute-script": whenFocused(executeAllSql),
-    "next-diagnostic": whenFocused((current) => jump(current, 1)),
-    "previous-diagnostic": whenFocused((current) => jump(current, -1)),
-    "diagnostic-details": whenFocused(showDetails),
-    "apply-quick-fix": whenFocused(applyFirstFix),
+    "next-diagnostic": whenFocused((current) => jumpTo(current, 1)),
+    "previous-diagnostic": whenFocused((current) => jumpTo(current, -1)),
+    "diagnostic-details": whenFocused((current) => details.showDetails(current)),
+    "apply-quick-fix": whenFocused((current) => details.applyFirstFix(current)),
   });
 
-  function buildDefinitionLink() {
-    return definitionLinkExtension({
-      resolveTable: (word) => resolveCatalogTable(sqlSchema.schema, sqlSchema.defaultSchema, word),
-      onOpen: (ref) => onopentabledefinition?.(ref),
-    });
-  }
+  // Los Compartment de cada ajuste (editor/configuration.ts).
+  const configuration = createEditorConfiguration({
+    language: () => ({
+      engine,
+      dialect: sqlDialect,
+      schema: sqlSchema,
+      catalogCompletions,
+      defaultTable,
+      routines: routineIndex,
+    }),
+    settings: () => get(editorSettings),
+    onOpenTable: (ref) => onopentabledefinition?.(ref),
+  });
 
   function reconfigureCompletion() {
-    if (!view) return;
-    view.dispatch({
-      effects: [
-        sqlCompartment.reconfigure(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
-        completionCompartment.reconfigure(
-          autocompletion({
-            override: [
-              buildCompletionSource({
-                dialect: sqlDialect,
-                engine,
-                schema: sqlSchema.schema,
-                defaultSchema: sqlSchema.defaultSchema,
-                defaultTable,
-                fkIndex: sqlSchema.fkIndex,
-                tableIndex: sqlSchema.tableIndex,
-                catalogCompletions,
-                tableAliases: get(editorSettings).tableAliases,
-              }),
-            ],
-          }),
-        ),
-        definitionLinkCompartment.reconfigure(buildDefinitionLink()),
-      ],
-    });
+    view?.dispatch({ effects: configuration.completion() });
   }
 
   // Para el comando find con el editor como zona activa (Workspace).
@@ -448,254 +224,18 @@
   }
 
   // Un error de la base, ubicado en la sentencia [from, to) que lo produjo
-  // (sqlDiagnostics.ts). Sin pista de donde, la sentencia entera.
+  // (editor/diagnosticPresentation.ts).
   function diagnosticFor(from: number, to: number, result: QueryExecutionResult): SqlDiagnostic[] {
-    if (!view || result.type !== "error") return [];
-    const statement = view.state.sliceDoc(from, to);
-    // Donde cayo y que ayuda corresponde: segun los mensajes y codigos del
-    // motor (lib/engines).
-    const located = engine.locateError(statement, result);
-    const range = located ?? { from: 0, to: statement.length };
-    const help = result.code ? engine.errorHelp[result.code] : undefined;
-    // Columna fuera del GROUP BY: sumarla o agregarla (solo si se sabe cual).
-    const fixes =
-      located && help === "groupBy"
-        ? groupByFixes(statement, range).map((fix) => ({
-            label: $t(fix.kind === "aggregate" ? "editor.diagnostics.fix.aggregate" : "editor.diagnostics.fix.groupBy", {
-              column: fix.column,
-            }),
-            from: from + fix.from,
-            to: from + fix.to,
-            insert: fix.insert,
-          }))
-        : [];
-    return [
-      {
-        from: from + range.from,
-        to: from + range.to,
-        message: result.message,
-        code: result.code,
-        source: "server",
-        fixes,
-        help,
-        unresolved: help === "tableMissing" || help === "columnMissing",
-      },
-    ];
+    if (!view) return [];
+    return serverDiagnostics(view.state.sliceDoc(from, to), from, result, engine, (key, params) => $t(key, params));
   }
 
-  // --- Analisis mientras se escribe (analyze_sql) ---------------------------
-  // Tras la pausa, el backend revisa sintaxis y nombres contra el catalogo,
-  // sin tocar la base: solo lo que cambio, con los resultados guardados por
-  // sentencia y el resto del documento en segundo plano (sqlAnalysis.ts).
-  interface AnalysisPosition {
-    line: number;
-    column: number;
-  }
-  interface AnalysisDiagnostic {
-    start: AnalysisPosition;
-    end: AnalysisPosition;
-    message: BackendMessage;
-    suggestions?: { start: AnalysisPosition; end: AnalysisPosition; replacement: string }[];
-  }
+  // --- Analisis mientras se escribe (editor/analysisSession.ts) -------------
+  const analysis = createAnalysisSession({ view: () => view, text: (key, params) => $t(key, params) });
 
-  // Nombres que no existen: se pintan en rojo en vez de subrayarse.
-  const UNRESOLVED_KEYS = new Set([
-    "diagnostic.unknownTable",
-    "diagnostic.unknownColumn",
-    "diagnostic.unknownColumnAny",
-    "diagnostic.unknownQualifier",
-  ]);
-
-  // Lo que falta cerrar mientras se escribe: no es un error todavia.
-  const UNFINISHED_KEYS: ReadonlySet<string> = new Set([
-    "diagnostic.incomplete",
-    "diagnostic.unclosedParen",
-    "diagnostic.unclosedCase",
-    "diagnostic.unterminatedString",
-    "diagnostic.unterminatedIdentifier",
-    "diagnostic.unterminatedDollarQuote",
-    "diagnostic.unterminatedComment",
-  ]);
-  // Lo mismo, pero solo si es lo ultimo de la sentencia (`SELECT a,` o
-  // `WHERE a =` a medio escribir).
-  const UNFINISHED_AT_END_KEYS: ReadonlySet<string> = new Set([
-    "diagnostic.trailingComma",
-    "diagnostic.extraComma",
-    "diagnostic.missingValue",
-  ]);
-
-  // Los mensajes genericos de sqlparser ("Expected X, found Y" y los que no
-  // traducimos): con la sentencia a medias suele retroceder y senalar un
-  // token anterior al que falta (sqlDiagnostics.ts, whileTyping).
-  const VAGUE_KEYS: ReadonlySet<string> = new Set([
-    "",
-    "diagnostic.unexpected",
-    "diagnostic.expected",
-    "diagnostic.expectedStatement",
-    "diagnostic.expectedExpression",
-    "diagnostic.expectedIdentifier",
-    "diagnostic.expectedClose",
-  ]);
-
-  const samePosition = (a: AnalysisPosition, b: AnalysisPosition) => a.line === b.line && a.column === b.column;
-
-  // Lo que dijo el backend de una sentencia que empieza en `start`.
-  function analysisDiagnostics(start: number, statement: string, found: AnalysisDiagnostic[]): SqlDiagnostic[] {
-    const at = (position: AnalysisPosition) => start + lineColumnToOffset(statement, position.line, position.column);
-    return found.map((item) => {
-      const from = at(item.start);
-      const to = Math.max(from + 1, at(item.end));
-      const message = backendText(item.message);
-      const suggestions = item.suggestions ?? [];
-      const key = typeof item.message === "object" ? item.message.key : "";
-      // Un nombre que no existe: "¿Quisiste decir…?" con el mas parecido.
-      const hint =
-        UNRESOLVED_KEYS.has(key) && suggestions[0]?.replacement
-          ? ` ${$t("editor.diagnostics.didYouMean", { name: suggestions[0].replacement })}`
-          : "";
-      const fixes: QuickFix[] = suggestions.map((suggestion) => ({
-        label: !suggestion.replacement
-          ? $t("editor.diagnostics.fix.delete")
-          : samePosition(suggestion.start, suggestion.end)
-            ? $t("editor.diagnostics.fix.insert", { text: suggestion.replacement })
-            : $t("editor.diagnostics.fix.replace", { text: suggestion.replacement }),
-        from: at(suggestion.start),
-        to: at(suggestion.end),
-        insert: suggestion.replacement,
-      }));
-      // Lo que solo dice que falta terminar: no se muestra mientras se
-      // escribe en esa sentencia (sqlDiagnostics.ts, typing).
-      const incomplete =
-        UNFINISHED_KEYS.has(key) || (UNFINISHED_AT_END_KEYS.has(key) && statement.slice(to - start).trim() === "");
-      return {
-        from,
-        to,
-        message: message + hint,
-        source: "analysis",
-        fixes,
-        unresolved: UNRESOLVED_KEYS.has(key),
-        incomplete,
-        vague: VAGUE_KEYS.has(key),
-      };
-    });
-  }
-
-  // Las tablas que crea el documento (sqlCreatedTables.ts), para que el
-  // analisis no las de por inexistentes. Se vuelven a buscar en cada ronda.
-  let createdNames: string[] = [];
-  let createdKey = "";
-
-  const analysis = new AnalysisRunner<AnalysisDiagnostic[]>({
-    view: () => view,
-    analyze: (statements) => invoke<AnalysisDiagnostic[][]>("analyze_sql", { statements, created: createdNames }),
-    toDiagnostics: analysisDiagnostics,
-    prepare: () => {
-      if (!view) return;
-      const names = createdTables(view.state.doc);
-      const key = names.join(",");
-      if (key === createdKey) return;
-      createdNames = names;
-      createdKey = key;
-      analysis.useCache(analysisCacheFor(analyzedProfile ?? null, analyzedTables, engine, createdKey));
-      analysis.markAllDirty();
-    },
-  });
-  analysis.markAllDirty();
-  let analyzedTables: unknown = null;
-  let analyzedEngine: SqlProfile | null = null;
-  let analyzedProfile: string | null | undefined = undefined;
-
-  // --- Ventana de detalle ------------------------------------------------
-  let popup = $state<{
-    diagnostic: SqlDiagnostic;
-    anchor: { left: number; top: number; bottom: number };
-    focused: boolean;
-  } | null>(null);
-  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  let hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function openPopup(diagnostic: SqlDiagnostic, focused: boolean) {
-    if (!view) return;
-    const coords = view.coordsAtPos(diagnostic.from);
-    if (!coords) return;
-    popup = { diagnostic, anchor: { left: coords.left, top: coords.top, bottom: coords.bottom }, focused };
-  }
-
-  function closePopup(refocusEditor: boolean) {
-    popup = null;
-    if (refocusEditor) view?.focus();
-  }
-
-  function applyFix(fix: QuickFix) {
-    if (!view) return;
-    closePopup(false);
-    applyQuickFix(view, fix);
-  }
-
-  function cancelHoverClose() {
-    if (hoverCloseTimer) clearTimeout(hoverCloseTimer);
-    hoverCloseTimer = null;
-  }
-
-  // Abierta con el mouse: se cierra al salir (con un margen para llegar a
-  // la ventana).
-  function scheduleHoverClose() {
-    cancelHoverClose();
-    if (popup && !popup.focused) hoverCloseTimer = setTimeout(() => closePopup(false), 250);
-  }
-
-  // Mouse quieto 400 ms sobre un subrayado: su detalle, sin quitarle el foco
-  // al editor.
-  const diagnosticHover = EditorView.domEventHandlers({
-    mousemove(event, current) {
-      const pos = current.posAtCoords({ x: event.clientX, y: event.clientY });
-      const under = pos === null ? null : diagnosticUnder(current.state, pos);
-      if (hoverTimer) clearTimeout(hoverTimer);
-      hoverTimer = null;
-      if (!under) {
-        scheduleHoverClose();
-        return false;
-      }
-      cancelHoverClose();
-      if (popup?.diagnostic === under) return false;
-      hoverTimer = setTimeout(() => {
-        if (!popup?.focused) openPopup(under, false);
-      }, 400);
-      return false;
-    },
-    mouseleave() {
-      if (hoverTimer) clearTimeout(hoverTimer);
-      hoverTimer = null;
-      scheduleHoverClose();
-      return false;
-    },
-    keydown() {
-      // Cualquier tecla en el editor cierra la que abrio el mouse.
-      if (popup && !popup.focused) closePopup(false);
-      return false;
-    },
-  });
-
-  // Mirar un error a proposito (detalle, correccion): se ven todos.
-  function stopTypingIn(current: EditorView) {
-    current.dispatch({ effects: stopTyping.of(null) });
-  }
-
-  function showDetails(current: EditorView): boolean {
-    stopTypingIn(current);
-    const diagnostic = diagnosticAt(current.state, current.state.selection.main.head);
-    if (!diagnostic) return false;
-    openPopup(diagnostic, true);
-    return true;
-  }
-
-  function applyFirstFix(current: EditorView): boolean {
-    stopTypingIn(current);
-    const fix = diagnosticAt(current.state, current.state.selection.main.head)?.fixes?.[0];
-    if (!fix) return false;
-    applyFix(fix);
-    return true;
-  }
+  // --- Ventana de detalle (editor/diagnosticPresentation.ts) ---------------
+  const details = createDiagnosticPopup(() => view);
+  const popup = details.state;
 
   // --- Contador de errores (abajo a la derecha) ---------------------------
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
@@ -715,38 +255,21 @@
 
   function goToDiagnostic(direction: 1 | -1) {
     if (!view) return;
-    jump(view, direction);
+    jumpTo(view, direction);
     view.focus();
   }
 
-  function measureChrome() {
-    if (!view) return;
-    scrollbarWidth = view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth;
-    scrollbarHeight = view.scrollDOM.offsetHeight - view.scrollDOM.clientHeight;
-    editorBackground = getComputedStyle(view.dom).backgroundColor;
-  }
-
-  // Se cuenta una vez por cuadro, y solo si cambiaron los errores o el
-  // cursor (lo que se oculta mientras se escribe depende de el).
-  let countFrame = 0;
-  const diagnosticCounter = EditorView.updateListener.of((update) => {
-    const changed =
-      update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField) || update.selectionSet;
-    if (!changed && !update.geometryChanged) return;
-    cancelAnimationFrame(countFrame);
-    countFrame = requestAnimationFrame(() => {
-      if (!view) return;
-      diagnosticCount = visibleDiagnosticCount(view.state);
-      measureChrome();
-    });
-  });
-
   // F2 sin errores: un aviso breve en vez de no hacer nada.
-  function jump(current: EditorView, direction: 1 | -1): boolean {
-    if (jumpToDiagnostic(current, direction)) return true;
-    notifySuccess($t("editor.diagnostics.noErrors"));
-    return true;
-  }
+  const jumpTo = (current: EditorView, direction: 1 | -1) =>
+    jump(current, direction, () => notifySuccess($t("editor.diagnostics.noErrors")));
+
+  // Una vez por cuadro: el numero, y el lugar que dejan las barras de scroll.
+  const counter = diagnosticCounter((count, current) => {
+    diagnosticCount = count;
+    scrollbarWidth = current.scrollDOM.offsetWidth - current.scrollDOM.clientWidth;
+    scrollbarHeight = current.scrollDOM.offsetHeight - current.scrollDOM.clientHeight;
+    editorBackground = getComputedStyle(current.dom).backgroundColor;
+  });
 
   function executionStatus(part: ExecutionPart) {
     return { status: part.status, executionTimeMs: part.executionTimeMs, message: part.message };
@@ -820,6 +343,7 @@
   const unregisterTextFlush = registerConsoleTextFlush(flushText);
 
   onMount(() => {
+    const configured = configuration.initial(get(editorPalette), get(effectiveScheme));
     view = new EditorView({
       doc: value,
       parent: container,
@@ -828,16 +352,16 @@
         // Buscar (Ctrl+F) y reemplazar (Ctrl+R) propios en vez del panel
         // por defecto de basicSetup.
         editorSearch(),
-        sqlCompartment.of(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
-        completionCompartment.of(autocompletion()),
-        definitionLinkCompartment.of(buildDefinitionLink()),
-        tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        configured.language,
+        configured.completion,
+        configured.definitionLink,
+        configured.tabCompletion,
         // /* se cierra solo (sqlCommentEditing.ts) y la jerarquia dentro de
         // los comentarios (sqlCommentStyle.ts).
         commentEditing,
         commentStyle,
-        indentationCompartment.of(indentationExtension(get(editorSettings).indentStyle, get(editorSettings).indentSize)),
-        lexicalCompartment.of(sqlLexical.of(engine.lexical)),
+        configured.indentation,
+        configured.lexical,
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
         // como escribe el SQL el motor de la conexion (sqlPaste.ts).
         EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
@@ -847,13 +371,13 @@
         scrollPastEnd(),
         EditorView.scrollMargins.of(() => ({ bottom: CURSOR_BOTTOM_MARGIN })),
         statementIndex,
-        hintsCompartment.of(parameterHintConfig.of(hintConfig())),
+        configured.hints,
         parameterHints,
         activeStatementHighlight,
         executionMarker,
         sqlDiagnostics,
-        diagnosticCounter,
-        diagnosticHover,
+        counter.extension,
+        details.hover,
         // Al salir del editor, el texto al dia (la pestaña marca cambios).
         EditorView.domEventHandlers({
           blur(_event, current) {
@@ -864,9 +388,9 @@
             return false;
           },
         }),
-        behaviorCompartment.of(get(editorSettings).autoUppercaseKeywords ? autoUppercaseSqlKeywords : []),
-        themeCompartment.of(buildCmTheme(get(editorPalette), get(effectiveScheme))),
-        phrasesCompartment.of(buildPhrases()),
+        configured.behavior,
+        configured.theme,
+        configured.phrases,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           for (const transaction of update.transactions) {
@@ -874,7 +398,7 @@
           }
           analysis.schedule();
           scheduleTextFlush();
-          if (popup) closePopup(false);
+          if (get(popup)) details.close(false);
 
           // completeFromSchema (la libreria) no distingue clausulas SQL: sin
           // "alias." de por medio, siempre sugiere tablas, sea que estes
@@ -934,7 +458,7 @@
     const palette = $editorPalette;
     const scheme = $effectiveScheme;
     if (!view) return;
-    view.dispatch({ effects: themeCompartment.reconfigure(buildCmTheme(palette, scheme)) });
+    view.dispatch({ effects: configuration.theme(palette, scheme) });
   });
 
   // Al cambiar el idioma: frases de CodeMirror y detalles del autocompletado
@@ -943,20 +467,17 @@
   $effect(() => {
     $locale;
     if (!view) return;
-    view.dispatch({ effects: phrasesCompartment.reconfigure(buildPhrases()) });
+    view.dispatch({ effects: configuration.phrases() });
     reconfigureCompletion();
     // Los mensajes del analisis, en el idioma nuevo (de la cache: sin llamar
     // al backend).
-    analysis.markAllDirty();
-    analysis.schedule();
+    analysis.retranslate();
   });
 
   $effect(() => {
     const autoUppercase = $editorSettings.autoUppercaseKeywords;
     if (!view) return;
-    view.dispatch({
-      effects: behaviorCompartment.reconfigure(autoUppercase ? autoUppercaseSqlKeywords : []),
-    });
+    view.dispatch({ effects: configuration.behavior(autoUppercase) });
   });
 
   $effect(() => {
@@ -967,15 +488,13 @@
   $effect(() => {
     const tabNavigatesCompletion = $editorSettings.tabNavigatesCompletion;
     if (!view) return;
-    view.dispatch({
-      effects: tabCompletionCompartment.reconfigure(buildTabCompletionKeymap(tabNavigatesCompletion)),
-    });
+    view.dispatch({ effects: configuration.tabCompletion(tabNavigatesCompletion) });
   });
 
   $effect(() => {
     const { indentStyle, indentSize } = $editorSettings;
     if (!view) return;
-    view.dispatch({ effects: indentationCompartment.reconfigure(indentationExtension(indentStyle, indentSize)) });
+    view.dispatch({ effects: configuration.indentation(indentStyle, indentSize) });
   });
 
   // Reconfigura schema/dialecto/FK cuando cambia el catalogo o la conexion
@@ -995,35 +514,27 @@
     });
     // Otro motor: el indice de sentencias vuelve a cortar con sus reglas.
     if (view && nextEngine.lexical !== engine.lexical) {
-      view.dispatch({ effects: lexicalCompartment.reconfigure(sqlLexical.of(nextEngine.lexical)) });
+      view.dispatch({ effects: configuration.lexical(nextEngine) });
     }
     engine = nextEngine;
     catalogCompletions = buildCatalogCompletions($databaseExplorer?.schemas ?? [], engine, defaultSchema);
     sqlDialect = dialectFor(engine);
     // Las rutinas (y el motor) de los hints de parametros.
     routineIndex = buildRoutineIndex($databaseExplorer?.schemas ?? [], defaultSchema);
-    view?.dispatch({ effects: hintsCompartment.reconfigure(parameterHintConfig.of(hintConfig())) });
+    view?.dispatch({ effects: configuration.hints() });
     reconfigureCompletion();
     // Otro catalogo o dialecto: los nombres se vuelven a revisar (el efecto
     // tambien corre con otros cambios de la conexion; ahi no hace falta).
-    const analyzedFor = $connection.profileId ?? null;
-    if (tables === analyzedTables && engine === analyzedEngine && analyzedFor === analyzedProfile) return;
-    analyzedTables = tables;
-    analyzedEngine = engine;
-    analyzedProfile = analyzedFor;
-    analysis.useCache(analysisCacheFor(analyzedFor, tables, engine, createdKey));
-    analysis.markAllDirty();
-    analysis.schedule();
+    analysis.setContext($connection.profileId ?? null, tables, engine);
   });
 
   onDestroy(() => {
-    cancelAnimationFrame(countFrame);
+    counter.destroy();
     flushText();
     unregisterTextFlush();
     unregisterCommands();
     analysis.destroy();
-    if (hoverTimer) clearTimeout(hoverTimer);
-    cancelHoverClose();
+    details.destroy();
     view?.destroy();
   });
 </script>
@@ -1108,15 +619,15 @@
   </div>
 </div>
 
-{#if popup}
+{#if $popup}
   <DiagnosticPopup
-    diagnostic={popup.diagnostic}
-    anchor={popup.anchor}
-    focused={popup.focused}
-    onapply={applyFix}
-    onclose={closePopup}
-    onpointerenter={cancelHoverClose}
-    onpointerleave={scheduleHoverClose}
+    diagnostic={$popup.diagnostic}
+    anchor={$popup.anchor}
+    focused={$popup.focused}
+    onapply={details.applyFix}
+    onclose={details.close}
+    onpointerenter={details.cancelHoverClose}
+    onpointerleave={details.scheduleHoverClose}
   />
 {/if}
 
