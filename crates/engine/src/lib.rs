@@ -157,6 +157,17 @@ mod contract {
             .join("../../tests/engines/contract.json");
         let contract: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let pending: Vec<&str> = contract["engines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|engine| engine["pending"] == true)
+            .map(|engine| engine["id"].as_str().unwrap())
+            .collect();
+        assert!(
+            pending.is_empty(),
+            "motores pendientes en tests/engines/contract.json (tools/engine/new.mjs): {pending:?}. Escribir sus valores y quitar \"pending\"."
+        );
         let ours: Vec<serde_json::Value> = ALL
             .iter()
             .map(|dialect| {
@@ -188,6 +199,23 @@ mod contract {
                 .all(|pattern| mariadb_syntax.contains(pattern))
         );
         assert!(mariadb_syntax.len() > mysql_syntax.len());
+    }
+
+    /// tools/engine/new.mjs deja la definicion de un motor nuevo con los
+    /// valores de otro y un bloque PENDIENTE: no pasa hasta decidir cada uno.
+    #[test]
+    fn ninguna_definicion_queda_pendiente() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/dialects");
+        let pending: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| std::fs::read_to_string(path).unwrap().contains("PENDIENTE"))
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(
+            pending.is_empty(),
+            "definiciones con valores heredados sin decidir: {pending:?} (ver su bloque PENDIENTE)"
+        );
     }
 
     /// El nucleo pregunta a la definicion del motor; no compara motores. Un

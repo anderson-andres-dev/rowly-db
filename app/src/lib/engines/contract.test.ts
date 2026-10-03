@@ -234,8 +234,16 @@ describe("contrato compartido con Rust", () => {
     const { readFileSync } = await import("node:fs");
     const path = new URL("../../../../tests/engines/contract.json", import.meta.url);
     const contract = JSON.parse(readFileSync(path, "utf8")) as {
-      engines: { id: string; identifierQuote: string; backslashEscapes: boolean; executableComments: string[] }[];
+      engines: {
+        id: string;
+        identifierQuote: string;
+        backslashEscapes: boolean;
+        executableComments: string[];
+        pending?: boolean;
+      }[];
     };
+    const pending = contract.engines.filter((engine) => engine.pending).map((engine) => engine.id);
+    expect(pending, "motores pendientes (tools/engine/new.mjs): escribir sus valores y quitar pending").toEqual([]);
     const ours = Object.entries(ENGINES).map(([id, profile]) => ({
       id,
       // La comilla con que la app cita un nombre (no las que acepta al leer).
