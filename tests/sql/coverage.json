@@ -799,7 +799,7 @@
       ]
     },
     "D8": {
-      "status": "covered",
+      "status": "partial",
       "tests": [
         {
           "file": "crates/server-tests/tests/version_lines.rs",
@@ -811,6 +811,10 @@
             "postgres"
           ]
         }
+      ],
+      "gap": "VECTOR de MySQL 9: sqlx 0.8.6 publicado no lee el tipo 0xf2 (§9); sus lecturas llevan -- gap:",
+      "gapEngines": [
+        "mysql"
       ]
     },
     "D9": {

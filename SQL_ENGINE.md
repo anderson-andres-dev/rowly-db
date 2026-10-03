@@ -184,7 +184,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D5 | TLS modes negotiate or fail with an actionable message | `contract` `tls_*`, against what each image offers (`tls` in `lines.json`); accepting a configured CA is a **gap** (§9) |
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
-| D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`) |
+| D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`). Gap: MySQL 9 `VECTOR` (§9); its reads carry `-- gap:` and must fail with the known error |
 | D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `app/src-tauri/src/engine_context.rs`: the context the backend builds on connect (effective line, verification of the exact release, vendor support), and anything asked for with another generation or `schemaEpoch` no longer counts. `front/editor/analysisSession.test.ts`: an answer asked for with the previous connection is not applied after reconnecting. `front/stores/connectionCatalog.test.ts`: the active engine is the one the backend reports, with its mode. E2E (`app/tests/e2e/resources.mjs`): 300 reconnections alternating MySQL and PostgreSQL, each with its own server and catalog, with no growth in the live JavaScript heap, the backend or what is mounted in the DOM. Changing the mode within the session is a **gap** (§9). There is no package revision yet: per-line packages do not exist |
 
 ### 6.5 Capabilities
@@ -264,7 +264,6 @@ Where Rowly DB departs from the server on purpose. Changing one of these is a pr
 | While typing a statement, the editor hides what is only unfinished, the last word written, names that are not found yet, and generic parser messages when typing at the end. They appear when the cursor leaves the statement or the editor loses focus. | The parser rejects every prefix. Showing that is noise, and its generic messages often point at the wrong token. |
 | Valid syntax that `sqlparser` cannot read (MariaDB `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) gets no syntax diagnostic (`Dialect::unparsed_syntax`). | A missing parser feature is not the user's error. |
 | PostgreSQL routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
-| `sqlx` comes from a fork (`anderson-andres-dev/sqlx`, `[patch.crates-io]` in `Cargo.toml`): 0.8.6 plus reading MySQL 9 `VECTOR` columns, which neither 0.8.6 nor 0.9.0 can do. | Without it, a `SELECT` on a table with a vector fails. The same fix is sent upstream ([transact-rs/sqlx#4441](https://github.com/transact-rs/sqlx/pull/4441)); the fork goes away when sqlx publishes it. |
 | A server older than the supported window still connects, and its line is never removed. | Rowly DB never refuses a server. It marks it as having no official support and does what its line allows. |
 
 ## 9. Known gaps
@@ -273,6 +272,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 | Gap | Severity | Note |
 |---|---|---|
+| Rowly DB cannot read MySQL 9 `VECTOR` columns (D8): a result that has one fails whole with "unknown column type 0xf2". `sqlx` 0.8.6, the latest published release it builds with, does not know that type; the fix is merged upstream ([transact-rs/sqlx#4441](https://github.com/transact-rs/sqlx/pull/4441)) but in no published release | P2 | Rowly DB only uses published releases of its dependencies, never a fork. It closes with the first published release that has it: the three reads in `tests/sql/mysql/9/reads.sql` carry `-- gap:` and the test reports when they stop failing. Creating the column, filtering on it or reading the table's other columns works. |
 | The integrated confirmation test (S7) covers only the console and result editing on one MySQL release | P2 | Add the other engines and releases. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. |
 | The session mode is read on connect: a `SET sql_mode` run in the console changes neither the context nor what the guard knows about strings (D9) | P2 | The pool holds several connections and the `SET` changes only one, so reading the mode again does not tell which one the next statement will use. On the normal path, the driver's preparation barrier (§8) still rejects multiple statements. The console needs a single-connection session, and then a new generation on every mode change. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
@@ -284,7 +284,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
 | `VerifyCa` and `VerifyIdentity` accepting a configured CA are not tested (D5): no test server uses a certificate from a CA of our own, and the PostgreSQL and MariaDB 10.6 images offer no TLS | P2 | Generate a CA in `tools/test-dbs` and serve its certificate. |
 | The guard fuzz on PostgreSQL 13 generates 37 dangerous cases out of 4000, and the test needs more than 30 to measure anything (S2) | P2 | Little headroom: a corpus or skeleton change can fail it without the guard changing. Add PostgreSQL skeletons or set the minimum per release. |
-| MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
+| MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 
 ## 10. Tests, fixtures and simulations
