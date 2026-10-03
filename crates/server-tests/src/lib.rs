@@ -77,9 +77,42 @@ pub enum Conn {
 impl Conn {
     /// La conexion de prueba del motor, despues de comprobar que el servidor
     /// es exactamente la version que `tools/test-dbs/lines.json` declara para
-    /// la imagen del contenedor (SQL_ENGINE §10.1).
+    /// la imagen del contenedor (SQL_ENGINE §10.1), y de que el `sql_mode`
+    /// global no trae `NO_BACKSLASH_ESCAPES`.
     pub async fn open(engine: Engine) -> Conn {
+        Conn::open_in_mode(engine, false).await
+    }
+
+    /// Como `open`, pero exige que el `sql_mode` global sea el esperado: un
+    /// modo que no toca hace fallar en falso las pruebas de cadenas (S2).
+    async fn open_in_mode(engine: Engine, no_backslash_escapes: bool) -> Conn {
         let conn = Conn::open_unchecked(engine).await;
+        if engine != Engine::Postgres {
+            let mode = conn
+                .scalar("SELECT @@GLOBAL.sql_mode")
+                .await
+                .unwrap_or_default();
+            let found = mode.contains("NO_BACKSLASH_ESCAPES");
+            assert!(
+                found == no_backslash_escapes,
+                "{}: el sql_mode global {} NO_BACKSLASH_ESCAPES ({mode}). {}",
+                engine.container(),
+                if found { "trae" } else { "no trae" },
+                if found {
+                    format!(
+                        "Lo dejo puesto una corrida interrumpida; quitalo con:\n  docker exec {} {} -uroot -prowly -e \"{NO_BACKSLASH_ESCAPES_OFF}\"",
+                        engine.container(),
+                        if engine == Engine::MariaDb {
+                            "mariadb"
+                        } else {
+                            "mysql"
+                        }
+                    )
+                } else {
+                    "NoBackslashEscapes::on no lo aplico.".to_string()
+                }
+            );
+        }
         let declared = declared_version(engine);
         let actual = exact_version(&conn.server_version()).to_string();
         assert_eq!(
@@ -357,6 +390,43 @@ pub fn error_text(result: &QueryExecutionResult) -> String {
             format!("{code:?}: {message:?}")
         }
         other => format!("{other:?}").chars().take(80).collect(),
+    }
+}
+
+const NO_BACKSLASH_ESCAPES_ON: &str =
+    "SET GLOBAL sql_mode = CONCAT(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES')";
+const NO_BACKSLASH_ESCAPES_OFF: &str = "SET GLOBAL sql_mode = REPLACE(REPLACE(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES', ''), 'NO_BACKSLASH_ESCAPES,', '')";
+
+/// `NO_BACKSLASH_ESCAPES` en el `sql_mode` global de MySQL o MariaDB mientras
+/// vive: al soltarse lo quita, tambien si la prueba entra en panico. Sin esto,
+/// una corrida interrumpida deja el servidor en ese modo y las pruebas de
+/// cadenas fallan en falso en la siguiente.
+pub struct NoBackslashEscapes(Engine);
+
+impl NoBackslashEscapes {
+    pub fn on(engine: Engine) -> NoBackslashEscapes {
+        assert!(engine != Engine::Postgres, "PostgreSQL no tiene sql_mode");
+        admin(engine, NO_BACKSLASH_ESCAPES_OFF);
+        let guard = NoBackslashEscapes(engine);
+        admin(engine, NO_BACKSLASH_ESCAPES_ON);
+        guard
+    }
+
+    /// La conexion de prueba, comprobando que el modo esta aplicado.
+    pub async fn open(&self) -> Conn {
+        Conn::open_in_mode(self.0, true).await
+    }
+}
+
+impl Drop for NoBackslashEscapes {
+    fn drop(&mut self) {
+        // Sin panico dentro de drop: abortaria el proceso durante otro panico.
+        if !try_admin(self.0, NO_BACKSLASH_ESCAPES_OFF) {
+            eprintln!(
+                "{}: no se pudo quitar NO_BACKSLASH_ESCAPES del sql_mode global",
+                self.0.container()
+            );
+        }
     }
 }
 

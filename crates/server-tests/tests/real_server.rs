@@ -860,8 +860,6 @@ async fn the_mixed_console_corpus_runs_through_guard_and_server() {
 #[ignore = "requiere tools/test-dbs/up.sh; cambia el sql_mode global y lo restaura"]
 async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
     use khipu_engine::execution_guard::GuardOptions;
-    const ON: &str = "SET GLOBAL sql_mode = CONCAT(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES')";
-    const OFF: &str = "SET GLOBAL sql_mode = REPLACE(REPLACE(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES', ''), 'NO_BACKSLASH_ESCAPES,', '')";
     let templates = [
         "SELECT '\\'; {x}; --'",
         "SELECT '\\' , '\\'; {x}; --'",
@@ -872,9 +870,8 @@ async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
     ];
     let mut failures = Vec::new();
     for engine in [Engine::MySql, Engine::MariaDb] {
-        admin(engine, OFF);
-        admin(engine, ON);
-        let conn = Conn::open(engine).await;
+        let mode_on = NoBackslashEscapes::on(engine);
+        let conn = mode_on.open().await;
         let mode = conn
             .scalar("SELECT @@SESSION.sql_mode")
             .await
@@ -908,7 +905,8 @@ async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
                 }
             }
         }
-        admin(engine, OFF);
+        drop(conn);
+        drop(mode_on);
         println!(
             "{engine:?}: {dangerous} peligrosos en este modo, {missed_without_option} que el guard sin aviso habria dejado pasar"
         );
