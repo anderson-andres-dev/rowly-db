@@ -17,7 +17,6 @@
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
-  import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
@@ -51,22 +50,12 @@
   } from "$lib/stores/pinnedResults";
   import {
     EMPTY_EDITS,
-    applyChanges,
-    buildChanges,
-    fetchEditInfo,
     pendingCount,
-    previewChanges,
-    type ChangeError,
-    type EditTarget,
-    type ResultChanges,
   } from "$lib/resultEditing";
   import {
     editStateFor,
     forgetResultEdits,
-    resetResultEdits,
     resultEdits,
-    setResultEditInfo,
-    clearResultPendingEdits,
     commitResultEdits,
     undoResultEdit,
     moveResultEdits,
@@ -104,10 +93,10 @@
   import { openSqlFileWithDialog, renameConsoleFile, saveConsole, saveConsoleAs } from "$lib/sqlFiles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
-  import { invalidCells } from "$lib/cellTypes";
   import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
   import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
   import { createExecutionFlow, formatMs as formatDuration } from "$lib/workspace/executionSession";
+  import { createResultChanges } from "$lib/workspace/resultChanges";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -637,6 +626,26 @@
     if (consoleId) void requestExecution(consoleId, sql);
   }
 
+  // --- Cambios del grid -------------------------------------------------
+  // Borrador, vista previa y aplicacion (workspace/resultChanges.ts).
+  const resultChanges = createResultChanges({
+    text: (key, params) => $t(key, params),
+    number: (value) => $numberFormat.format(value),
+    schema: () => logSchema,
+    production: () => $isProduction,
+    notifyError,
+    reload: (key) => void reloadResult(key),
+  });
+  const preview = resultChanges.preview;
+  const applyingChanges = resultChanges.applying;
+  const applyError = resultChanges.error;
+  const discardPrompt = resultChanges.discardPrompt;
+  const prepareResultEditing = resultChanges.prepare;
+  const pendingEditsCount = resultChanges.pendingCount;
+  const confirmDiscardPending = resultChanges.confirmDiscard;
+  const openChangesPreview = resultChanges.openPreview;
+  const submitChanges = resultChanges.submit;
+
   // --- Ejecucion --------------------------------------------------------
   // Pedir, confirmar, ejecutar, paginar, ordenar, recargar y scripts, con su
   // registro en la Salida (workspace/executionSession.ts). Cada ejecucion
@@ -673,172 +682,6 @@
 
   // --- Edicion del resultado -------------------------------------------
   const editState = $derived(activeConsole ? editStateFor($resultEdits, viewKey) : null);
-
-  // Cada resultado nuevo arranca sin cambios pendientes; si es otra
-  // consulta, se pregunta al backend si (y como) se puede editar. Es un
-  // analisis local (AST + catalogo en memoria), no va a la base.
-  function prepareResultEditing(consoleId: string, sql: string, result: QueryExecutionResult) {
-    if (result.type !== "resultSet") {
-      forgetResultEdits(consoleId);
-      return;
-    }
-    if (resetResultEdits(consoleId, sql)) return;
-    fetchEditInfo(
-      sql,
-      result.columns.map((column) => column.name),
-    )
-      .then((info) => setResultEditInfo(consoleId, sql, info, null))
-      .catch((reason) => setResultEditInfo(consoleId, sql, null, String(reason)));
-  }
-
-  function pendingEditsCount(consoleId: string): number {
-    return pendingCount(editStateFor($resultEdits, consoleId).edits);
-  }
-
-  // Cambiar de pagina, re-ejecutar o cerrar con cambios sin aplicar pide
-  // confirmacion: los cambios son sobre las filas visibles y se perderian.
-  let discardPrompt = $state<{ resolve: (discard: boolean) => void } | null>(null);
-
-  // Acepta varias claves: una ejecucion nueva reemplaza la pestaña normal y
-  // las desfijadas, y se pregunta UNA vez por todas.
-  function confirmDiscardPending(keys: string | string[]): Promise<boolean> {
-    const list = (Array.isArray(keys) ? keys : [keys]).filter((key) => pendingEditsCount(key) > 0);
-    if (list.length === 0) return Promise.resolve(true);
-    return new Promise((resolve) => {
-      discardPrompt = {
-        resolve: (discard) => {
-          discardPrompt = null;
-          if (discard) for (const key of list) clearResultPendingEdits(key);
-          resolve(discard);
-        },
-      };
-    });
-  }
-
-  let preview = $state<{
-    consoleId: string;
-    target: EditTarget;
-    changes: ResultChanges;
-    statements: string[];
-    dismiss: boolean;
-  } | null>(null);
-  let applyingChanges = $state(false);
-  let applyError = $state<ChangeError | null>(null);
-
-  // Antes de aplicar (o de ver el SQL): si algun valor no encaja en su
-  // columna (cellTypes.ts), no se manda nada; las celdas ya estan en rojo.
-  function blockedByInvalidValues(consoleId: string): boolean {
-    const state = editStateFor($resultEdits, consoleId);
-    const result = executionForConsole($queryConsoles, consoleId).result;
-    if (!state.info || result?.type !== "resultSet") return false;
-    const invalid = invalidCells(state.edits, state.info, result.rows);
-    if (invalid.length === 0) return false;
-    notifyError(
-      $t(invalid.length === 1 ? "results.invalidValuesOne" : "results.invalidValuesOther", {
-        count: $numberFormat.format(invalid.length),
-      }),
-    );
-    return true;
-  }
-
-  function currentChanges(consoleId: string): { target: EditTarget; changes: ResultChanges } | null {
-    const state = editStateFor($resultEdits, consoleId);
-    const result = executionForConsole($queryConsoles, consoleId).result;
-    if (!state.info || result?.type !== "resultSet") return null;
-    return { target: state.info.target, changes: buildChanges(state.edits, state.info, result.rows) };
-  }
-
-  // El SQL se pide ANTES de abrir: el modal aparece ya completo, sin un
-  // instante vacio ni contenido que salta al llegar.
-  // Ancho de la vista previa (ver sqlPreviewFormat.ts): una clausula por
-  // linea, sin lineas kilometricas ni un valor por linea.
-  const PREVIEW_LINE_WIDTH = 78;
-
-  async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
-    if (!error && blockedByInvalidValues(consoleId)) return;
-    const current = currentChanges(consoleId);
-    if (!current) return;
-    try {
-      const statements = (await previewChanges(current.target, current.changes)).map((statement) =>
-        formatPreviewSql(statement, PREVIEW_LINE_WIDTH),
-      );
-      applyError = error;
-      preview = { consoleId, ...current, statements, dismiss: false };
-    } catch (cause) {
-      notifyError(cause);
-    }
-  }
-
-  function asChangeError(error: unknown): ChangeError {
-    if (error && typeof error === "object" && "message" in error) {
-      const value = error as Partial<ChangeError>;
-      return { statementIndex: value.statementIndex ?? null, message: String(value.message), code: value.code ?? null };
-    }
-    return { statementIndex: null, message: String(error), code: null };
-  }
-
-  // Aplica todo en una transaccion. Si falla no queda nada aplicado: los
-  // cambios siguen pendientes y el error se muestra en la vista previa.
-  // En produccion nada se aplica sin ver antes el SQL: el atajo o el boton
-  // del grid abren la vista previa, y aplicar desde ella confirma.
-  async function submitChanges(key: string, confirmed = false) {
-    if (blockedByInvalidValues(consoleOfKey(key))) return;
-    if ($isProduction && !confirmed) {
-      void openChangesPreview(key);
-      return;
-    }
-    const consoleId = consoleOfKey(key);
-    const current = currentChanges(key);
-    if (!current || applyingChanges) return;
-    applyingChanges = true;
-    // El error anterior sigue a la vista mientras se reintenta: si vuelve a
-    // fallar, la vista previa lo "golpea" en vez de borrarlo y redibujarlo.
-    // Las mismas sentencias que muestra la vista previa, para la Salida.
-    const statements = await previewChanges(current.target, current.changes).catch(() => [] as string[]);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const logStatements = () => {
-      for (const statement of statements) {
-        appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: startedAt });
-      }
-    };
-    try {
-      const affected = await applyChanges(current.target, current.changes, confirmed);
-      logStatements();
-      appendLog(consoleId, {
-        kind: "info",
-        text: $t(affected === 1 ? "workspace.output.appliedOne" : "workspace.output.appliedOther", {
-          count: $numberFormat.format(affected),
-          ms: formatMs(performance.now() - started),
-        }),
-      });
-      applyError = null;
-      clearResultPendingEdits(key);
-      // El modal (si estaba abierto) se cierra animado; lo quita su onclose.
-      if (preview) preview = { ...preview, dismiss: true };
-      // Recarga: trae ids generados, defaults y lo que haya cambiado un
-      // trigger.
-      void reloadResult(key);
-    } catch (error) {
-      applyingChanges = false;
-      const changeError = asChangeError(error);
-      logStatements();
-      appendLog(consoleId, {
-        kind: "error",
-        text:
-          changeError.statementIndex !== null
-            ? $t("workspace.output.applyFailedAt", {
-                index: changeError.statementIndex + 1,
-                message: changeError.message,
-              })
-            : $t("workspace.output.applyFailed", { message: changeError.message }),
-      });
-      if (preview) applyError = changeError;
-      else void openChangesPreview(key, changeError);
-      return;
-    }
-    applyingChanges = false;
-  }
 
   // --- Exportar datos ---------------------------------------------------
   // Clave de la pestaña que se exporta.
@@ -1315,8 +1158,8 @@
   />
 {/if}
 
-{#if discardPrompt}
-  {@const prompt = discardPrompt}
+{#if $discardPrompt}
+  {@const prompt = $discardPrompt}
   <ConfirmDialog
     title={$t("workspace.discard.title")}
     message={$t("workspace.discard.message")}
@@ -1348,20 +1191,17 @@
   />
 {/if}
 
-{#if preview}
-  {@const current = preview}
+{#if $preview}
+  {@const current = $preview}
   <ChangesPreview
     statements={current.statements}
     changes={current.changes}
-    applying={applyingChanges}
-    error={applyError}
+    applying={$applyingChanges}
+    error={$applyError}
     dismiss={current.dismiss}
     production={$isProduction}
     onapply={() => void submitChanges(current.consoleId, true)}
-    onclose={() => {
-      preview = null;
-      applyError = null;
-    }}
+    onclose={resultChanges.closePreview}
   />
 {/if}
 
