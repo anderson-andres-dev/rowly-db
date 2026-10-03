@@ -1,0 +1,280 @@
+{
+  "format": 1,
+  "scenario": "idle",
+  "app": "Rowly DB",
+  "label": "v0.3.0-cachyos",
+  "date": "2026-10-02T22:56:00-0500",
+  "environment": {
+    "os": "CachyOS",
+    "kernel": "7.1.8-1-cachyos",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "cores": 16,
+    "memory_gb": 15.3,
+    "governor": "powersave",
+    "platform_profile": "balanced",
+    "power_supply": {
+      "ADP0": "1",
+      "ucsi-source-psy-USBC000:001": "0",
+      "BAT0": "Full"
+    },
+    "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)\n00:06.2 PCI bridge: Intel Corporation Device a73d",
+    "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+    "compositor": "Hyprland v0.56.2",
+    "session": "wayland",
+    "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+    "workspace": "special:rowlybench (silent, fuera de pantalla)",
+    "binary": "target/release/rowly-db (v0.3.0, npx tauri build --no-bundle)"
+  },
+  "seconds": 300,
+  "connection": "ninguna (perfil vacio)",
+  "cpu_seconds": 0.08,
+  "cpu_pct_of_one_core": 0.03,
+  "pss_slope_mb_per_min": -0.002,
+  "pss_first_last_mb": [
+    259.5,
+    259.4
+  ],
+  "remotes": [],
+  "samples": [
+    {
+      "t_s": 0.0,
+      "cpu_ticks": 0,
+      "pss_mb": 259.5,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 56
+    },
+    {
+      "t_s": 10.0,
+      "cpu_ticks": 0,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 54
+    },
+    {
+      "t_s": 20.0,
+      "cpu_ticks": 0,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 30.1,
+      "cpu_ticks": 0,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 40.1,
+      "cpu_ticks": 1,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 50.1,
+      "cpu_ticks": 2,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 60.1,
+      "cpu_ticks": 2,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 70.1,
+      "cpu_ticks": 2,
+      "pss_mb": 259.1,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 80.2,
+      "cpu_ticks": 2,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 90.2,
+      "cpu_ticks": 2,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 100.2,
+      "cpu_ticks": 2,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 110.3,
+      "cpu_ticks": 3,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 120.3,
+      "cpu_ticks": 4,
+      "pss_mb": 259.6,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 130.3,
+      "cpu_ticks": 4,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 140.3,
+      "cpu_ticks": 4,
+      "pss_mb": 259.0,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 150.3,
+      "cpu_ticks": 4,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 160.4,
+      "cpu_ticks": 4,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 170.4,
+      "cpu_ticks": 4,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 180.4,
+      "cpu_ticks": 5,
+      "pss_mb": 259.5,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 190.5,
+      "cpu_ticks": 5,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 200.5,
+      "cpu_ticks": 5,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 210.5,
+      "cpu_ticks": 6,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 220.5,
+      "cpu_ticks": 6,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 230.6,
+      "cpu_ticks": 6,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 240.6,
+      "cpu_ticks": 7,
+      "pss_mb": 259.2,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 250.6,
+      "cpu_ticks": 7,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 260.6,
+      "cpu_ticks": 7,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 270.7,
+      "cpu_ticks": 7,
+      "pss_mb": 259.3,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 280.7,
+      "cpu_ticks": 7,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    },
+    {
+      "t_s": 290.7,
+      "cpu_ticks": 8,
+      "pss_mb": 259.4,
+      "rss_mb": 428.7,
+      "processes": 3,
+      "threads": 53
+    }
+  ]
+}

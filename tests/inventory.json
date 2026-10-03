@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 117,
-    "tests": 1362,
+    "files": 119,
+    "tests": 1376,
     "ignored": 42,
     "byDecision": {
-      "keep": 58,
+      "keep": 60,
       "move": 53,
       "rewrite": 6,
       "remove": 0
     },
     "byGate": {
-      "pr": 112,
+      "pr": 114,
       "engine-pr": 1,
       "manual": 4,
       "release": 0
@@ -129,7 +129,7 @@
       ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 4,
+      "tests": 5,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2043,14 +2043,37 @@
       "durationMs": 27
     },
     {
+      "path": "app/src/lib/workspace/consoleFiles.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/consoleFiles.ts",
+      "property": "Cerrar consolas sin perder texto: aviso solo si se pierde algo, guardar que falla deja la pestana, renombre del nombre por defecto",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "consoleFiles",
+        "stores/queryConsoles"
+      ],
+      "external": [
+        "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
       "path": "app/src/lib/workspace/executionSession.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/executionSession.ts",
-      "property": "Unico camino para ejecutar SQL: id por ejecucion, cancelar una vez, una ejecucion vieja no borra la nueva; ningun otro modulo importa executeQuery",
+      "property": "Unico camino para ejecutar SQL: id y cancelacion por ejecucion; pedir, confirmar (una vez, atomica), scripts, paginar, ordenar, recargar, pestana de tabla y contar, con su registro; ningun otro modulo importa executeQuery",
       "risk": "P0",
       "gate": "pr",
       "decision": "keep",
       "sqlEngineRows": [
+        "S3",
         "S7"
       ],
       "kind": "ts",
@@ -2059,6 +2082,41 @@
       "environment": "node",
       "dependencies": [
         "executionSession",
+        "queryExecution",
+        "resultTabs",
+        "sqlStatements",
+        "stores/executionLog",
+        "stores/queryConsoles",
+        "stores/queryHistory",
+        "types"
+      ],
+      "external": [
+        "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/workspace/resultChanges.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/resultChanges.ts",
+      "property": "Cambios del grid: en produccion solo la vista previa confirma; un fallo no aplica nada y deja todo pendiente; valores invalidos no se mandan; un solo aviso de descartar",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "S7"
+      ],
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "resultChanges",
+        "resultEditing",
+        "stores/executionLog",
+        "stores/queryConsoles",
+        "stores/resultEdits",
         "types"
       ],
       "external": [
@@ -2071,7 +2129,7 @@
       "path": "app/src/lib/workspace/resultTabs.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/resultTabs.ts",
-      "property": "Pestanas de resultado: pestana visible, orden del usuario y posicion al fijar/desfijar",
+      "property": "Pestanas de resultado: pestana visible, orden del usuario, fijar/desfijar con su estado, cerrar y olvidar",
       "risk": "P2",
       "gate": "pr",
       "decision": "keep",
@@ -2080,10 +2138,14 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "resultTabs"
+        "resultTabs",
+        "stores/pinnedResults",
+        "stores/queryConsoles",
+        "types"
       ],
       "external": [
         "Orders",
+        "svelte",
         "vitest"
       ],
       "durationMs": null
@@ -2128,7 +2190,7 @@
         "S7"
       ],
       "kind": "e2e",
-      "tests": 4,
+      "tests": 5,
       "ignored": 0,
       "environment": "app+webdriver+mysql",
       "durationMs": null

@@ -37,6 +37,17 @@ python3 tools/bench/compare.py tools/bench/baseline/v0.3.0 <dir>
 
 Do not run measurements while building or testing: other load on the machine changes the results.
 
+## References
+
+Compare only against a reference taken on the same machine and system:
+
+| Reference | What was measured | Where |
+|---|---|---|
+| `baseline/v0.3.0` | The published release binary (`rowly-db-bin 0.3.0-1`), with Beekeeper Studio and the engine benchmark | Omarchy, kernel 7.2.5, profile `performance` |
+| `baseline/v0.3.0-cachyos` | `v0.3.0` built from its tag (`npx tauri build --no-bundle`), the same way as the branch it is compared with | CachyOS, kernel 7.1.8, profile `balanced` (same CPU) |
+
+`node-editor.json` has no dispersion field, so a single run against another single run can flag noise at the microsecond scale. Before calling it a regression, repeat both sides (five alternating runs) and compare medians.
+
 ## What is not measured yet
 
 These scenarios need the app to be instrumented (`performance.mark` and Rust `Instant` around each operation) or to be driven by input, and neither exists yet: keystroke-to-paint latency, grid frame times, the 300 open/close cycles, and idle with an open connection. Windows/WebView2 and macOS/WKWebView are measured on those machines. A missing scenario is reported as missing, never as passed.
