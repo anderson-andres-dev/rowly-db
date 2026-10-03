@@ -150,8 +150,11 @@ const DOM = `({
   styles: document.querySelectorAll("style").length,
 })`;
 
+// La memoria de los procesos se lee antes de recolectar: el snapshot del
+// heap pasa por la app y la infla un momento.
 async function sample(page, app, index) {
-  return { index, heap: await liveHeap(page), pss: pss(app.pid), dom: await page.evaluate(DOM) };
+  const memory = pss(app.pid);
+  return { index, pss: memory, heap: await liveHeap(page), dom: await page.evaluate(DOM) };
 }
 
 const format = ({ index, heap, pss, dom }) =>
@@ -174,7 +177,7 @@ function classGrowth(first, last) {
 
 // Sin fuga desde el calentamiento: heap vivo, objetos vivos, backend y lo
 // montado en el DOM.
-function assertStable(samples) {
+function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) => s.index >= 2 * WARMUP) : samples) {
   if (samples.length < 2) throw new Error("hacen falta dos muestras: menos ciclos que el calentamiento");
   const first = samples[0];
   const last = samples[samples.length - 1];
@@ -187,16 +190,17 @@ function assertStable(samples) {
   };
   grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
   grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
-  // La memoria propia del backend (Anonymous: su heap y su pila), no su
-  // PSS: el PSS reparte las bibliotecas compartidas entre quienes las usan, y
+  // La memoria propia de la app (Anonymous: su heap y su pila), no su PSS:
+  // el PSS reparte las bibliotecas compartidas entre quienes las usan, y
   // sube solo cuando muere otro proceso que las compartia. Sube y baja con
   // cada conexion; una fuga sube su piso, asi que se compara el minimo de la
-  // segunda mitad de las muestras con el de la primera.
+  // segunda mitad de las muestras con el de la primera, desde el ciclo 100:
+  // del 50 al 100 todavia calienta (sus caches de conexion).
   const backend = (s) => s.pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0;
-  const half = Math.ceil(samples.length / 2);
+  const half = Math.ceil(memory.length / 2);
   const floor = (part) => Math.min(...part.map(backend));
-  const before = floor(samples.slice(0, half));
-  grew("el piso de la memoria propia del backend (MB)", before, floor(samples.slice(half)), Math.max(2, before * 0.05));
+  const before = floor(memory.slice(0, half));
+  grew("el piso de la memoria propia del backend (MB)", before, floor(memory.slice(half)), Math.max(2, before * 0.05));
   for (const key of ["editors", "styles"])
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
@@ -394,8 +398,14 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
   const before = await sample(page, app, 0);
   // La CPU se cuenta solo en el reposo: recolectar y tomar el snapshot del
   // heap tambien gastan, y no son de la app.
+  // Muestras de memoria cada 30 s, sin recolectar (para no sumar trabajo).
   const idleStart = pss(app.pid);
-  await sleep(IDLE_SECONDS * 1000);
+  const during = [{ index: 0, pss: idleStart }];
+  for (let elapsed = 30; elapsed <= IDLE_SECONDS; elapsed += 30) {
+    await sleep(30000);
+    during.push({ index: elapsed, pss: pss(app.pid) });
+  }
+  await sleep((IDLE_SECONDS % 30) * 1000);
   const idleEnd = pss(app.pid);
   const after = await sample(page, app, IDLE_SECONDS);
   const idle = await page.evaluate("window.__idle");
@@ -414,6 +424,11 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
     .join(", ");
   console.log(`        ${format(before)}\n        ${format(after)}`);
   console.log(
+    `        memoria propia por proceso cada 30 s: ${during
+      .map(({ index, pss }) => `${index}: ${Object.entries(pss.anonymousByName).map(([name, mb]) => `${name} ${mb.toFixed(1)}`).join(" / ")}`)
+      .join("; ")}`,
+  );
+  console.log(
     `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
       `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
       `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
@@ -425,7 +440,9 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
   // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
   // continuo (sondeos, bucles), que se ve muy por encima.
   if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
-  assertStable([before, after]);
+  // El heap vivo y el DOM, del principio al final; la memoria propia de la
+  // app, por pisos de las muestras cada 30 s.
+  assertStable([before, after], during);
 });
 
 // --- Ejecucion --------------------------------------------------------------
