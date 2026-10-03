@@ -135,11 +135,11 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 |---|---|---|
 | S1 | A `;` inside a string, comment, identifier or dollar quote of the engine does not split | `front/engines/contract.test.ts` (*un ; dentro de sus comillas…*), `front/sqlStatements.test.ts` |
 | S2 | Text the guard accepts runs as exactly one statement on the real server, measured **without** the driver's prepare barrier (§8) | `real` `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server`, `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement` |
-| S3 | Whatever damages data asks for confirmation | `real` `what_damages_data_never_passes_as_not_destructive`, `guard` unit tests (`*_requires_confirmation`) |
+| S3 | Whatever damages data asks for confirmation | `real` `what_damages_data_never_passes_as_not_destructive`, `guard` unit tests (`*_requires_confirmation`); in the real app, `app/tests/e2e/run.mjs` (*DELETE sin WHERE: Escape cancela…*) |
 | S4 | Executable and versioned comments are classified as code | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
 | S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) | `real` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
 | S6 | Syntax the parser cannot read is judged by structure, never waved through | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
-| S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; an integrated test is missing (§9) |
+| S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; in the real app, `app/tests/e2e/run.mjs` (*produccion: una escritura pide confirmacion…*) covers the console on MySQL; the rest of the flow is a gap (§9) |
 
 ### 6.2 Analysis and diagnostics
 
@@ -206,7 +206,7 @@ Where it is declared today: lexical and call rules in each `SqlProfile` (`app/sr
 
 | Gate | When | What runs | Automated |
 |---|---|---|---|
-| **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build` | Partly: CI still omits `npm test` and `-D warnings` (§9) |
+| **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, test inventory check, and the E2E walks in the real app (Linux, WebKitGTK) | Yes: `.github/workflows/quality.yml` and `e2e.yml` |
 | **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | No: the real-server suite is still manual (§9) |
 | **Exact release or pack** | Before advertising a verified release or publishing its line pack (§11) | Complete matrix on that release and the line's other verified releases; D7 against the previous line if behavior changes | No |
 | **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | No |
@@ -216,9 +216,11 @@ Commands, today:
 ```bash
 # PR gate
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cd app && npm run check && npm test && npm run build
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cd app && npm run check && npm test && npm run build && cd ..
+node tools/inventory/tests.mjs --check
+# E2E walks: CI only (.github/workflows/e2e.yml); needs WebKitWebDriver, tauri-driver, Xvfb and xdotool
 
 # Real-server suite (starts MySQL, MariaDB and PostgreSQL in Docker)
 tools/test-dbs/up.sh
@@ -267,10 +269,9 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 | Gap | Severity | Note |
 |---|---|---|
-| CI does not run `npm test`, and runs clippy without `-D warnings` | P1 | More than a thousand frontend tests are not checked on pull requests, and a clippy warning does not fail the build. Both are one line in `.github/workflows/quality.yml`. |
 | Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), there is no complete report per exact release, and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | Complete the §10 map, pin and run every declared release, automate §7 and align the support window. |
 | The real-server suite does not run in CI | P2 | Needs Docker in CI; until then it is the manual engine PR gate. |
-| No integrated confirmation test spans keyboard, UI and backend execution (S7), and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add cases per engine and release, including reconnect and mode changes; today's unit tests cover only parts of the flow. The UI does not yet distinguish verified from unverified exact releases. |
+| The integrated confirmation test (S7) covers only the console on one MySQL release, and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add result editing, the other engines and releases, reconnect and mode changes. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. The UI does not yet distinguish verified from unverified exact releases. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
 | The incomplete / unresolved / generic classification lives in the frontend (key lists in `SqlEditor.svelte`), and `real` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
