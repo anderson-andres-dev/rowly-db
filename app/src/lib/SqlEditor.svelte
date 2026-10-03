@@ -10,23 +10,21 @@
   import { createAnalysisSession } from "$lib/editor/analysisSession";
   import { createEditorConfiguration } from "$lib/editor/configuration";
   import { createEditorCommands, currentSqlRange } from "$lib/editor/commands";
+  import {
+    createDiagnosticPopup,
+    diagnosticCounter,
+    jump,
+    serverDiagnostics,
+    stopTypingIn,
+  } from "$lib/editor/diagnosticPresentation";
   import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
   import { parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
-    applyQuickFix,
-    diagnosticAt,
-    jumpToDiagnostic,
-    visibleDiagnosticCount,
-    diagnosticsField,
-    diagnosticUnder,
     sqlDiagnostics,
-    stopTyping,
-    type QuickFix,
     type SqlDiagnostic,
   } from "$lib/sqlDiagnostics";
-  import { groupByFixes } from "$lib/sqlErrorHelp";
   import { engineFor, standardSql, type SqlProfile } from "$lib/engines";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
@@ -191,10 +189,10 @@
     "format-sql": whenFocused(formatCurrentSql),
     "execute-query": whenFocused(executeCurrentSql),
     "execute-script": whenFocused(executeAllSql),
-    "next-diagnostic": whenFocused((current) => jump(current, 1)),
-    "previous-diagnostic": whenFocused((current) => jump(current, -1)),
-    "diagnostic-details": whenFocused(showDetails),
-    "apply-quick-fix": whenFocused(applyFirstFix),
+    "next-diagnostic": whenFocused((current) => jumpTo(current, 1)),
+    "previous-diagnostic": whenFocused((current) => jumpTo(current, -1)),
+    "diagnostic-details": whenFocused((current) => details.showDetails(current)),
+    "apply-quick-fix": whenFocused((current) => details.applyFirstFix(current)),
   });
 
   // Los Compartment de cada ajuste (editor/configuration.ts).
@@ -226,135 +224,18 @@
   }
 
   // Un error de la base, ubicado en la sentencia [from, to) que lo produjo
-  // (sqlDiagnostics.ts). Sin pista de donde, la sentencia entera.
+  // (editor/diagnosticPresentation.ts).
   function diagnosticFor(from: number, to: number, result: QueryExecutionResult): SqlDiagnostic[] {
-    if (!view || result.type !== "error") return [];
-    const statement = view.state.sliceDoc(from, to);
-    // Donde cayo y que ayuda corresponde: segun los mensajes y codigos del
-    // motor (lib/engines).
-    const located = engine.locateError(statement, result);
-    const range = located ?? { from: 0, to: statement.length };
-    const help = result.code ? engine.errorHelp[result.code] : undefined;
-    // Columna fuera del GROUP BY: sumarla o agregarla (solo si se sabe cual).
-    const fixes =
-      located && help === "groupBy"
-        ? groupByFixes(statement, range).map((fix) => ({
-            label: $t(fix.kind === "aggregate" ? "editor.diagnostics.fix.aggregate" : "editor.diagnostics.fix.groupBy", {
-              column: fix.column,
-            }),
-            from: from + fix.from,
-            to: from + fix.to,
-            insert: fix.insert,
-          }))
-        : [];
-    return [
-      {
-        from: from + range.from,
-        to: from + range.to,
-        message: result.message,
-        code: result.code,
-        source: "server",
-        fixes,
-        help,
-        unresolved: help === "tableMissing" || help === "columnMissing",
-      },
-    ];
+    if (!view) return [];
+    return serverDiagnostics(view.state.sliceDoc(from, to), from, result, engine, (key, params) => $t(key, params));
   }
 
   // --- Analisis mientras se escribe (editor/analysisSession.ts) -------------
   const analysis = createAnalysisSession({ view: () => view, text: (key, params) => $t(key, params) });
 
-  // --- Ventana de detalle ------------------------------------------------
-  let popup = $state<{
-    diagnostic: SqlDiagnostic;
-    anchor: { left: number; top: number; bottom: number };
-    focused: boolean;
-  } | null>(null);
-  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  let hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function openPopup(diagnostic: SqlDiagnostic, focused: boolean) {
-    if (!view) return;
-    const coords = view.coordsAtPos(diagnostic.from);
-    if (!coords) return;
-    popup = { diagnostic, anchor: { left: coords.left, top: coords.top, bottom: coords.bottom }, focused };
-  }
-
-  function closePopup(refocusEditor: boolean) {
-    popup = null;
-    if (refocusEditor) view?.focus();
-  }
-
-  function applyFix(fix: QuickFix) {
-    if (!view) return;
-    closePopup(false);
-    applyQuickFix(view, fix);
-  }
-
-  function cancelHoverClose() {
-    if (hoverCloseTimer) clearTimeout(hoverCloseTimer);
-    hoverCloseTimer = null;
-  }
-
-  // Abierta con el mouse: se cierra al salir (con un margen para llegar a
-  // la ventana).
-  function scheduleHoverClose() {
-    cancelHoverClose();
-    if (popup && !popup.focused) hoverCloseTimer = setTimeout(() => closePopup(false), 250);
-  }
-
-  // Mouse quieto 400 ms sobre un subrayado: su detalle, sin quitarle el foco
-  // al editor.
-  const diagnosticHover = EditorView.domEventHandlers({
-    mousemove(event, current) {
-      const pos = current.posAtCoords({ x: event.clientX, y: event.clientY });
-      const under = pos === null ? null : diagnosticUnder(current.state, pos);
-      if (hoverTimer) clearTimeout(hoverTimer);
-      hoverTimer = null;
-      if (!under) {
-        scheduleHoverClose();
-        return false;
-      }
-      cancelHoverClose();
-      if (popup?.diagnostic === under) return false;
-      hoverTimer = setTimeout(() => {
-        if (!popup?.focused) openPopup(under, false);
-      }, 400);
-      return false;
-    },
-    mouseleave() {
-      if (hoverTimer) clearTimeout(hoverTimer);
-      hoverTimer = null;
-      scheduleHoverClose();
-      return false;
-    },
-    keydown() {
-      // Cualquier tecla en el editor cierra la que abrio el mouse.
-      if (popup && !popup.focused) closePopup(false);
-      return false;
-    },
-  });
-
-  // Mirar un error a proposito (detalle, correccion): se ven todos.
-  function stopTypingIn(current: EditorView) {
-    current.dispatch({ effects: stopTyping.of(null) });
-  }
-
-  function showDetails(current: EditorView): boolean {
-    stopTypingIn(current);
-    const diagnostic = diagnosticAt(current.state, current.state.selection.main.head);
-    if (!diagnostic) return false;
-    openPopup(diagnostic, true);
-    return true;
-  }
-
-  function applyFirstFix(current: EditorView): boolean {
-    stopTypingIn(current);
-    const fix = diagnosticAt(current.state, current.state.selection.main.head)?.fixes?.[0];
-    if (!fix) return false;
-    applyFix(fix);
-    return true;
-  }
+  // --- Ventana de detalle (editor/diagnosticPresentation.ts) ---------------
+  const details = createDiagnosticPopup(() => view);
+  const popup = details.state;
 
   // --- Contador de errores (abajo a la derecha) ---------------------------
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
@@ -374,38 +255,21 @@
 
   function goToDiagnostic(direction: 1 | -1) {
     if (!view) return;
-    jump(view, direction);
+    jumpTo(view, direction);
     view.focus();
   }
 
-  function measureChrome() {
-    if (!view) return;
-    scrollbarWidth = view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth;
-    scrollbarHeight = view.scrollDOM.offsetHeight - view.scrollDOM.clientHeight;
-    editorBackground = getComputedStyle(view.dom).backgroundColor;
-  }
-
-  // Se cuenta una vez por cuadro, y solo si cambiaron los errores o el
-  // cursor (lo que se oculta mientras se escribe depende de el).
-  let countFrame = 0;
-  const diagnosticCounter = EditorView.updateListener.of((update) => {
-    const changed =
-      update.startState.field(diagnosticsField) !== update.state.field(diagnosticsField) || update.selectionSet;
-    if (!changed && !update.geometryChanged) return;
-    cancelAnimationFrame(countFrame);
-    countFrame = requestAnimationFrame(() => {
-      if (!view) return;
-      diagnosticCount = visibleDiagnosticCount(view.state);
-      measureChrome();
-    });
-  });
-
   // F2 sin errores: un aviso breve en vez de no hacer nada.
-  function jump(current: EditorView, direction: 1 | -1): boolean {
-    if (jumpToDiagnostic(current, direction)) return true;
-    notifySuccess($t("editor.diagnostics.noErrors"));
-    return true;
-  }
+  const jumpTo = (current: EditorView, direction: 1 | -1) =>
+    jump(current, direction, () => notifySuccess($t("editor.diagnostics.noErrors")));
+
+  // Una vez por cuadro: el numero, y el lugar que dejan las barras de scroll.
+  const counter = diagnosticCounter((count, current) => {
+    diagnosticCount = count;
+    scrollbarWidth = current.scrollDOM.offsetWidth - current.scrollDOM.clientWidth;
+    scrollbarHeight = current.scrollDOM.offsetHeight - current.scrollDOM.clientHeight;
+    editorBackground = getComputedStyle(current.dom).backgroundColor;
+  });
 
   function executionStatus(part: ExecutionPart) {
     return { status: part.status, executionTimeMs: part.executionTimeMs, message: part.message };
@@ -512,8 +376,8 @@
         activeStatementHighlight,
         executionMarker,
         sqlDiagnostics,
-        diagnosticCounter,
-        diagnosticHover,
+        counter.extension,
+        details.hover,
         // Al salir del editor, el texto al dia (la pestaña marca cambios).
         EditorView.domEventHandlers({
           blur(_event, current) {
@@ -534,7 +398,7 @@
           }
           analysis.schedule();
           scheduleTextFlush();
-          if (popup) closePopup(false);
+          if (get(popup)) details.close(false);
 
           // completeFromSchema (la libreria) no distingue clausulas SQL: sin
           // "alias." de por medio, siempre sugiere tablas, sea que estes
@@ -665,13 +529,12 @@
   });
 
   onDestroy(() => {
-    cancelAnimationFrame(countFrame);
+    counter.destroy();
     flushText();
     unregisterTextFlush();
     unregisterCommands();
     analysis.destroy();
-    if (hoverTimer) clearTimeout(hoverTimer);
-    cancelHoverClose();
+    details.destroy();
     view?.destroy();
   });
 </script>
@@ -756,15 +619,15 @@
   </div>
 </div>
 
-{#if popup}
+{#if $popup}
   <DiagnosticPopup
-    diagnostic={popup.diagnostic}
-    anchor={popup.anchor}
-    focused={popup.focused}
-    onapply={applyFix}
-    onclose={closePopup}
-    onpointerenter={cancelHoverClose}
-    onpointerleave={scheduleHoverClose}
+    diagnostic={$popup.diagnostic}
+    anchor={$popup.anchor}
+    focused={$popup.focused}
+    onapply={details.applyFix}
+    onclose={details.close}
+    onpointerenter={details.cancelHoverClose}
+    onpointerleave={details.scheduleHoverClose}
   />
 {/if}
 
