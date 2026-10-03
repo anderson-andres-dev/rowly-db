@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 120,
-    "tests": 1382,
+    "files": 121,
+    "tests": 1383,
     "ignored": 42,
     "byDecision": {
-      "keep": 61,
+      "keep": 62,
       "move": 53,
       "rewrite": 6,
       "remove": 0
     },
     "byGate": {
-      "pr": 115,
+      "pr": 116,
       "engine-pr": 1,
       "manual": 4,
       "release": 0
@@ -435,6 +435,37 @@
         "engines"
       ],
       "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/configuration.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/configuration.ts",
+      "property": "Cada ajuste del editor se reconfigura en su Compartment: mismo editor, texto, seleccion e historial de deshacer",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "configuration",
+        "engines",
+        "sqlCallHints",
+        "sqlCatalogCompletions",
+        "sqlSchema",
+        "sqlStatementIndex",
+        "stores/editorSettings",
+        "theming/theme"
+      ],
+      "external": [
+        "@codemirror/commands",
+        "@codemirror/state",
+        "@codemirror/view",
+        "svelte",
         "vitest"
       ],
       "durationMs": null

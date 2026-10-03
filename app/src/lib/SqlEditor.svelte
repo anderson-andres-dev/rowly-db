@@ -10,8 +10,9 @@
     statementTextAt,
   } from "$lib/sqlStatementIndex";
   import { createAnalysisSession } from "$lib/editor/analysisSession";
+  import { createEditorConfiguration } from "$lib/editor/configuration";
   import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
-  import { parameterHintConfig, parameterHints } from "$lib/sqlParameterHints";
+  import { parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
@@ -34,34 +35,28 @@
   import { onMount, onDestroy, untrack } from "svelte";
   import { get } from "svelte/store";
   import { basicSetup, EditorView } from "codemirror";
-  import { sql } from "@codemirror/lang-sql";
-  import { autocompletion } from "@codemirror/autocomplete";
   import { selectAll } from "@codemirror/commands";
   import { scrollPastEnd } from "@codemirror/view";
-  import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
-  import { buildCmTheme } from "$lib/theming/codemirrorTheme";
+  import { EditorSelection } from "@codemirror/state";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
   import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import {
-    buildCompletionSource,
     buildSqlSchema,
     dialectFor,
     extractDefaultTable,
-    resolveCatalogTable,
   } from "$lib/sqlSchema";
   import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
   import { vendorSupport } from "$lib/engines/vendorSupport";
   import { commentEditing } from "$lib/sqlCommentEditing";
   import { commentStyle } from "$lib/sqlCommentStyle";
-  import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
+  import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
-  import { buildTabCompletionKeymap, indentationExtension } from "$lib/sqlIndentation";
   import { formatSqlText } from "$lib/sqlFormatter";
   import { notifyError } from "$lib/stores/notifications";
-  import { activeStatementHighlight, autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
+  import { activeStatementHighlight } from "$lib/sqlEditorBehavior";
   import {
     executionMarker,
     executionMarkerField,
@@ -80,33 +75,7 @@
   import "$lib/sqlEditorIcons.css";
   import "$lib/styles/editorSearch.css";
   import { editorSearch, openReplacePanel, toggleSearchPanel } from "$lib/editorSearchPanel";
-  import { locale, t, translate, type MessageKey } from "$lib/i18n";
-
-  // Frases propias de CodeMirror (plegado, anuncios de lector de pantalla,
-  // "ir a linea"...) que se muestran o anuncian en el editor.
-  const CODEMIRROR_PHRASES: Record<string, MessageKey> = {
-    "Fold line": "editor.cm.foldLine",
-    "Unfold line": "editor.cm.unfoldLine",
-    "Folded lines": "editor.cm.foldedLines",
-    "Unfolded lines": "editor.cm.unfoldedLines",
-    to: "editor.cm.to",
-    "folded code": "editor.cm.foldedCode",
-    unfold: "editor.cm.unfold",
-    Completions: "editor.cm.completions",
-    "Control character": "editor.cm.controlCharacter",
-    "Selection deleted": "editor.cm.selectionDeleted",
-    "current match": "editor.cm.currentMatch",
-    "on line": "editor.cm.onLine",
-    "Go to line": "editor.cm.goToLine",
-    go: "editor.cm.go",
-    close: "editor.cm.close",
-  };
-
-  function buildPhrases() {
-    return EditorState.phrases.of(
-      Object.fromEntries(Object.entries(CODEMIRROR_PHRASES).map(([phrase, key]) => [phrase, translate(key)])),
-    );
-  }
+  import { locale, t } from "$lib/i18n";
 
   let {
     value = $bindable(""),
@@ -126,19 +95,6 @@
 
   let container: HTMLDivElement;
   let view: EditorView | undefined;
-  const themeCompartment = new Compartment();
-  const sqlCompartment = new Compartment();
-  // Las comillas y comentarios del motor, para cortar en sentencias.
-  const lexicalCompartment = new Compartment();
-  // El motor y las rutinas de la conexion, para los hints de parametros.
-  const hintsCompartment = new Compartment();
-  const completionCompartment = new Compartment();
-  const definitionLinkCompartment = new Compartment();
-  const behaviorCompartment = new Compartment();
-  const tabCompletionCompartment = new Compartment();
-  const indentationCompartment = new Compartment();
-  const phrasesCompartment = new Compartment();
-
   // Config vigente. schema/dialect/fkIndex cambian poco (catalogo o conexion
   // activa); defaultTable cambia con cada tecla, asi que se separan para no
   // reconstruir el SQLNamespace completo en cada keystroke.
@@ -148,9 +104,6 @@
   let engine: SqlProfile = standardSql;
   let routineIndex: RoutineIndex = buildRoutineIndex([]);
 
-  function hintConfig() {
-    return { engine, routines: routineIndex };
-  }
   let sqlDialect = dialectFor(engine);
   let defaultTable: string | undefined;
   // Ejecucion lanzada desde este editor cuyo resultado todavia no llego:
@@ -362,38 +315,22 @@
     "apply-quick-fix": whenFocused(applyFirstFix),
   });
 
-  function buildDefinitionLink() {
-    return definitionLinkExtension({
-      resolveTable: (word) => resolveCatalogTable(sqlSchema.schema, sqlSchema.defaultSchema, word),
-      onOpen: (ref) => onopentabledefinition?.(ref),
-    });
-  }
+  // Los Compartment de cada ajuste (editor/configuration.ts).
+  const configuration = createEditorConfiguration({
+    language: () => ({
+      engine,
+      dialect: sqlDialect,
+      schema: sqlSchema,
+      catalogCompletions,
+      defaultTable,
+      routines: routineIndex,
+    }),
+    settings: () => get(editorSettings),
+    onOpenTable: (ref) => onopentabledefinition?.(ref),
+  });
 
   function reconfigureCompletion() {
-    if (!view) return;
-    view.dispatch({
-      effects: [
-        sqlCompartment.reconfigure(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
-        completionCompartment.reconfigure(
-          autocompletion({
-            override: [
-              buildCompletionSource({
-                dialect: sqlDialect,
-                engine,
-                schema: sqlSchema.schema,
-                defaultSchema: sqlSchema.defaultSchema,
-                defaultTable,
-                fkIndex: sqlSchema.fkIndex,
-                tableIndex: sqlSchema.tableIndex,
-                catalogCompletions,
-                tableAliases: get(editorSettings).tableAliases,
-              }),
-            ],
-          }),
-        ),
-        definitionLinkCompartment.reconfigure(buildDefinitionLink()),
-      ],
-    });
+    view?.dispatch({ effects: configuration.completion() });
   }
 
   // Para el comando find con el editor como zona activa (Workspace).
@@ -660,6 +597,7 @@
   const unregisterTextFlush = registerConsoleTextFlush(flushText);
 
   onMount(() => {
+    const configured = configuration.initial(get(editorPalette), get(effectiveScheme));
     view = new EditorView({
       doc: value,
       parent: container,
@@ -668,16 +606,16 @@
         // Buscar (Ctrl+F) y reemplazar (Ctrl+R) propios en vez del panel
         // por defecto de basicSetup.
         editorSearch(),
-        sqlCompartment.of(sql({ dialect: sqlDialect, upperCaseKeywords: true })),
-        completionCompartment.of(autocompletion()),
-        definitionLinkCompartment.of(buildDefinitionLink()),
-        tabCompletionCompartment.of(buildTabCompletionKeymap(get(editorSettings).tabNavigatesCompletion)),
+        configured.language,
+        configured.completion,
+        configured.definitionLink,
+        configured.tabCompletion,
         // /* se cierra solo (sqlCommentEditing.ts) y la jerarquia dentro de
         // los comentarios (sqlCommentStyle.ts).
         commentEditing,
         commentStyle,
-        indentationCompartment.of(indentationExtension(get(editorSettings).indentStyle, get(editorSettings).indentSize)),
-        lexicalCompartment.of(sqlLexical.of(engine.lexical)),
+        configured.indentation,
+        configured.lexical,
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
         // como escribe el SQL el motor de la conexion (sqlPaste.ts).
         EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
@@ -687,7 +625,7 @@
         scrollPastEnd(),
         EditorView.scrollMargins.of(() => ({ bottom: CURSOR_BOTTOM_MARGIN })),
         statementIndex,
-        hintsCompartment.of(parameterHintConfig.of(hintConfig())),
+        configured.hints,
         parameterHints,
         activeStatementHighlight,
         executionMarker,
@@ -704,9 +642,9 @@
             return false;
           },
         }),
-        behaviorCompartment.of(get(editorSettings).autoUppercaseKeywords ? autoUppercaseSqlKeywords : []),
-        themeCompartment.of(buildCmTheme(get(editorPalette), get(effectiveScheme))),
-        phrasesCompartment.of(buildPhrases()),
+        configured.behavior,
+        configured.theme,
+        configured.phrases,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           for (const transaction of update.transactions) {
@@ -774,7 +712,7 @@
     const palette = $editorPalette;
     const scheme = $effectiveScheme;
     if (!view) return;
-    view.dispatch({ effects: themeCompartment.reconfigure(buildCmTheme(palette, scheme)) });
+    view.dispatch({ effects: configuration.theme(palette, scheme) });
   });
 
   // Al cambiar el idioma: frases de CodeMirror y detalles del autocompletado
@@ -783,7 +721,7 @@
   $effect(() => {
     $locale;
     if (!view) return;
-    view.dispatch({ effects: phrasesCompartment.reconfigure(buildPhrases()) });
+    view.dispatch({ effects: configuration.phrases() });
     reconfigureCompletion();
     // Los mensajes del analisis, en el idioma nuevo (de la cache: sin llamar
     // al backend).
@@ -793,9 +731,7 @@
   $effect(() => {
     const autoUppercase = $editorSettings.autoUppercaseKeywords;
     if (!view) return;
-    view.dispatch({
-      effects: behaviorCompartment.reconfigure(autoUppercase ? autoUppercaseSqlKeywords : []),
-    });
+    view.dispatch({ effects: configuration.behavior(autoUppercase) });
   });
 
   $effect(() => {
@@ -806,15 +742,13 @@
   $effect(() => {
     const tabNavigatesCompletion = $editorSettings.tabNavigatesCompletion;
     if (!view) return;
-    view.dispatch({
-      effects: tabCompletionCompartment.reconfigure(buildTabCompletionKeymap(tabNavigatesCompletion)),
-    });
+    view.dispatch({ effects: configuration.tabCompletion(tabNavigatesCompletion) });
   });
 
   $effect(() => {
     const { indentStyle, indentSize } = $editorSettings;
     if (!view) return;
-    view.dispatch({ effects: indentationCompartment.reconfigure(indentationExtension(indentStyle, indentSize)) });
+    view.dispatch({ effects: configuration.indentation(indentStyle, indentSize) });
   });
 
   // Reconfigura schema/dialecto/FK cuando cambia el catalogo o la conexion
@@ -834,14 +768,14 @@
     });
     // Otro motor: el indice de sentencias vuelve a cortar con sus reglas.
     if (view && nextEngine.lexical !== engine.lexical) {
-      view.dispatch({ effects: lexicalCompartment.reconfigure(sqlLexical.of(nextEngine.lexical)) });
+      view.dispatch({ effects: configuration.lexical(nextEngine) });
     }
     engine = nextEngine;
     catalogCompletions = buildCatalogCompletions($databaseExplorer?.schemas ?? [], engine, defaultSchema);
     sqlDialect = dialectFor(engine);
     // Las rutinas (y el motor) de los hints de parametros.
     routineIndex = buildRoutineIndex($databaseExplorer?.schemas ?? [], defaultSchema);
-    view?.dispatch({ effects: hintsCompartment.reconfigure(parameterHintConfig.of(hintConfig())) });
+    view?.dispatch({ effects: configuration.hints() });
     reconfigureCompletion();
     // Otro catalogo o dialecto: los nombres se vuelven a revisar (el efecto
     // tambien corre con otros cambios de la conexion; ahi no hace falta).

@@ -40,7 +40,7 @@ describe("analysisDiagnostics", () => {
       ],
       text,
     );
-    expect(diagnostic.fixes.map((fix) => fix.label)).toEqual(['editor.diagnostics.fix.insert {"text":")"}', "editor.diagnostics.fix.delete"]);
+    expect(diagnostic.fixes?.map((fix) => fix.label)).toEqual(['editor.diagnostics.fix.insert {"text":")"}', "editor.diagnostics.fix.delete"]);
   });
 
   it("what is only unfinished is marked incomplete; a trailing comma only at the end of the statement", () => {
