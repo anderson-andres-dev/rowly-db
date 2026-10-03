@@ -36,6 +36,8 @@ const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
 const PG_PORT = Number(process.env.E2E_PG_PORT ?? 5432);
 const PG_USER = process.env.E2E_PG_USER ?? "postgres";
 const RECONNECTIONS = Number(process.env.E2E_RECONNECTIONS ?? 300);
+const CONSOLE_CYCLES = Number(process.env.E2E_CONSOLE_CYCLES ?? 300);
+const IDLE_SECONDS = Number(process.env.E2E_IDLE_SECONDS ?? 300);
 const WARMUP = 50;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,9 +112,18 @@ function pss(pid) {
     }
   }
   const byName = {};
+  const ticksByName = {};
   let total = 0;
+  let ticks = 0;
   for (const process of tree) {
     try {
+      const stat = readFileSync(`/proc/${process}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      // utime y stime (campos 14 y 15 de stat), en ticks de reloj.
+      const own = Number(fields[11]) + Number(fields[12]);
+      ticks += own;
+      const comm = readFileSync(`/proc/${process}/comm`, "utf8").trim();
+      ticksByName[comm] = (ticksByName[comm] ?? 0) + own;
       const mb = Number(readFileSync(`/proc/${process}/smaps_rollup`, "utf8").match(/^Pss:\s+(\d+)/m)?.[1] ?? 0) / 1024;
       const name = readFileSync(`/proc/${process}/comm`, "utf8").trim();
       byName[name] = (byName[name] ?? 0) + mb;
@@ -121,7 +132,7 @@ function pss(pid) {
       // Termino mientras se leia.
     }
   }
-  return { total, byName };
+  return { total, byName, ticks, ticksByName };
 }
 
 const DOM = `({
@@ -141,14 +152,29 @@ const format = ({ index, heap, pss, dom }) =>
     .map(([name, mb]) => `${name} ${mb.toFixed(1)}`)
     .join(", ")}); ${dom.nodes} nodos, ${dom.editors} editores, ${dom.styles} estilos`;
 
+// Las clases del heap que mas objetos sumaron entre dos muestras.
+function classGrowth(first, last) {
+  return Object.entries(last.heap.classes)
+    .map(([name, entry]) => [name, entry.count - (first.heap.classes[name]?.count ?? 0), entry.bytes - (first.heap.classes[name]?.bytes ?? 0)])
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([name, count, bytes]) => `${name} +${count} (${(bytes / 1024).toFixed(0)} KB)`)
+    .join(", ");
+}
+
 // Sin fuga desde el calentamiento: heap vivo, objetos vivos, backend y lo
 // montado en el DOM.
 function assertStable(samples) {
+  if (samples.length < 2) throw new Error("hacen falta dos muestras: menos ciclos que el calentamiento");
   const first = samples[0];
   const last = samples[samples.length - 1];
   const grew = (what, before, after, allowed) => {
     if (after > before + allowed)
-      throw new Error(`${what} crecio de ${before.toFixed(1)} a ${after.toFixed(1)} entre el ciclo ${first.index} y el ${last.index}`);
+      throw new Error(
+        `${what} crecio de ${before.toFixed(1)} a ${after.toFixed(1)} entre el ciclo ${first.index} y el ${last.index}\n` +
+          `      lo que mas crecio: ${classGrowth(first, last)}`,
+      );
   };
   grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
   grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
@@ -195,6 +221,32 @@ async function open(page, profile, server, password = null) {
   }
   // El servidor que se ve es el de esta conexion, nunca el de la anterior.
   await waitFor(page, server, `${shown} === ${JSON.stringify(server)}`);
+}
+
+// Escribir es seleccionar todo (Ctrl+A) y pegar: los eventos que escucha
+// CodeMirror, sin depender del foco de la ventana bajo Xvfb.
+function writeSql(page, text) {
+  return page.evaluate(`(() => {
+    const content = document.querySelector(".cm-content");
+    content.focus();
+    content.dispatchEvent(new KeyboardEvent("keydown", { key: "a", code: "KeyA", keyCode: 65, ctrlKey: true, bubbles: true, cancelable: true }));
+    const data = new DataTransfer();
+    data.setData("text/plain", ${JSON.stringify(text)});
+    content.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    content.blur();
+    return content.textContent;
+  })()`);
+}
+
+// Un atajo de la app: keydown sobre lo que tiene el foco (keybindings.ts
+// decide la zona por ahi) o sobre el documento.
+function press(page, { key, code, ctrl = false, shift = false }, target = null) {
+  return page.evaluate(`(() => {
+    const target = ${target ? `document.querySelector(${JSON.stringify(target)})` : "null"} ?? document.activeElement ?? document.body;
+    target.focus?.();
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, code: ${JSON.stringify(code)}, ctrlKey: ${ctrl}, shiftKey: ${shift}, bubbles: true, cancelable: true }));
+    return true;
+  })()`);
 }
 
 async function backToConnections(page) {
@@ -247,19 +299,7 @@ cycle(`${RECONNECTIONS} reconexiones alternando MySQL y PostgreSQL: cada una con
   // MySQL (rowly_e2e) y no en PostgreSQL. Se mira con el foco fuera del
   // editor: mientras el cursor esta en la sentencia, el editor oculta los
   // nombres que no encuentra (SQL_ENGINE §8).
-  // Escribir es seleccionar todo (Ctrl+A) y pegar: los eventos que escucha
-  // CodeMirror, sin depender del foco de la ventana bajo Xvfb.
-  const write = (text) =>
-    page.evaluate(`(() => {
-      const content = document.querySelector(".cm-content");
-      content.focus();
-      content.dispatchEvent(new KeyboardEvent("keydown", { key: "a", code: "KeyA", keyCode: 65, ctrlKey: true, bubbles: true, cancelable: true }));
-      const data = new DataTransfer();
-      data.setData("text/plain", ${JSON.stringify(text)});
-      content.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-      content.blur();
-      return content.textContent;
-    })()`);
+  const write = (text) => writeSql(page, text);
   const marked = `[...document.querySelectorAll(".cm-unresolved")].map((element) => element.textContent)`;
   if ((await page.evaluate(shown)) !== SERVERS[PG_PROFILE.id]) {
     await backToConnections(page);
@@ -278,6 +318,103 @@ cycle(`${RECONNECTIONS} reconexiones alternando MySQL y PostgreSQL: cada una con
     throw new Error(`en MySQL se marco victim, que existe en rowly_e2e: ${JSON.stringify(names)}`);
 
   assertStable(samples);
+});
+
+const consoles = `document.querySelectorAll(".cm-editor").length`;
+const gridText = `(document.querySelector('[role="grid"]')?.innerText ?? "")`;
+const settingsButton = `document.querySelector("button.icon-button[aria-expanded][aria-pressed]")`;
+
+cycle(`${CONSOLE_CYCLES} ciclos de consola: abrir, ejecutar, cambiar de tema y cerrar, sin dejar nada detras`, async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  const tabs = `document.querySelectorAll('[role="tab"]').length`;
+  const baseTabs = await page.evaluate(tabs);
+  const samples = [];
+  for (let index = 1; index <= CONSOLE_CYCLES; index += 1) {
+    // Abrir: una consola nueva, activa, con su editor.
+    await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true });
+    await waitFor(page, `la consola ${index}`, `${tabs} === ${baseTabs + 1}`);
+    // Ejecutar en ella.
+    await writeSql(page, `SELECT id, name, ${index} AS ciclo FROM victim ORDER BY id`);
+    await press(page, { key: "Enter", code: "Enter", ctrl: true }, ".cm-content");
+    await waitFor(page, `el resultado del ciclo ${index}`, `${gridText}.includes("tres") && ${gridText}.includes("${index}")`);
+    // Cambiar de tema: otra paleta, desde Ajustes.
+    await page.evaluate(`${settingsButton}.click(), true`);
+    await waitFor(page, "las paletas", `document.querySelectorAll(".palette-grid .palette-option").length > 1`);
+    await page.evaluate(`document.querySelectorAll(".palette-grid .palette-option")[${index % 2}].click(), true`);
+    await page.evaluate(`${settingsButton}.click(), true`);
+    await waitFor(page, "Ajustes cerrado", `${settingsButton}.getAttribute("aria-expanded") === "false"`);
+    // Cerrar: si pregunta por el texto, se descarta.
+    await press(page, { key: "F4", code: "F4", ctrl: true }, ".cm-content");
+    await waitFor(page, `cerrar la consola ${index}`, `${tabs} === ${baseTabs} || !!document.querySelector("dialog[open] .danger-soft")`);
+    if (await page.evaluate(`!!document.querySelector("dialog[open] .danger-soft")`)) {
+      await page.evaluate(`document.querySelector("dialog[open] .danger-soft").click(), true`);
+      await waitFor(page, `cerrar la consola ${index}`, `${tabs} === ${baseTabs}`);
+    }
+    if (index === Math.min(WARMUP, CONSOLE_CYCLES) || (index > WARMUP && index % 50 === 0) || index === CONSOLE_CYCLES)
+      samples.push(await sample(page, app, index));
+  }
+  console.log(samples.map((s) => `        ${format(s)}`).join("\n"));
+  if ((await page.evaluate(consoles)) !== 1) throw new Error(`quedaron ${await page.evaluate(consoles)} editores montados`);
+  assertStable(samples);
+});
+
+cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamadas al backend ni memoria que crezca`, async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  await writeSql(page, "SELECT id, name FROM victim ORDER BY id");
+  await press(page, { key: "Enter", code: "Enter", ctrl: true }, ".cm-content");
+  await waitFor(page, "el resultado", `${gridText}.includes("tres")`);
+  // Lo que haga la app sola desde aqui: llamadas al backend y timers.
+  await page.evaluate(`(() => {
+    const counts = (window.__idle = { invokes: [], timeouts: 0, intervals: 0, frames: 0 });
+    const requestAnimationFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback) => (counts.frames++, requestAnimationFrame(callback));
+    const internals = window.__TAURI_INTERNALS__;
+    const invoke = internals.invoke.bind(internals);
+    internals.invoke = (command, ...rest) => (counts.invokes.push(command), invoke(command, ...rest));
+    const setTimeout = window.setTimeout;
+    window.setTimeout = (...rest) => (counts.timeouts++, setTimeout(...rest));
+    const setInterval = window.setInterval;
+    window.setInterval = (...rest) => (counts.intervals++, setInterval(...rest));
+    return true;
+  })()`);
+  await sleep(5000);
+  const before = await sample(page, app, 0);
+  // La CPU se cuenta solo en el reposo: recolectar y tomar el snapshot del
+  // heap tambien gastan, y no son de la app.
+  const idleStart = pss(app.pid);
+  await sleep(IDLE_SECONDS * 1000);
+  const idleEnd = pss(app.pid);
+  const after = await sample(page, app, IDLE_SECONDS);
+  const idle = await page.evaluate("window.__idle");
+  // Lo que anima solo: animaciones y transiciones CSS que siguen corriendo.
+  const animations = await page.evaluate(`document.getAnimations()
+    .filter((animation) => animation.playState === "running")
+    .map((animation) => {
+      const target = animation.effect?.target;
+      const where = target ? target.tagName.toLowerCase() + (target.classList.length ? "." + [...target.classList].join(".") : "") : "?";
+      return (animation.animationName ?? animation.transitionProperty ?? "animacion") + " en " + where;
+    })`);
+  const clock = Number(execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8" }).trim());
+  const cpuSeconds = (idleEnd.ticks - idleStart.ticks) / clock;
+  const cpuByProcess = Object.keys(idleEnd.ticksByName)
+    .map((name) => `${name} ${((idleEnd.ticksByName[name] - (idleStart.ticksByName[name] ?? 0)) / clock).toFixed(2)} s`)
+    .join(", ");
+  console.log(`        ${format(before)}\n        ${format(after)}`);
+  console.log(
+    `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
+      `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
+      `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
+      `animando: ${animations.join(", ") || "nada"}`,
+  );
+  if (idle.invokes.length > 0) throw new Error(`en reposo se llamo al backend: ${idle.invokes.join(", ")}`);
+  if (idle.intervals > 0) throw new Error(`en reposo se crearon ${idle.intervals} setInterval`);
+  // Con el editor enfocado, el cursor parpadea: bajo Xvfb, sin GPU, eso y el
+  // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
+  // continuo (sondeos, bucles), que se ve muy por encima.
+  if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
+  assertStable([before, after]);
 });
 
 // --- Ejecucion --------------------------------------------------------------
