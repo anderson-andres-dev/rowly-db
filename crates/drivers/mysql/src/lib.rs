@@ -110,7 +110,9 @@ fn mysql_cell_to_query_value(row: &MySqlRow, index: usize) -> Result<QueryValue,
 }
 
 /// A MySQL 9 `VECTOR` arrives as its float32 values, little-endian. It is
-/// shown as `[1,2.5,3]`, the text `STRING_TO_VECTOR` reads back.
+/// shown as `[1,2.5,3]`, the text `STRING_TO_VECTOR` reads back. The
+/// published sqlx 0.8.6 rejects the column type (0xf2) before a row gets
+/// here: this applies once a published release reads it (SQL_ENGINE §9).
 fn vector_text(bytes: &[u8]) -> Option<String> {
     if bytes.len() % 4 != 0 {
         return None;

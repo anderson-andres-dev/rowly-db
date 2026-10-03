@@ -89,7 +89,9 @@ fn label(entry: &str) -> String {
     entry
         .lines()
         .take_while(|line| line.starts_with("--"))
-        .filter(|line| since(line).is_none() && !line.starts_with("-- expect:"))
+        .filter(|line| {
+            since(line).is_none() && !line.starts_with("-- expect:") && !line.starts_with("-- gap:")
+        })
         .map(|line| line.trim_start_matches('-').trim())
         .collect::<Vec<_>>()
         .join(" ")
@@ -266,6 +268,17 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
 }
 
 /// `-- expect: valor`: lo que debe mostrar la primera celda.
+/// `-- gap: <error>`: un hueco conocido del driver (SQL_ENGINE §9). La
+/// lectura tiene que fallar con ese error; si un dia funciona, la prueba lo
+/// dice para que se quite la marca y vuelva a ser una lectura comprobada.
+fn known_gap(entry: &str) -> Option<String> {
+    entry
+        .lines()
+        .take_while(|line| line.starts_with("--"))
+        .find_map(|line| line.strip_prefix("-- gap:"))
+        .map(|value| value.trim().to_string())
+}
+
 fn expected(entry: &str) -> Option<String> {
     entry
         .lines()
@@ -282,6 +295,7 @@ fn expected(entry: &str) -> Option<String> {
 async fn every_column_type_a_line_returns_is_read() {
     let mut failures = Vec::new();
     let mut checked = 0;
+    let mut gaps = 0;
     for (engine_name, lines) in registry() {
         let engine = engine_named(&engine_name);
         if !engine_selected(engine) {
@@ -318,7 +332,31 @@ async fn every_column_type_a_line_returns_is_read() {
                         continue;
                     }
                     checked += 1;
-                    let problem = match conn.raw(sql).await {
+                    let result = conn.raw(sql).await;
+                    if let Some(gap) = known_gap(sql) {
+                        let problem = match &result {
+                            QueryExecutionResult::ResultSet { .. } => Some(
+                                "ya se lee: quitar la marca -- gap y su hueco de SQL_ENGINE §9"
+                                    .to_string(),
+                            ),
+                            other if !error_text(other).contains(&gap) => Some(format!(
+                                "fallo con otro error que el del hueco ({gap}): {}",
+                                error_text(other)
+                            )),
+                            _ => None,
+                        };
+                        if let Some(problem) = problem {
+                            failures.push(format!(
+                                "{engine_name} {} ({version}): «{}» {problem}",
+                                line.name,
+                                label(sql)
+                            ));
+                        } else {
+                            gaps += 1;
+                        }
+                        continue;
+                    }
+                    let problem = match result {
                         QueryExecutionResult::ResultSet { rows, .. } => {
                             let first = rows.first().and_then(|row| row.first().cloned()).flatten();
                             match expected(sql) {
@@ -341,7 +379,9 @@ async fn every_column_type_a_line_returns_is_read() {
             }
         }
     }
-    println!("lecturas comprobadas: {checked}");
+    println!(
+        "lecturas comprobadas: {checked} (huecos conocidos que siguen fallando igual: {gaps})"
+    );
     assert!(
         failures.is_empty(),
         "\n{} problemas:\n{}\n",
