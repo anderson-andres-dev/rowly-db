@@ -29,7 +29,7 @@
   import { engineFor } from "$lib/engines";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
-  import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
+  import { appendLog, executionLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import ParametersDialog from "$lib/components/ParametersDialog.svelte";
   import ChangesPreview from "$lib/components/results/ChangesPreview.svelte";
@@ -69,14 +69,11 @@
   import {
     consoleDisplayTitle,
     activateQueryConsole,
-    closeQueryConsole,
     createQueryConsole,
-    currentQueryConsole,
     ensureQueryConsole,
     executionForConsole,
     isQueryConsoleDirty,
     queryConsoles,
-    renameQueryConsole,
     reorderQueryConsoles,
     setTableFilters,
     type QueryConsole,
@@ -90,13 +87,13 @@
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
-  import { openSqlFileWithDialog, renameConsoleFile, saveConsole, saveConsoleAs } from "$lib/sqlFiles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
   import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
   import { createExecutionFlow, formatMs as formatDuration } from "$lib/workspace/executionSession";
   import { createResultChanges } from "$lib/workspace/resultChanges";
+  import { createConsoleFiles } from "$lib/workspace/consoleFiles";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -256,10 +253,6 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
   let renameInput = $state<HTMLInputElement>();
-  let pendingCloseId = $state<string | null>(null);
-  // Titulo congelado al abrir: si la consola se cierra (Descartar) mientras
-  // el modal se desvanece, el titulo no debe cambiar a mitad de animacion.
-  let closeDialogTitle = $state("");
 
   function shortcutKeys(id: string): string {
     return $shortcuts.find((shortcut) => shortcut.id === id)?.keys ?? "";
@@ -284,12 +277,12 @@
               label: $t("common.save"),
               shortcut: shortcutKeys("save-query-console"),
               separatorBefore: true,
-              action: () => void runFileAction(() => saveConsole(item)),
+              action: () => void files.save(item),
             },
             {
               label: $t("workspace.saveAs"),
               shortcut: shortcutKeys("save-query-console-as"),
-              action: () => void runFileAction(() => saveConsoleAs(item)),
+              action: () => void files.saveAs(item),
             },
           ]),
       {
@@ -309,26 +302,21 @@
       {
         label: $t("workspace.menu.openFile"),
         shortcut: shortcutKeys("open-sql-file"),
-        action: () => void runFileAction(() => openSqlFileWithDialog(profileId)),
+        action: () => void files.open(),
       },
     ];
   });
 
-  // Las acciones de archivo (dialogos + disco) son asincronas y pueden
-  // fallar por permisos, disco lleno, etc.: el error se muestra como aviso
-  // en vez de perderse en la consola del navegador.
-  async function runFileAction(action: () => Promise<boolean | void>): Promise<boolean> {
-    try {
-      return (await action()) !== false;
-    } catch (error) {
-      notifyError(error);
-      return false;
-    }
-  }
-
-  function currentConsole(id: string) {
-    return $queryConsoles.consoles.find((item) => item.id === id);
-  }
+  // --- Archivos y cierre de consolas (workspace/consoleFiles.ts) ----------
+  const files = createConsoleFiles({
+    profileId: () => profileId,
+    displayTitle: (title) => consoleDisplayTitle(title, $t),
+    fallbackTitle: () => $t("workspace.consoleFallback"),
+    confirmDiscard: (key) => confirmDiscardPending(key),
+    forgetResults: forgetConsoleResults,
+    notifyError,
+  });
+  const pendingClose = files.pendingClose;
 
   $effect(() => {
     ensureQueryConsole(profileId);
@@ -390,7 +378,7 @@
 
   function closeConsole(event: Event, id: string) {
     event.stopPropagation();
-    void requestClose(id);
+    requestClose(id);
   }
 
   function openTabMenu(event: MouseEvent, id: string) {
@@ -412,72 +400,18 @@
   function finishRename(save: boolean) {
     const id = renamingId;
     renamingId = null;
-    if (!save || !id) return;
-    // Confirmar sin cambios el nombre por defecto traducido no debe guardarlo
-    // traducido: se perdería el "consola_N" del que depende la numeración.
-    const original = currentConsole(id)?.title;
-    if (original !== undefined && renameValue === consoleDisplayTitle(original, $t)) return;
-    // En un archivo, cambiar el nombre renombra el archivo en disco.
-    if (currentConsole(id)?.filePath) {
-      void runFileAction(() => renameConsoleFile(id, renameValue));
-    } else {
-      renameQueryConsole(id, renameValue);
-    }
+    if (save && id) files.rename(id, renameValue);
   }
 
-  async function requestClose(id: string) {
+  function requestClose(id: string) {
     tabMenu = null;
-    if (!(await confirmDiscardPending(id))) return;
-    // Con el texto del editor al dia (lo manda con un retraso).
-    const item = currentQueryConsole(id);
-    // Solo se pregunta cuando cerrar perderia algo.
-    if (item && !isQueryConsoleDirty(item)) {
-      closeQueryConsole(profileId, id);
-      forgetResultEdits(id);
-      forgetLog(id);
-      forgetConsoleResults(id);
-      return;
-    }
-    closeDialogTitle = item ? consoleDisplayTitle(item.title, $t) : $t("workspace.consoleFallback");
-    pendingCloseId = id;
-  }
-
-  // Las tres respuestas llegan cuando el aviso (ConfirmDialog) termino de
-  // cerrarse.
-  function cancelClose() {
-    pendingCloseId = null;
-  }
-
-  function discardAndClose() {
-    const id = pendingCloseId;
-    pendingCloseId = null;
-    if (!id) return;
-    closeQueryConsole(profileId, id);
-    forgetResultEdits(id);
-    forgetLog(id);
-    forgetConsoleResults(id);
-  }
-
-  // Guarda (con el dialogo de "Guardar como" si es una consola) y recien
-  // despues cierra; si el usuario cancela el dialogo o falla el disco, la
-  // pestaña queda abierta.
-  async function saveAndClose() {
-    const id = pendingCloseId;
-    pendingCloseId = null;
-    const item = id ? currentConsole(id) : undefined;
-    if (!id || !item) return;
-    if (await runFileAction(() => saveConsole(item))) {
-      closeQueryConsole(profileId, id);
-      forgetResultEdits(id);
-      forgetLog(id);
-      forgetConsoleResults(id);
-    }
+    void files.requestClose(id);
   }
 
   // Comandos de las pestañas (lib/commands.ts); la tecla la pone
   // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
   $effect(() => {
-    const whenIdle = (run: () => boolean | void) => () => pendingCloseId === null && run() !== false;
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
     return registerCommands("global", {
       "new-query-console": whenIdle(() => {
         tabMenu = null;
@@ -492,17 +426,17 @@
       "save-query-console-as": whenIdle(() => {
         const item = activeConsole;
         if (!item || item.table) return false;
-        void runFileAction(() => saveConsoleAs(item));
+        void files.saveAs(item);
       }),
       "save-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item || item.table) return false;
-        void runFileAction(() => saveConsole(item));
+        void files.save(item);
       }),
       "next-result-page": whenIdle(() => stepPage(1)),
       "previous-result-page": whenIdle(() => stepPage(-1)),
       "open-sql-file": whenIdle(() => {
-        void runFileAction(() => openSqlFileWithDialog(profileId));
+        void files.open();
       }),
       "cancel-query": whenIdle(() => !!activeConsole && cancelExecution(activeConsole.id)),
       "query-history": whenIdle(() => {
@@ -513,7 +447,7 @@
       "close-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item) return false;
-        void requestClose(item.id);
+        requestClose(item.id);
       }),
     });
   });
@@ -988,7 +922,7 @@
           <span>{$t("workspace.newConsole")}</span>
           <kbd>{shortcutKeys("new-query-console")}</kbd>
         </button>
-        <button type="button" onclick={() => void runFileAction(() => openSqlFileWithDialog(profileId))}>
+        <button type="button" onclick={() => void files.open()}>
           <span>{$t("workspace.openFile")}</span>
           <kbd>{shortcutKeys("open-sql-file")}</kbd>
         </button>
@@ -1220,16 +1154,16 @@
   </div>
 {/if}
 
-{#if pendingCloseId}
+{#if $pendingClose}
   <ConfirmDialog
     tone="warning"
-    title={$t("workspace.close.title", { title: closeDialogTitle })}
+    title={$t("workspace.close.title", { title: $pendingClose.title })}
     message={$t("workspace.close.message")}
     confirmLabel={$t("common.save")}
     alternateLabel={$t("common.discard")}
-    onconfirm={() => void saveAndClose()}
-    onalternate={discardAndClose}
-    oncancel={cancelClose}
+    onconfirm={() => void files.saveAndClose()}
+    onalternate={files.discardAndClose}
+    oncancel={files.cancelClose}
   />
 {/if}
 
