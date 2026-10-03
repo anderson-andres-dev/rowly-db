@@ -166,7 +166,11 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
         // Un directorio de linea que lines.json no conoce no prueba nada.
         for entry in std::fs::read_dir(&dir).unwrap().flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if entry.path().is_dir() && !lines.iter().any(|line| line.name == name) {
+            // `common/` es el corpus valido en cada linea (SQL_ENGINE §10.1).
+            if entry.path().is_dir()
+                && name != "common"
+                && !lines.iter().any(|line| line.name == name)
+            {
                 failures.push(format!(
                     "{engine_name}: tests/sql/{engine_name}/{name} no es una linea de lines.json"
                 ));

@@ -34,7 +34,7 @@ export const UNRESOLVED_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 // Lo que falta cerrar mientras se escribe: no es un error todavia.
-// crates/server-tests/tests/real_server.rs replica esta lista (SQL_ENGINE §9).
+// crates/server-tests/tests/analysis.rs replica esta lista (SQL_ENGINE §9).
 export const UNFINISHED_KEYS: ReadonlySet<string> = new Set([
   "diagnostic.incomplete",
   "diagnostic.unclosedParen",

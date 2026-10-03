@@ -3,7 +3,10 @@
 The SQL the engine tests run, laid out as described in [SQL_ENGINE.md](../../SQL_ENGINE.md#10-tests-fixtures-and-simulations) §10.
 
 ```text
+common/                valid in every line of every engine: no-diagnostics.sql, mixed-errors.json, mixed-routines.json
 <engine>/
+  common/              valid in every line of the engine: valid.sql, attacks.sql, routines.sql,
+                       no-diagnostics.sql, mixed.json (MariaDB uses MySQL's, except mixed.json)
   setup.sql            run on every server of the engine before its fixtures; errors are ignored
                        (objects a line lacks simply fail there)
   <line>/

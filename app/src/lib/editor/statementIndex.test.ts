@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { splitStatements, statementAt, type SqlLexical } from "../sqlStatements";
 import { ENGINES, standardSql } from "../engines";
-import mysqlFixture from "../../../../crates/engine/tests/corpus/mixed/mysql.json";
+import mysqlFixture from "../../../../tests/sql/mysql/common/mixed.json";
 import {
   statementIndexComplete,
   statementIndexField,

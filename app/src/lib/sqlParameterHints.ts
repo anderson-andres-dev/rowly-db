@@ -6,7 +6,7 @@ import { statementsIn } from "$lib/editor/statementIndex";
 
 // Los hints de parametros en el editor:
 // solo las sentencias que tocan lo visible, cada una con el lexer liviano de
-// sqlCallHints.ts.
+// editor/callHints.ts.
 
 export interface ParameterHintConfig {
   engine: SqlProfile;

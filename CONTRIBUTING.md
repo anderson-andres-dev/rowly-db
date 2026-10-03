@@ -53,7 +53,7 @@ tools/test-dbs/up.sh                       # or one verified release: tools/test
 cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 
-`real_server` tests the guard, the statement splitter, the analyzer and the SQL the app writes; `contract` tests the drivers through the API the app uses: results, truncation, errors, session, introspection and TLS (what each image offers is the `tls` of its release in `lines.json`). Before running, the harness checks that the server is the release `lines.json` declares. What a release lacks counts as N/A only if the server rejects it. See `tools/test-dbs/README.md`.
+`safety` tests the guard, `analysis` the statement splitter and the analyzer, `generated` the SQL the app writes; `contract` tests the drivers through the API the app uses: results, truncation, errors, session, introspection and TLS (what each image offers is the `tls` of its release in `lines.json`). Before running, the harness checks that the server is the release `lines.json` declares. What a release lacks counts as N/A only if the server rejects it. See `tools/test-dbs/README.md`.
 
 `tools/test-dbs/lines.sh` checks version-line boundaries. CI runs all of this on every engine PR, for every verified exact release (`.github/workflows/sql-engine.yml`); the commands and rules are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Do not advertise a release as verified without its complete evidence.
 

@@ -134,7 +134,7 @@
   // vigente — no la del texto actual del editor, que puede haber cambiado
   // desde la ejecucion. Solo resuelve el caso simple (sin JOIN); con varias
   // tablas se toma la primera, igual que el resto de heuristicas de
-  // sqlSchema.ts.
+  // editor/completionSource.ts.
   // firstFromTable complementa a extractFromContext, que es del
   // autocompletado y depende de la posicion del cursor: sobre el texto
   // entero a veces no resuelve una consulta simple.

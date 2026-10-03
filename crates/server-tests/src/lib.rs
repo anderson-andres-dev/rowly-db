@@ -656,6 +656,52 @@ pub fn admin(engine: Engine, sql: &str) {
     );
 }
 
+// --- Corpus de tests/sql (SQL_ENGINE §10.1) ---------------------------------
+
+/// Una entrada de un corpus: la sentencia y lo que dicen sus comentarios
+/// (`-- drop:`, `-- call:`, `-- needs:`).
+pub struct Entry {
+    pub drop: Option<String>,
+    pub call: Option<String>,
+    /// `-- needs: <capacidad>`: la entrada usa algo que agrega una linea
+    /// (`capability`); en las anteriores es N/A, si el servidor la rechaza.
+    pub needs: Option<String>,
+    pub sql: String,
+}
+
+pub fn parse(entry: &str) -> Entry {
+    let mut drop = None;
+    let mut call = None;
+    let mut needs = None;
+    let mut body = Vec::new();
+    for line in entry.lines() {
+        if let Some(rest) = line.strip_prefix("-- drop:") {
+            drop = Some(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("-- call:") {
+            call = Some(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("-- needs:") {
+            needs = Some(rest.trim().to_string());
+        } else {
+            body.push(line);
+        }
+    }
+    Entry {
+        drop,
+        call,
+        needs,
+        sql: body.join("\n").trim().to_string(),
+    }
+}
+
+/// Rutinas que cada servidor crea y el guard acepta (MariaDB usa las de
+/// MySQL).
+pub fn routines_corpus(engine: Engine) -> &'static str {
+    match engine {
+        Engine::Postgres => include_str!("../../../tests/sql/postgres/common/routines.sql"),
+        _ => include_str!("../../../tests/sql/mysql/common/routines.sql"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

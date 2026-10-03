@@ -329,7 +329,7 @@ function consoleDocument(editor = false): { doc: string; queries: { from: number
   return { doc, queries };
 }
 
-// El escaner por trozos, como sqlStatementIndex: el primero termina en
+// El escaner por trozos, como editor/statementIndex: el primero termina en
 // `cut`, y cada trozo trae SCAN_OVERLAP de margen mas alla de su limite.
 function scanInChunks(text: string, lexical: SqlLexical, cuts: number[]): ScannedStatement[] {
   const state = initialScanState();
@@ -392,7 +392,7 @@ describe("en el editor: Ctrl+Enter, el recuadro y las sugerencias", () => {
       for (let pos = query.from; pos <= query.to; pos++) {
         // Ctrl+Enter (SqlEditor.currentSqlRange).
         expect(ranges([statementNear(state, pos)!])).toEqual([query]);
-        // El recuadro verde (sqlEditorBehavior.statementDecorations).
+        // El recuadro verde (editor/behavior, statementDecorations).
         expect(ranges([statementContaining(state, pos)!])).toEqual([query]);
       }
     }

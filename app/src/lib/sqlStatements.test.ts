@@ -386,7 +386,7 @@ describe("splitStatements - linea en blanco", () => {
   });
 
   it("igual si el texto llega por trozos", () => {
-    // El escaner por trozos (sqlStatementIndex) tiene que decidir lo mismo
+    // El escaner por trozos (editor/statementIndex) tiene que decidir lo mismo
     // aunque la linea en blanco o la palabra que la sigue queden partidas
     // entre dos trozos. Cada trozo trae SCAN_OVERLAP de margen, como alli.
     const columns = Array.from({ length: 20 }, (_, index) => `columna_${index}`).join(", ");

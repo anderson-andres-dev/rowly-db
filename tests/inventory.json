@@ -2,18 +2,18 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 129,
+    "files": 131,
     "tests": 1405,
     "ignored": 26,
     "byDecision": {
-      "keep": 125,
-      "move": 1,
-      "rewrite": 3,
+      "keep": 131,
+      "move": 0,
+      "rewrite": 0,
       "remove": 0
     },
     "byGate": {
       "pr": 125,
-      "engine-pr": 4,
+      "engine-pr": 6,
       "manual": 0,
       "release": 0
     },
@@ -1238,7 +1238,7 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "../../../../crates/engine/tests/corpus/mixed/mysql.json",
+        "../../../../tests/sql/mysql/common/mixed.json",
         "../engines",
         "../sqlStatements",
         "statementIndex"
@@ -1703,8 +1703,7 @@
       "property": "El corpus compartido de consolas mezcladas se divide igual que en Rust",
       "risk": "P0",
       "gate": "pr",
-      "decision": "rewrite",
-      "target": "tests/sql/common/",
+      "decision": "keep",
       "reason": "Lee crates/engine/tests/corpus/mixed; pasa a consumir los fixtures canonicos de tests/sql (M1)",
       "sqlEngineRows": [
         "S1",
@@ -1715,10 +1714,10 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "../../../crates/engine/tests/corpus/mixed/errors.json",
-        "../../../crates/engine/tests/corpus/mixed/mariadb.json",
-        "../../../crates/engine/tests/corpus/mixed/mysql.json",
-        "../../../crates/engine/tests/corpus/mixed/postgres.json",
+        "../../../tests/sql/common/mixed-errors.json",
+        "../../../tests/sql/mariadb/common/mixed.json",
+        "../../../tests/sql/mysql/common/mixed.json",
+        "../../../tests/sql/postgres/common/mixed.json",
         "engines",
         "sqlStatements"
       ],
@@ -2730,8 +2729,7 @@
       "property": "Corpus valido y mezclado: nada valido se marca; errores ordinarios si",
       "risk": "P1",
       "gate": "pr",
-      "decision": "rewrite",
-      "target": "tests/sql/",
+      "decision": "keep",
       "reason": "Corpus fuera del arbol canonico (SQL_ENGINE §10.1): cada entrada pasa a tests/sql y se retira al pasar el sustituto",
       "sqlEngineRows": [
         "A1",
@@ -2765,6 +2763,28 @@
       "durationMs": null
     },
     {
+      "path": "crates/server-tests/tests/analysis.rs",
+      "domain": "sql-engine",
+      "owner": "crates/server-tests/tests/analysis.rs",
+      "property": "Analizador y divisor contra SQL real: corpus, definiciones de Sakila/Pagila, consolas mezcladas y escritura letra a letra; CALL y SHOW CREATE devuelven filas",
+      "risk": "P0",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A1",
+        "A3",
+        "A4",
+        "D2"
+      ],
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 7,
+      "ignored": 7,
+      "environment": "real-server",
+      "env": [],
+      "durationMs": null
+    },
+    {
       "path": "crates/server-tests/tests/contract.rs",
       "domain": "drivers",
       "owner": "crates/server-tests",
@@ -2786,37 +2806,51 @@
       "durationMs": null
     },
     {
-      "path": "crates/server-tests/tests/real_server.rs",
+      "path": "crates/server-tests/tests/generated.rs",
       "domain": "sql-engine",
-      "owner": "crates/server-tests",
-      "property": "Guard, divisor, analizador, CALL generado y escritura contra servidores reales",
+      "owner": "crates/server-tests/tests/generated.rs",
+      "property": "El CALL que escribe el autocompletado corre en cada servidor con sus argumentos",
       "risk": "P0",
       "gate": "engine-pr",
-      "decision": "rewrite",
-      "target": "crates/server-tests/tests/{safety,generated,editing}.rs",
-      "reason": "Corre en CI por version exacta (sql-engine.yml); falta repartirla en safety/generated/editing y quitar la copia de la clasificacion de SqlEditor (§9)",
+      "decision": "keep",
       "sqlEngineRows": [
-        "S2",
-        "S3",
-        "S5",
-        "A1",
-        "A3",
-        "A4",
-        "D2",
-        "G2"
+        "G2",
+        "D4"
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 12,
-      "ignored": 12,
+      "tests": 1,
+      "ignored": 1,
       "environment": "real-server",
       "env": [
-        "ROWLY_FUZZ_CASES",
-        "ROWLY_FUZZ_SEED",
         "ROWLY_ROUTINES_IN",
         "ROWLY_ROUTINES_OUT"
       ],
-      "durationMs": 0
+      "durationMs": null
+    },
+    {
+      "path": "crates/server-tests/tests/safety.rs",
+      "domain": "sql-engine",
+      "owner": "crates/server-tests/tests/safety.rs",
+      "property": "Seguridad en servidores reales: lo que el guard acepta corre como una sola sentencia (corpus de ataques y fuzz), nada que dañe datos pasa como no destructivo, cadenas segun el modo",
+      "risk": "P0",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "S2",
+        "S3",
+        "S5"
+      ],
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 4,
+      "ignored": 4,
+      "environment": "real-server",
+      "env": [
+        "ROWLY_FUZZ_CASES",
+        "ROWLY_FUZZ_SEED"
+      ],
+      "durationMs": null
     },
     {
       "path": "crates/server-tests/tests/version_lines.rs",
@@ -2825,8 +2859,7 @@
       "property": "Cada linea se distingue de la anterior en sus extremos; tipos leidos por linea",
       "risk": "P1",
       "gate": "engine-pr",
-      "decision": "move",
-      "target": "crates/server-tests/tests/contract.rs",
+      "decision": "keep",
       "reason": "Corre en CI por motor sobre imagenes fijadas por digest (sql-engine.yml); se une al contrato del harness",
       "sqlEngineRows": [
         "D7",
