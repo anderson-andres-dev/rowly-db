@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 112,
-    "tests": 1335,
+    "files": 114,
+    "tests": 1341,
     "ignored": 42,
     "byDecision": {
-      "keep": 53,
+      "keep": 55,
       "move": 53,
       "rewrite": 6,
       "remove": 0
     },
     "byGate": {
-      "pr": 107,
+      "pr": 109,
       "engine-pr": 1,
       "manual": 4,
       "release": 0
@@ -58,6 +58,22 @@
       "environment": "none",
       "env": [],
       "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/credentials.rs",
+      "domain": "connections",
+      "owner": "app/src-tauri/src/credentials.rs",
+      "property": "Sin almacen de credenciales no hay nada guardado: leer o borrar no impide conectar a un perfil que no guarda la contrasena",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "app/src-tauri/src/drivers.rs",
@@ -2025,6 +2041,25 @@
         "vitest"
       ],
       "durationMs": 27
+    },
+    {
+      "path": "app/tests/e2e/run.mjs",
+      "domain": "workspace",
+      "owner": "app/src/lib/components/Workspace.svelte",
+      "property": "App real por teclado: conectar, ejecutar, confirmar/cancelar destructivas, confirmacion en produccion y texto de consola tras reiniciar",
+      "risk": "P0",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "Solo Linux/WebKitGTK (tauri-driver); WebView2 y WKWebView siguen como humo manual de release",
+      "sqlEngineRows": [
+        "S3",
+        "S7"
+      ],
+      "kind": "e2e",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "app+webdriver+mysql",
+      "durationMs": null
     },
     {
       "path": "crates/driver-core/src/assembly.rs",
