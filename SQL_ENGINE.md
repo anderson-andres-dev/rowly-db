@@ -100,7 +100,7 @@ Vendor support and Rowly DB verification are separate facts. **Every exact serve
 
 ### 5.3 Lines today
 
-Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine.
+Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine. Every release in **Tested on** is declared `verified` in `tools/test-dbs/lines.json`, pinned by image digest, and passes the complete matrix of §6 in CI on every engine PR (§7); what a line lacks is reported as N/A with its proof (§10.1).
 
 | Engine | Line | Differences from the previous line | Status | Tested on |
 |---|---|---|---|---|
@@ -114,14 +114,14 @@ Status as of 2026-10-02. **Every line below is proven** against real servers at 
 | PostgreSQL | 10 | Base: identity columns, declarative partitioning, `xlog` → `wal` functions | Unsupported (EOL 2022-11) | — |
 | | 11 | Procedures and `CALL` | Unsupported (EOL 2023-11) | — |
 | | 12–13 | Generated columns, `WITH OIDS` removed. 13 changes nothing Rowly DB depends on | Supported, 13 in grace until 2026-11-13 | 13.23 |
-| | 14 | OUT parameters in procedures, postfix operators removed | Supported until 2026-11-12 | 14.24 |
+| | 14 | OUT parameters in procedures, SQL-standard function bodies (`BEGIN ATOMIC`, `RETURN`), postfix operators removed | Supported until 2026-11-12 | 14.24 |
 | | 15 | `MERGE`, no default `CREATE` on schema `public` | Supported until 2027-11 | 15.19 |
 | | 16 | SQL/JSON constructors, `IS JSON` | Supported until 2028-11 | 16.15 |
 | | 17 | `JSON_TABLE`, `MERGE … RETURNING` | Supported until 2029-11 | 17.11 |
 | | 18 | Virtual generated columns, `OLD`/`NEW` in `RETURNING` | Supported until 2030-11 | 18.6 |
 | SQLite | — | Lines defined when the engine is added (§12) | — | — |
 
-Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, each pinned to a commit. The containers are in `tools/test-dbs/`.
+Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, pinned in `lines.json` (Sakila by SHA-256, Pagila by commit). The containers are in `tools/test-dbs/`.
 
 ## 6. The matrix
 
@@ -145,7 +145,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 
 | # | Property | Proven by |
 |---|---|---|
-| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`; `crates/engine/tests/corpus.rs` |
+| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
 | A2 | Real errors are reported where they are | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
 | A3 | **No prefix of any corpus SQL panics**, typed one character at a time | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
 | A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/sqlDiagnostics.dom.test.ts` |
@@ -207,7 +207,7 @@ Where it is declared today: lexical and call rules in each `SqlProfile` (`app/sr
 | Gate | When | What runs | Automated |
 |---|---|---|---|
 | **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, test inventory check, and the E2E walks in the real app (Linux, WebKitGTK) | Yes: `.github/workflows/quality.yml` and `e2e.yml` |
-| **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | No: the real-server suite is still manual (§9) |
+| **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | Yes: `.github/workflows/sql-engine.yml` runs the matrix on every verified exact release, D7/D8 on every probe, and fails when a release lacks complete evidence. Driver tests (D1, D3, D5) are still manual (§9) |
 | **Exact release or pack** | Before advertising a verified release or publishing its line pack (§11) | Complete matrix on that release and the line's other verified releases; D7 against the previous line if behavior changes | No |
 | **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | No |
 
@@ -223,8 +223,9 @@ node tools/inventory/tests.mjs --check
 # E2E walks: CI only (.github/workflows/e2e.yml); needs WebKitWebDriver, tauri-driver, Xvfb and xdotool
 
 # Real-server suite (starts MySQL, MariaDB and PostgreSQL in Docker)
-tools/test-dbs/up.sh
-cargo test -p rowly-server-tests -- --ignored --test-threads=1
+tools/test-dbs/up.sh                       # or one verified release: tools/test-dbs/up.sh postgres=13.23
+ROWLY_EVIDENCE=evidence.jsonl cargo test -p rowly-server-tests -- --ignored --test-threads=1
+node tools/inventory/coverage.mjs          # every §6 row mapped, no orphan real-server test
 
 # Fuzz knobs
 ROWLY_ENGINES=mysql,postgres     # limit to some engines
@@ -241,7 +242,7 @@ cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Today the full suite runs on one release per engine; only line proof runs on the probes in `lines.json` (§9). **The commands above do not certify every patch or yet meet the exact-release gate.** Until it is automated, the PR must attach manual evidence for each affected release and must not advertise a release as verified when an applicable row is missing.
+In CI, each verified exact release runs in its own job against its pinned image; the harness stops if the server is not the declared release or if its global `sql_mode` was left in another mode. The last job (`tools/test-dbs/evidence.mjs`) requires, for every release in `verified`, the declared server and every real-server test passing with none ignored, and lists the N/As. A release without that evidence is not advertised as verified.
 
 The real-server tests share the table `rowly_test.victim`. Run them with `--test-threads=1`, and never two runs against the same server at the same time.
 
@@ -269,8 +270,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 | Gap | Severity | Note |
 |---|---|---|
-| Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), there is no complete report per exact release, and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | Complete the §10 map, pin and run every declared release, automate §7 and align the support window. |
-| The real-server suite does not run in CI | P2 | Needs Docker in CI; until then it is the manual engine PR gate. |
+| The minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | Align the support window. |
 | The integrated confirmation test (S7) covers only the console and result editing on one MySQL release, and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add the other engines and releases, reconnect and mode changes. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. The UI does not yet distinguish verified from unverified exact releases. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
@@ -279,7 +279,6 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Other generated SQL (G7) is not run on a server | P2 | |
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
-| Datasets are not pinned (`tools/test-dbs/fetch.sh` downloads the latest Sakila and Pagila from `master`), images in `lines.json` have no digest, and real-server runs do not print the server version | P3 | Pin inputs and emit evidence as required by §5 and §10. |
 | Two ways to reach a real server: the driver tests (`KHIPU_TEST_*`) and `rowly-server-tests` (`tools/test-dbs`) | P3 | One suite on `tools/test-dbs` (§10). |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
@@ -307,11 +306,13 @@ tests/sql/
 
 Unit cases stay next to the code they test. Entries in a `.sql` file are separated by a line `-- ---`; each one is a single statement with a comment saying what it proves. A `-- since: <version>` line in an entry marks a change inside the line (§5.1): before that version, the line behaves like the previous one, and the line needs servers on both sides of it.
 
-`tools/test-dbs/lines.json` is the single source for test engines, lines and exact server releases. Pin each image by digest, and have the harness check the server-reported version before running. Current images come from the public mirror of the official images (`public.ecr.aws/docker/library`); digest pinning and evidence per exact release remain open (§9).
+`tools/test-dbs/lines.json` is the single source for test engines, lines and exact server releases. Each image is pinned by digest, and the harness checks the server-reported version against the one declared for that digest before running. Images come from the public mirror of the official images (`public.ecr.aws/docker/library`).
+
+An entry that uses something a later line adds says so with `-- needs: <capability>` (in a mixed-console fixture, the `needs` key). The capability is named by the comment of its entry in `tests/sql/<engine>/<line>/accepts.sql`, so the boundary is declared once and D7 proves it. On an earlier release the server must reject the entry; only then is it N/A, recorded in the evidence with its row, line and file. If the server accepts it, the capability is declared wrong and the test fails.
 
 The line fixtures already live here. The rest of the corpus still lives in `crates/server-tests/corpus/<engine>/` (`valid.sql`, `attacks.sql`, `routines.sql`) and `crates/engine/tests/corpus/` (`valid/`, `mixed/`), and moves to this layout (§9). Tests that no longer apply are deleted, not kept "just in case".
 
-`coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test or an `N/A` without a reason fails coverage-map review. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
+`coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test, an `N/A` without a reason, or a real-server test that proves no row fails `tools/inventory/coverage.mjs`. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
 
 To migrate an old corpus or test: record the property it protects, add its replacement to the target tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia. The locations in the §6 tables and the §7 commands continue to show **what exists today** until each migration PR updates them.
 

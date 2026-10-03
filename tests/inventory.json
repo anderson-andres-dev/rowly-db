@@ -13,8 +13,8 @@
     },
     "byGate": {
       "pr": 119,
-      "engine-pr": 1,
-      "manual": 4,
+      "engine-pr": 3,
+      "manual": 2,
       "release": 0
     },
     "sqlEngineRowsWithoutTest": [
@@ -2779,10 +2779,10 @@
       "owner": "crates/server-tests",
       "property": "Guard, divisor, analizador, CALL generado y escritura contra servidores reales",
       "risk": "P0",
-      "gate": "manual",
+      "gate": "engine-pr",
       "decision": "rewrite",
       "target": "crates/server-tests/tests/{safety,generated,editing}.rs",
-      "reason": "Una version por motor y etiqueta flotante; replica la clasificacion de SqlEditor (§9); falta reporte por version exacta (M1)",
+      "reason": "Corre en CI por version exacta (sql-engine.yml); falta repartirla en safety/generated/editing y quitar la copia de la clasificacion de SqlEditor (§9)",
       "sqlEngineRows": [
         "S2",
         "S3",
@@ -2812,10 +2812,10 @@
       "owner": "crates/server-tests",
       "property": "Cada linea se distingue de la anterior en sus extremos; tipos leidos por linea",
       "risk": "P1",
-      "gate": "manual",
+      "gate": "engine-pr",
       "decision": "move",
       "target": "crates/server-tests/tests/contract.rs",
-      "reason": "Imagenes sin digest (§9 P3); entra a CI por (motor, version) en M1",
+      "reason": "Corre en CI por motor sobre imagenes fijadas por digest (sql-engine.yml); se une al contrato del harness",
       "sqlEngineRows": [
         "D7",
         "D8"

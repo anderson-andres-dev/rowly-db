@@ -100,7 +100,7 @@ El soporte del fabricante y la verificación de Rowly DB son datos distintos. **
 
 ### 5.3 Las líneas hoy
 
-Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra servidores reales en sus dos extremos (`version_lines`, D7): lo nuevo de ella pasa ahí y falla en los dos extremos de la línea anterior, y lo que eliminó, al revés. Una línea que ningún fixture separa se uniría a la anterior; el test lo informa. Cada línea soportada se prueba con el último parche de su versión LTS soportada más antigua, la que protege el mínimo. La compuerta de release también prueba la versión más nueva de cada motor.
+Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra servidores reales en sus dos extremos (`version_lines`, D7): lo nuevo de ella pasa ahí y falla en los dos extremos de la línea anterior, y lo que eliminó, al revés. Una línea que ningún fixture separa se uniría a la anterior; el test lo informa. Cada línea soportada se prueba con el último parche de su versión LTS soportada más antigua, la que protege el mínimo. La compuerta de release también prueba la versión más nueva de cada motor. Cada versión de **Probada en** está declarada `verified` en `tools/test-dbs/lines.json`, fijada por digest de imagen, y pasa la matriz completa de §6 en CI en cada PR de motor (§7); lo que una línea no tiene se informa como N/A con su prueba (§10.1).
 
 | Motor | Línea | Diferencias con la línea anterior | Estado | Probada en |
 |---|---|---|---|---|
@@ -114,14 +114,14 @@ Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra serv
 | PostgreSQL | 10 | Base: columnas identity, particionado declarativo, funciones `xlog` → `wal` | Sin soporte (EOL 2022-11) | — |
 | | 11 | Procedures y `CALL` | Sin soporte (EOL 2023-11) | — |
 | | 12–13 | Columnas generadas, se elimina `WITH OIDS`. La 13 no cambia nada de lo que usa Rowly DB | Soportada, 13 en gracia hasta 2026-11-13 | 13.23 |
-| | 14 | Parámetros OUT en procedures, se eliminan los operadores postfijos | Soportada hasta 2026-11-12 | 14.24 |
+| | 14 | Parámetros OUT en procedures, cuerpos SQL estándar (`BEGIN ATOMIC`, `RETURN`), se eliminan los operadores postfijos | Soportada hasta 2026-11-12 | 14.24 |
 | | 15 | `MERGE`, sin `CREATE` por defecto en el schema `public` | Soportada hasta 2027-11 | 15.19 |
 | | 16 | Constructores SQL/JSON, `IS JSON` | Soportada hasta 2028-11 | 16.15 |
 | | 17 | `JSON_TABLE`, `MERGE … RETURNING` | Soportada hasta 2029-11 | 17.11 |
 | | 18 | Columnas generadas virtuales, `OLD`/`NEW` en `RETURNING` | Soportada hasta 2030-11 | 18.6 |
 | SQLite | — | Las líneas se definen al agregar el motor (§12) | — | — |
 
-Datasets: Sakila en MySQL y MariaDB, Pagila en PostgreSQL, cada uno fijado a un commit. Los contenedores están en `tools/test-dbs/`.
+Datasets: Sakila en MySQL y MariaDB, Pagila en PostgreSQL, fijados en `lines.json` (Sakila por SHA-256, Pagila por commit). Los contenedores están en `tools/test-dbs/`.
 
 ## 6. La matriz
 
@@ -145,7 +145,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 
 | # | Propiedad | Lo demuestra |
 |---|---|---|
-| A1 | No se marca nada que un servidor real acepte: el corpus, todas las definiciones de Sakila y Pagila, las consolas mezcladas | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`; `crates/engine/tests/corpus.rs` |
+| A1 | No se marca nada que un servidor real acepte: el corpus, todas las definiciones de Sakila y Pagila, las consolas mezcladas | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
 | A2 | Los errores reales se marcan donde están | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
 | A3 | **Ningún prefijo del SQL del corpus entra en pánico**, escrito letra a letra | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
 | A4 | Mientras se escribe, solo se ven errores reales: no lo que está sin terminar, ni la última palabra, ni un nombre que aún puede definirse | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/sqlDiagnostics.dom.test.ts` |
@@ -207,7 +207,7 @@ Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`
 | Compuerta | Cuándo | Qué corre | Automática |
 |---|---|---|---|
 | **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, comprobación del inventario de tests y los recorridos E2E en la app real (Linux, WebKitGTK) | Sí: `.github/workflows/quality.yml` y `e2e.yml` |
-| **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | No: la suite real aún es manual (§9) |
+| **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | Sí: `.github/workflows/sql-engine.yml` corre la matriz en cada versión exacta verificada, D7/D8 en cada probe, y falla si una versión no tiene la evidencia completa. Los tests de driver (D1, D3, D5) siguen siendo manuales (§9) |
 | **Versión exacta o paquete** | Antes de anunciar una versión verificada o publicar su paquete de línea (§11) | Matriz completa en esa versión y en las demás versiones verificadas de la línea afectada; D7 frente a línea anterior si cambia el comportamiento | No |
 | **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | No |
 
@@ -223,8 +223,9 @@ node tools/inventory/tests.mjs --check
 # Recorridos E2E: solo en CI (.github/workflows/e2e.yml); necesitan WebKitWebDriver, tauri-driver, Xvfb y xdotool
 
 # Suite contra servidor real (levanta MySQL, MariaDB y PostgreSQL en Docker)
-tools/test-dbs/up.sh
-cargo test -p rowly-server-tests -- --ignored --test-threads=1
+tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=13.23
+ROWLY_EVIDENCE=evidence.jsonl cargo test -p rowly-server-tests -- --ignored --test-threads=1
+node tools/inventory/coverage.mjs          # cada fila de §6 asignada, ninguna prueba real huérfana
 
 # Ajustes del fuzz
 ROWLY_ENGINES=mysql,postgres     # limita a algunos motores
@@ -241,7 +242,7 @@ cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Hoy la suite completa corre con una sola versión por motor; solo la demostración de líneas corre en los probes de `lines.json` (§9). **Los comandos anteriores no certifican todos los parches ni cumplen aún la compuerta por versión exacta.** Hasta automatizarla, el PR debe adjuntar la evidencia manual de cada versión afectada y no anunciar una versión como verificada si falta una fila aplicable.
+En CI, cada versión exacta verificada corre en su propio job contra su imagen fijada; el harness se detiene si el servidor no es la versión declarada o si su `sql_mode` global quedó en otro modo. El último job (`tools/test-dbs/evidence.mjs`) exige, para cada versión de `verified`, el servidor declarado y todas las pruebas reales en verde, ninguna ignorada, y enumera los N/A. Una versión sin esa evidencia no se anuncia como verificada.
 
 Las pruebas contra servidor real comparten la tabla `rowly_test.victim`. Se corren con `--test-threads=1` y nunca dos corridas a la vez contra el mismo servidor.
 
@@ -269,8 +270,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 
 | Hueco | Severidad | Nota |
 |---|---|---|
-| Las líneas están demostradas, pero el resto de la suite (escritura, `CALL` generado, fuzz del guard, destructividad) corre con una versión por motor (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), no hay reporte completo por versión exacta y los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Completar el mapa de §10, fijar y ejecutar cada versión declarada, automatizar §7 y ajustar la ventana de soporte. |
-| La suite contra servidor real no corre en el CI | P2 | Necesita Docker en el CI; mientras tanto, es la compuerta manual de PR de motor. |
+| Los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Ajustar la ventana de soporte. |
 | La prueba integrada de confirmación (S7) solo cubre la consola y la edición de resultados en una versión de MySQL, y no hay contexto tipado e invalidación completos por conexión (D9) | P2 | Añadir los demás motores y versiones, reconexión y cambio de modo. Los recorridos E2E corren solo en Linux; Windows (WebView2) y macOS (WKWebView) siguen siendo humo manual de release. La UI aún no distingue versión exacta verificada de no verificada. |
 | El analizador tiene un solo dialecto por motor: no puede marcar la sintaxis que una línea eliminó (A9), y las palabras reservadas son una lista por motor (G6) | P2 | Llega con la declaración por línea de abajo. |
 | Las capacidades se declaran en tres lugares (§6.5), en código y no por línea | P2 | Una sola declaración por línea, como datos. Es también lo que llevan los paquetes de soporte de versión (§11). |
@@ -279,7 +279,6 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | El resto del SQL generado (G7) no se ejecuta en un servidor | P2 | |
 | Los cuerpos de las rutinas de PostgreSQL no se analizan (A5) | P2 | |
 | Unicode más allá de `SELECT INTO`: nombres, posiciones, UTF-8 ↔ UTF-16 entre Rust y el editor (A8) | P2 | |
-| Los datasets no están fijados (`tools/test-dbs/fetch.sh` descarga el último Sakila y el Pagila de `master`), las imágenes de `lines.json` no tienen digest y las corridas reales no muestran la versión del servidor | P3 | Fijar entradas y emitir evidencia según §5 y §10. |
 | Dos maneras de llegar a un servidor real: los tests de driver (`KHIPU_TEST_*`) y `rowly-server-tests` (`tools/test-dbs`) | P3 | Una sola suite sobre `tools/test-dbs` (§10). |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | Los vectores de MySQL 9 se ven como `[1,2.5,-3]`. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
@@ -307,11 +306,13 @@ tests/sql/
 
 Los casos unitarios quedan junto al código que prueban. Las entradas de un `.sql` se separan con una línea `-- ---`; cada una es una sola sentencia con un comentario que dice qué demuestra. Una línea `-- since: <versión>` en una entrada marca un cambio dentro de la línea (§5.1): antes de esa versión, la línea se comporta como la anterior, y la línea necesita servidores a los dos lados de ella.
 
-`tools/test-dbs/lines.json` es la fuente única de motores, líneas y versiones exactas de prueba. Cada imagen debe quedar fijada por digest, y el harness comprueba la versión que devuelve el servidor antes de ejecutar. Las imágenes actuales vienen del espejo público de las oficiales (`public.ecr.aws/docker/library`); fijar digest y añadir evidencia por versión exacta sigue pendiente (§9).
+`tools/test-dbs/lines.json` es la fuente única de motores, líneas y versiones exactas de prueba. Cada imagen está fijada por digest, y el harness compara la versión que devuelve el servidor con la declarada para ese digest antes de ejecutar. Las imágenes vienen del espejo público de las oficiales (`public.ecr.aws/docker/library`).
+
+Una entrada que usa algo que agrega una línea posterior lo dice con `-- needs: <capacidad>` (en un fixture de consola mixta, la clave `needs`). La capacidad se nombra con el comentario de su entrada en `tests/sql/<motor>/<línea>/accepts.sql`, así que la frontera se declara una vez y D7 la demuestra. En una versión anterior el servidor tiene que rechazar la entrada; solo entonces es N/A, y queda en la evidencia con su fila, línea y archivo. Si el servidor la acepta, la capacidad está mal declarada y la prueba falla.
 
 Los fixtures de las líneas ya viven aquí. El resto del corpus sigue en `crates/server-tests/corpus/<motor>/` (`valid.sql`, `attacks.sql`, `routines.sql`) y en `crates/engine/tests/corpus/` (`valid/`, `mixed/`), y pasa a esta estructura (§9). Los tests que ya no aplican se borran, no se guardan «por si acaso».
 
-`coverage.json` asigna cada fila S/A/G/D de §6 a una prueba, su fixture, los motores y versiones donde aplica y la compuerta que la ejecuta. Una fila sin prueba o un `N/A` sin motivo falla la revisión del mapa. El harness de `crates/server-tests` prepara un esquema efímero por motor, versión y caso, restaura el modo de sesión, recoge la versión exacta y emite un reporte reproducible con commit, fila, SQL mínimo, semilla y resultado. Los tests unitarios siguen junto al código.
+`coverage.json` asigna cada fila S/A/G/D de §6 a una prueba, su fixture, los motores y versiones donde aplica y la compuerta que la ejecuta. Una fila sin prueba, un `N/A` sin motivo o una prueba real que no prueba ninguna fila hacen fallar `tools/inventory/coverage.mjs`. El harness de `crates/server-tests` prepara un esquema efímero por motor, versión y caso, restaura el modo de sesión, recoge la versión exacta y emite un reporte reproducible con commit, fila, SQL mínimo, semilla y resultado. Los tests unitarios siguen junto al código.
 
 Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en el árbol destino, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia. Las ubicaciones de las tablas de §6 y los comandos de §7 siguen indicando **lo que existe hoy** hasta que se actualicen con cada PR de migración.
 
