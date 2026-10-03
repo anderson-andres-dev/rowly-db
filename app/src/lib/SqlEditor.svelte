@@ -1,23 +1,21 @@
 <script lang="ts">
   import { Check, ChevronDown, ChevronUp, CircleX } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
-  import { splitStatements } from "$lib/sqlStatements";
   import {
     sqlLexical,
     statementIndex,
-    statementNear,
     statementsChangedIn,
     statementTextAt,
   } from "$lib/sqlStatementIndex";
   import { createAnalysisSession } from "$lib/editor/analysisSession";
   import { createEditorConfiguration } from "$lib/editor/configuration";
+  import { createEditorCommands, currentSqlRange } from "$lib/editor/commands";
   import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
   import { parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
     applyQuickFix,
-    clearDiagnosticsIn,
     diagnosticAt,
     jumpToDiagnostic,
     visibleDiagnosticCount,
@@ -54,7 +52,6 @@
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
-  import { formatSqlText } from "$lib/sqlFormatter";
   import { notifyError } from "$lib/stores/notifications";
   import { activeStatementHighlight } from "$lib/sqlEditorBehavior";
   import {
@@ -62,7 +59,6 @@
     executionMarkerField,
     executionPart,
     markerFromResult,
-    setExecutionMarker,
     setPartStatus,
     updateExecutionMarker,
     type ExecutionPart,
@@ -140,116 +136,21 @@
     };
   }
 
-  async function writeClipboard(text: string): Promise<boolean> {
-    const copied = await copyToClipboard(text);
-    view?.focus();
-    return copied;
-  }
-
-  async function copySelection() {
-    if (!view) return;
-    const selection = view.state.selection.main;
-    if (selection.empty) return;
-    await writeClipboard(view.state.sliceDoc(selection.from, selection.to));
-  }
-
-  async function cutSelection() {
-    if (!view) return;
-    const selection = view.state.selection.main;
-    if (selection.empty) return;
-    const copied = await writeClipboard(view.state.sliceDoc(selection.from, selection.to));
-    if (copied) view.dispatch({ changes: { from: selection.from, to: selection.to } });
-    view.focus();
-  }
-
-  async function pasteClipboard() {
-    if (!view) return;
-    try {
-      // Mismo filtro que Ctrl+V (clipboardInputFilter), que este camino no
-      // pasa.
-      const text = normalizePastedSql(await navigator.clipboard.readText(), view.state.facet(sqlLexical));
-      view.dispatch({ ...view.state.replaceSelection(text), userEvent: "input.paste", scrollIntoView: true });
-      view.focus();
-    } catch {
-      // El permiso del portapapeles puede estar bloqueado por el sistema.
-    }
-  }
-
-  function selectEverything() {
-    if (!view) return;
-    selectAll(view);
-    view.focus();
-  }
-
-  function currentSqlRange(): { from: number; to: number; selected: boolean } | null {
-    if (!view) return null;
-    const selection = view.state.selection.main;
-    if (!selection.empty) return { from: selection.from, to: selection.to, selected: true };
-
-    // Sentencia bajo el cursor (sqlStatementIndex.ts): nunca el documento
-    // entero; sin sentencias, nada que ejecutar.
-    const range = statementNear(view.state, selection.head);
-    return range ? { ...range, selected: false } : null;
-  }
-
-  function mappedCursorOffset(source: string, offset: number, formatted: string): number {
-    const significantBeforeCursor = [...source.slice(0, offset)].filter((char) => !/\s/.test(char)).length;
-    if (significantBeforeCursor === 0) return 0;
-
-    let seen = 0;
-    for (let index = 0; index < formatted.length; index += 1) {
-      if (!/\s/.test(formatted[index])) seen += 1;
-      if (seen === significantBeforeCursor) return index + 1;
-    }
-    return formatted.length;
-  }
-
-  function formatCurrentSql(): boolean {
-    if (!view) return false;
-    const range = currentSqlRange();
-    if (!range) return false;
-
-    const originalDoc = view.state.doc;
-    const source = view.state.sliceDoc(range.from, range.to);
-    const originalCursor = view.state.selection.main.head;
-    const settings = get(editorSettings);
-    void formatSqlText(source, engine, settings.formatterLineWidth, settings.formatterAlignColumns, settings.indentStyle, settings.indentSize).then((result) => {
-      // La primera ejecución carga el formateador bajo demanda. Si el usuario
-      // escribió durante esos milisegundos, no se reemplaza una versión vieja.
-      if (!view || view.state.doc !== originalDoc) return;
-      // Lo que el parser no entiende queda igual y se dice por que (antes no
-      // pasaba nada y parecia que el formato no se aplicaba). Con varias
-      // consultas, las demas si se formatean.
-      const firstLine = view.state.doc.lineAt(range.from).number;
-      const failure = result.failures[0];
-      if (failure) {
-        const line = firstLine + failure.line - 1;
-        const params = { token: failure.token ?? "", line, count: result.failures.length, formatted: result.formatted };
-        notifyError(
-          result.formatted === 0
-            ? $t(failure.token ? "editor.format.failedAt" : "editor.format.failed", params)
-            : $t(result.failures.length === 1 ? "editor.format.partialOne" : "editor.format.partialOther", params),
-        );
-        if (result.formatted === 0) return;
-      }
-      const formatted = result.text;
-      if (formatted === source) {
-        view.focus();
-        return;
-      }
-
-      const cursorOffset = mappedCursorOffset(source, originalCursor - range.from, formatted);
-      view.dispatch({
-        changes: { from: range.from, to: range.to, insert: formatted },
-        selection: range.selected
-          ? EditorSelection.range(range.from, range.from + formatted.length)
-          : EditorSelection.cursor(range.from + cursorOffset),
-        userEvent: "input.format",
-      });
-      view.focus();
-    });
-    return true;
-  }
+  // Portapapeles, formatear y preparar una ejecucion (editor/commands.ts).
+  const commands = createEditorCommands({
+    view: () => view,
+    engine: () => engine,
+    formatSettings: () => get(editorSettings),
+    text: (key, params) => $t(key, params),
+    notifyError,
+    writeClipboard: copyToClipboard,
+    readClipboard: () => navigator.clipboard.readText(),
+  });
+  const copySelection = commands.copy;
+  const cutSelection = commands.cut;
+  const pasteClipboard = commands.paste;
+  const selectEverything = commands.selectEverything;
+  const formatCurrentSql = commands.format;
 
   // Ejecuta la seleccion o la sentencia bajo el cursor. Ignorado mientras
   // esta consola ya esta ejecutando (el boton se deshabilita, pero el atajo
@@ -258,7 +159,7 @@
   // otra vez del lado del store antes de invocar el backend.
   function executeCurrentSql(): boolean {
     if (!view || executing) return true;
-    const range = currentSqlRange();
+    const range = currentSqlRange(view.state);
     return range ? executeRange(range) : true;
   }
 
@@ -270,27 +171,8 @@
   }
 
   function executeRange(range: { from: number; to: number }): boolean {
-    if (!view) return true;
-    const raw = view.state.sliceDoc(range.from, range.to);
-    const sql = raw.trim();
-    if (!sql) return true;
-    const statements = splitStatements(raw, engine.lexical);
-    if (statements.length === 0) return true;
-
-    const from = range.from + (raw.length - raw.trimStart().length);
-    // Varias sentencias: el Workspace las corre como script y va marcando
-    // cada una (markStatement), con su icono y su tiempo.
-    const parts =
-      statements.length > 1
-        ? statements.map((part) => ({ from: range.from + part.from, to: range.from + part.to, status: "pending" as const }))
-        : undefined;
-    view.dispatch({
-      effects: [
-        setExecutionMarker.of({ from, to: from + sql.length, status: "pending", parts }),
-        // Volver a ejecutar la sentencia quita sus errores anteriores.
-        clearDiagnosticsIn.of({ from, to: from + sql.length }),
-      ],
-    });
+    const sql = commands.execute(range);
+    if (sql === null) return true;
     awaitingResult = { result };
     onexecute?.(sql);
     return true;
