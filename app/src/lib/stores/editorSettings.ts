@@ -16,7 +16,7 @@ export interface EditorSettings {
   formatterLineWidth: number;
   autoUppercaseKeywords: boolean;
   // Formatear alineando en columnas: alias, ON de los JOIN y operadores de
-  // las condiciones (sqlFormatLayout.ts).
+  // las condiciones (editor/formatLayout.ts).
   formatterAlignColumns: boolean;
   tabNavigatesCompletion: boolean;
   indentStyle: IndentStyle;

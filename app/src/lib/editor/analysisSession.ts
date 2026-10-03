@@ -1,7 +1,7 @@
 // Analisis mientras se escribe (analyze_sql). Tras la pausa, el backend revisa
 // sintaxis y nombres contra el catalogo, sin tocar la base: solo lo que cambio,
 // con los resultados guardados por sentencia y el resto del documento en
-// segundo plano (sqlAnalysis.ts). Aqui no hay DOM: la vista solo da su
+// segundo plano (editor/analysisRunner.ts). Aqui no hay DOM: la vista solo da su
 // EditorView para pintar.
 
 import type { ChangeSet } from "@codemirror/state";
@@ -9,9 +9,9 @@ import type { EditorView } from "@codemirror/view";
 import { backendText, invoke, type BackendMessage } from "$lib/backend";
 import type { SqlProfile } from "$lib/engines";
 import type { MessageKey, MessageParams } from "$lib/i18n";
-import { AnalysisRunner, type Region } from "$lib/sqlAnalysis";
-import { createdTables } from "$lib/sqlCreatedTables";
-import { lineColumnToOffset, type QuickFix, type SqlDiagnostic } from "$lib/sqlDiagnostics";
+import { AnalysisRunner, type Region } from "$lib/editor/analysisRunner";
+import { createdTables } from "$lib/editor/createdTables";
+import { lineColumnToOffset, type QuickFix, type SqlDiagnostic } from "$lib/editor/diagnostics";
 
 export interface AnalysisPosition {
   line: number;
@@ -34,7 +34,7 @@ export const UNRESOLVED_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 // Lo que falta cerrar mientras se escribe: no es un error todavia.
-// crates/server-tests/tests/real_server.rs replica esta lista (SQL_ENGINE §9).
+// crates/server-tests/tests/analysis.rs replica esta lista (SQL_ENGINE §9).
 export const UNFINISHED_KEYS: ReadonlySet<string> = new Set([
   "diagnostic.incomplete",
   "diagnostic.unclosedParen",
@@ -55,7 +55,7 @@ export const UNFINISHED_AT_END_KEYS: ReadonlySet<string> = new Set([
 
 // Los mensajes genericos de sqlparser ("Expected X, found Y" y los que no
 // traducimos): con la sentencia a medias suele retroceder y senalar un token
-// anterior al que falta (sqlDiagnostics.ts, whileTyping).
+// anterior al que falta (editor/diagnostics.ts, whileTyping).
 export const VAGUE_KEYS: ReadonlySet<string> = new Set([
   "",
   "diagnostic.unexpected",
@@ -100,7 +100,7 @@ export function analysisDiagnostics(
       insert: suggestion.replacement,
     }));
     // Lo que solo dice que falta terminar: no se muestra mientras se escribe
-    // en esa sentencia (sqlDiagnostics.ts, typing).
+    // en esa sentencia (editor/diagnostics.ts, typing).
     const incomplete =
       UNFINISHED_KEYS.has(key) || (UNFINISHED_AT_END_KEYS.has(key) && statement.slice(to - start).trim() === "");
     return {
@@ -129,7 +129,7 @@ export interface AnalysisContext {
 // y con la cache adentro volver a una pestaña reanalizaba el documento entero
 // en el backend. Una sola a la vez: la de otro contexto se suelta entera, asi
 // que reconectar no la hace crecer (el tope por entradas esta en
-// sqlAnalysis.ts). Tambien cuentan las tablas que crea el documento: con
+// editor/analysisRunner.ts). Tambien cuentan las tablas que crea el documento: con
 // otras, lo que se dijo de una sentencia cambia.
 let shared: {
   context: AnalysisContext | null;
@@ -178,7 +178,7 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
         generation: context?.generation ?? 0,
         schemaEpoch: context?.schemaEpoch ?? 0,
       }));
-  // Las tablas que crea el documento (sqlCreatedTables.ts), para que el
+  // Las tablas que crea el documento (editor/createdTables.ts), para que el
   // analisis no las de por inexistentes. Se vuelven a buscar en cada ronda.
   let createdNames: string[] = [];
   let createdKey = "";

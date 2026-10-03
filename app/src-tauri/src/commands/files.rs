@@ -1,6 +1,7 @@
 //! El texto de las consolas y los archivos .sql.
 
-use crate::{console_texts, sql_files, text_encoding};
+use crate::services::{console_texts, sql_files};
+use crate::text_encoding;
 use khipu_driver_core::Message;
 #[tauri::command]
 pub async fn write_console_text(

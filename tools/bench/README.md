@@ -58,7 +58,7 @@ Compare only against a reference taken on the same machine and system:
 | 300 consoles | Open (Ctrl+Shift+Q), run (Ctrl+Enter), switch palette in Settings, close (Ctrl+F4) | A single editor is left at the end |
 | Idle with a connection | 300 s with a result on screen | No backend call or `setInterval`; under 10 % of one core |
 
-In all of them, from the warm-up (cycle 50) on, nothing grows: the live JavaScript heap after collecting (±10 % or 2 MB), live objects (±5 %), the backend's PSS floor (±5 % or 2 MB), mounted editors and styles. If the heap grows, the error names the classes that added objects.
+In all of them, from the warm-up (cycle 50) on, nothing grows: the live JavaScript heap after collecting (±10 % or 2 MB), live objects (±5 %), the floor of the backend's own memory (`Anonymous`, ±5 % or 2 MB), mounted editors and styles. If the heap grows, the error names the classes that added objects.
 
 The WebKitWebProcess PSS is reported but is not a gate: it rises with memory the collector already freed and WebKit keeps, and flattens on its own (over 1500 reconnections, around 600–700, with and without the JIT) while the live heap stays flat. At idle, under Xvfb without a GPU, the blinking cursor and the GTK compositor take ~3 % of one core.
 

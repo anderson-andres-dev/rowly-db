@@ -7,7 +7,7 @@
 // previa confirma, y el backend lo vuelve a exigir (apply_result_changes).
 
 import { get, writable, type Readable } from "svelte/store";
-import { invalidCells } from "$lib/cellTypes";
+import { invalidCells } from "$lib/results/cellTypes";
 import {
   applyChanges,
   buildChanges,
@@ -18,7 +18,7 @@ import {
   type EditTarget,
   type ResultChanges,
   type ResultEditInfo,
-} from "$lib/resultEditing";
+} from "$lib/results/resultEditing";
 import { formatPreviewSql } from "$lib/sqlPreviewFormat";
 import { appendLog } from "$lib/stores/executionLog";
 import { consoleOfKey } from "$lib/stores/pinnedResults";
@@ -115,7 +115,7 @@ export function createResultChanges(
   const count = (key: string) => pendingCount(editState(key).edits);
 
   // Antes de aplicar (o de ver el SQL): si algun valor no encaja en su
-  // columna (cellTypes.ts), no se manda nada; las celdas ya estan en rojo.
+  // columna (results/cellTypes.ts), no se manda nada; las celdas ya estan en rojo.
   function blockedByInvalidValues(key: string): boolean {
     const state = editState(key);
     const result = shownResult(key);

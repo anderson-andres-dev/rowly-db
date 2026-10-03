@@ -3,14 +3,14 @@ import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { ENGINES, standardSql, type SqlProfile } from "$lib/engines";
 import type { ConnectionDriver } from "$lib/connections";
-import type { ExecutionError } from "$lib/sqlDiagnostics";
+import type { ExecutionError } from "$lib/editor/diagnostics";
 import { splitStatements } from "$lib/sqlStatements";
-import { normalizePastedSql } from "$lib/sqlPaste";
-import { sqlTokens } from "$lib/sqlContext";
-import { aliasFor } from "$lib/sqlRelations";
-import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/sqlSchema";
+import { normalizePastedSql } from "$lib/editor/paste";
+import { sqlTokens } from "$lib/editor/context";
+import { aliasFor } from "$lib/editor/relations";
+import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/editor/completionSource";
 import type { CatalogTable, SchemaObjects } from "$lib/types";
-import { buildRoutineIndex, callHints } from "$lib/sqlCallHints";
+import { buildRoutineIndex, callHints } from "$lib/editor/callHints";
 
 // El contrato que cumple cada perfil de motor
 // (SQL_ENGINE.es.md). Un motor nuevo se suma a

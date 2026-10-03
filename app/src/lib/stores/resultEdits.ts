@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { EMPTY_EDITS, type PendingEdits, type ResultEditInfo, type RowRange } from "$lib/resultEditing";
+import { EMPTY_EDITS, type PendingEdits, type ResultEditInfo, type RowRange } from "$lib/results/resultEditing";
 
 // Un paso deshacible: como estaban los cambios ANTES, y donde ocurrio el
 // cambio (para llevar el grid hasta ahi al deshacerlo).

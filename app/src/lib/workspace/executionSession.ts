@@ -23,9 +23,9 @@ import {
   type PageRequest,
   type StatementCheck,
 } from "$lib/queryExecution";
-import { sqlTokens } from "$lib/sqlContext";
+import { sqlTokens } from "$lib/editor/context";
 import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
-import { nextSort } from "$lib/gridSort";
+import { nextSort } from "$lib/results/gridSort";
 import { appendLog } from "$lib/stores/executionLog";
 import { recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
 import { forgetResultEdits } from "$lib/stores/resultEdits";

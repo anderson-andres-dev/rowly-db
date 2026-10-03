@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { EditorState, type TransactionSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { standardSql, ENGINES } from "$lib/engines";
-import { diagnosticsField, diagnosticsIn } from "$lib/sqlDiagnostics";
-import { statementIndexField } from "$lib/sqlStatementIndex";
+import { diagnosticsField, diagnosticsIn } from "$lib/editor/diagnostics";
+import { statementIndexField } from "$lib/editor/statementIndex";
 import {
   analysisCacheFor,
   analysisDiagnostics,

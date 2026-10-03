@@ -3,7 +3,7 @@
   import { onMount, onDestroy, tick } from "svelte";
   import { onePerFrame } from "$lib/onePerFrame";
   import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
-  import { registerCommands } from "$lib/commands";
+  import { registerCommands } from "$lib/workspace/commands";
   import { installKeybindings } from "$lib/keybindings";
   import { installNumpadFix } from "$lib/numpadKeys";
   import type { Snippet } from "svelte";

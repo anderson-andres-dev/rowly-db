@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { ENGINES } from "$lib/engines";
-import { addDiagnostics, sqlDiagnostics, type SqlDiagnostic } from "$lib/sqlDiagnostics";
+import { addDiagnostics, sqlDiagnostics, type SqlDiagnostic } from "$lib/editor/diagnostics";
 import type { QueryExecutionResult } from "$lib/types";
 import { createDiagnosticPopup, serverDiagnostics } from "./diagnosticPresentation";
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import EncodingPicker from "$lib/components/EncodingPicker.svelte";
   import type { TextEncoding } from "$lib/textEncoding";
-  import { formatDecimal, type SelectionSummary } from "$lib/gridSelectionSummary";
+  import { formatDecimal, type SelectionSummary } from "$lib/results/gridSelectionSummary";
   import { tooltip } from "$lib/tooltip";
   import { settleTransitions } from "$lib/settleTransitions";
   import {
@@ -26,9 +26,9 @@
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
   import { flipDuration, reorderable } from "$lib/reorder";
-  import { findInPage, type FindOptions, type FindResult } from "$lib/gridFind";
+  import { findInPage, type FindOptions, type FindResult } from "$lib/results/gridFind";
 
-  import { COPY_FORMATS, type PasteBlock } from "$lib/gridClipboard";
+  import { COPY_FORMATS, type PasteBlock } from "$lib/results/gridClipboard";
   import { copySettings } from "$lib/stores/copyFormat";
   import type { EditStep } from "$lib/stores/resultEdits";
   import type { LogEntry } from "$lib/stores/executionLog";
@@ -49,9 +49,9 @@
     type PendingEdits,
     type ResultEditInfo,
     type RowRange,
-  } from "$lib/resultEditing";
+  } from "$lib/results/resultEditing";
   import { shortcuts } from "$lib/stores/shortcuts";
-  import { registerCommands } from "$lib/commands";
+  import { registerCommands } from "$lib/workspace/commands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
   import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
@@ -60,7 +60,7 @@
     rowsHiddenByFilters,
     withColumnFilter,
     type ColumnFilters,
-  } from "$lib/columnFilters";
+  } from "$lib/results/columnFilters";
 
   let {
     isExecuting,
@@ -401,7 +401,7 @@
     return hidden;
   });
 
-  // --- Filtro local por columna (columnFilters.ts) ----------------------
+  // --- Filtro local por columna (results/columnFilters.ts) ----------------------
   // Sobre las filas cargadas, sin volver a consultar; se suma a "Filtrar
   // filas". Otro resultado (otras columnas) empieza sin filtros; otra
   // pagina de la misma consulta los conserva.
@@ -482,7 +482,7 @@
     formatMenuOpen = false;
   }
 
-  // Comandos del grid (lib/commands.ts): solo con el foco en el grid y no
+  // Comandos del grid (lib/workspace/commands.ts): solo con el foco en el grid y no
   // mientras se edita una celda (su input tiene sus propias teclas), asi un
   // atajo no actua sobre las filas desde la barra de filtros o de busqueda.
   let gridScroll = $state<HTMLElement>();

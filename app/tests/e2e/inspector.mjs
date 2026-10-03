@@ -16,16 +16,18 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // que la abre ("/socket/1/1/WebPage").
 async function pageSocket(address) {
   // Una build debug recien compilada tarda en abrir la ventana.
+  let html = null;
   for (let attempt = 0; attempt < 300; attempt += 1) {
-    const html = await fetch(`http://${address}/`).then(
+    html = await fetch(`http://${address}/`).then(
       (response) => response.text(),
-      () => "",
+      () => null,
     );
-    const path = html.match(/\/socket\/\d+\/\d+\/WebPage/)?.[0];
+    const path = html?.match(/\/socket\/\d+\/\d+\/WebPage/)?.[0];
     if (path) return `ws://${address}${path}`;
     await sleep(100);
   }
-  throw new Error(`el inspector de ${address} no listo ninguna pagina en 30 s`);
+  const answer = html === null ? "no respondio" : `respondio sin paginas: ${html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}`;
+  throw new Error(`el inspector de ${address} no listo ninguna pagina en 30 s (${answer})`);
 }
 
 // Una conexion a la pagina: `send` para cualquier metodo del protocolo y

@@ -9,7 +9,7 @@
   import ColorPicker from "$lib/components/ColorPicker.svelte";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import { getDriver, type ConnectionDriver } from "$lib/connections";
-  import { summarizeError, summarizeReport, summaryText, type TestSummary } from "$lib/connectionTest";
+  import { summarizeError, summarizeReport, summaryText, type TestSummary } from "$lib/connections/connectionTest";
   import { writeClipboard } from "$lib/clipboard";
   import { t, type MessageKey } from "$lib/i18n";
   import {
@@ -33,7 +33,7 @@
     type PasswordPolicy,
   } from "$lib/credentials";
   import type { ConnectionFailure, TestConnectionReport, TlsMode } from "$lib/types";
-  import { explainConnectionFailure, toConnectionFailure } from "$lib/connectionErrors";
+  import { explainConnectionFailure, toConnectionFailure } from "$lib/connections/connectionErrors";
 
   let {
     driver,
@@ -610,7 +610,7 @@
 
       {#if attempted && $connection.error}
         <!-- Que paso y que revisar; el texto crudo del driver queda para
-             copiar (connectionErrors.ts). Sin causa reconocida, se muestra
+             copiar (connections/connectionErrors.ts). Sin causa reconocida, se muestra
              tal cual. -->
         {@const explained = explainConnectionFailure(
           $connection.error,

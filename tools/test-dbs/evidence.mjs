@@ -9,7 +9,7 @@
 // evidence.jsonl (lo que escribe ROWLY_EVIDENCE) y real.log (la salida de
 // cargo test). Completa quiere decir: el servidor que corrio es el que
 // lines.json declara (version y digest) y pasaron todas las pruebas de
-// real_server.rs y contract.rs, sin ninguna ignorada. Lo que una version no tiene sale
+// safety.rs, analysis.rs, generated.rs y contract.rs, sin ninguna ignorada. Lo que una version no tiene sale
 // como N/A, con su prueba. Con GITHUB_STEP_SUMMARY el resumen va ahi.
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
@@ -21,7 +21,7 @@ if (!dir) throw new Error("uso: evidence.mjs <dir>");
 
 const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
 // Las suites que corre cada job de version (sql-engine.yml).
-const SUITES = ["real_server", "contract"];
+const SUITES = ["safety", "analysis", "generated", "contract"];
 const expected = SUITES.map((suite) => readFileSync(join(ROOT, `crates/server-tests/tests/${suite}.rs`), "utf8"))
   .map((source) => (source.match(/#\[tokio::test\]/g) ?? []).length)
   .reduce((sum, count) => sum + count, 0);

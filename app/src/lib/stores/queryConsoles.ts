@@ -1,4 +1,4 @@
-import { isFilterOperator, type FilterCondition } from "$lib/filterBuilder";
+import { isFilterOperator, type FilterCondition } from "$lib/results/filterBuilder";
 import { DEFAULT_TEXT_ENCODING, isTextEncoding, type TextEncoding } from "$lib/textEncoding";
 import { browser } from "$app/environment";
 import { get, writable } from "svelte/store";

@@ -133,17 +133,17 @@ Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, pinned in `lines.js
 
 Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. **Proven by** names the test available today; its presence does not mean it already runs on all those releases. A row with no test is a gap, not a pass.
 
-Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `contract` = `crates/server-tests/tests/contract.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
+Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `safety`, `analysis`, `generated` = `crates/server-tests/tests/{safety,analysis,generated}.rs`, `contract` = `crates/server-tests/tests/contract.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
 
 ### 6.1 Safety
 
 | # | Property | Proven by |
 |---|---|---|
 | S1 | A `;` inside a string, comment, identifier or dollar quote of the engine does not split | `front/engines/contract.test.ts` (*un ; dentro de sus comillas…*), `front/sqlStatements.test.ts` |
-| S2 | Text the guard accepts runs as exactly one statement on the real server, measured **without** the driver's prepare barrier (§8) | `real` `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server`, `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement` |
-| S3 | Whatever damages data asks for confirmation | `real` `what_damages_data_never_passes_as_not_destructive`, `guard` unit tests (`*_requires_confirmation`); in the real app, `app/tests/e2e/run.mjs` (*DELETE sin WHERE: Escape cancela…*) |
+| S2 | Text the guard accepts runs as exactly one statement on the real server, measured **without** the driver's prepare barrier (§8) | `safety` `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server`, `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement` |
+| S3 | Whatever damages data asks for confirmation | `safety` `what_damages_data_never_passes_as_not_destructive`, `guard` unit tests (`*_requires_confirmation`); in the real app, `app/tests/e2e/run.mjs` (*DELETE sin WHERE: Escape cancela…*) |
 | S4 | Executable and versioned comments are classified as code | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
-| S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) | `real` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
+| S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) | `safety` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
 | S6 | Syntax the parser cannot read is judged by structure, never waved through | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
 | S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent | `app/src-tauri/src/commands/query.rs` `in_production_every_write_needs_confirmation`, `commands/results.rs` `grid_changes_in_production_need_the_users_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; in the real app, `app/tests/e2e/run.mjs` (*produccion: una escritura pide confirmacion…*, *produccion: editar el grid…*) covers the console and result editing on MySQL; the rest of the flow is a gap (§9) |
 
@@ -151,13 +151,13 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 
 | # | Property | Proven by |
 |---|---|---|
-| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
+| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `analysis` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
 | A2 | Real errors are reported where they are | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
-| A3 | **No prefix of any corpus SQL panics**, typed one character at a time | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
-| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/sqlDiagnostics.dom.test.ts` |
+| A3 | **No prefix of any corpus SQL panics**, typed one character at a time | `analysis` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
+| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `analysis` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/editor/diagnostics.dom.test.ts` |
 | A5 | Routine bodies are checked inside | MySQL/MariaDB: `diag` `valid_routine_structures_are_not_objected_to`, `a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is`. PostgreSQL: **gap** (§9) |
 | A6 | Names are checked against the catalog with the engine's case rules | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
-| A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/sqlDiagnostics.test.ts` |
+| A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
 | A8 | Positions stay right with multibyte text | `diag` `select_into_keeps_positions_with_multibyte_characters`; broader Unicode coverage is a **gap** (§9) |
 | A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines | **gap** (§9): the analyzer has one dialect per engine |
 
@@ -166,10 +166,10 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | # | Property | Proven by |
 |---|---|---|
 | G1 | Identifiers and literals written by the app read back as the same value, including an internal quote character | `crates/engine/src/lib.rs` `mod contract`, `front/engines/contract.test.ts` |
-| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) | `real` `completion_calls_run_on_the_real_servers` (calls the TypeScript code through `front/sqlCatalogCompletions.server.test.ts`) |
-| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/sqlCatalogCompletions.test.ts` |
-| G4 | Inserting a suggestion counts as typing for diagnostics | `front/sqlCatalogCompletions.test.ts` (`input.complete` assertion) |
-| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/sqlCatalogCompletions.test.ts` |
+| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) | `generated` `completion_calls_run_on_the_real_servers` (calls the TypeScript code through `front/editor/catalogCompletions.server.test.ts`) |
+| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/editor/catalogCompletions.test.ts` |
+| G4 | Inserting a suggestion counts as typing for diagnostics | `front/editor/catalogCompletions.test.ts` (`input.complete` assertion) |
+| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
 | G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine | `front/engines/contract.test.ts` covers one list per engine; per-line words are a **gap** (§9) |
 | G7 | Other generated SQL runs on the server: the INSERT/UPDATE from result editing, exports, filters | **gap** (§9); covered by unit tests only |
 
@@ -178,7 +178,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | # | Property | Proven by |
 |---|---|---|
 | D1 | Result sets, NULLs, types, truncation and DDL commands behave correctly | `contract` `connects_and_lists_schemas_and_tables`, `a_result_set_keeps_values_and_nulls`, `truncating_leaves_the_next_queries_complete`, `ddl_returns_a_command`, `a_server_error_keeps_its_code_and_position`, `the_session_keeps_the_server_defaults` |
-| D2 | `CALL` and `SHOW CREATE` return their rows | `real` `call_and_show_create_return_their_rows` |
+| D2 | `CALL` and `SHOW CREATE` return their rows | `analysis` `call_and_show_create_return_their_rows` |
 | D3 | Introspection classifies every object kind | `contract` `introspection_classifies_every_object_kind` |
 | D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes | partly, through G2; a direct check is a **gap** (§9) |
 | D5 | TLS modes negotiate or fail with an actionable message | `contract` `tls_*`, against what each image offers (`tls` in `lines.json`); accepting a configured CA is a **gap** (§9) |
@@ -277,7 +277,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | The session mode is read on connect: a `SET sql_mode` run in the console changes neither the context nor what the guard knows about strings (D9) | P2 | The pool holds several connections and the `SET` changes only one, so reading the mode again does not tell which one the next statement will use. On the normal path, the driver's preparation barrier (§8) still rejects multiple statements. The console needs a single-connection session, and then a new generation on every mode change. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
-| The incomplete / unresolved / generic classification lives in the frontend (key lists in `app/src/lib/editor/analysisSession.ts`), and `real` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
+| The incomplete / unresolved / generic classification lives in the frontend (key lists in `app/src/lib/editor/analysisSession.ts`), and `analysis` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
 | Introspected content is not checked directly against the server (D4) | P2 | Example found while writing this: MariaDB 11.8 accepts `DEFAULT` on procedure parameters, but its introspection always reports `has_default: false`. |
 | Other generated SQL (G7) is not run on a server | P2 | |
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
@@ -313,7 +313,7 @@ Unit cases stay next to the code they test. Entries in a `.sql` file are separat
 
 An entry that uses something a later line adds says so with `-- needs: <capability>` (in a mixed-console fixture, the `needs` key). The capability is named by the comment of its entry in `tests/sql/<engine>/<line>/accepts.sql`, so the boundary is declared once and D7 proves it. On an earlier release the server must reject the entry; only then is it N/A, recorded in the evidence with its row, line and file. If the server accepts it, the capability is declared wrong and the test fails.
 
-The line fixtures already live here. The rest of the corpus still lives in `crates/server-tests/corpus/<engine>/` (`valid.sql`, `attacks.sql`, `routines.sql`) and `crates/engine/tests/corpus/` (`valid/`, `mixed/`), and moves to this layout (§9). Tests that no longer apply are deleted, not kept "just in case".
+The whole corpus lives here. In `common/` (at any level): `no-diagnostics.sql`, valid SQL the analyzer must flag nothing in (`crates/engine/tests/corpus.rs`); `mixed.json`, mixed consoles with how they split (shared by the Rust splitter, the frontend's and `analysis`); `mixed-errors.json` and `mixed-routines.json` in `tests/sql/common/`; and, per engine, `valid.sql`, `attacks.sql` and `routines.sql`, which run against the servers (`safety`, `analysis`). MariaDB uses MySQL's except `mixed.json`. Tests that no longer apply are deleted, not kept "just in case".
 
 `coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test, an `N/A` without a reason, or a real-server test that proves no row fails `tools/inventory/coverage.mjs`. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
 

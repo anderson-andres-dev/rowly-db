@@ -34,7 +34,7 @@ ver [Próximos pasos](#próximos-pasos).
 4. **`list_tables`** aplana las tablas y vistas de todos los schemas
    visibles para el autocompletado, así que agregar un schema también hace
    autocompletables sus tablas.
-5. **`buildExplorerTree`** (`app/src/lib/explorerTree.ts`, puro y testeado)
+5. **`buildExplorerTree`** (`app/src/lib/connections/explorerTree.ts`, puro y testeado)
    convierte eso en nodos, y el componente solo los dibuja.
 
 ## Contrato del driver

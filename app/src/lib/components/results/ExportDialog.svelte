@@ -8,9 +8,9 @@
   import { save } from "@tauri-apps/plugin-dialog";
   import { FolderOpen } from "@lucide/svelte";
   import type { QueryColumn, QueryRow, SortKey } from "$lib/types";
-  import { COPY_FORMATS, serializeSelection, writeClipboardText, type CopyFormat } from "$lib/gridClipboard";
-  import { escapeHtml, highlightJson } from "$lib/jsonHighlight";
-  import { highlightSql } from "$lib/sqlHighlight";
+  import { COPY_FORMATS, serializeSelection, writeClipboardText, type CopyFormat } from "$lib/results/gridClipboard";
+  import { escapeHtml, highlightJson } from "$lib/results/jsonHighlight";
+  import { highlightSql } from "$lib/editor/highlight";
   import { t } from "$lib/i18n";
 
   // "Exportar datos": la consulta del resultado se vuelve a ejecutar ENTERA

@@ -1,6 +1,6 @@
 import type { SQLDialect } from "@codemirror/lang-sql";
-import type { ErrorLocator } from "$lib/sqlDiagnostics";
-import type { ErrorHelp } from "$lib/sqlErrorHelp";
+import type { ErrorLocator } from "$lib/editor/diagnostics";
+import type { ErrorHelp } from "$lib/editor/errorHelp";
 import type { ExplorerRoutine, RoutineParameter } from "$lib/types";
 
 // Todo lo que cambia de un motor a otro, en un solo lugar
@@ -36,12 +36,12 @@ export interface SqlProfile {
   // invertida escapa (MySQL), tambien ella.
   quoteString(value: string): string;
   // Resaltado y keywords del editor (CodeMirror). Sin configurar: dialectFor
-  // (sqlSchema.ts) le agrega lo de la app.
+  // (editor/completionSource.ts) le agrega lo de la app.
   editorDialect: SQLDialect;
   formatterDialect: FormatterDialect;
   // Lo que puede abrir una sentencia (autocompletado al inicio).
   statementStarters: readonly string[];
-  // Palabras que no pueden ser un alias sin comillas (sqlRelations.ts; se
+  // Palabras que no pueden ser un alias sin comillas (editor/relations.ts; se
   // suman a las keywords del dialecto del editor).
   reservedWords: ReadonlySet<string>;
   // La ayuda de la app por codigo de error del servidor.
@@ -49,7 +49,7 @@ export interface SqlProfile {
   // Donde cayo un error de ejecucion, segun los mensajes del motor.
   locateError: ErrorLocator;
   // Que parametros de una rutina van como argumentos en la llamada (hints de
-  // parametros, sqlCallHints.ts): en MySQL todos; en Postgres, los de
+  // parametros, editor/callHints.ts): en MySQL todos; en Postgres, los de
   // entrada de una funcion y, en un CALL, tambien los OUT.
   passedInCall(mode: RoutineParameter["mode"], kind: ExplorerRoutine["kind"]): boolean;
 }

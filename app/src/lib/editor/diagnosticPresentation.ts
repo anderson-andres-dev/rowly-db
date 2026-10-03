@@ -1,7 +1,7 @@
 // Como se presentan los diagnosticos del editor: el error del servidor puesto
 // en su sentencia, la ventana de detalle (por teclado o con el mouse quieto
 // sobre un subrayado), el contador de abajo a la derecha y el salto al
-// siguiente. Los diagnosticos mismos viven en sqlDiagnostics.ts.
+// siguiente. Los diagnosticos mismos viven en editor/diagnostics.ts.
 
 import { writable, type Readable } from "svelte/store";
 import { EditorView } from "@codemirror/view";
@@ -18,8 +18,8 @@ import {
   visibleDiagnosticCount,
   type QuickFix,
   type SqlDiagnostic,
-} from "$lib/sqlDiagnostics";
-import { groupByFixes } from "$lib/sqlErrorHelp";
+} from "$lib/editor/diagnostics";
+import { groupByFixes } from "$lib/editor/errorHelp";
 import type { QueryExecutionResult } from "$lib/types";
 
 type Text = (key: MessageKey, params?: MessageParams) => string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
-import type { CellValue, EditableColumn, ResultEditInfo } from "$lib/resultEditing";
+import type { CellValue, EditableColumn, ResultEditInfo } from "$lib/results/resultEditing";
 import { executionLog } from "$lib/stores/executionLog";
 import { finishQueryExecution } from "$lib/stores/queryConsoles";
 import {

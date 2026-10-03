@@ -4,14 +4,14 @@
   import { t } from "$lib/i18n";
   import type { MessageKey } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
-  import { parameterValue, quoteText, type ParameterType } from "$lib/sqlParameters";
-  import type { ParameterColumn } from "$lib/sqlParameterTypes";
+  import { parameterValue, quoteText, type ParameterType } from "$lib/workspace/parameters";
+  import type { ParameterColumn } from "$lib/editor/parameterTypes";
   import type { SqlLexical } from "$lib/sqlStatements";
   import { queryParameterValues, rememberParameterValues } from "$lib/stores/queryParameters";
 
   // Pide los valores de los parametros (:nombre) antes de ejecutar. Se
   // escribe el dato y la app lo formatea segun la columna con que se compara
-  // (sqlParameters.ts): una fecha en ISO, un numero validado, un texto entre
+  // (workspace/parameters.ts): una fecha en ISO, un numero validado, un texto entre
   // comillas. Debajo del nombre, el tipo de esa columna; si lo escrito no
   // encaja, se avisa y no se ejecuta. NULL es un boton, como al editar una
   // celda. Se propone lo ultimo usado. Enter en el ultimo campo (o

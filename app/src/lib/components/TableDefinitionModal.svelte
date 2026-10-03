@@ -8,10 +8,10 @@
   import { sql, MySQL } from "@codemirror/lang-sql";
   import { Check, Copy, X } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
-  import { writeClipboardText } from "$lib/gridClipboard";
+  import { writeClipboardText } from "$lib/results/gridClipboard";
   import { t } from "$lib/i18n";
   import { fetchTableDefinition } from "$lib/tableDefinition";
-  import { alignColumnDefinitions } from "$lib/sqlFormatLayout";
+  import { alignColumnDefinitions } from "$lib/editor/formatLayout";
   import { editorSettings } from "$lib/stores/editorSettings";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";

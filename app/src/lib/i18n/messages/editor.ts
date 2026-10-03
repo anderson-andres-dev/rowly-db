@@ -1,6 +1,6 @@
 import { defineMessages } from "../define";
 
-// Editor SQL (SqlEditor.svelte), su barra de búsqueda (editorSearchPanel.ts),
+// Editor SQL (SqlEditor.svelte), su barra de búsqueda (editor/search.ts),
 // el marcador de ejecución y el autocompletado. Las claves "cm.*" son las
 // frases propias de CodeMirror (EditorState.phrases).
 export default defineMessages({

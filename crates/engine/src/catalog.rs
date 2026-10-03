@@ -34,7 +34,7 @@ pub struct CatalogColumn {
 
 /// A foreign key owned by a `CatalogTable`: `column` on this table references
 /// `referenced_column` on `referenced_table`. Used by the frontend to suggest
-/// JOIN targets and auto-complete their ON condition (see sqlSchema.ts).
+/// JOIN targets and auto-complete their ON condition (see editor/completionSource.ts).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogForeignKey {

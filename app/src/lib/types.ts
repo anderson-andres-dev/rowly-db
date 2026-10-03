@@ -97,7 +97,7 @@ export interface ExplorerRoutine {
   kind: "procedure" | "function";
   arguments: string;
   returnType?: string | null;
-  // Uno por uno, para los hints de parametros (sqlCallHints.ts). Puede faltar
+  // Uno por uno, para los hints de parametros (editor/callHints.ts). Puede faltar
   // con un backend viejo.
   parameters?: RoutineParameter[];
 }
@@ -144,7 +144,7 @@ export interface TlsStatus {
 }
 
 // Por que fallo conectar (ConnectionErrorKind en driver-core): la app lo
-// explica en su idioma (connectionErrors.ts) y el detalle tecnico queda para
+// explica en su idioma (connections/connectionErrors.ts) y el detalle tecnico queda para
 // copiar.
 export type ConnectionErrorKind =
   | "authFailed"

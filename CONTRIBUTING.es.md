@@ -53,7 +53,7 @@ tools/test-dbs/up.sh                       # o una versión verificada: tools/te
 cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 
-`real_server` prueba el guard, el divisor de sentencias, el analizador y el SQL que escribe la app; `contract` prueba los drivers por la API que usa la app: resultados, truncado, errores, sesión, introspección y TLS (lo que ofrece cada imagen es el `tls` de su versión en `lines.json`). Antes de ejecutar, el harness comprueba que el servidor es la versión que declara `lines.json`. Lo que una versión no tiene cuenta como N/A solo si el servidor lo rechaza. Ver `tools/test-dbs/README.es.md`.
+`safety` prueba el guard, `analysis` el divisor de sentencias y el analizador, `generated` el SQL que escribe la app; `contract` prueba los drivers por la API que usa la app: resultados, truncado, errores, sesión, introspección y TLS (lo que ofrece cada imagen es el `tls` de su versión en `lines.json`). Antes de ejecutar, el harness comprueba que el servidor es la versión que declara `lines.json`. Lo que una versión no tiene cuenta como N/A solo si el servidor lo rechaza. Ver `tools/test-dbs/README.es.md`.
 
 `tools/test-dbs/lines.sh` comprueba los límites de las líneas de versión. El CI corre todo esto en cada PR de motor, en cada versión exacta verificada (`.github/workflows/sql-engine.yml`); los comandos y las reglas están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). No anuncies una versión como verificada sin su evidencia completa.
 
