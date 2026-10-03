@@ -69,3 +69,6 @@ jobs:
 
       - name: Cobertura de SQL_ENGINE (tests/sql/coverage.json)
         run: node tools/inventory/coverage.mjs
+
+      - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
+        run: node tools/test-dbs/window.mjs

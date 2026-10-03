@@ -194,12 +194,12 @@ impl DbConnector for PostgresConnector {
     async fn introspect_schema(&self, schema: &str) -> Result<SchemaObjects, DriverError> {
         let mut objects =
             introspect::introspect_schema(&self.pool, schema, self.version.capabilities()).await?;
-        if self.version.is_below_minimum() {
+        if self.version.is_below_compatibility_floor() {
             objects.warnings.insert(
                 0,
-                Message::key("introspect.unsupportedVersion")
+                Message::key("introspect.belowCompatibilityFloor")
                     .with("version", self.version.display())
-                    .with("minimum", "PostgreSQL 10"),
+                    .with("floor", "PostgreSQL 10"),
             );
         }
         Ok(objects)
