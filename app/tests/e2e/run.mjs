@@ -86,12 +86,17 @@ async function connect(session, name) {
   await (await session.find("#password")).type("rowly");
   await (await session.find('form button[type="submit"]')).click();
   await session.find(".cm-content", { timeout: 30000 });
-  // Para el diagnostico de un fallo: que tecla llego y a que elemento.
+  // Para el diagnostico de un fallo (que tecla llego y a que elemento) y para
+  // comprobar la entrega de los acordes.
   await session.script(`
     window.__e2eKeys = [];
+    // Las teclas principales recibidas: con esto webdriver.mjs comprueba que
+    // un acorde X11 llego.
+    window.__e2eDown = [];
     for (const type of ["keydown", "keyup"]) {
       window.addEventListener(type, (e) => {
         const t = e.target;
+        if (type === "keydown" && !["Control", "Shift", "Alt", "Meta"].includes(e.key)) window.__e2eDown.push(e.key);
         window.__e2eKeys.push(type[3] + ":" + (e.ctrlKey ? "Ctrl+" : "") + e.key + "@" + (t.className || t.tagName));
         if (window.__e2eKeys.length > 80) window.__e2eKeys.shift();
       }, true);

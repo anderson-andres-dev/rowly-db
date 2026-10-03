@@ -89,27 +89,67 @@ export class Session {
   async keys(...sequence) {
     for (const item of sequence) {
       if (typeof item === "string" && X11_KEYS[item]) {
-        x11Chord([item]);
-        await sleep(100);
+        await this.x11([item]);
       } else if (typeof item === "string") {
         const focused = await this.script("return document.activeElement");
         await new Element(this, elementId(focused)).type(item);
       } else {
-        x11Chord(item.chord);
-        await sleep(100);
+        await this.x11(item.chord);
       }
     }
+  }
+
+  // Un acorde X11 cuenta como entregado cuando la pagina ve su tecla principal
+  // (window.__e2eDown, el registro que instala run.mjs). Si no llega, la
+  // ventana no tenia el foco de X: se repite, y a la tercera se detiene
+  // diciendo quien lo tenia. Sin registro no hay como comprobarlo.
+  async x11(chord) {
+    const last = chord[chord.length - 1];
+    const key = DOM_KEYS[last] ?? last;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const before = await this.script("return window.__e2eDown?.length ?? null");
+      x11Chord(chord);
+      if (before === null) {
+        await sleep(100);
+        return;
+      }
+      const deadline = Date.now() + 1000;
+      while (Date.now() < deadline) {
+        const seen = await this.script(
+          "return window.__e2eDown.slice(arguments[0]).includes(arguments[1])",
+          before,
+          key,
+        );
+        if (seen) {
+          await sleep(100);
+          return;
+        }
+        await sleep(50);
+      }
+    }
+    throw new Error(`la tecla ${x11Combo(chord)} no llego a la app en 3 intentos; foco de X: ${x11Focus()}`);
   }
 }
 
 const X11_KEYS = { [KEYS.control]: "ctrl", [KEYS.shift]: "shift", [KEYS.enter]: "Return", [KEYS.escape]: "Escape" };
+// event.key que ve la pagina para cada tecla especial.
+const DOM_KEYS = { [KEYS.enter]: "Enter", [KEYS.escape]: "Escape" };
+
+const x11Combo = (chord) => chord.map((key) => X11_KEYS[key] ?? key).join("+");
 
 function x11Chord(chord) {
-  const combo = chord.map((key) => X11_KEYS[key] ?? key).join("+");
   execFileSync("xdotool", [
     "search", "--sync", "--onlyvisible", "--name", "^Rowly DB$", "windowfocus", "--sync",
-    "key", "--clearmodifiers", combo,
+    "key", "--clearmodifiers", x11Combo(chord),
   ]);
+}
+
+function x11Focus() {
+  try {
+    return execFileSync("xdotool", ["getwindowfocus", "getwindowname"], { encoding: "utf8" }).trim();
+  } catch (error) {
+    return `desconocido (${error.message.split("\n")[0]})`;
+  }
 }
 
 export class Element {
