@@ -1,976 +1,19 @@
 mod catalog_adapter;
+mod commands;
 mod console_texts;
 mod credentials;
 mod drivers;
 mod export;
 mod result_editing;
 mod sql_files;
+mod state;
 mod text_encoding;
 mod updates;
 mod webkit_env;
 
-use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
-    QueryExecutionOptions, QueryExecutionResult, SchemaObjects, TlsStatus,
-};
-use khipu_engine::Dialect;
-use khipu_engine::catalog::{CatalogTable, SchemaCatalog};
-use khipu_engine::execution_guard::{
-    DestructiveClassification, DestructiveStatement, GuardOptions, classify_sql_with,
-};
-use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use state::AppState;
 use tauri::Manager;
 use tauri_plugin_window_state::StateFlags;
-
-/// Page size when the frontend doesn't ask for one.
-const DEFAULT_QUERY_ROW_LIMIT: usize = 500;
-/// Upper bound for a requested page size ("Todas" included): the result grid
-/// mounts every row it receives, so this keeps a single page from freezing
-/// the WebView. Whatever the WebView asks for is clamped to this.
-const MAX_QUERY_ROW_LIMIT: usize = 10_000;
-
-/// Page requested by the frontend (row offset + page size).
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PageRequest {
-    offset: u64,
-    page_size: usize,
-    /// Orden pedido desde los encabezados del grid (vacio = el de la
-    /// consulta).
-    #[serde(default)]
-    sort: Vec<khipu_engine::pagination::SortKey>,
-}
-
-/// How the returned rows map onto the full result. `pageable: false` means
-/// the statement couldn't be rewritten with LIMIT/OFFSET (SHOW, FOR
-/// UPDATE, ...): only the first page is available.
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PageInfo {
-    offset: u64,
-    page_size: usize,
-    pageable: bool,
-    /// La sentencia se puede ordenar desde el grid (se puede reescribir su
-    /// ORDER BY). Si no, los encabezados no ofrecen ordenar.
-    sortable: bool,
-}
-
-/// The connector from the most recent successful `connect` and every schema
-/// introspected through it, kept alive so `execute_query` and the database
-/// explorer have something to work against.
-struct ActiveConnection {
-    connector: Arc<dyn DbConnector>,
-    dialect: Dialect,
-    /// The profile is marked as production: every write asks for
-    /// confirmation (`DestructiveStatement::WriteInProduction`).
-    production: bool,
-    /// El `sql_mode` del servidor incluye NO_BACKSLASH_ESCAPES: el guard lee la
-    /// barra invertida como un caracter, no como un escape.
-    no_backslash_escapes: bool,
-    server_version: String,
-    tls: TlsStatus,
-    default_schema: String,
-    available_schemas: Vec<String>,
-    /// Schemas currently shown in the explorer. Always includes
-    /// `default_schema`; the others come and go via `set_visible_schemas`.
-    schemas: BTreeMap<String, SchemaObjects>,
-    /// `schemas` as the engine's catalog, built once each time they change
-    /// (`set_schemas`). `analyze_sql` runs after every typing pause: it used
-    /// to clone every table and column on each call, with the connections
-    /// lock held (so a query started meanwhile had to wait).
-    catalog: Arc<SchemaCatalog>,
-}
-
-/// ¿El modo de la sesion lleva NO_BACKSLASH_ESCAPES? Solo en los motores
-/// con `sql_mode_query` (MySQL, MariaDB). Cambia como se parten las cadenas, y
-/// con ello lo que el guard ve.
-async fn uses_no_backslash_escapes(connector: &dyn DbConnector, dialect: Dialect) -> bool {
-    let Some(query) = dialect.definition().sql_mode_query else {
-        return false;
-    };
-    match connector
-        .execute_query(query, QueryExecutionOptions { max_rows: 1 })
-        .await
-    {
-        QueryExecutionResult::ResultSet { rows, .. } => rows
-            .first()
-            .and_then(|row| row.first())
-            .and_then(|mode| mode.as_deref())
-            .is_some_and(|mode| mode.to_ascii_uppercase().contains("NO_BACKSLASH_ESCAPES")),
-        _ => false,
-    }
-}
-
-fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<SchemaCatalog> {
-    Arc::new(catalog_adapter::tables_to_catalog(
-        schemas
-            .values()
-            .flat_map(|objects| objects.tables.iter().cloned()),
-    ))
-}
-
-impl ActiveConnection {
-    fn guard_options(&self) -> GuardOptions {
-        GuardOptions {
-            no_backslash_escapes: self.no_backslash_escapes,
-        }
-    }
-
-    /// The only way to change `schemas`: keeps `catalog` in step.
-    fn set_schemas(&mut self, update: impl FnOnce(&mut BTreeMap<String, SchemaObjects>)) {
-        update(&mut self.schemas);
-        self.catalog = build_catalog(&self.schemas);
-    }
-
-    fn explorer(&self) -> DatabaseExplorer {
-        // El schema por defecto primero, el resto en orden alfabetico.
-        let mut schemas: Vec<SchemaObjects> = Vec::with_capacity(self.schemas.len());
-        if let Some(default) = self.schemas.get(&self.default_schema) {
-            schemas.push(default.clone());
-        }
-        schemas.extend(
-            self.schemas
-                .values()
-                .filter(|objects| objects.schema != self.default_schema)
-                .cloned(),
-        );
-
-        DatabaseExplorer {
-            server_version: self.server_version.clone(),
-            tls: self.tls.clone(),
-            default_schema: self.default_schema.clone(),
-            available_schemas: self.available_schemas.clone(),
-            schemas,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DatabaseExplorer {
-    server_version: String,
-    tls: TlsStatus,
-    default_schema: String,
-    available_schemas: Vec<String>,
-    schemas: Vec<SchemaObjects>,
-}
-
-/// One active connection per window, keyed by the window label: each window
-/// ("main", or a "connection-*" one opened from the connection switcher)
-/// works against its own database, so connecting in one never replaces the
-/// connection another window is using. A window's entry is dropped when the
-/// window is destroyed (see `run`).
-#[derive(Default)]
-struct AppState {
-    connections: Mutex<HashMap<String, ActiveConnection>>,
-    /// Queries running now that `cancel_query` can interrupt, by the
-    /// execution id the frontend gave them.
-    running: Mutex<HashMap<String, Arc<QueryCancel>>>,
-}
-
-/// Removes a running query from `AppState::running` when it ends, however
-/// it ends.
-struct RunningQuery<'a> {
-    state: &'a AppState,
-    id: String,
-}
-
-impl Drop for RunningQuery<'_> {
-    fn drop(&mut self) {
-        self.state
-            .running
-            .lock()
-            .expect("running queries mutex poisoned")
-            .remove(&self.id);
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-enum ExecuteQueryResponse {
-    ConfirmationRequired {
-        statement: DestructiveStatement,
-    },
-    Completed {
-        result: QueryExecutionResult,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        page: Option<PageInfo>,
-    },
-}
-
-/// Tables and views of every loaded schema, for completion: adding a schema
-/// in the explorer also makes its tables completable.
-#[tauri::command]
-fn list_tables(window: tauri::Window, state: tauri::State<'_, AppState>) -> Vec<CatalogTable> {
-    state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned")
-        .get(window.label())
-        .map(|active| active.catalog.tables.clone())
-        .unwrap_or_default()
-}
-
-#[tauri::command]
-fn database_explorer(
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Option<DatabaseExplorer> {
-    state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned")
-        .get(window.label())
-        .map(ActiveConnection::explorer)
-}
-
-fn schemas_to_load(
-    wanted: &[String],
-    existing: &BTreeMap<String, SchemaObjects>,
-    refresh: bool,
-) -> Vec<String> {
-    wanted
-        .iter()
-        .filter(|name| refresh || !existing.contains_key(*name))
-        .cloned()
-        .collect()
-}
-
-/// Muestra `names` mas el schema por defecto. Introspecta los nuevos, o
-/// todos si se pide refresh, y descarta los demas. Ignora nombres que el
-/// servidor no liste. Si un schema falla, conserva su aviso en `warnings`.
-#[tauri::command]
-async fn set_visible_schemas(
-    names: Vec<String>,
-    refresh: Option<bool>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<DatabaseExplorer, Message> {
-    let (connector, mut wanted, mut to_load, default_schema) = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        let active = guard
-            .get(window.label())
-            .ok_or_else(|| Message::key("noActiveConnection"))?;
-
-        let mut wanted: Vec<String> = names
-            .into_iter()
-            .filter(|name| active.available_schemas.contains(name))
-            .collect();
-        if !wanted.contains(&active.default_schema) {
-            wanted.push(active.default_schema.clone());
-        }
-        let to_load = schemas_to_load(&wanted, &active.schemas, refresh.unwrap_or(false));
-        (
-            Arc::clone(&active.connector),
-            wanted,
-            to_load,
-            active.default_schema.clone(),
-        )
-    };
-
-    let available = if refresh.unwrap_or(false) {
-        connector.list_schemas().await.ok()
-    } else {
-        None
-    };
-    if let Some(names) = &available {
-        wanted.retain(|name| name == &default_schema || names.contains(name));
-        to_load.retain(|name| wanted.contains(name));
-    }
-
-    let mut loaded = Vec::with_capacity(to_load.len());
-    for name in to_load {
-        let objects = match connector.introspect_schema(&name).await {
-            Ok(objects) => objects,
-            Err(error) => {
-                let mut objects = SchemaObjects::new(&name);
-                objects
-                    .warnings
-                    .push(Message::key("introspect.schema").with("error", error));
-                objects
-            }
-        };
-        loaded.push(objects);
-    }
-
-    let mut guard = state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned");
-    let active = guard
-        .get_mut(window.label())
-        .ok_or_else(|| Message::key("noActiveConnection"))?;
-    // Si mientras se introspectaba se conecto a otra base, lo cargado es de
-    // la conexion anterior y no se mezcla con la nueva.
-    if !Arc::ptr_eq(&active.connector, &connector) {
-        return Err(Message::key("connectionChanged"));
-    }
-    if let Some(names) = available {
-        active.available_schemas = names;
-    }
-    active.set_schemas(|schemas| {
-        schemas.retain(|name, _| wanted.contains(name));
-        for objects in loaded {
-            schemas.insert(objects.schema.clone(), objects);
-        }
-    });
-    Ok(active.explorer())
-}
-
-/// Why connecting (or testing a connection) failed: the cause, which the
-/// frontend explains in the app's language, and the raw detail to copy.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ConnectFailure {
-    kind: ConnectionErrorKind,
-    detail: String,
-}
-
-impl From<DriverError> for ConnectFailure {
-    fn from(error: DriverError) -> Self {
-        match error {
-            DriverError::Connection { kind, detail } => Self { kind, detail },
-            // Ya conectado, fallo leer el catalogo inicial.
-            DriverError::Query(detail) => Self {
-                kind: ConnectionErrorKind::Other,
-                detail,
-            },
-        }
-    }
-}
-
-#[tauri::command]
-async fn connect(
-    kind: drivers::DatabaseKind,
-    config: ConnectionConfig,
-    production: Option<bool>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<usize, ConnectFailure> {
-    let connected = drivers::connect(kind, &config).await?;
-    let table_count = connected.default_objects.tables.len();
-    let mut schemas = BTreeMap::new();
-    schemas.insert(connected.default_schema.clone(), connected.default_objects);
-    let catalog = build_catalog(&schemas);
-    let no_backslash_escapes =
-        uses_no_backslash_escapes(&*connected.connector, kind.dialect()).await;
-
-    state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned")
-        .insert(
-            window.label().to_string(),
-            ActiveConnection {
-                connector: connected.connector,
-                dialect: kind.dialect(),
-                production: production.unwrap_or(false),
-                no_backslash_escapes,
-                server_version: connected.server_version,
-                tls: connected.tls,
-                default_schema: connected.default_schema,
-                available_schemas: connected.available_schemas,
-                schemas,
-                catalog,
-            },
-        );
-
-    Ok(table_count)
-}
-
-#[tauri::command]
-fn disconnect(window: tauri::Window, state: tauri::State<'_, AppState>) {
-    state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned")
-        .remove(window.label());
-}
-
-#[tauri::command]
-async fn execute_query(
-    sql: String,
-    confirmed_statement: Option<DestructiveStatement>,
-    page: Option<PageRequest>,
-    execution_id: Option<String>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<ExecuteQueryResponse, Message> {
-    let sql = sql.trim();
-    if sql.is_empty() {
-        return Ok(ExecuteQueryResponse::Completed {
-            page: None,
-            result: QueryExecutionResult::Error {
-                message: Message::key("query.empty"),
-                code: None,
-                position: None,
-            },
-        });
-    }
-
-    let (connector, dialect, production, guard_options) = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        match guard.get(window.label()) {
-            Some(active) => (
-                Arc::clone(&active.connector),
-                active.dialect,
-                active.production,
-                active.guard_options(),
-            ),
-            None => {
-                return Ok(ExecuteQueryResponse::Completed {
-                    page: None,
-                    result: QueryExecutionResult::Error {
-                        message: Message::key("noActiveConnection"),
-                        code: None,
-                        position: None,
-                    },
-                });
-            }
-        }
-    };
-
-    let classification = match classify_sql_with(sql, dialect, production, guard_options) {
-        Ok(classification) => classification,
-        Err(error) => {
-            return Ok(ExecuteQueryResponse::Completed {
-                page: None,
-                result: QueryExecutionResult::Error {
-                    message: error.to_string().into(),
-                    code: None,
-                    position: None,
-                },
-            });
-        }
-    };
-
-    match (classification, confirmed_statement) {
-        (DestructiveClassification::NotDestructive, None) => {}
-        (DestructiveClassification::RequiresConfirmation(statement), Some(confirmed))
-            if confirmed == statement => {}
-        (DestructiveClassification::RequiresConfirmation(statement), _) => {
-            return Ok(ExecuteQueryResponse::ConfirmationRequired { statement });
-        }
-        (DestructiveClassification::NotDestructive, Some(_)) => {
-            return Ok(ExecuteQueryResponse::Completed {
-                page: None,
-                result: QueryExecutionResult::Error {
-                    message: Message::key("query.staleConfirmation"),
-                    code: None,
-                    position: None,
-                },
-            });
-        }
-    }
-
-    let offset = page.as_ref().map_or(0, |page| page.offset);
-    let page_size = page
-        .as_ref()
-        .map_or(DEFAULT_QUERY_ROW_LIMIT, |page| page.page_size)
-        .clamp(1, MAX_QUERY_ROW_LIMIT);
-    // Se piden page_size + 1 filas: si llega la extra, hay pagina siguiente
-    // (el driver la descarta y marca `truncated`).
-    //
-    // Primero el orden (sobre la consulta entera) y despues la pagina.
-    let sort = page
-        .as_ref()
-        .map(|page| page.sort.clone())
-        .unwrap_or_default();
-    let sortable = khipu_engine::pagination::sort_sql(
-        sql,
-        dialect,
-        &[khipu_engine::pagination::SortKey {
-            column: 0,
-            descending: false,
-        }],
-    )
-    .is_some();
-    let sorted_sql = khipu_engine::pagination::sort_sql(sql, dialect, &sort);
-    let base_sql = sorted_sql.as_deref().unwrap_or(sql);
-    let paged_sql =
-        khipu_engine::pagination::paginate_sql(base_sql, dialect, offset, page_size as u64 + 1);
-    let pageable = paged_sql.is_some();
-    let final_sql = paged_sql.as_deref().unwrap_or(base_sql);
-    let options = QueryExecutionOptions {
-        max_rows: page_size,
-    };
-    let result = match execution_id {
-        Some(id) => {
-            let cancel = Arc::new(QueryCancel::default());
-            state
-                .running
-                .lock()
-                .expect("running queries mutex poisoned")
-                .insert(id.clone(), Arc::clone(&cancel));
-            let _running = RunningQuery { state: &state, id };
-            connector
-                .execute_query_cancellable(final_sql, options, &cancel)
-                .await
-        }
-        None => connector.execute_query(final_sql, options).await,
-    };
-
-    // La posicion del error, referida al SQL del usuario y no al reescrito
-    // para ordenar o paginar (error_position.rs).
-    let result = match result {
-        QueryExecutionResult::Error {
-            message,
-            code,
-            position: Some(position),
-        } => QueryExecutionResult::Error {
-            message,
-            code,
-            position: khipu_engine::error_position::map_error_position(sql, final_sql, position),
-        },
-        other => other,
-    };
-    let page = matches!(result, QueryExecutionResult::ResultSet { .. }).then_some(PageInfo {
-        offset: if pageable { offset } else { 0 },
-        page_size,
-        pageable,
-        sortable,
-    });
-    Ok(ExecuteQueryResponse::Completed { result, page })
-}
-
-/// What a script needs to know before running anything: for each
-/// statement, whether it needs confirmation (same rules as `execute_query`)
-/// or can't be analyzed at all. The frontend confirms them all at once and
-/// then runs them one by one with `execute_query`, which checks each again.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StatementCheck {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    confirmation: Option<DestructiveStatement>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
-#[tauri::command]
-fn classify_statements(
-    statements: Vec<String>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<StatementCheck>, Message> {
-    let (dialect, production, options) = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        let active = guard
-            .get(window.label())
-            .ok_or_else(|| Message::key("noActiveConnection"))?;
-        (active.dialect, active.production, active.guard_options())
-    };
-    Ok(statements
-        .iter()
-        .map(|statement| check_statement(statement, dialect, production, options))
-        .collect())
-}
-
-fn check_statement(
-    statement: &str,
-    dialect: Dialect,
-    production: bool,
-    options: GuardOptions,
-) -> StatementCheck {
-    match classify_sql_with(statement.trim(), dialect, production, options) {
-        Ok(DestructiveClassification::NotDestructive) => StatementCheck {
-            confirmation: None,
-            error: None,
-        },
-        Ok(DestructiveClassification::RequiresConfirmation(kind)) => StatementCheck {
-            confirmation: Some(kind),
-            error: None,
-        },
-        Err(error) => StatementCheck {
-            confirmation: None,
-            error: Some(error.to_string()),
-        },
-    }
-}
-
-/// Diagnostics while typing (khipu_engine::diagnostics): syntax, and names
-/// checked against the loaded catalog. Never touches the database. One list
-/// per statement, positions relative to it.
-#[tauri::command]
-fn analyze_sql(
-    statements: Vec<String>,
-    // Lo que crea el documento (CREATE [TEMPORARY] TABLE/VIEW): ver
-    // `CatalogView::created`.
-    created: Option<Vec<String>>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
-    // Solo lo necesario bajo el candado (el catalogo es compartido: no se
-    // copia); el analisis corre despues, sin bloquear execute_query.
-    let (catalog, dialect, default_schema, loaded_schemas) =
-        with_active_connection(&window, &state, |active| {
-            Ok((
-                Arc::clone(&active.catalog),
-                active.dialect,
-                active.default_schema.clone(),
-                active.schemas.keys().cloned().collect::<Vec<_>>(),
-            ))
-        })?;
-    let view = khipu_engine::diagnostics::CatalogView {
-        tables: &catalog.tables,
-        loaded_schemas: loaded_schemas.iter().map(String::as_str).collect(),
-        default_schema: &default_schema,
-        created: created.iter().flatten().map(String::as_str).collect(),
-    };
-    Ok(statements
-        .iter()
-        .map(|statement| {
-            khipu_engine::diagnostics::analyze_statement(statement, dialect, Some(&view))
-        })
-        .collect())
-}
-
-/// Interrupts the query started with `execution_id` (see `execute_query`).
-/// It then ends with the server's own error, which the frontend shows as
-/// cancelled. Nothing to do if it already ended.
-#[tauri::command]
-async fn cancel_query(
-    execution_id: String,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), Message> {
-    let Some(cancel) = state
-        .running
-        .lock()
-        .expect("running queries mutex poisoned")
-        .get(&execution_id)
-        .cloned()
-    else {
-        return Ok(());
-    };
-    let connector = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        match guard.get(window.label()) {
-            Some(active) => Arc::clone(&active.connector),
-            None => return Ok(()),
-        }
-    };
-    connector
-        .cancel_query(&cancel)
-        .await
-        .map_err(|e| Message::from(e.to_string()))
-}
-
-/// Total rows `sql` would return, via `SELECT COUNT(*) FROM (...)`. Only
-/// for statements `execute_query` can paginate.
-#[tauri::command]
-async fn count_query_rows(
-    sql: String,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<u64, Message> {
-    let (connector, dialect) = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        let active = guard
-            .get(window.label())
-            .ok_or_else(|| Message::key("noActiveConnection"))?;
-        (Arc::clone(&active.connector), active.dialect)
-    };
-    let count_sql = khipu_engine::pagination::count_sql(sql.trim(), dialect)
-        .ok_or_else(|| Message::key("count.unsupported"))?;
-    match connector
-        .execute_query(&count_sql, QueryExecutionOptions { max_rows: 1 })
-        .await
-    {
-        QueryExecutionResult::ResultSet { rows, .. } => rows
-            .first()
-            .and_then(|row| row.first().cloned().flatten())
-            .and_then(|value| value.parse::<u64>().ok())
-            .ok_or_else(|| Message::key("count.noTotal")),
-        QueryExecutionResult::Error { message, .. } => Err(message),
-        QueryExecutionResult::Command { .. } => Err(Message::key("count.noTotal")),
-    }
-}
-
-#[tauri::command]
-async fn table_definition(
-    schema: String,
-    table: String,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<String, Message> {
-    let connector = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        match guard.get(window.label()) {
-            Some(active) => Arc::clone(&active.connector),
-            None => return Err(Message::key("noActiveConnection")),
-        }
-    };
-
-    connector
-        .table_definition(&schema, &table)
-        .await
-        .map_err(|e| Message::from(e.to_string()))
-}
-
-#[tauri::command]
-async fn test_connection(
-    kind: drivers::DatabaseKind,
-    config: ConnectionConfig,
-) -> Result<drivers::TestConnectionReport, ConnectFailure> {
-    Ok(drivers::test_connection(kind, &config).await?)
-}
-
-#[tauri::command]
-async fn save_connection_password(profile_id: String, password: String) -> Result<(), Message> {
-    credentials::save(profile_id, password)
-        .await
-        .map_err(Message::from)
-}
-
-#[tauri::command]
-async fn load_connection_password(profile_id: String) -> Result<Option<String>, Message> {
-    credentials::load(profile_id).await.map_err(Message::from)
-}
-
-#[tauri::command]
-async fn delete_connection_password(profile_id: String) -> Result<(), Message> {
-    credentials::delete(profile_id).await.map_err(Message::from)
-}
-
-#[tauri::command]
-async fn write_console_text(
-    app: tauri::AppHandle,
-    key: String,
-    contents: String,
-) -> Result<(), Message> {
-    console_texts::write(&app, &key, contents).await
-}
-
-#[tauri::command]
-async fn read_console_text(app: tauri::AppHandle, key: String) -> Result<Option<String>, Message> {
-    console_texts::read(&app, &key).await
-}
-
-#[tauri::command]
-async fn prune_console_texts(app: tauri::AppHandle, keep: Vec<String>) -> Result<(), Message> {
-    console_texts::prune(&app, keep).await
-}
-
-#[tauri::command]
-async fn read_sql_file(path: String) -> Result<sql_files::SqlFileText, Message> {
-    sql_files::read(path).await
-}
-
-/// Sin `encoding` (una consola que se guarda por primera vez), UTF-8.
-#[tauri::command]
-async fn write_sql_file(
-    path: String,
-    contents: String,
-    encoding: Option<text_encoding::TextEncoding>,
-) -> Result<(), Message> {
-    sql_files::write(
-        path,
-        contents,
-        encoding.unwrap_or(text_encoding::TextEncoding::Utf8),
-    )
-    .await
-}
-
-#[tauri::command]
-async fn rename_sql_file(path: String, new_name: String) -> Result<String, Message> {
-    sql_files::rename(path, new_name).await
-}
-
-#[tauri::command]
-async fn list_sql_dir(path: String) -> Result<Vec<sql_files::SqlDirEntry>, Message> {
-    sql_files::list_dir(path).await
-}
-
-#[tauri::command]
-async fn create_sql_file(dir: String, name: String) -> Result<String, Message> {
-    sql_files::create(dir, name).await
-}
-
-#[tauri::command]
-async fn trash_sql_file(path: String) -> Result<(), Message> {
-    sql_files::trash(path).await
-}
-
-/// Runs `f` against the active connection while holding the lock. Only
-/// for synchronous work (analysis, SQL generation): the catalog is read in
-/// place instead of cloned.
-fn with_active_connection<T>(
-    window: &tauri::Window,
-    state: &tauri::State<'_, AppState>,
-    f: impl FnOnce(&ActiveConnection) -> Result<T, Message>,
-) -> Result<T, Message> {
-    let guard = state
-        .connections
-        .lock()
-        .expect("connections mutex poisoned");
-    let active = guard
-        .get(window.label())
-        .ok_or_else(|| Message::key("noActiveConnection"))?;
-    f(active)
-}
-
-/// Whether the rows of `sql` can be edited from the grid, and how each
-/// result column maps onto the source table. `Err` carries the reason
-/// shown to the user.
-#[tauri::command]
-fn result_edit_info(
-    sql: String,
-    column_names: Vec<String>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<result_editing::ResultEditInfo, Message> {
-    with_active_connection(&window, &state, |active| {
-        result_editing::edit_info(
-            sql.trim(),
-            active.dialect,
-            &active.default_schema,
-            &active.schemas,
-            &column_names,
-        )
-    })
-}
-
-/// The exact SQL `apply_result_changes` would run, for the preview.
-#[tauri::command]
-fn preview_result_changes(
-    target: result_editing::EditTarget,
-    changes: khipu_engine::editing::ResultChanges,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<String>, Message> {
-    with_active_connection(&window, &state, |active| {
-        let statements =
-            result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
-        Ok(statements
-            .into_iter()
-            .map(|statement| statement.sql)
-            .collect())
-    })
-}
-
-/// In production every write needs the user's explicit confirmation, and the
-/// backend checks it: the UI shows the preview, but does not decide alone.
-fn production_write_allowed(production: bool, confirmed: bool) -> Result<(), Message> {
-    if production && !confirmed {
-        return Err(Message::key("changes.productionNeedsConfirmation"));
-    }
-    Ok(())
-}
-
-/// Applies the pending grid changes in one transaction (all or nothing).
-/// `confirmed`: the user confirmed this exact set of changes in the preview.
-#[tauri::command]
-async fn apply_result_changes(
-    target: result_editing::EditTarget,
-    changes: khipu_engine::editing::ResultChanges,
-    confirmed: Option<bool>,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<u64, khipu_driver_core::TransactionError> {
-    let (connector, statements) = with_active_connection(&window, &state, |active| {
-        production_write_allowed(active.production, confirmed.unwrap_or(false))?;
-        let statements =
-            result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
-        Ok((Arc::clone(&active.connector), statements))
-    })
-    .map_err(|message| khipu_driver_core::TransactionError {
-        statement_index: None,
-        message,
-        code: None,
-    })?;
-    if statements.is_empty() {
-        return Ok(0);
-    }
-    connector.execute_in_transaction(&statements).await
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ExportSummary {
-    rows: u64,
-    path: String,
-    elapsed_ms: u64,
-}
-
-/// "Exportar datos": vuelve a ejecutar la consulta del resultado SIN limite
-/// de filas y la escribe al archivo fila por fila (export.rs). Solo para
-/// consultas de lectura: re-ejecutar un UPDATE ... RETURNING modificaria
-/// los datos otra vez.
-/// Lo que pide "Exportar datos" (ver export_query_to_file).
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ExportRequest {
-    sql: String,
-    #[serde(default)]
-    sort: Vec<khipu_engine::pagination::SortKey>,
-    format: export::ExportFormat,
-    headers: bool,
-    table_name: String,
-    path: String,
-}
-
-#[tauri::command]
-async fn export_query_to_file(
-    request: ExportRequest,
-    window: tauri::Window,
-    state: tauri::State<'_, AppState>,
-) -> Result<ExportSummary, Message> {
-    let ExportRequest {
-        sql,
-        sort,
-        format,
-        headers,
-        table_name,
-        path,
-    } = request;
-    let sql = sql.trim().to_string();
-    let path = export::validated_path(&path)?;
-    let (connector, export_sql, dialect) = with_active_connection(&window, &state, |active| {
-        if !khipu_engine::pagination::is_read_only_query(&sql, active.dialect) {
-            return Err(Message::key("export.readOnly"));
-        }
-        // El archivo sale en el mismo orden que el grid (orden de los
-        // encabezados, aplicado en la base igual que al paginar).
-        let sorted = khipu_engine::pagination::sort_sql(&sql, active.dialect, &sort);
-        Ok((
-            Arc::clone(&active.connector),
-            sorted.unwrap_or_else(|| sql.clone()),
-            active.dialect,
-        ))
-    })?;
-    let start = std::time::Instant::now();
-    let mut sink = export::FileSink::create(&path, format, headers, table_name, dialect)?;
-    let rows = connector.stream_query(&export_sql, &mut sink).await?;
-    Ok(ExportSummary {
-        rows,
-        path: path.to_string_lossy().into_owned(),
-        elapsed_ms: start.elapsed().as_millis() as u64,
-    })
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -1002,34 +45,34 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            list_tables,
-            database_explorer,
-            set_visible_schemas,
-            connect,
-            disconnect,
-            execute_query,
-            cancel_query,
-            classify_statements,
-            analyze_sql,
-            table_definition,
-            test_connection,
-            save_connection_password,
-            load_connection_password,
-            delete_connection_password,
-            read_sql_file,
-            write_sql_file,
-            write_console_text,
-            read_console_text,
-            prune_console_texts,
-            rename_sql_file,
-            list_sql_dir,
-            create_sql_file,
-            trash_sql_file,
-            count_query_rows,
-            result_edit_info,
-            preview_result_changes,
-            apply_result_changes,
-            export_query_to_file,
+            commands::catalog::list_tables,
+            commands::catalog::database_explorer,
+            commands::catalog::set_visible_schemas,
+            commands::connection::connect,
+            commands::connection::disconnect,
+            commands::query::execute_query,
+            commands::query::cancel_query,
+            commands::query::classify_statements,
+            commands::query::analyze_sql,
+            commands::catalog::table_definition,
+            commands::connection::test_connection,
+            commands::connection::save_connection_password,
+            commands::connection::load_connection_password,
+            commands::connection::delete_connection_password,
+            commands::files::read_sql_file,
+            commands::files::write_sql_file,
+            commands::files::write_console_text,
+            commands::files::read_console_text,
+            commands::files::prune_console_texts,
+            commands::files::rename_sql_file,
+            commands::files::list_sql_dir,
+            commands::files::create_sql_file,
+            commands::files::trash_sql_file,
+            commands::query::count_query_rows,
+            commands::results::result_edit_info,
+            commands::results::preview_result_changes,
+            commands::results::apply_result_changes,
+            commands::results::export_query_to_file,
             updates::update_context,
             updates::list_releases,
             updates::install_release,
@@ -1041,78 +84,77 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn catalog_refresh_reloads_visible_schemas() {
-        let wanted = vec!["core".to_string(), "other".to_string()];
-        let existing = BTreeMap::from([("core".to_string(), SchemaObjects::new("core"))]);
-        assert_eq!(schemas_to_load(&wanted, &existing, false), vec!["other"]);
-        assert_eq!(schemas_to_load(&wanted, &existing, true), wanted);
+    /// Los nombres de `invoke("…")` en el frontend (app/src, sin tests).
+    fn frontend_commands() -> std::collections::BTreeSet<String> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                let name = path.file_name().unwrap().to_string_lossy().to_string();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if (name.ends_with(".ts") || name.ends_with(".svelte"))
+                    && !name.contains(".test.")
+                {
+                    out.push(path);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src"),
+            &mut files,
+        );
+        let mut found = std::collections::BTreeSet::new();
+        for file in files {
+            let text = std::fs::read_to_string(&file).unwrap();
+            let mut rest = text.as_str();
+            while let Some(at) = rest.find("invoke") {
+                rest = &rest[at + "invoke".len()..];
+                let mut chars = rest.trim_start();
+                // invoke<T>(…): el tipo puede llevar sus propios < >.
+                if let Some(generic) = chars.strip_prefix('<') {
+                    let mut depth = 1;
+                    let end = generic
+                        .char_indices()
+                        .find(|&(_, c)| {
+                            depth += match c {
+                                '<' => 1,
+                                '>' => -1,
+                                _ => 0,
+                            };
+                            depth == 0
+                        })
+                        .map(|(index, _)| index + 1);
+                    let Some(end) = end else { continue };
+                    chars = generic[end..].trim_start();
+                }
+                let Some(call) = chars.strip_prefix('(') else {
+                    continue;
+                };
+                let Some(quoted) = call.trim_start().strip_prefix('"') else {
+                    continue;
+                };
+                if let Some(end) = quoted.find('"') {
+                    found.insert(quoted[..end].to_string());
+                }
+            }
+        }
+        found
     }
 
+    /// La superficie IPC: lo que registra `run()` es exactamente lo que llama
+    /// el frontend. Un comando que se mueve, se renombra o queda sin
+    /// registrar rompe esto antes que la app.
     #[test]
-    fn a_script_is_checked_statement_by_statement() {
-        let checks: Vec<StatementCheck> = ["SELECT 1;", "DELETE FROM t;", "SELEC nada"]
-            .iter()
-            .map(|sql| check_statement(sql, Dialect::MySql, false, GuardOptions::default()))
+    fn the_registered_commands_are_exactly_the_ones_the_frontend_invokes() {
+        let lib = include_str!("lib.rs");
+        let start = lib.find("generate_handler![").unwrap() + "generate_handler![".len();
+        let end = start + lib[start..].find(']').unwrap();
+        let registered: std::collections::BTreeSet<String> = lib[start..end]
+            .split(',')
+            .map(|path| path.trim().rsplit("::").next().unwrap().to_string())
+            .filter(|name| !name.is_empty())
             .collect();
-        assert!(checks[0].confirmation.is_none() && checks[0].error.is_none());
-        assert_eq!(
-            checks[1].confirmation,
-            Some(DestructiveStatement::DeleteWithoutWhere)
-        );
-        assert!(checks[2].error.is_some());
-    }
-
-    #[test]
-    fn routine_is_checked_whole_and_is_not_rewritten_before_execution() {
-        let sql = "CREATE PROCEDURE p() BEGIN SELECT 1; SELECT 2; END";
-        assert!(
-            check_statement(sql, Dialect::MySql, false, GuardOptions::default())
-                .error
-                .is_none()
-        );
-        assert!(
-            khipu_engine::pagination::sort_sql(
-                sql,
-                Dialect::MySql,
-                &[khipu_engine::pagination::SortKey {
-                    column: 0,
-                    descending: false,
-                }]
-            )
-            .is_none()
-        );
-        assert!(khipu_engine::pagination::paginate_sql(sql, Dialect::MySql, 0, 501).is_none());
-        let bad = "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t";
-        assert!(
-            check_statement(bad, Dialect::MySql, false, GuardOptions::default())
-                .error
-                .is_some()
-        );
-    }
-
-    #[test]
-    fn in_production_every_write_needs_confirmation() {
-        let insert = check_statement(
-            "INSERT INTO t VALUES (1)",
-            Dialect::Postgres,
-            true,
-            GuardOptions::default(),
-        );
-        assert_eq!(
-            insert.confirmation,
-            Some(DestructiveStatement::WriteInProduction)
-        );
-        let select = check_statement("SELECT 1", Dialect::Postgres, true, GuardOptions::default());
-        assert!(select.confirmation.is_none());
-    }
-
-    #[test]
-    fn grid_changes_in_production_need_the_users_confirmation() {
-        assert!(production_write_allowed(true, false).is_err());
-        assert!(production_write_allowed(true, true).is_ok());
-        assert!(production_write_allowed(false, false).is_ok());
+        assert_eq!(registered, frontend_commands());
     }
 }

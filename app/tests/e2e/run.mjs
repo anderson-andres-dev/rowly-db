@@ -17,6 +17,7 @@
 //     Enter lo confirma y se ejecuta (SQL_ENGINE S3)
 //   - en produccion toda escritura pide confirmacion en la app real (S7),
 //     tambien los cambios del grid, que el backend rechaza sin ella
+//   - contar el total pasa por el guard del backend y cuenta en la base
 //   - el texto de la consola sobrevive a reiniciar la app
 
 import { execFileSync, spawn } from "node:child_process";
@@ -199,6 +200,22 @@ flow("produccion: editar el grid se aplica solo tras confirmar la vista previa",
   await session.find("dialog.changes-dialog[open]");
   await session.keys(KEYS.enter);
   await session.waitFor("el cambio confirmado", async () => sql("SELECT name FROM rowly_e2e.victim WHERE id = 1") === "UNO");
+});
+
+flow("contar el total: el backend lo clasifica y lo cuenta en la base", async (session) => {
+  // Mas filas que la pagina (500): el total no se conoce hasta contarlo.
+  sql(
+    "CREATE TABLE rowly_e2e.many (id INT PRIMARY KEY); " +
+      "INSERT INTO rowly_e2e.many SELECT i FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 600) SELECT i FROM n) AS series;",
+  );
+  await seedProfiles(session, [profile("e2e-local", "E2E local", "local")]);
+  await connect(session, "E2E local");
+  await run(session, "SELECT id FROM many ORDER BY id");
+  const count = await session.find(".total-button");
+  await count.click();
+  await session.waitFor("el total contado", async () =>
+    (await session.script(`return document.querySelector(".total")?.textContent ?? ""`)).replace(/\D/g, "") === "600",
+  );
 });
 
 flow("el texto de la consola sobrevive a reiniciar la app", async (session, restart) => {

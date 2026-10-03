@@ -21,7 +21,7 @@ ver [Próximos pasos](#próximos-pasos).
 
 ## Flujo de datos
 
-1. **`connect`** (`app/src-tauri/src/lib.rs`): el driver detecta la versión
+1. **`connect`** (`app/src-tauri/src/commands/connection.rs`): el driver detecta la versión
    del servidor, resuelve el schema por defecto (`current_schema()`), lo
    introspecta y lista los schemas disponibles.
 2. **`database_explorer`** devuelve `{ serverVersion, tls, defaultSchema,

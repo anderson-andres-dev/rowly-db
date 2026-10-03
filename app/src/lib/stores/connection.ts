@@ -14,7 +14,7 @@ import { forgetPinnedTables } from "./pinnedTables";
 
 export interface ConnectionState {
   // true = el ultimo connect() cargo un catalogo con exito. El backend
-  // mantiene vivo ese pool (ActiveConnection en src-tauri/src/lib.rs) para
+  // mantiene vivo ese pool (ActiveConnection en src-tauri/src/state.rs) para
   // execute_query y el explorador hasta el proximo connect().
   connected: boolean;
   connecting: boolean;
@@ -275,11 +275,12 @@ export async function testConnection(
   return await invoke<TestConnectionReport>("test_connection", { kind, config });
 }
 
-// reset() SOLO limpia el estado del lado del frontend. No existe un comando
-// de Tauri para "desconectar" o descartar el catalogo en AppState hoy, asi
-// que esto no llama a invoke(): reconectar es simplemente volver a llamar a
-// connect().
+// Volver a la lista de conexiones: el frontend queda sin conexion y el
+// backend suelta la suya (disconnect): su pool y su catalogo no siguen vivos
+// hasta cerrar la ventana. Una consulta que todavia corre conserva su
+// conector y termina igual. Reconectar es volver a llamar a connect().
 export function reset(): void {
+  void releaseBackendConnection();
   connectionGeneration += 1;
   explorerLoading.set(false);
   connection.set(initialState);
@@ -291,6 +292,16 @@ export function reset(): void {
 // va primero: si el keyring falla, el perfil se conserva para no dejar una
 // contraseña huerfana imposible de borrar desde la interfaz. Los archivos
 // .sql de la carpeta vinculada no se tocan, solo se olvida el vinculo.
+// Si no habia conexion, disconnect no hace nada; si falla, no hay nada que
+// mostrar: la ventana ya no la usa.
+async function releaseBackendConnection(): Promise<void> {
+  try {
+    await invoke("disconnect");
+  } catch {
+    // Nada que hacer.
+  }
+}
+
 export async function deleteConnectionProfile(profileId: string): Promise<void> {
   await forgetConnectionPassword(profileId);
   saveVisibleSchemas(profileId, []);

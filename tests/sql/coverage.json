@@ -162,7 +162,7 @@
       "status": "partial",
       "tests": [
         {
-          "file": "app/src-tauri/src/lib.rs",
+          "file": "app/src-tauri/src/commands/query.rs",
           "name": "in_production_every_write_needs_confirmation",
           "scope": "unit",
           "engines": [
