@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import type { ExecuteQueryResponse } from "$lib/types";
-import { createExecutionSession } from "./executionSession";
+import {
+  createExecutionFlow,
+  createExecutionSession,
+  type ExecutionBackend,
+  type ExecutionView,
+} from "./executionSession";
+import { OUTPUT_TAB } from "./resultTabs";
+import type { StatementCheck } from "$lib/queryExecution";
+import { STANDARD_LEXICAL } from "$lib/sqlStatements";
+import { executionLog } from "$lib/stores/executionLog";
+import { queryHistory } from "$lib/stores/queryHistory";
+import { executionForConsole, queryConsoles } from "$lib/stores/queryConsoles";
 
 const page = { offset: 0, pageSize: 100 };
 const done: ExecuteQueryResponse = {
@@ -103,5 +114,221 @@ describe("one path to execute SQL", () => {
     expect(callers).toEqual(["lib/queryExecution.ts"]);
     expect(importers).toEqual(["lib/workspace/executionSession.ts"]);
     expect(invokers).toEqual(["lib/queryExecution.ts"]);
+  });
+});
+
+// --- Flujo de ejecucion ------------------------------------------------------
+
+type Answer = ExecuteQueryResponse | ((sql: string) => ExecuteQueryResponse);
+const rows = (count: number): ExecuteQueryResponse =>
+  ({
+    type: "completed",
+    result: {
+      type: "resultSet",
+      columns: [{ name: "id" }],
+      rows: Array.from({ length: count }, (_, i) => [String(i)]),
+      truncated: false,
+      executionTimeMs: 1,
+    },
+    page: { offset: 0, pageSize: 100, pageable: true, sortable: true },
+  }) as unknown as ExecuteQueryResponse;
+const command = (affectedRows: number): ExecuteQueryResponse =>
+  ({ type: "completed", result: { type: "command", affectedRows, executionTimeMs: 1 } }) as unknown as ExecuteQueryResponse;
+const failure = (message: string): ExecuteQueryResponse =>
+  ({ type: "completed", result: { type: "error", message } }) as unknown as ExecuteQueryResponse;
+const needsConfirmation = (statement: string): ExecuteQueryResponse =>
+  ({ type: "confirmationRequired", statement }) as unknown as ExecuteQueryResponse;
+
+let consoleCounter = 0;
+
+// Un flujo con la vista y el backend falsos; los stores son los reales, con
+// una consola nueva por prueba.
+function flowFixture(answers: Record<string, Answer> = {}, options: { classify?: StatementCheck[] } = {}) {
+  const consoleId = `flow-${++consoleCounter}`;
+  const executed: { sql: string; confirmed: unknown }[] = [];
+  const shown: string[] = [];
+  const ready: string[] = [];
+  const marks: string[] = [];
+  const refreshed: string[] = [];
+  let discard = true;
+  let parameters: string | null | undefined;
+  let tab = 0;
+  const view: ExecutionView = {
+    profileId: () => `profile-${consoleId}`,
+    schema: () => "core",
+    lexical: () => STANDARD_LEXICAL,
+    text: (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
+    number: (value) => String(value),
+    defaultPageSize: () => 100,
+    showTab: (_consoleId, key) => shown.push(key),
+    resultReady: (key) => ready.push(key),
+    confirmDiscard: async () => discard,
+    replaceableKeys: (id) => [id],
+    dropUnpinned: () => {},
+    newScriptTab: (id) => `${id}#tab${++tab}`,
+    fillParameters: async (sql) => (parameters === undefined ? sql : parameters),
+    markStatement: (_id, index, outcome) => marks.push(`${index}:${outcome === "running" ? "running" : outcome.type}`),
+    refreshCatalog: async () => {
+      refreshed.push("catalog");
+    },
+    notifyError: () => {},
+  };
+  const backend: ExecutionBackend = {
+    execute: async (sql, confirmed) => {
+      executed.push({ sql, confirmed });
+      const answer = answers[sql.trim()] ?? rows(1);
+      return typeof answer === "function" ? answer(sql) : answer;
+    },
+    cancel: async () => {},
+    newId: () => crypto.randomUUID(),
+  };
+  const classify = async (statements: string[]) => options.classify ?? statements.map(() => ({}));
+  const flow = createExecutionFlow(view, createExecutionSession(backend), classify);
+  return {
+    consoleId,
+    flow,
+    executed,
+    shown,
+    ready,
+    marks,
+    refreshed,
+    log: () => (get(executionLog)[consoleId] ?? []).map((entry) => `${entry.kind}: ${entry.text}`),
+    history: () => get(queryHistory)[`profile-${consoleId}`] ?? [],
+    state: (key = consoleId) => executionForConsole(get(queryConsoles), key),
+    refuseDiscard: () => (discard = false),
+    cancelParameters: () => (parameters = null),
+  };
+}
+
+describe("createExecutionFlow", () => {
+  it("runs one statement, logs it with its outcome, keeps it in the history and shows its rows", async () => {
+    const fixture = flowFixture({ "SELECT id FROM t": rows(2) });
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    expect(fixture.executed).toEqual([{ sql: "SELECT id FROM t", confirmed: null }]);
+    expect(fixture.log()[0]).toBe("query: SELECT id FROM t");
+    expect(fixture.log()[1]).toMatch(/^info: workspace\.output\.fetchedOther/);
+    expect(fixture.history().map((entry) => [entry.sql, entry.outcome])).toEqual([["SELECT id FROM t", "ok"]]);
+    expect(fixture.shown).toEqual([fixture.consoleId]);
+    expect(fixture.ready).toEqual([fixture.consoleId]);
+    expect(fixture.state().isExecuting).toBe(false);
+    expect(fixture.state().resultSql).toBe("SELECT id FROM t");
+  });
+
+  it("an error goes to the Output tab and to the history as an error", async () => {
+    const fixture = flowFixture({ "SELECT nope": failure("unknown column") });
+    await fixture.flow.request(fixture.consoleId, "SELECT nope");
+    expect(fixture.log()[1]).toBe("error: unknown column");
+    expect(fixture.shown).toEqual([OUTPUT_TAB]);
+    expect(fixture.history()[0].outcome).toBe("error");
+  });
+
+  it("when the backend asks for confirmation nothing ran: nothing is logged and it waits for the user", async () => {
+    const fixture = flowFixture({ "DELETE FROM t": needsConfirmation("deleteWithoutWhere") });
+    await fixture.flow.request(fixture.consoleId, "DELETE FROM t");
+    expect(fixture.log()).toEqual([]);
+    expect(fixture.history()).toEqual([]);
+    expect(fixture.state().pendingConfirmation).toEqual({ sql: "DELETE FROM t", statement: "deleteWithoutWhere" });
+  });
+
+  it("confirming runs the pending statement with its confirmation, once even on a double confirm", async () => {
+    const answers: Record<string, Answer> = { "DELETE FROM t": needsConfirmation("deleteWithoutWhere") };
+    const fixture = flowFixture(answers);
+    await fixture.flow.request(fixture.consoleId, "DELETE FROM t");
+    answers["DELETE FROM t"] = command(3);
+    await Promise.all([fixture.flow.confirmPending(fixture.consoleId), fixture.flow.confirmPending(fixture.consoleId)]);
+    expect(fixture.executed).toEqual([
+      { sql: "DELETE FROM t", confirmed: null },
+      { sql: "DELETE FROM t", confirmed: "deleteWithoutWhere" },
+    ]);
+    expect(fixture.state().pendingConfirmation).toBeNull();
+    expect(fixture.log()[1]).toMatch(/^info: workspace\.output\.affectedOther/);
+  });
+
+  it("a new request replaces a pending confirmation: confirming never runs an older statement", async () => {
+    const fixture = flowFixture({ "DELETE FROM t": needsConfirmation("deleteWithoutWhere") });
+    await fixture.flow.request(fixture.consoleId, "DELETE FROM t");
+    await fixture.flow.request(fixture.consoleId, "SELECT 1");
+    await fixture.flow.confirmPending(fixture.consoleId);
+    expect(fixture.executed.map((call) => call.sql)).toEqual(["DELETE FROM t", "SELECT 1"]);
+  });
+
+  it("cancelling the confirmation runs nothing", async () => {
+    const fixture = flowFixture({ "DELETE FROM t": needsConfirmation("deleteWithoutWhere") });
+    await fixture.flow.request(fixture.consoleId, "DELETE FROM t");
+    fixture.flow.cancelPending(fixture.consoleId);
+    await fixture.flow.confirmPending(fixture.consoleId);
+    expect(fixture.executed).toHaveLength(1);
+  });
+
+  it("does nothing when the user keeps the pending edits or cancels the parameters", async () => {
+    const kept = flowFixture();
+    kept.refuseDiscard();
+    await kept.flow.request(kept.consoleId, "SELECT 1");
+    const cancelled = flowFixture();
+    cancelled.cancelParameters();
+    await cancelled.flow.request(cancelled.consoleId, "SELECT :id");
+    expect([kept.executed, cancelled.executed]).toEqual([[], []]);
+    expect([kept.state().isExecuting, cancelled.state().isExecuting]).toEqual([false, false]);
+  });
+
+  it("refreshes the catalog after DDL, not after a query", async () => {
+    const fixture = flowFixture({ "CREATE TABLE x (id INT)": command(0) });
+    await fixture.flow.request(fixture.consoleId, "SELECT 1");
+    expect(fixture.refreshed).toEqual([]);
+    await fixture.flow.request(fixture.consoleId, "CREATE TABLE x (id INT)");
+    expect(fixture.refreshed).toEqual(["catalog"]);
+  });
+
+  it("a script runs in order, opens a tab per SELECT and stops at the first error", async () => {
+    const fixture = flowFixture({ "SELECT 2;": failure("boom") });
+    await fixture.flow.request(fixture.consoleId, "SELECT 1; SELECT 2; SELECT 3");
+    expect(fixture.executed.map((call) => call.sql)).toEqual(["SELECT 1;", "SELECT 2;"]);
+    expect(fixture.marks).toEqual(["0:running", "0:resultSet", "1:running", "1:error"]);
+    expect(fixture.log().at(-1)).toBe('info: workspace.output.scriptStopped {"count":"1"}');
+    expect(fixture.ready).toEqual([`${fixture.consoleId}#tab1`, fixture.consoleId]);
+    expect(fixture.history().map((entry) => [entry.sql, entry.outcome])).toEqual([["SELECT 1; SELECT 2; SELECT 3", "error"]]);
+    expect(fixture.shown).toEqual([OUTPUT_TAB]);
+  });
+
+  it("a script with a statement the guard cannot read runs nothing", async () => {
+    const fixture = flowFixture({}, { classify: [{}, { error: "parse error" }] });
+    await fixture.flow.request(fixture.consoleId, "SELECT 1; SELEC 2");
+    expect(fixture.executed).toEqual([]);
+    expect(fixture.log()).toEqual(["query: SELEC 2", 'error: workspace.output.scriptInvalid {"index":2,"error":"parse error"}']);
+  });
+
+  it("a script that needs confirmation asks once, then runs every statement with its own confirmation", async () => {
+    const fixture = flowFixture({}, { classify: [{}, { confirmation: "deleteWithoutWhere" }] });
+    await fixture.flow.request(fixture.consoleId, "SELECT 1; DELETE FROM t");
+    expect(fixture.executed).toEqual([]);
+    expect(fixture.state().pendingConfirmation?.statement).toBe("deleteWithoutWhere");
+    await fixture.flow.confirmPending(fixture.consoleId);
+    expect(fixture.executed).toEqual([
+      { sql: "SELECT 1;", confirmed: null },
+      { sql: "DELETE FROM t", confirmed: "deleteWithoutWhere" },
+    ]);
+  });
+
+  it("paging and sorting run the query that produced the result, not the editor text", async () => {
+    const fixture = flowFixture({ "SELECT id FROM t": rows(2) });
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    await fixture.flow.navigate(fixture.consoleId, 100, 100);
+    await fixture.flow.sort(fixture.consoleId, 0, false);
+    await fixture.flow.reload(fixture.consoleId);
+    expect(fixture.executed.map((call) => call.sql)).toEqual(Array(4).fill("SELECT id FROM t"));
+    expect(fixture.state().sort).toEqual([{ column: 0, descending: false }]);
+    // Solo la ejecucion nueva queda en el historial.
+    expect(fixture.history()).toHaveLength(1);
+  });
+
+  it("a table tab keeps the rows it showed when a filter fails, and reports the error", async () => {
+    const answers: Record<string, Answer> = { "SELECT * FROM t": rows(2) };
+    const fixture = flowFixture(answers);
+    expect(await fixture.flow.table(fixture.consoleId, "SELECT * FROM t")).toBeNull();
+    answers["SELECT * FROM t WHERE x"] = failure("bad filter");
+    expect(await fixture.flow.table(fixture.consoleId, "SELECT * FROM t WHERE x")).toBe("bad filter");
+    expect(fixture.state().result?.type).toBe("resultSet");
+    expect(fixture.state().resultSql).toBe("SELECT * FROM t");
+    expect(fixture.state().isExecuting).toBe(false);
   });
 });

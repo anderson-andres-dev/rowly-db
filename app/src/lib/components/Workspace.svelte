@@ -22,10 +22,9 @@
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
-  import { sqlTokens } from "$lib/sqlContext";
-  import { classifyStatements, countQueryRows, type PageRequest } from "$lib/queryExecution";
-  import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
-  import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
+  import { countQueryRows } from "$lib/queryExecution";
+  import { queryHistory } from "$lib/stores/queryHistory";
+  import { STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
   import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
   import { parameterColumns, type ParameterColumn } from "$lib/sqlParameterTypes";
   import { engineFor } from "$lib/engines";
@@ -76,21 +75,16 @@
     CatalogColumn,
     CatalogTable,
     ColumnCatalogInfo,
-    DestructiveStatement,
-    ExecuteQueryResponse,
     QueryExecutionResult,
   } from "$lib/types";
   import {
     consoleDisplayTitle,
     activateQueryConsole,
-    beginQueryExecution,
-    cancelQueryConfirmation,
     closeQueryConsole,
     createQueryConsole,
     currentQueryConsole,
     ensureQueryConsole,
     executionForConsole,
-    finishQueryExecution,
     isQueryConsoleDirty,
     queryConsoles,
     renameQueryConsole,
@@ -98,27 +92,22 @@
     setTableFilters,
     type QueryConsole,
     type TableTab,
-    requireQueryConfirmation,
     setQueryCounting,
-    setQuerySort,
     clearQueryResult,
     forgetExecutionState,
     moveExecutionState,
-    stopQueryExecution,
     setQueryTotalRows,
-    takeQueryConfirmation,
     updateQueryConsoleSql,
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
   import { openSqlFileWithDialog, renameConsoleFile, saveConsole, saveConsoleAs } from "$lib/sqlFiles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
-  import { nextSort } from "$lib/gridSort";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import { invalidCells } from "$lib/cellTypes";
   import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
   import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
-  import { createExecutionSession } from "$lib/workspace/executionSession";
+  import { createExecutionFlow, formatMs as formatDuration } from "$lib/workspace/executionSession";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -553,45 +542,15 @@
     return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
   }
 
-  // Un filtro con error no borra lo que se estaba viendo: el error queda al
-  // lado de los filtros y en la Salida.
-  // Los filtros se ejecutan mientras se arman: una sola consulta a la vez
-  // por pestaña (oneQueryAtATime); la vuelta extra lee los filtros del store.
+  // Una sola consulta a la vez por pestaña (oneQueryAtATime); la vuelta
+  // extra lee los filtros del store. La ejecucion es la del flujo.
   const runTableQuery = oneQueryAtATime(runTableQueryOnce);
 
   async function runTableQueryOnce(consoleId: string) {
     const item = get(queryConsoles).consoles.find((candidate) => candidate.id === consoleId);
     if (!item?.table) return;
-    if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
-    setQuerySort(consoleId, []);
-    const sql = tableSql(item.table, quoteIdentifier);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const { response, cancelled } = await executeCancellable(consoleId, sql, null, firstPage(consoleId));
-    if (response.type !== "completed") {
-      applyExecuteQueryResponse(consoleId, sql, response);
-      return;
-    }
-    appendLog(consoleId, { kind: "query", schema: logSchema, text: sql, at: startedAt });
-    appendLog(consoleId, {
-      kind: response.result.type === "error" && !cancelled ? "error" : "info",
-      text: cancelled
-        ? $t("workspace.output.cancelled")
-        : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
-    });
-    const hadRows = executionForConsole($queryConsoles, consoleId).result?.type === "resultSet";
-    if (response.result.type === "error") {
-      tableFilterError = { ...tableFilterError, [consoleId]: describeOutcome(response.result, 0, 0) };
-      if (hadRows) {
-        stopQueryExecution(consoleId);
-        return;
-      }
-    } else {
-      tableFilterError = { ...tableFilterError, [consoleId]: null };
-    }
-    applyExecuteQueryResponse(consoleId, sql, response);
-    selectTab(consoleId, response.result.type === "resultSet" ? consoleId : OUTPUT_TAB);
-    dropUnpinnedResults(consoleId);
+    const error = await executions.table(consoleId, tableSql(item.table, quoteIdentifier));
+    if (error !== undefined) tableFilterError = { ...tableFilterError, [consoleId]: error };
   }
 
   function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "conditions">) {
@@ -654,31 +613,7 @@
   // --- Salida -----------------------------------------------------------
   const logSchema = $derived(activeProfile ? activeProfile.database || activeProfile.name : "");
 
-  // Duracion para la Salida: "1.234 ms", con los separadores del idioma.
-  function formatMs(elapsedMs: number): string {
-    return `${$numberFormat.format(Math.round(elapsedMs))} ms`;
-  }
-
-  function describeOutcome(result: QueryExecutionResult, offset: number, elapsedMs: number): string {
-    const ms = formatMs(elapsedMs);
-    if (result.type === "resultSet") {
-      const count = result.rows.length;
-      if (count === 0) return $t("workspace.output.noRows", { ms });
-      return $t(count === 1 ? "workspace.output.fetchedOne" : "workspace.output.fetchedOther", {
-        count: $numberFormat.format(count),
-        from: $numberFormat.format(offset + 1),
-        ms,
-      });
-    }
-    if (result.type === "command") {
-      if (result.affectedRows === 0) return $t("workspace.output.completed", { ms });
-      return $t(result.affectedRows === 1 ? "workspace.output.affectedOne" : "workspace.output.affectedOther", {
-        count: $numberFormat.format(result.affectedRows),
-        ms,
-      });
-    }
-    return result.code ? `[${result.code}] ${result.message}` : result.message;
-  }
+  const formatMs = (elapsedMs: number) => formatDuration(elapsedMs, (value) => $numberFormat.format(value));
 
   // --- Historial (Ctrl+E) ---------------------------------------------------
   // Capa flotante sobre el editor; al cerrarla, el foco vuelve al editor en
@@ -702,89 +637,39 @@
     if (consoleId) void requestExecution(consoleId, sql);
   }
 
-  // --- Cancelar ---------------------------------------------------------
-  // Cada ejecucion lleva un id; mientras corre, cancelExecution() le pide
-  // al servidor que la interrumpa (cancel_query). Termina con el error del
-  // servidor (o, en MySQL, a veces con un resultado parcial): en la Salida
-  // queda como "cancelada", no como error.
-  const executions = createExecutionSession();
+  // --- Ejecucion --------------------------------------------------------
+  // Pedir, confirmar, ejecutar, paginar, ordenar, recargar y scripts, con su
+  // registro en la Salida (workspace/executionSession.ts). Cada ejecucion
+  // lleva un id: mientras corre, cancelExecution() le pide al servidor que
+  // la interrumpa; termina como "cancelada", no como error.
+  const executions = createExecutionFlow({
+    profileId: () => profileId,
+    schema: () => logSchema,
+    lexical: () => (activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL),
+    text: (key, params) => $t(key, params),
+    number: (value) => $numberFormat.format(value),
+    defaultPageSize: () => $defaultPageSize,
+    showTab: selectTab,
+    resultReady: prepareResultEditing,
+    confirmDiscard: confirmDiscardPending,
+    replaceableKeys,
+    dropUnpinned: dropUnpinnedResults,
+    newScriptTab: (consoleId) => resultKey(consoleId, addResultTab(consoleId, false)),
+    fillParameters,
+    markStatement: (consoleId, index, outcome) => {
+      if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
+    },
+    refreshCatalog,
+    notifyError,
+  });
   const cancelling = executions.cancelling;
-  const executeCancellable = executions.run;
   const cancelExecution = executions.cancel;
-
-  const CATALOG_DDL = new Set(["create", "drop", "alter", "rename", "comment"]);
-
-  async function refreshAfterDdl(sql: string, result: QueryExecutionResult, cancelled: boolean) {
-    if (cancelled || result.type === "error") return;
-    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    const first = sqlTokens(sql, lexical).find((token) => token.kind === "word");
-    if (!first || !CATALOG_DDL.has(first.text)) return;
-    try {
-      await refreshCatalog();
-    } catch (error) {
-      notifyError(error);
-    }
-  }
-
-  // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
-  // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
-  // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
-  //
-  // `key` es la pestaña de resultado que recibe el resultado (la normal de
-  // la consola o una fijada); la Salida es siempre la de su consola. Con
-  // filas, se muestra esa pestaña; con error o sin filas, la Salida.
-  async function runQuery(
-    key: string,
-    sql: string,
-    confirmed: DestructiveStatement | null,
-    page: PageRequest,
-    paging = false,
-    // Ejecucion nueva desde el editor: queda en el historial (Ctrl+E).
-    record = false,
-  ) {
-    const consoleId = consoleOfKey(key);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const { response, cancelled } = await executeCancellable(consoleId, sql, confirmed, page);
-    if (response.type === "completed") {
-      const elapsed = performance.now() - started;
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: sql.trim(), at: startedAt });
-      appendLog(consoleId, {
-        kind: response.result.type === "error" && !cancelled ? "error" : "info",
-        text: cancelled
-          ? $t("workspace.output.cancelled")
-          : describeOutcome(response.result, response.page?.offset ?? 0, elapsed),
-      });
-      if (record) {
-        recordQuery(profileId, {
-          sql,
-          at: startedAt,
-          durationMs: elapsed,
-          outcome: cancelled ? "cancelled" : response.result.type === "error" ? "error" : "ok",
-        });
-      }
-    }
-    applyExecuteQueryResponse(key, sql, response, paging);
-    if (response.type === "completed") {
-      selectTab(consoleId, response.result.type === "resultSet" ? key : OUTPUT_TAB);
-      await refreshAfterDdl(sql, response.result, cancelled);
-    }
-  }
-
-  function applyExecuteQueryResponse(key: string, sql: string, response: ExecuteQueryResponse, paging = false) {
-    if (response.type === "confirmationRequired") {
-      requireQueryConfirmation(key, { sql, statement: response.statement });
-      return;
-    }
-    // Una pestaña fijada que falla al recargar o paginar conserva lo que
-    // mostraba: el error queda en la Salida.
-    if (key !== consoleOfKey(key) && response.result.type !== "resultSet") {
-      stopQueryExecution(key);
-      return;
-    }
-    finishQueryExecution(key, sql, response.result, response.page ?? null, paging);
-    prepareResultEditing(key, sql, response.result);
-  }
+  const requestExecution = executions.request;
+  const confirmPendingExecution = executions.confirmPending;
+  const cancelPendingExecution = executions.cancelPending;
+  const reloadResult = executions.reload;
+  const navigatePage = executions.navigate;
+  const sortResult = executions.sort;
 
   // --- Edicion del resultado -------------------------------------------
   const editState = $derived(activeConsole ? editStateFor($resultEdits, viewKey) : null);
@@ -1063,47 +948,6 @@
     }
   }
 
-  // Vuelve a ejecutar la consulta del resultado en la misma pagina, como una
-  // ejecucion nueva (el total se vuelve a calcular). Con cambios pendientes
-  // pregunta antes de descartarlos.
-  async function reloadResult(key: string) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    const page = current.page ?? firstPage(key);
-    await runQuery(key, sql, null, { offset: page.offset, pageSize: page.pageSize, sort: current.sort });
-  }
-
-  // Una ejecucion nueva arranca en la primera pagina, con el tamaño que la
-  // consola venia usando (o el predeterminado).
-  function firstPage(key: string): PageRequest {
-    const current = executionForConsole($queryConsoles, key).page;
-    return { offset: 0, pageSize: current?.pageSize ?? $defaultPageSize };
-  }
-
-  // Otra pagina de la consulta que produjo el resultado vigente (resultSql,
-  // no el texto actual del editor, que puede haber cambiado).
-  // Paginar conserva el orden elegido en los encabezados: cada pagina es
-  // consulta + orden + LIMIT/OFFSET (el backend ordena ANTES de paginar).
-  async function navigatePage(key: string, offset: number, pageSize: number) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    await runQuery(key, sql, null, { offset, pageSize, sort: current.sort }, true);
-  }
-
-  // Clic en un encabezado: nuevo orden, de vuelta a la primera pagina (mismo
-  // tamaño). Es la misma consulta, asi que el total contado se conserva.
-  async function sortResult(key: string, column: number, additive: boolean) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !current.page?.sortable) return;
-    if (!(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    const sort = nextSort(current.sort, column, additive);
-    setQuerySort(key, sort);
-    await runQuery(key, sql, null, { offset: 0, pageSize: current.page.pageSize, sort }, true);
-  }
-
   async function countTotalRows(key: string): Promise<number | null> {
     const consoleId = consoleOfKey(key);
     const sql = executionForConsole($queryConsoles, key).resultSql;
@@ -1142,35 +986,6 @@
     return true;
   }
 
-  // Solicita una ejecucion nueva (Ctrl+Enter o el boton "Ejecutar"). No hace
-  // nada si esa consola ya esta ejecutando. Con una confirmacion pendiente,
-  // la ejecucion nueva la reemplaza: confirmar ejecuta siempre lo ultimo que
-  // se pidio, nunca un bloque anterior (y su modal se abre de nuevo, ver el
-  // {#key} de ExecutionGuard). Nada se confirma por si solo.
-  async function requestExecution(consoleId: string, requested: string) {
-    if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
-    cancelQueryConfirmation(consoleId);
-    // Con las reglas del motor: las mismas con que el editor marca cada
-    // sentencia del script.
-    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    // Los parametros se reemplazan antes de dividir el script.
-    const sql = await fillParameters(requested, lexical);
-    if (sql === null || !beginQueryExecution(consoleId)) return;
-    // Consulta nueva: arranca sin el orden de los encabezados.
-    setQuerySort(consoleId, []);
-    const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
-    if (statements.length === 0) {
-      stopQueryExecution(consoleId);
-      return;
-    }
-    if (statements.length > 1) {
-      await startScript(consoleId, sql, statements);
-      return;
-    }
-    await runQuery(consoleId, statements[0], null, firstPage(consoleId), false, true);
-    dropUnpinnedResults(consoleId);
-  }
-
   // Parametros con nombre (:nombre, sqlParameters.ts): se piden antes de
   // ejecutar, cada uno con el tipo de la columna con que se compara
   // (sqlParameterTypes.ts, del catalogo ya cargado), y se reemplazan en el
@@ -1195,133 +1010,6 @@
         },
       };
     });
-  }
-
-  // --- Scripts -------------------------------------------------------------
-  // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
-  // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
-  // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
-  // script entero (el guard muestra cuantas se ejecutaran). Despues corren
-  // en orden, cada una con autocommit, y el script se detiene si falla o al
-  // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
-  // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
-  const MAX_SCRIPT_RESULT_TABS = 10;
-
-  async function startScript(consoleId: string, sql: string, statements: string[]) {
-    const checks = await classifyStatements(statements);
-    const invalid = checks.findIndex((check) => check.error !== undefined);
-    if (invalid !== -1) {
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: statements[invalid].trim(), at: Date.now() });
-      const message = $t("workspace.output.scriptInvalid", { index: invalid + 1, error: checks[invalid].error ?? "" });
-      appendLog(consoleId, { kind: "error", text: message });
-      finishQueryExecution(consoleId, sql, { type: "error", message });
-      selectTab(consoleId, OUTPUT_TAB);
-      return;
-    }
-    const confirmations = checks.map((check) => check.confirmation ?? null);
-    const first = confirmations.find((item) => item !== null);
-    if (first) {
-      requireQueryConfirmation(consoleId, { sql, statement: first, script: { statements, confirmations } });
-      return;
-    }
-    await runScript(consoleId, sql, statements, confirmations);
-  }
-
-  async function runScript(
-    consoleId: string,
-    sql: string,
-    statements: string[],
-    confirmations: (DestructiveStatement | null)[],
-  ) {
-    // Lo de la ejecucion anterior se va de entrada: los resultados nuevos
-    // aparecen a medida que llegan.
-    dropUnpinnedResults(consoleId);
-    clearQueryResult(consoleId);
-    forgetResultEdits(consoleId);
-    const startedAt = Date.now();
-    const started = performance.now();
-    let outcome: HistoryOutcome = "ok";
-    let lastResultTab: string | null = null;
-    let resultTabs = 0;
-
-    for (let index = 0; index < statements.length; index += 1) {
-      const statement = statements[index].trim();
-      const statementStarted = performance.now();
-      // Cada sentencia con su marca en el editor (si sigue a la vista).
-      const markStatement = (outcome: "running" | QueryExecutionResult) => {
-        if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
-      };
-      markStatement("running");
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: Date.now() });
-      const { response, cancelled } = await executeCancellable(
-        consoleId,
-        statement,
-        confirmations[index],
-        firstPage(consoleId),
-      );
-      // execute_query vuelve a clasificar cada sentencia: si ahora pide una
-      // confirmacion distinta, no se ejecuto y el script se detiene.
-      const result: QueryExecutionResult =
-        response.type === "completed"
-          ? response.result
-          : { type: "error", message: $t(`workspace.guard.${response.statement}`) };
-      const page = response.type === "completed" ? (response.page ?? null) : null;
-      markStatement(result);
-      appendLog(consoleId, {
-        kind: result.type === "error" && !cancelled ? "error" : "info",
-        text: cancelled
-          ? $t("workspace.output.cancelled")
-          : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
-      });
-      await refreshAfterDdl(statement, result, cancelled);
-
-      const stopped = result.type === "error" || cancelled;
-      if (stopped || index === statements.length - 1) {
-        finishQueryExecution(consoleId, statement, result, page);
-        prepareResultEditing(consoleId, statement, result);
-        if (result.type === "resultSet") lastResultTab = consoleId;
-        if (stopped) {
-          outcome = cancelled ? "cancelled" : "error";
-          const remaining = statements.length - index - 1;
-          if (remaining > 0) {
-            appendLog(consoleId, {
-              kind: "info",
-              text: $t("workspace.output.scriptStopped", { count: $numberFormat.format(remaining) }),
-            });
-          }
-        }
-        break;
-      }
-      if (result.type === "resultSet" && resultTabs < MAX_SCRIPT_RESULT_TABS) {
-        const key = resultKey(consoleId, addResultTab(consoleId, false));
-        finishQueryExecution(key, statement, result, page);
-        prepareResultEditing(key, statement, result);
-        lastResultTab = key;
-        resultTabs += 1;
-      }
-    }
-
-    recordQuery(profileId, { sql, at: startedAt, durationMs: performance.now() - started, outcome });
-    selectTab(consoleId, outcome === "error" || !lastResultTab ? OUTPUT_TAB : lastResultTab);
-  }
-
-  // La confirmacion del guard llama aqui. takeQueryConfirmation() retira el
-  // pendiente de forma atomica antes del await: un doble click no confirma
-  // dos veces.
-  async function confirmPendingExecution(consoleId: string) {
-    const pending = takeQueryConfirmation(consoleId);
-    if (!pending || !beginQueryExecution(consoleId)) return;
-    setQuerySort(consoleId, []);
-    if (pending.script) {
-      await runScript(consoleId, pending.sql, pending.script.statements, pending.script.confirmations);
-      return;
-    }
-    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId), false, true);
-    dropUnpinnedResults(consoleId);
-  }
-
-  function cancelPendingExecution(consoleId: string) {
-    cancelQueryConfirmation(consoleId);
   }
 
   function startResize(event: PointerEvent) {
