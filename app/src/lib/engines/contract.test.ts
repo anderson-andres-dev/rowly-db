@@ -225,3 +225,36 @@ describe.each(Object.entries(ENGINES) as [ConnectionDriver, (typeof ENGINES)[Con
     });
   },
 );
+
+// tests/engines/contract.json: lo mismo que deciden el nucleo de Rust y el
+// backend para cada motor, en el mismo orden. Un cambio en un lado se hace en
+// los tres y en ese archivo.
+describe("contrato compartido con Rust", () => {
+  it("cada motor del frontend coincide con el nucleo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = new URL("../../../../tests/engines/contract.json", import.meta.url);
+    const contract = JSON.parse(readFileSync(path, "utf8")) as {
+      engines: {
+        id: string;
+        identifierQuote: string;
+        backslashEscapes: boolean;
+        executableComments: string[];
+        pending?: boolean;
+      }[];
+    };
+    const pending = contract.engines.filter((engine) => engine.pending).map((engine) => engine.id);
+    expect(pending, "motores pendientes (tools/engine/new.mjs): escribir sus valores y quitar pending").toEqual([]);
+    expect(
+      Object.keys(ENGINES),
+      "motores de ConnectionDriver (app/src/lib/connections.ts) y ENGINES (app/src/lib/engines) frente a tests/engines/contract.json",
+    ).toEqual(contract.engines.map((engine) => engine.id));
+    const ours = Object.entries(ENGINES).map(([id, profile]) => ({
+      id,
+      // La comilla con que la app cita un nombre (no las que acepta al leer).
+      identifierQuote: profile.quoteIdentifier("x")[0],
+      backslashEscapes: profile.lexical.backslashEscapes,
+      executableComments: [...profile.lexical.executableComments],
+    }));
+    expect(ours).toEqual(contract.engines);
+  });
+});

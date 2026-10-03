@@ -2,8 +2,8 @@
 //! En produccion, cada escritura tambien necesita confirmacion. Usa el AST
 //! general y valida las definiciones de rutinas con tokens del motor.
 
-use crate::Dialect;
 use crate::pagination::query_is_read_only;
+use crate::{Dialect, DoBlocks, RoutineBodies};
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{AlterTableOperation, ObjectType, Query, SetExpr, Statement};
 use sqlparser::parser::{Parser, ParserError};
@@ -320,19 +320,14 @@ fn classify_routine(
         }
     }
     let kind = word(at);
-    let allowed = match dialect {
-        Dialect::Postgres => matches!(kind.as_str(), "PROCEDURE" | "FUNCTION" | "TRIGGER"),
-        Dialect::MySql | Dialect::MariaDb => matches!(
-            kind.as_str(),
-            "PROCEDURE" | "FUNCTION" | "TRIGGER" | "EVENT"
-        ),
-    };
-    if !allowed {
+    let definition = dialect.definition();
+    if !definition.routine_kinds.contains(&kind.as_str()) {
         return None;
     }
-    // sqlparser no lee todos los CREATE TRIGGER (EXECUTE FUNCTION f('texto')):
-    // uno nunca destruye datos, solo importa que sea una sola sentencia.
-    if matches!(dialect, Dialect::Postgres) && kind == "TRIGGER" {
+    // Con el cuerpo en otro lenguaje, sqlparser no lee todos los CREATE
+    // TRIGGER (EXECUTE FUNCTION f('texto')): uno nunca destruye datos, solo
+    // importa que sea una sola sentencia.
+    if definition.routine_bodies == RoutineBodies::Quoted && kind == "TRIGGER" {
         return Some(single_top_level_statement(&tokens).map(|()| {
             if production {
                 DestructiveClassification::RequiresConfirmation(
@@ -353,12 +348,15 @@ fn classify_routine(
 }
 
 // MySQL y MariaDB ejecutan el contenido de /*! ... */ (y /*M! ... */ en
-// MariaDB) como SQL; el tokenizer lo toma por un comentario. Se clasifica el
+// MariaDB): los `executable_comments` de su definicion. El tokenizer lo toma
+// por un comentario. El recorrido es el de esos motores (`#`, `-- `,
+// comillas con barra invertida). Se clasifica el
 // texto con ese contenido a la vista; al servidor se envia el original. La
 // version se ignora: no se conoce la del servidor, asi que cuenta como
 // ejecutable.
 fn expand_executable_comments(sql: &str, dialect: Dialect) -> Result<Cow<'_, str>, ParserError> {
-    if dialect == Dialect::Postgres || !sql.contains("/*") {
+    let markers = dialect.definition().executable_comments;
+    if markers.is_empty() || !sql.contains("/*") {
         return Ok(Cow::Borrowed(sql));
     }
     let bytes = sql.as_bytes();
@@ -391,11 +389,10 @@ fn expand_executable_comments(sql: &str, dialect: Dialect) -> Result<Cow<'_, str
                 index = line_end(bytes, index);
             }
             b'/' if bytes.get(index + 1) == Some(&b'*') => {
-                let marker = match (bytes.get(index + 2), bytes.get(index + 3)) {
-                    (Some(b'!'), _) => Some(3),
-                    (Some(b'M'), Some(b'!')) if dialect == Dialect::MariaDb => Some(4),
-                    _ => None,
-                };
+                let marker = markers
+                    .iter()
+                    .find(|marker| sql[index..].starts_with(*marker))
+                    .map(|marker| marker.len());
                 let close = sql[index + 2..].find("*/").map(|at| at + index + 2);
                 match (marker, close) {
                     (Some(skip), Some(close)) => {
@@ -436,7 +433,7 @@ fn double_backslashes<'a>(
     dialect: Dialect,
     options: GuardOptions,
 ) -> Cow<'a, str> {
-    if dialect == Dialect::Postgres || !options.no_backslash_escapes || !sql.contains('\\') {
+    if !dialect.backslash_escapes() || !options.no_backslash_escapes || !sql.contains('\\') {
         return sql;
     }
     let bytes = sql.as_bytes();
@@ -507,43 +504,26 @@ fn classify_unparsed(
         .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
         .collect();
     let word = |index: usize| tokens.get(index).map(token_word).unwrap_or_default();
-    let (first, second, third) = (word(0), word(1), word(2));
-    let known = match dialect {
-        Dialect::MySql | Dialect::MariaDb => {
-            matches!(
-                (first.as_str(), second.as_str()),
-                ("DROP" | "ALTER", "EVENT")
-                    | ("ALTER", "PROCEDURE" | "FUNCTION")
-                    | ("GRANT" | "REVOKE", "EXECUTE")
-                    | ("OPTIMIZE" | "CHECK" | "REPAIR", "TABLE")
-            ) || first == "DO"
-                || first == "HELP"
-        }
-        Dialect::Postgres => {
-            matches!(
-                (first.as_str(), second.as_str()),
-                ("ALTER", "FUNCTION" | "PROCEDURE" | "ROUTINE")
-                    | ("GRANT" | "REVOKE", "EXECUTE")
-                    | ("CREATE", "RULE" | "AGGREGATE" | "OPERATOR")
-            ) || first == "DO"
-                || (first == "COMMENT"
-                    && second == "ON"
-                    && matches!(
-                        third.as_str(),
-                        "FUNCTION" | "PROCEDURE" | "ROUTINE" | "TRIGGER"
-                    ))
-                || (first == "CREATE" && second == "OR" && third == "REPLACE" && word(3) == "RULE")
-        }
-    };
+    let (first, second) = (word(0), word(1));
+    let known = dialect.definition().unparsed_writes.iter().any(|pattern| {
+        pattern
+            .iter()
+            .enumerate()
+            .all(|(at, expected)| word(at) == *expected)
+    });
     if !known {
         return None;
     }
-    if dialect == Dialect::Postgres && first == "DO" && do_block_changes_data(&tokens) {
+    let definition = dialect.definition();
+    if definition.do_blocks == DoBlocks::Anonymous
+        && first == "DO"
+        && do_block_changes_data(&tokens)
+    {
         return Some(Err(routine_error(
             "a DO block that deletes, updates, truncates, drops or runs dynamic SQL can't be run from here",
         )));
     }
-    let single = if matches!(dialect, Dialect::MySql | Dialect::MariaDb)
+    let single = if definition.routine_bodies == RoutineBodies::Block
         && second == "EVENT"
         && first == "ALTER"
     {
@@ -633,7 +613,7 @@ fn validate_routine(
     {
         return Err(invalid());
     }
-    if dialect == Dialect::Postgres {
+    if dialect.definition().routine_bodies == RoutineBodies::Quoted {
         return validate_postgres_body(tokens, kind_at + 1);
     }
     let mut parens = 0usize;

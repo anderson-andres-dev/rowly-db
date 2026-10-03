@@ -206,7 +206,7 @@ What each engine has. N/A is correct where the engine really lacks the feature; 
 | Backslash escapes in strings | yes (unless `NO_BACKSLASH_ESCAPES`) | yes (same) | `E'…'` only | no |
 | `#` comments / dollar quotes / `DELIMITER` | yes / no / client-side | yes / no / client-side | no / yes / no | no / no / no |
 
-Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in `Dialect` (`crates/engine/src/lib.rs`); version-dependent catalog features in each driver's `version.rs` (`Capabilities`). Line differences must have one data declaration; the engine and driver remain app code (§9 and §12).
+Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in each engine's `EngineDefinition` (`crates/engine/src/dialects/`, registered by `Dialect::definition`); version-dependent catalog features in each driver's `version.rs` (`Capabilities`). Line differences must have one data declaration; the engine and driver remain app code (§9 and §12).
 
 ## 7. Gates
 
@@ -365,8 +365,8 @@ These operations are distinct: **engine** = SQL and catalog rules; **driver** = 
 
 ### 12.1 New engine
 
-1. **Choose identity and protocol.** Give it a stable ID in `DatabaseKind`, `Dialect` and `ConnectionDriver`; update exhaustive registries. Reuse a driver only when the protocol and tests for types, TLS and introspection allow it. The [development guide](CONTRIBUTING.md#adding-a-database-engine) lists current paths.
-2. **Implement engine decisions.** Lexing, parser or policy for unread syntax, quoting, generated SQL, guard and catalog are resolved explicitly. Use a "nearby" parser only after proving it neither hides destructive SQL nor flags valid syntax as an error. No case silently falls back to another engine.
+1. **Choose identity and protocol.** Start with `node tools/engine/new.mjs <id> --like <engine>`: it gives it a stable ID in the registry (`Dialect::definition`), marks it pending in `tests/engines/contract.json`, and from then on the compiler and the tests name every place still missing it (`DatabaseKind`, `ConnectionDriver`, the test harness, lines and vendor dates). Reuse a driver only when the protocol and tests for types, TLS and introspection allow it. The [development guide](CONTRIBUTING.md#adding-a-database-engine) lists current paths.
+2. **Implement engine decisions.** Every field of its `EngineDefinition` (`crates/engine/src/dialects/<id>.rs`) is resolved explicitly: parser and unread syntax, quoting, backslash rule, executable comments, routine bodies, generated SQL and guard; the template's inherited values fail tests until they are decided. The core never compares engines: a mechanism one engine needs is a new field or variant of the definition, with a test for every existing engine. Use a "nearby" parser only after proving it neither hides destructive SQL nor flags valid syntax as an error. No case silently falls back to another engine.
 3. **Register tests.** Add its capability column in §6.5, common and per-line fixtures in §10, and a response to every S/A/G/D row. Existing `PerEngine` and `FIXTURES` help but do not replace the real-server matrix. `N/A` needs a documented reason.
 4. **Validate and announce.** Run §7 on every exact release to be advertised, rerun shared contracts for existing engines, and report P0/P1/P2. Only with P0 = 0, P1 = 0 and every applicable row covered does it reach Integrable (§4).
 

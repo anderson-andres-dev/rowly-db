@@ -61,14 +61,22 @@ Al preparar una release, comprueba las fechas de soporte en los avisos oficiales
 
 ## Agregar un motor de base de datos
 
-Sigue [SQL_ENGINE.es.md, §12](SQL_ENGINE.es.md#12-agregar-un-motor-paso-a-paso) para separar **motor**, **driver**, **línea** y **versión exacta**. Estas son las rutas del código actual; el compilador señala parte de las decisiones pendientes, y la matriz S/A/G/D detecta las restantes.
+Sigue [SQL_ENGINE.es.md, §12](SQL_ENGINE.es.md#12-agregar-un-motor-paso-a-paso) para separar **motor**, **driver**, **línea** y **versión exacta**. Empieza por la plantilla y deja que el compilador y los tests te lleven por el resto: cada paso pendiente falla nombrando el archivo que necesita.
 
-1. **Driver.** Si necesita protocolo propio, crea `crates/drivers/<motor>`, implementa `DbConnector` de `khipu-driver-core` y agrega el crate al workspace. Si habla el protocolo de otro motor soportado, reutiliza su driver después de probar tipos, TLS e introspección.
-2. **Rust.** Agrega el motor a `DatabaseKind` en `app/src-tauri/src/drivers.rs`, que elige su driver, y a `Dialect` y su lista `ALL` en `crates/engine/src/lib.rs`. El compilador marca cada decisión pendiente. El motor se llama igual en `DatabaseKind`, en `Dialect` y en `ConnectionDriver` del frontend.
-3. **Frontend.** Agrégalo a `app/src/lib/connections.ts` con su nombre, logo y puerto por defecto, y escribe su perfil en `app/src/lib/engines/<motor>.ts`.
-4. **Contrato.** Completa sus `FIXTURES` en `app/src/lib/engines/contract.test.ts`, decide su respuesta en cada caso `PerEngine` de `crates/engine/src/diagnostics.rs` y añade corpus y servidores exactos en `tests/sql/` y `tools/test-dbs/lines.json`. Revisa cada fila aplicable de `SQL_ENGINE.es.md` y documenta `N/A` con motivo.
+```bash
+node tools/engine/new.mjs <id> --like <mysql|mariadb|postgres>
+```
 
-Después corre la compuerta de motor de `SQL_ENGINE.es.md` en cada versión exacta que quieras anunciar y comprueba que los motores existentes siguen verdes. Un parser cercano, como el que MariaDB comparte con MySQL, solo es válido si las pruebas demuestran que no oculta SQL destructivo ni produce diagnósticos falsos; registra la sintaxis válida que no lee en `Dialect::unparsed_syntax`. Una integración sin matriz completa queda como experimental, no como soporte verificado.
+Crea el `EngineDefinition` del motor en `crates/engine/src/dialects/<id>.rs` (con los valores del motor parecido, bajo un bloque `PENDIENTE`), lo suma al registro (`Dialect`, `ALL` y `definition()` en `crates/engine/src/lib.rs`), agrega su entrada a `tests/engines/contract.json` con `"pending": true` y crea `tests/sql/<id>/`. Después, en orden:
+
+1. **`cargo build`**: la respuesta del motor en cada caso por motor de los tests (`PerEngine` de `diagnostics.rs`) y su lugar en la lista del contrato de `lib.rs`.
+2. **La definición.** Escribe cada campo de `EngineDefinition` con la respuesta propia del motor, probada contra su servidor, y quita el bloque `PENDIENTE`. Un valor heredado que nadie probó es un motor que sigue en silencio las reglas de otro. La sintaxis válida que su parser no lee va en `unparsed_syntax`.
+3. **`cargo test`** nombra el resto del lado Rust: `DatabaseKind` y su driver en `app/src-tauri/src/drivers.rs` (un protocolo nuevo es un crate en `crates/drivers/<protocolo>` que implementa `DbConnector`), `Engine` en `crates/server-tests` y el contrato compartido.
+4. **Frontend.** `ConnectionDriver` en `app/src/lib/connections.ts` (nombre, logo, puerto por defecto), su perfil en `app/src/lib/engines/<id>.ts`, `ENGINES` y los `FIXTURES` de `contract.test.ts`. La comilla de identificadores, la regla de la barra invertida y los comentarios ejecutables tienen que coincidir con `tests/engines/contract.json`; después quita `"pending"`.
+5. **Servidores y soporte.** Líneas, probes y versiones verificadas fijadas por digest en `tools/test-dbs/lines.json` (y su contenedor), fechas del fabricante en `app/src/lib/engines/vendorSupport.json`.
+6. **La matriz.** `node tools/inventory/coverage.mjs` enumera cada fila de `SQL_ENGINE.es.md` sin respuesta para el motor: una prueba que lo incluya, un `N/A` con motivo o un hueco declarado (`gapEngines`).
+
+Después corre la compuerta de motor en cada versión exacta que quieras anunciar y comprueba que los motores existentes siguen verdes. Una integración sin matriz completa queda como experimental, no como soporte verificado.
 
 ## Publicar una versión
 

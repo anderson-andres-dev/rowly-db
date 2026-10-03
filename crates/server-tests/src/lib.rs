@@ -660,6 +660,21 @@ pub fn admin(engine: Engine, sql: &str) {
 mod tests {
     use super::*;
 
+    /// El harness prueba cada motor del registro (Dialect::ALL), con su
+    /// identidad: un motor nuevo no queda fuera de las pruebas reales.
+    #[test]
+    fn the_harness_covers_every_engine_of_the_registry() {
+        let ours: Vec<&str> = Engine::ALL.iter().map(|engine| engine.name()).collect();
+        let registry: Vec<&str> = Dialect::ALL.iter().map(|dialect| dialect.id()).collect();
+        assert_eq!(
+            ours, registry,
+            "Engine (crates/server-tests) y Dialect::ALL"
+        );
+        for engine in Engine::ALL {
+            assert_eq!(engine.dialect().id(), engine.name());
+        }
+    }
+
     #[test]
     fn a_capability_starts_in_the_line_whose_accepts_declares_it() {
         let merge = capability(Engine::Postgres, "MERGE.");

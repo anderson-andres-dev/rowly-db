@@ -3,7 +3,9 @@
 // cada fila tiene entrada; cada prueba citada existe (archivo y nombre);
 // "partial" y "gap" dicen que falta; un N/A por motor dice por que; y cada
 // prueba contra servidores reales (crates/server-tests/tests) prueba alguna
-// fila: no hay huerfanas.
+// fila: no hay huerfanas. Cada fila responde por cada motor de
+// tests/engines/contract.json (prueba, N/A con motivo o `gapEngines`), y un
+// motor marcado `pending` (tools/engine/new.mjs) falla con lo que le falta.
 //
 //   node tools/inventory/coverage.mjs           informe y exit 1 si algo falla
 
@@ -11,7 +13,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
-const ENGINES = new Set(["mysql", "mariadb", "postgres"]);
+const contract = JSON.parse(readFileSync(join(ROOT, "tests/engines/contract.json"), "utf8"));
+const ENGINES = new Set(contract.engines.map((engine) => engine.id));
 const STATUS = new Set(["covered", "partial", "gap"]);
 
 const coverage = JSON.parse(readFileSync(join(ROOT, "tests/sql/coverage.json"), "utf8"));
@@ -40,6 +43,39 @@ for (const [row, entry] of Object.entries(coverage.rows)) {
     }
     if (!readFileSync(path, "utf8").includes(test.name)) problems.push(`${row}: "${test.name}" no aparece en ${test.file}`);
   }
+}
+
+// Cada motor tiene una respuesta en cada fila que no es un hueco entero.
+const unanswered = new Map([...ENGINES].map((engine) => [engine, []]));
+for (const [row, entry] of Object.entries(coverage.rows)) {
+  if (entry.status === "gap") continue;
+  const answered = new Set([
+    ...entry.tests.flatMap((test) => test.engines),
+    ...Object.keys(entry.na ?? {}),
+    ...(entry.gapEngines ?? []),
+  ]);
+  for (const engine of entry.gapEngines ?? []) {
+    if (!ENGINES.has(engine)) problems.push(`${row}: gapEngines con un motor desconocido (${engine})`);
+    if (!entry.gap) problems.push(`${row}: gapEngines sin decir que falta (gap)`);
+  }
+  for (const engine of ENGINES) if (!answered.has(engine)) unanswered.get(engine).push(row);
+}
+for (const engine of contract.engines) {
+  const rows = unanswered.get(engine.id);
+  if (engine.pending)
+    problems.push(
+      `motor ${engine.id} pendiente (tools/engine/new.mjs): ${rows.length ? `filas sin respuesta: ${rows.join(", ")}` : "quitar \"pending\" de tests/engines/contract.json"}`,
+    );
+  else if (rows.length) problems.push(`${engine.id}: sin respuesta en ${rows.join(", ")} (prueba, N/A con motivo o gapEngines)`);
+}
+
+// Cada motor tiene sus lineas de version y las fechas de su fabricante: sin
+// ellas no hay servidores que probar ni ventana de soporte (SQL_ENGINE §5).
+const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
+const vendor = JSON.parse(readFileSync(join(ROOT, "app/src/lib/engines/vendorSupport.json"), "utf8"));
+for (const engine of ENGINES) {
+  if (!lines.engines?.[engine]?.length) problems.push(`${engine}: sin lineas en tools/test-dbs/lines.json (engines)`);
+  if (!vendor[engine]?.length) problems.push(`${engine}: sin fechas en app/src/lib/engines/vendorSupport.json`);
 }
 
 // Huerfanas: una prueba real que no prueba ninguna fila.
