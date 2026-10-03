@@ -163,4 +163,22 @@ mod tests {
         assert!(production_write_allowed(true, true).is_ok());
         assert!(production_write_allowed(false, false).is_ok());
     }
+
+    #[test]
+    fn export_requests_and_summaries_keep_their_shape() {
+        let summary = ExportSummary {
+            rows: 3,
+            path: "/tmp/x.csv".into(),
+            elapsed_ms: 12,
+        };
+        assert_eq!(
+            serde_json::to_value(&summary).unwrap(),
+            serde_json::json!({ "rows": 3, "path": "/tmp/x.csv", "elapsedMs": 12 })
+        );
+        let request: ExportRequest = serde_json::from_value(serde_json::json!({
+            "sql": "SELECT 1", "format": "csv", "headers": true, "tableName": "t", "path": "/tmp/x.csv"
+        }))
+        .unwrap();
+        assert!(request.headers && request.sort.is_empty());
+    }
 }

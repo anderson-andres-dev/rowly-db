@@ -99,3 +99,20 @@ pub async fn load_connection_password(profile_id: String) -> Result<Option<Strin
 pub async fn delete_connection_password(profile_id: String) -> Result<(), Message> {
     credentials::delete(profile_id).await.map_err(Message::from)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_connection_failure_keeps_its_shape() {
+        let failure = ConnectFailure::from(DriverError::Connection {
+            kind: ConnectionErrorKind::TlsUnavailable,
+            detail: "no TLS".into(),
+        });
+        assert_eq!(
+            serde_json::to_value(&failure).unwrap(),
+            serde_json::json!({ "kind": "tlsUnavailable", "detail": "no TLS" })
+        );
+    }
+}

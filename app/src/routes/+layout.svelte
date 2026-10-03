@@ -174,9 +174,8 @@
   }
 
   // "Recargar tablas" es, en la practica, volver a conectar al mismo
-  // perfil activo: no hay pool vivo que reintrospectar (ver comentario de
-  // reset() en connection.ts), asi que connectToProfile ya hace exactamente
-  // lo que un refresh necesita, sin agregar ningun comando nuevo en Rust.
+  // perfil activo: connect reemplaza la conexion de la ventana y vuelve a
+  // introspectar, que es exactamente lo que un refresh necesita.
   async function handleRefreshTables() {
     const profile = activeProfile;
     if (!profile || refreshingTables) return;

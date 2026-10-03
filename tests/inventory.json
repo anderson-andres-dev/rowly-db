@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 124,
-    "tests": 1389,
+    "files": 128,
+    "tests": 1394,
     "ignored": 26,
     "byDecision": {
-      "keep": 67,
-      "move": 53,
+      "keep": 72,
+      "move": 52,
       "rewrite": 4,
       "remove": 0
     },
     "byGate": {
-      "pr": 120,
+      "pr": 124,
       "engine-pr": 4,
       "manual": 0,
       "release": 0
@@ -41,6 +41,78 @@
       "environment": "none",
       "env": [],
       "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/commands/catalog.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/commands/catalog.rs",
+      "property": "Schemas visibles: refrescar recarga los que se ven",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/commands/connection.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/commands/connection.rs",
+      "property": "La forma del fallo de conexion que el frontend explica",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/commands/query.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/commands/query.rs",
+      "property": "Guard antes de ejecutar: scripts clasificados sentencia por sentencia, produccion, rutinas sin reescribir, contar y exportar solo lecturas; forma de las respuestas",
+      "risk": "P0",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "S2",
+        "S3",
+        "S7"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 5,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/commands/results.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/commands/results.rs",
+      "property": "Cambios del grid en produccion solo con confirmacion; forma de la exportacion",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "S7"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "app/src-tauri/src/console_texts.rs",
@@ -119,17 +191,13 @@
       "path": "app/src-tauri/src/lib.rs",
       "domain": "desktop",
       "owner": "app/src-tauri/src/lib.rs",
-      "property": "Scripts se clasifican sentencia a sentencia; en produccion toda escritura pide confirmacion; refresco de schemas visibles",
-      "risk": "P0",
+      "property": "Superficie IPC: los comandos registrados son exactamente los que invoca el frontend",
+      "risk": "P1",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/commands/query.rs",
-      "sqlEngineRows": [
-        "S7"
-      ],
+      "decision": "keep",
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 5,
+      "tests": 1,
       "ignored": 0,
       "environment": "none",
       "env": [],

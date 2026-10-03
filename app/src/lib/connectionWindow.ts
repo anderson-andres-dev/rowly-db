@@ -3,7 +3,7 @@ import type { ConnectionProfile } from "$lib/stores/connectionProfiles";
 
 // Abre `profile` en una ventana nueva de Rowly DB. La ventana carga la app con
 // ?connect=<id> y +page.svelte se conecta sola a ese perfil. El backend
-// guarda una conexion por ventana (AppState en src-tauri/src/lib.rs), asi
+// guarda una conexion por ventana (AppState en src-tauri/src/state.rs), asi
 // que esta ventana y la actual trabajan cada una contra su base.
 //
 // El label "connection-*" es el que habilita capabilities/default.json.

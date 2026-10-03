@@ -479,4 +479,61 @@ mod tests {
         let select = check_statement("SELECT 1", Dialect::Postgres, true, GuardOptions::default());
         assert!(select.confirmation.is_none());
     }
+
+    /// La forma que lee el frontend (queryExecution.ts): no cambia al mover
+    /// los comandos de sitio.
+    #[test]
+    fn execute_query_answers_keep_their_shape() {
+        let confirmation = ExecuteQueryResponse::ConfirmationRequired {
+            statement: DestructiveStatement::DeleteWithoutWhere,
+        };
+        assert_eq!(
+            serde_json::to_value(&confirmation).unwrap(),
+            serde_json::json!({ "type": "confirmationRequired", "statement": "deleteWithoutWhere" })
+        );
+        let completed = ExecuteQueryResponse::Completed {
+            result: QueryExecutionResult::Command {
+                affected_rows: 2,
+                execution_time_ms: 3,
+            },
+            page: Some(PageInfo {
+                offset: 0,
+                page_size: 500,
+                pageable: true,
+                sortable: false,
+            }),
+        };
+        let value = serde_json::to_value(&completed).unwrap();
+        assert_eq!(value["type"], "completed");
+        assert_eq!(
+            value["page"],
+            serde_json::json!({ "offset": 0, "pageSize": 500, "pageable": true, "sortable": false })
+        );
+        let without_page = ExecuteQueryResponse::Completed {
+            result: QueryExecutionResult::Command {
+                affected_rows: 0,
+                execution_time_ms: 0,
+            },
+            page: None,
+        };
+        assert!(
+            serde_json::to_value(&without_page)
+                .unwrap()
+                .get("page")
+                .is_none()
+        );
+        let check = check_statement(
+            "DELETE FROM t",
+            Dialect::MySql,
+            false,
+            GuardOptions::default(),
+        );
+        assert_eq!(
+            serde_json::to_value(&check).unwrap(),
+            serde_json::json!({ "confirmation": "deleteWithoutWhere" })
+        );
+        let page: PageRequest =
+            serde_json::from_value(serde_json::json!({ "offset": 100, "pageSize": 50 })).unwrap();
+        assert_eq!((page.offset, page.page_size, page.sort.len()), (100, 50, 0));
+    }
 }
