@@ -61,14 +61,22 @@ When preparing a release, check support dates against each vendor's official not
 
 ## Adding a database engine
 
-Follow [SQL_ENGINE.md, §12](SQL_ENGINE.md#12-adding-an-engine-step-by-step) to distinguish **engine**, **driver**, **line** and **exact release**. These are the current code paths; the compiler flags some missing decisions, and the S/A/G/D matrix catches the rest.
+Follow [SQL_ENGINE.md, §12](SQL_ENGINE.md#12-adding-an-engine-step-by-step) to distinguish **engine**, **driver**, **line** and **exact release**. Start with the template, then let the compiler and the tests walk you through the rest: every step left fails with the file it needs.
 
-1. **Driver.** If it needs its own protocol, create `crates/drivers/<engine>`, implement `DbConnector` from `khipu-driver-core` and add the crate to the workspace. If it speaks a supported engine's protocol, reuse that driver after testing types, TLS and introspection.
-2. **Rust.** Add the engine to `DatabaseKind` in `app/src-tauri/src/drivers.rs`, which picks its driver, and to `Dialect` and its `ALL` list in `crates/engine/src/lib.rs`. The compiler points at each decision left. The engine has the same name in `DatabaseKind`, `Dialect` and the frontend's `ConnectionDriver`.
-3. **Frontend.** Add it to `app/src/lib/connections.ts` with its name, logo and default port, and write its profile in `app/src/lib/engines/<engine>.ts`.
-4. **Contract.** Fill in its `FIXTURES` in `app/src/lib/engines/contract.test.ts`, decide its answer in each `PerEngine` case in `crates/engine/src/diagnostics.rs`, and add corpus and exact servers in `tests/sql/` and `tools/test-dbs/lines.json`. Review every applicable row of `SQL_ENGINE.md` and document each `N/A` with a reason.
+```bash
+node tools/engine/new.mjs <id> --like <mysql|mariadb|postgres>
+```
 
-Then run the `SQL_ENGINE.md` engine gate on every exact release you intend to advertise and check that existing engines remain green. A nearby parser, such as the one MariaDB shares with MySQL, is acceptable only if tests prove it neither hides destructive SQL nor produces false diagnostics; list valid syntax it cannot read in `Dialect::unparsed_syntax`. An integration without the full matrix remains experimental, not verified support.
+It creates the engine's `EngineDefinition` in `crates/engine/src/dialects/<id>.rs` (starting from the nearby engine's values, under a `PENDIENTE` block), adds it to the registry (`Dialect`, `ALL` and `definition()` in `crates/engine/src/lib.rs`), adds its entry to `tests/engines/contract.json` as `"pending": true`, and creates `tests/sql/<id>/`. Then, in order:
+
+1. **`cargo build`**: each per-engine test answer (`PerEngine` in `diagnostics.rs`) and the list order in the `lib.rs` contract.
+2. **The definition.** Write every field of `EngineDefinition` with the engine's own answer, proven against its server, and remove the `PENDIENTE` block. An inherited value nobody tested is an engine that silently follows another one's rules. Valid syntax its parser cannot read goes in `unparsed_syntax`.
+3. **`cargo test`** names the rest of the Rust side: `DatabaseKind` and its driver in `app/src-tauri/src/drivers.rs` (a new protocol is a crate in `crates/drivers/<protocol>` implementing `DbConnector`), `Engine` in `crates/server-tests`, and the shared contract.
+4. **Frontend.** `ConnectionDriver` in `app/src/lib/connections.ts` (name, logo, default port), its profile in `app/src/lib/engines/<id>.ts`, `ENGINES` and the `FIXTURES` of `contract.test.ts`. Its identifier quote, backslash rule and executable comments must match `tests/engines/contract.json`; then remove `"pending"`.
+5. **Servers and support.** Lines, probes and verified releases pinned by digest in `tools/test-dbs/lines.json` (and its container), vendor dates in `app/src/lib/engines/vendorSupport.json`.
+6. **The matrix.** `node tools/inventory/coverage.mjs` lists every `SQL_ENGINE.md` row without an answer for the engine: a test that includes it, an `N/A` with a reason, or a declared gap (`gapEngines`).
+
+Then run the engine gate on every exact release you intend to advertise and check that existing engines remain green. An integration without the full matrix remains experimental, not verified support.
 
 ## Releasing
 

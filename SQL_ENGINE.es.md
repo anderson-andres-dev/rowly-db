@@ -206,7 +206,7 @@ Lo que tiene cada motor. N/A es correcto donde el motor de verdad no tiene la ca
 | Barra invertida como escape en textos | sí (salvo con `NO_BACKSLASH_ESCAPES`) | sí (igual) | solo en `E'…'` | no |
 | Comentarios `#` / dollar quotes / `DELIMITER` | sí / no / lo resuelve el cliente | sí / no / lo resuelve el cliente | no / sí / no | no / no / no |
 
-Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`app/src/lib/engines/*.ts`); las reglas del lenguaje, en `Dialect` (`crates/engine/src/lib.rs`); el catálogo dependiente de versión, en el `version.rs` de cada driver (`Capabilities`). Las diferencias de línea deben tener una sola declaración de datos; el motor y el driver siguen siendo código de la app (§9 y §12).
+Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`app/src/lib/engines/*.ts`); las reglas del lenguaje, en el `EngineDefinition` de cada motor (`crates/engine/src/dialects/`, registrado en `Dialect::definition`); el catálogo dependiente de versión, en el `version.rs` de cada driver (`Capabilities`). Las diferencias de línea deben tener una sola declaración de datos; el motor y el driver siguen siendo código de la app (§9 y §12).
 
 ## 7. Compuertas
 
@@ -365,8 +365,8 @@ Estas operaciones son distintas: **motor** = reglas SQL y catálogo; **driver** 
 
 ### 12.1 Motor nuevo
 
-1. **Elegir identidad y protocolo.** Darle un ID estable en `DatabaseKind`, `Dialect` y `ConnectionDriver`; actualizar los registros exhaustivos. Reutilizar un driver solo si habla el mismo protocolo y los tests de tipos, TLS e introspección lo permiten. La [guía de desarrollo](CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos) enumera las rutas actuales.
-2. **Implementar decisiones de motor.** Léxico, parser o política de sintaxis no leída, citas, SQL generado, guard y catálogo se resuelven explícitamente. Un parser «cercano» solo se usa tras demostrar que no oculta SQL destructivo ni marca sintaxis válida como error. Ningún caso cae silenciosamente a otro motor.
+1. **Elegir identidad y protocolo.** Empezar con `node tools/engine/new.mjs <id> --like <motor>`: le da un ID estable en el registro (`Dialect::definition`), lo marca pendiente en `tests/engines/contract.json`, y desde ahí el compilador y los tests nombran cada lugar donde todavía falta (`DatabaseKind`, `ConnectionDriver`, el harness de pruebas, líneas y fechas del fabricante). Reutilizar un driver solo si habla el mismo protocolo y los tests de tipos, TLS e introspección lo permiten. La [guía de desarrollo](CONTRIBUTING.es.md#agregar-un-motor-de-base-de-datos) enumera las rutas actuales.
+2. **Implementar decisiones de motor.** Cada campo de su `EngineDefinition` (`crates/engine/src/dialects/<id>.rs`) se resuelve explícitamente: parser y sintaxis no leída, citas, regla de la barra invertida, comentarios ejecutables, cuerpos de rutina, SQL generado y guard; los valores heredados de la plantilla hacen fallar los tests hasta decidirlos. El núcleo nunca compara motores: un mecanismo que necesita un motor es un campo o variante nueva de la definición, con una prueba para cada motor existente. Un parser «cercano» solo se usa tras demostrar que no oculta SQL destructivo ni marca sintaxis válida como error. Ningún caso cae silenciosamente a otro motor.
 3. **Registrar pruebas.** Añadir su columna de capacidades en §6.5, fixtures comunes y por línea en §10, y una respuesta para cada fila S/A/G/D. Los `PerEngine` y `FIXTURES` actuales ayudan, pero no sustituyen la matriz real. `N/A` exige motivo documentado.
 4. **Validar y anunciar.** Ejecutar §7 en todas las versiones exactas que se pretendan anunciar, volver a correr contratos compartidos de los motores existentes y registrar P0/P1/P2. Solo con P0 = 0, P1 = 0 y cada fila aplicable cubierta llega a Integrable (§4).
 
