@@ -132,7 +132,7 @@ mod contract {
     use super::Dialect;
     use sqlparser::tokenizer::{Token, Tokenizer};
 
-    const ALL: [Dialect; 3] = Dialect::ALL;
+    const ALL: [Dialect; Dialect::ALL.len()] = Dialect::ALL;
 
     #[test]
     fn la_lista_tiene_todos_los_motores() {
