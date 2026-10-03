@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 128,
-    "tests": 1402,
+    "files": 129,
+    "tests": 1403,
     "ignored": 26,
     "byDecision": {
-      "keep": 73,
+      "keep": 74,
       "move": 52,
       "rewrite": 3,
       "remove": 0
     },
     "byGate": {
-      "pr": 124,
+      "pr": 125,
       "engine-pr": 4,
       "manual": 0,
       "release": 0
@@ -2354,6 +2354,23 @@
       "external": [
         "vitest"
       ],
+      "durationMs": null
+    },
+    {
+      "path": "app/tests/e2e/resources.mjs",
+      "domain": "connections",
+      "owner": "app/tests/e2e/resources.mjs",
+      "property": "Ciclos de recursos en la app real: reconectar alternando motores no mezcla servidores ni catalogos, ni hace crecer el heap JS vivo, el backend o el DOM",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D9"
+      ],
+      "kind": "e2e",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "app+inspector+mysql+postgres",
       "durationMs": null
     },
     {

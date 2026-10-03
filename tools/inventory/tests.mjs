@@ -106,9 +106,11 @@ function cargoBinary(crate, path) {
 }
 
 const tsFiles = walk(join(ROOT, "app/src"), (p) => p.endsWith(".test.ts"));
-// Recorridos E2E: cada flow("...") de app/tests/e2e es un test de la app real.
+// Recorridos E2E: cada flow(...) de run.mjs y cycle(...) de resources.mjs
+// en app/tests/e2e es un test de la app real.
+const E2E_TEST = /^(flow|cycle)\(["`]/gm;
 const e2eFiles = existsSync(join(ROOT, "app/tests/e2e"))
-  ? walk(join(ROOT, "app/tests/e2e"), (p) => p.endsWith(".mjs") && /\bflow\("/.test(readFileSync(p, "utf8")))
+  ? walk(join(ROOT, "app/tests/e2e"), (p) => p.endsWith(".mjs") && new RegExp(E2E_TEST.source, "m").test(readFileSync(p, "utf8")))
   : [];
 const rustFiles = [
   ...walk(join(ROOT, "crates"), (p) => p.endsWith(".rs")),
@@ -128,7 +130,9 @@ const ROWS = new Set([...matrix.matchAll(/^\| ([SAGD]\d+) \|/gm)].map((m) => m[1
 const problems = [];
 function e2eEntry(path) {
   const src = readFileSync(join(ROOT, path), "utf8");
-  return { kind: "e2e", tests: (src.match(/^flow\("/gm) ?? []).length, ignored: 0, environment: "app+webdriver+mysql" };
+  // resources.mjs no usa WebDriver: abre la app con el inspector de WebKit.
+  const environment = /^cycle\(/m.test(src) ? "app+inspector+mysql+postgres" : "app+webdriver+mysql";
+  return { kind: "e2e", tests: (src.match(E2E_TEST) ?? []).length, ignored: 0, environment };
 }
 
 const tests = [...tsFiles, ...rustFiles, ...e2eFiles].sort().map((path) => {

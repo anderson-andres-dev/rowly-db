@@ -897,8 +897,8 @@
           ]
         },
         {
-          "file": "app/tests/e2e/run.mjs",
-          "name": "reconexiones alternando MySQL y PostgreSQL: cada una con su servidor, sin crecer en memoria",
+          "file": "app/tests/e2e/resources.mjs",
+          "name": "reconexiones alternando MySQL y PostgreSQL: cada una con su servidor y su catalogo, sin crecer en memoria",
           "scope": "e2e",
           "engines": [
             "mysql",

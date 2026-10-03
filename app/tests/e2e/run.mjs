@@ -8,9 +8,7 @@
 //
 // Necesita un MySQL desechable en E2E_MYSQL_PORT (por defecto 3306) con
 // root/rowly; el propio script crea la base `rowly_e2e`. Nunca se apunta a una
-// base de usuario: cada recorrido borra y recrea sus datos. El recorrido de
-// reconexiones usa tambien un PostgreSQL vacio en E2E_PG_PORT (por defecto
-// 5432) con postgres/rowly, sin escribir en el.
+// base de usuario: cada recorrido borra y recrea sus datos.
 //
 // Cada recorrido demuestra una propiedad visible por teclado, de punta a punta
 // (UI -> IPC -> guard del backend -> servidor):
@@ -20,15 +18,14 @@
 //   - en produccion toda escritura pide confirmacion en la app real (S7),
 //     tambien los cambios del grid, que el backend rechaza sin ella
 //   - contar el total pasa por el guard del backend y cuenta en la base
-//   - 300 reconexiones alternando MySQL y PostgreSQL: cada una muestra su
-//     servidor y analiza con su catalogo, y la memoria no crece (M3)
 //   - el texto de la consola sobrevive a reiniciar la app
+//
+// Los ciclos de recursos (reconexiones, memoria) estan en resources.mjs.
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { liveHeap } from "./inspector.mjs";
+import { join } from "node:path";
 import { KEYS, Session, sleep } from "./webdriver.mjs";
 
 const args = process.argv.slice(2);
@@ -41,10 +38,6 @@ const TAURI_DRIVER = option("--tauri-driver", "tauri-driver");
 const DRIVER = "http://127.0.0.1:4444";
 const PORT = Number(process.env.E2E_MYSQL_PORT ?? 3306);
 const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
-const PG_PORT = Number(process.env.E2E_PG_PORT ?? 5432);
-const RECONNECTIONS = Number(process.env.E2E_RECONNECTIONS ?? 300);
-// El inspector remoto de la app (inspector.mjs): una sola app a la vez.
-const INSPECTOR = "127.0.0.1:9333";
 if (!APP) throw new Error("falta --app <binario>");
 
 function sql(statement) {
@@ -115,69 +108,6 @@ async function connect(session, name) {
     }
   `);
 }
-
-// Volver a la lista de conexiones (la flecha del topbar): el frontend suelta
-// la conexion y el backend tambien (disconnect).
-async function backToConnections(session) {
-  await (await session.find(".connection-nav .icon-button")).click();
-  await session.find(".card-main");
-}
-
-// El patron de la app en la linea de comandos, anclado al principio: la de
-// este script tambien contiene la ruta de la app.
-const appPattern = () => `^${APP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`;
-
-// PSS en MB de la app y de todos sus procesos hijos, en total y por nombre de
-// proceso: el frontend corre en el WebKitWebProcess, el backend en la app.
-function appPss() {
-  const root = Number(execFileSync("pgrep", ["-o", "-f", appPattern()], { encoding: "utf8" }).trim());
-  const parents = new Map();
-  for (const entry of readdirSync("/proc")) {
-    if (!/^\d+$/.test(entry)) continue;
-    try {
-      const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
-      parents.set(Number(entry), Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]));
-    } catch {
-      // Termino mientras se leia.
-    }
-  }
-  const tree = new Set([root]);
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const [pid, parent] of parents) {
-      if (tree.has(parent) && !tree.has(pid)) {
-        tree.add(pid);
-        grew = true;
-      }
-    }
-  }
-  const byName = {};
-  let kb = 0;
-  for (const pid of tree) {
-    try {
-      const pss = Number(readFileSync(`/proc/${pid}/smaps_rollup`, "utf8").match(/^Pss:\s+(\d+)/m)?.[1] ?? 0);
-      const name = readFileSync(`/proc/${pid}/comm`, "utf8").trim();
-      byName[name] = (byName[name] ?? 0) + pss / 1024;
-      kb += pss;
-    } catch {
-      // Termino mientras se leia.
-    }
-  }
-  return { total: kb / 1024, byName };
-}
-
-// Lo que el frontend tiene montado: nodos, editores y hojas de estilo.
-const domCounts = (session) =>
-  session.script(`return {
-    nodes: document.getElementsByTagName("*").length,
-    editors: document.querySelectorAll(".cm-editor").length,
-    styles: document.querySelectorAll("style").length,
-  }`);
-
-const formatSample = ({ index, heap, pss, dom }) =>
-  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; PSS ${pss.total.toFixed(1)} MB (${Object.entries(pss.byName)
-    .map(([name, mb]) => `${name} ${mb.toFixed(1)}`)
-    .join(", ")}); ${dom.nodes} nodos, ${dom.editors} editores, ${dom.styles} estilos`;
 
 async function editorText(session) {
   return await session.script(`return document.querySelector(".cm-content")?.innerText ?? ""`);
@@ -290,90 +220,6 @@ flow("contar el total: el backend lo clasifica y lo cuenta en la base", async (s
   );
 });
 
-flow(`${RECONNECTIONS} reconexiones alternando MySQL y PostgreSQL: cada una con su servidor, sin crecer en memoria`, async (session) => {
-  // La contrasena se pide una vez por perfil; despues la recuerda la sesion.
-  const mysql = { ...profile("e2e-local", "E2E local", "local"), passwordPolicy: "restart" };
-  const postgres = {
-    ...profile("e2e-pg", "E2E pg", "local"),
-    driver: "postgres",
-    port: PG_PORT,
-    database: "postgres",
-    username: "postgres",
-    passwordPolicy: "restart",
-  };
-  await seedProfiles(session, [mysql, postgres]);
-  const servers = { [mysql.name]: "MySQL 8.4.11", [postgres.name]: "PostgreSQL 18.6" };
-  const shown = () => session.script(`return document.querySelector(".server-version")?.textContent.trim() ?? ""`);
-  await connect(session, mysql.name);
-  await backToConnections(session);
-  await connect(session, postgres.name);
-
-  const reopen = async (name) => {
-    await backToConnections(session);
-    const card = await session.findBy(
-      `la tarjeta "${name}"`,
-      `return [...document.querySelectorAll(".card-main")].find((card) => card.textContent.includes(arguments[0])) ?? null`,
-      name,
-    );
-    await card.click();
-    // El servidor que se ve es el de esta conexion, nunca el de la anterior.
-    await session.waitFor(servers[name], async () => (await shown()) === servers[name]);
-  };
-
-  const samples = [];
-  const warmup = Math.min(50, RECONNECTIONS);
-  for (let index = 1; index <= RECONNECTIONS; index += 1) {
-    await reopen(index % 2 === 1 ? mysql.name : postgres.name);
-    if (index === warmup || (index > warmup && index % 50 === 0) || index === RECONNECTIONS) {
-      const heap = await liveHeap(INSPECTOR);
-      samples.push({ index, heap, pss: appPss(), dom: await domCounts(session) });
-    }
-  }
-  console.log(`      por reconexion:\n${samples.map((sample) => `        ${formatSample(sample)}`).join("\n")}`);
-
-  // El analisis usa el catalogo de la conexion actual: `victim` existe en
-  // MySQL (rowly_e2e) y no en PostgreSQL. Mientras el cursor esta en la
-  // sentencia, el editor oculta los nombres que no encuentra (SQL_ENGINE §8):
-  // se mira con el foco fuera del editor.
-  const unresolved = () => session.script(`return !!document.querySelector(".cm-unresolved")`);
-  const writeAndLeave = async (text) => {
-    await write(session, text);
-    await session.script(`document.activeElement?.blur()`);
-  };
-  if ((await shown()) !== servers[postgres.name]) await reopen(postgres.name);
-  await writeAndLeave("SELECT name FROM victim");
-  await session.waitFor("victim marcada como inexistente en PostgreSQL", unresolved);
-  await reopen(mysql.name);
-  // El control: en la misma consola, una tabla que no existe si se marca.
-  // Asi la ausencia de marca en victim no es un analisis que no corrio.
-  await writeAndLeave("SELECT * FROM victim, missing_e2e");
-  await session.waitFor("missing_e2e marcada como inexistente en MySQL", unresolved);
-  const marked = await session.script(
-    `return [...document.querySelectorAll(".cm-unresolved")].map((element) => element.textContent)`,
-  );
-  if (marked.some((text) => text.includes("victim")))
-    throw new Error(`en MySQL se marco victim, que existe en rowly_e2e: ${JSON.stringify(marked)}`);
-
-  // Sin fuga por reconexion, desde el calentamiento: el heap de JavaScript
-  // que queda vivo tras recolectar, el backend y lo montado en el DOM. El
-  // PSS del WebKitWebProcess no entra: sube con la memoria que el recolector
-  // ya libero y WebKit retiene, y se aplana solo hacia las 600-700
-  // reconexiones (medido hasta 1500, con JIT y sin el, con el heap vivo
-  // plano). Se informa en la salida.
-  const first = samples[0];
-  const last = samples[samples.length - 1];
-  const grew = (what, before, after, allowed) => {
-    if (after > before + allowed)
-      throw new Error(`${what} crecio de ${before.toFixed(1)} a ${after.toFixed(1)} en ${last.index - first.index} reconexiones`);
-  };
-  grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
-  grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
-  const backend = (sample) => sample.pss.byName[basename(APP).slice(0, 15)] ?? 0;
-  grew("el PSS del backend (MB)", backend(first), backend(last), Math.max(2, backend(first) * 0.05));
-  for (const key of ["editors", "styles"])
-    if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
-});
-
 flow("el texto de la consola sobrevive a reiniciar la app", async (session, restart) => {
   await seedProfiles(session, [profile("e2e-local", "E2E local", "local")]);
   await connect(session, "E2E local");
@@ -392,7 +238,6 @@ async function startDriver(profile) {
     XDG_DATA_HOME: join(profile, "data"),
     XDG_CONFIG_HOME: join(profile, "config"),
     XDG_CACHE_HOME: join(profile, "cache"),
-    WEBKIT_INSPECTOR_HTTP_SERVER: INSPECTOR,
   };
   const driver = spawn(TAURI_DRIVER, ["--port", "4444"], { env, stdio: "ignore" });
   for (let i = 0; i < 100; i += 1) {
@@ -408,7 +253,7 @@ async function startDriver(profile) {
 // recorrido. El patron va anclado al principio: la linea de comandos de este
 // script tambien contiene la ruta de la app.
 async function stopApp() {
-  const pattern = appPattern();
+  const pattern = `^${APP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`;
   const alive = () => {
     try {
       execFileSync("pgrep", ["-f", pattern]);

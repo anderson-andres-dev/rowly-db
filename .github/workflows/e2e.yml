@@ -27,7 +27,7 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -uroot -prowly"
           --health-interval=5s --health-timeout=5s --health-retries=30
-      # Solo para el recorrido de reconexiones: otro motor y otra linea.
+      # Solo para los ciclos de reconexion (resources.mjs): otro motor y otra linea.
       postgres:
         image: postgres:18.6
         env:
@@ -48,7 +48,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22: WebSocket nativo para el inspector de resources.mjs.
+          node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
 
@@ -67,6 +68,15 @@ jobs:
         working-directory: app
         env:
           E2E_MYSQL_PORT: "3306"
-          E2E_PG_PORT: "5432"
         # run.mjs arranca un tauri-driver por recorrido, dentro de este display.
         run: xvfb-run --auto-servernum node tests/e2e/run.mjs --app "$GITHUB_WORKSPACE/target/debug/rowly-db"
+
+      - name: Ciclos de recursos
+        if: ${{ !cancelled() }}
+        working-directory: app
+        env:
+          E2E_MYSQL_PORT: "3306"
+          E2E_PG_PORT: "5432"
+        # Sin WebDriver: la app se abre con el inspector de WebKit, que mide el
+        # heap de JavaScript vivo (tests/e2e/inspector.mjs).
+        run: xvfb-run --auto-servernum node tests/e2e/resources.mjs --app "$GITHUB_WORKSPACE/target/debug/rowly-db"

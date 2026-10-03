@@ -3,6 +3,9 @@
 // sigue vivo. El PSS del WebKitWebProcess no sirve para eso: incluye memoria
 // que el recolector ya libero y WebKit todavia no devolvio al sistema.
 //
+// No convive con WebDriver, que maneja la app por el mismo inspector: lo usa
+// resources.mjs, que abre la app por su cuenta.
+//
 // El protocolo es el de Web Inspector: cada mensaje para la pagina va dentro
 // de Target.sendMessageToTarget, y su respuesta vuelve en
 // Target.dispatchMessageFromTarget.
@@ -24,7 +27,9 @@ async function pageSocket(address) {
   throw new Error(`el inspector de ${address} no lista ninguna pagina`);
 }
 
-async function open(address) {
+// Una conexion a la pagina: `send` para cualquier metodo del protocolo y
+// `evaluate` para correr JavaScript en ella y traer el resultado.
+export async function connectInspector(address) {
   const ws = new WebSocket(await pageSocket(address));
   await new Promise((resolve, reject) => {
     ws.onopen = resolve;
@@ -62,23 +67,23 @@ async function open(address) {
         }),
       );
     });
-  return { send, close: () => ws.close() };
+  const evaluate = async (expression) => {
+    const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
+    if (result.wasThrown) throw new Error(`${expression.slice(0, 80)}: ${JSON.stringify(result.result)}`);
+    return result.result.value;
+  };
+  return { send, evaluate, close: () => ws.close() };
 }
 
 // El heap de JavaScript que queda vivo tras recolectar dos veces: MB y
 // objetos (snapshot de Heap: [id, tamaño, clase, flags] por nodo).
-export async function liveHeap(address) {
-  const inspector = await open(address);
-  try {
-    await inspector.send("Heap.gc");
-    await sleep(300);
-    await inspector.send("Heap.gc");
-    const { snapshotData } = await inspector.send("Heap.snapshot");
-    const nodes = JSON.parse(snapshotData).nodes;
-    let bytes = 0;
-    for (let index = 1; index < nodes.length; index += 4) bytes += nodes[index];
-    return { mb: bytes / 1048576, objects: nodes.length / 4 };
-  } finally {
-    inspector.close();
-  }
+export async function liveHeap(inspector) {
+  await inspector.send("Heap.gc");
+  await sleep(300);
+  await inspector.send("Heap.gc");
+  const { snapshotData } = await inspector.send("Heap.snapshot");
+  const nodes = JSON.parse(snapshotData).nodes;
+  let bytes = 0;
+  for (let index = 1; index < nodes.length; index += 4) bytes += nodes[index];
+  return { mb: bytes / 1048576, objects: nodes.length / 4 };
 }
