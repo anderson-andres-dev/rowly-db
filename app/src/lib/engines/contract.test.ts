@@ -244,6 +244,10 @@ describe("contrato compartido con Rust", () => {
     };
     const pending = contract.engines.filter((engine) => engine.pending).map((engine) => engine.id);
     expect(pending, "motores pendientes (tools/engine/new.mjs): escribir sus valores y quitar pending").toEqual([]);
+    expect(
+      Object.keys(ENGINES),
+      "motores de ConnectionDriver (app/src/lib/connections.ts) y ENGINES (app/src/lib/engines) frente a tests/engines/contract.json",
+    ).toEqual(contract.engines.map((engine) => engine.id));
     const ours = Object.entries(ENGINES).map(([id, profile]) => ({
       id,
       // La comilla con que la app cita un nombre (no las que acepta al leer).

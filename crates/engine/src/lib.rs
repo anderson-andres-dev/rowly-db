@@ -185,8 +185,11 @@ mod contract {
 
     #[test]
     fn cada_motor_tiene_su_identidad() {
-        let ids: Vec<&str> = ALL.iter().map(|dialect| dialect.id()).collect();
-        assert_eq!(ids, ["mysql", "mariadb", "postgres"]);
+        let mut ids: Vec<&str> = ALL.iter().map(|dialect| dialect.id()).collect();
+        assert!(ids.iter().all(|id| !id.is_empty()));
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), ALL.len(), "dos motores con el mismo id");
         // MariaDB usa el driver y casi todo el SQL de MySQL, pero no es MySQL:
         // tiene sus comentarios ejecutables y su sintaxis propia.
         let (mysql, mariadb) = (Dialect::MySql.definition(), Dialect::MariaDb.definition());

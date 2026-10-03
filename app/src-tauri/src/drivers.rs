@@ -146,7 +146,9 @@ mod tests {
             .map(|engine| engine["id"].as_str().unwrap())
             .collect();
         for id in &ids {
-            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(id)).unwrap();
+            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(id)).unwrap_or_else(|_| {
+                panic!("DatabaseKind (app/src-tauri/src/drivers.rs) no tiene el motor {id}: sumarlo con su driver")
+            });
             assert_eq!(kind.dialect().id(), *id);
         }
         let all: Vec<&str> = Dialect::ALL.iter().map(|dialect| dialect.id()).collect();
