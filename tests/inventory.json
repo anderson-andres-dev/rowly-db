@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 119,
-    "tests": 1376,
+    "files": 120,
+    "tests": 1382,
     "ignored": 42,
     "byDecision": {
-      "keep": 60,
+      "keep": 61,
       "move": 53,
       "rewrite": 6,
       "remove": 0
     },
     "byGate": {
-      "pr": 114,
+      "pr": 115,
       "engine-pr": 1,
       "manual": 4,
       "release": 0
@@ -414,6 +414,30 @@
         "vitest"
       ],
       "durationMs": 4
+    },
+    {
+      "path": "app/src/lib/editor/analysisSession.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/analysisSession.ts",
+      "property": "Analisis mientras se escribe: posiciones, nombres que no existen, lo que solo falta terminar, mensajes vagos y cache compartida por contexto",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A4"
+      ],
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "analysisSession",
+        "engines"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/editorSearchPanel.dom.test.ts",
