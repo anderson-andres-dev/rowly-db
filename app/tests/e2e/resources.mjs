@@ -152,8 +152,14 @@ function assertStable(samples) {
   };
   grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
   grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
+  // El PSS del backend sube y baja con cada conexion (en CI, entre ~142 y
+  // ~165 MB de una muestra a otra): una fuga sube su piso. Se compara el
+  // minimo de la segunda mitad de las muestras con el de la primera.
   const backend = (s) => s.pss.byName[basename(APP).slice(0, 15)] ?? 0;
-  grew("el PSS del backend (MB)", backend(first), backend(last), Math.max(2, backend(first) * 0.05));
+  const half = Math.ceil(samples.length / 2);
+  const floor = (part) => Math.min(...part.map(backend));
+  const before = floor(samples.slice(0, half));
+  grew("el piso del PSS del backend (MB)", before, floor(samples.slice(half)), Math.max(2, before * 0.05));
   for (const key of ["editors", "styles"])
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
