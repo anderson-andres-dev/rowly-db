@@ -198,6 +198,29 @@ async function startDriver(profile) {
   throw new Error("tauri-driver no respondio en 10 s");
 }
 
+// Termina las instancias de la app que queden del recorrido y espera a que
+// salgan: cerrar la sesion y tauri-driver no siempre las cierra, y una que
+// sigue viva escribe en el perfil mientras se borra y en el siguiente
+// recorrido. El patron va anclado al principio: la linea de comandos de este
+// script tambien contiene la ruta de la app.
+async function stopApp() {
+  const pattern = `^${APP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`;
+  const alive = () => {
+    try {
+      execFileSync("pgrep", ["-f", pattern]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  for (const signal of ["TERM", "KILL"]) {
+    if (!alive()) return;
+    execFileSync("pkill", [`-${signal}`, "-f", pattern], { stdio: "ignore" });
+    for (let i = 0; i < 50 && alive(); i += 1) await sleep(100);
+  }
+  if (alive()) throw new Error("la app no termino tras SIGKILL");
+}
+
 let failures = 0;
 for (const { name, body } of flows) {
   resetData();
@@ -231,8 +254,8 @@ for (const { name, body } of flows) {
     await session.quit();
     driver.kill();
     await new Promise((resolve) => driver.once("exit", resolve));
-    // La WebView puede seguir escribiendo su almacenamiento un instante tras
-    // cerrarse (ENOTEMPTY): se reintenta.
+    await stopApp();
+    // Los procesos de WebKit salen un instante despues que la app.
     rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
