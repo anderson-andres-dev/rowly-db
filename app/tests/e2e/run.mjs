@@ -8,7 +8,9 @@
 //
 // Necesita un MySQL desechable en E2E_MYSQL_PORT (por defecto 3306) con
 // root/rowly; el propio script crea la base `rowly_e2e`. Nunca se apunta a una
-// base de usuario: cada recorrido borra y recrea sus datos.
+// base de usuario: cada recorrido borra y recrea sus datos. El recorrido de
+// reconexiones usa tambien un PostgreSQL vacio en E2E_PG_PORT (por defecto
+// 5432) con postgres/rowly, sin escribir en el.
 //
 // Cada recorrido demuestra una propiedad visible por teclado, de punta a punta
 // (UI -> IPC -> guard del backend -> servidor):
@@ -18,10 +20,12 @@
 //   - en produccion toda escritura pide confirmacion en la app real (S7),
 //     tambien los cambios del grid, que el backend rechaza sin ella
 //   - contar el total pasa por el guard del backend y cuenta en la base
+//   - 300 reconexiones alternando MySQL y PostgreSQL: cada una muestra su
+//     servidor y analiza con su catalogo, y la memoria no crece (M3)
 //   - el texto de la consola sobrevive a reiniciar la app
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KEYS, Session, sleep } from "./webdriver.mjs";
@@ -36,6 +40,8 @@ const TAURI_DRIVER = option("--tauri-driver", "tauri-driver");
 const DRIVER = "http://127.0.0.1:4444";
 const PORT = Number(process.env.E2E_MYSQL_PORT ?? 3306);
 const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
+const PG_PORT = Number(process.env.E2E_PG_PORT ?? 5432);
+const RECONNECTIONS = Number(process.env.E2E_RECONNECTIONS ?? 300);
 if (!APP) throw new Error("falta --app <binario>");
 
 function sql(statement) {
@@ -105,6 +111,52 @@ async function connect(session, name) {
       }, true);
     }
   `);
+}
+
+// Volver a la lista de conexiones (la flecha del topbar): el frontend suelta
+// la conexion y el backend tambien (disconnect).
+async function backToConnections(session) {
+  await (await session.find(".connection-nav .icon-button")).click();
+  await session.find(".card-main");
+}
+
+// El patron de la app en la linea de comandos, anclado al principio: la de
+// este script tambien contiene la ruta de la app.
+const appPattern = () => `^${APP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`;
+
+// PSS en MB de la app y de todos sus procesos hijos: el frontend corre en el
+// WebKitWebProcess, el backend en la app.
+function appPss() {
+  const root = Number(execFileSync("pgrep", ["-o", "-f", appPattern()], { encoding: "utf8" }).trim());
+  const parents = new Map();
+  for (const entry of readdirSync("/proc")) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+      parents.set(Number(entry), Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]));
+    } catch {
+      // Termino mientras se leia.
+    }
+  }
+  const tree = new Set([root]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [pid, parent] of parents) {
+      if (tree.has(parent) && !tree.has(pid)) {
+        tree.add(pid);
+        grew = true;
+      }
+    }
+  }
+  let kb = 0;
+  for (const pid of tree) {
+    try {
+      kb += Number(readFileSync(`/proc/${pid}/smaps_rollup`, "utf8").match(/^Pss:\s+(\d+)/m)?.[1] ?? 0);
+    } catch {
+      // Termino mientras se leia.
+    }
+  }
+  return kb / 1024;
 }
 
 async function editorText(session) {
@@ -218,6 +270,69 @@ flow("contar el total: el backend lo clasifica y lo cuenta en la base", async (s
   );
 });
 
+flow(`${RECONNECTIONS} reconexiones alternando MySQL y PostgreSQL: cada una con su servidor, sin crecer en memoria`, async (session) => {
+  // La contrasena se pide una vez por perfil; despues la recuerda la sesion.
+  const mysql = { ...profile("e2e-local", "E2E local", "local"), passwordPolicy: "restart" };
+  const postgres = {
+    ...profile("e2e-pg", "E2E pg", "local"),
+    driver: "postgres",
+    port: PG_PORT,
+    database: "postgres",
+    username: "postgres",
+    passwordPolicy: "restart",
+  };
+  await seedProfiles(session, [mysql, postgres]);
+  const servers = { [mysql.name]: "MySQL 8.4.11", [postgres.name]: "PostgreSQL 18.6" };
+  const shown = () => session.script(`return document.querySelector(".server-version")?.textContent.trim() ?? ""`);
+  await connect(session, mysql.name);
+  await backToConnections(session);
+  await connect(session, postgres.name);
+
+  const samples = [];
+  const warmup = Math.min(50, RECONNECTIONS);
+  for (let index = 1; index <= RECONNECTIONS; index += 1) {
+    const name = index % 2 === 1 ? mysql.name : postgres.name;
+    await backToConnections(session);
+    const card = await session.findBy(
+      `la tarjeta "${name}"`,
+      `return [...document.querySelectorAll(".card-main")].find((card) => card.textContent.includes(arguments[0])) ?? null`,
+      name,
+    );
+    await card.click();
+    // El servidor que se ve es el de esta conexion, nunca el de la anterior.
+    await session.waitFor(`${servers[name]} en la reconexion ${index}`, async () => (await shown()) === servers[name]);
+    if (index === warmup || index % 50 === 0) {
+      await sleep(2000);
+      samples.push({ index, pss: appPss() });
+    }
+  }
+  console.log(`      PSS (MB): ${samples.map(({ index, pss }) => `${index}: ${pss.toFixed(1)}`).join(", ")}`);
+
+  // El analisis usa el catalogo de la conexion actual: `victim` existe en
+  // MySQL (rowly_e2e) y no en PostgreSQL.
+  const unresolved = () => session.script(`return !!document.querySelector(".cm-unresolved")`);
+  if ((await shown()) !== servers[postgres.name]) {
+    await backToConnections(session);
+    await (await session.findBy("la tarjeta de PostgreSQL", `return [...document.querySelectorAll(".card-main")].find((card) => card.textContent.includes(arguments[0])) ?? null`, postgres.name)).click();
+    await session.waitFor("PostgreSQL", async () => (await shown()) === servers[postgres.name]);
+  }
+  await write(session, "SELECT name FROM victim");
+  await session.waitFor("victim marcada como inexistente en PostgreSQL", unresolved);
+  await backToConnections(session);
+  await (await session.findBy("la tarjeta de MySQL", `return [...document.querySelectorAll(".card-main")].find((card) => card.textContent.includes(arguments[0])) ?? null`, mysql.name)).click();
+  await session.waitFor("MySQL", async () => (await shown()) === servers[mysql.name]);
+  await write(session, "SELECT name FROM victim");
+  await sleep(2000);
+  if (await unresolved()) throw new Error("en MySQL se aplico el analisis de PostgreSQL: victim existe en rowly_e2e");
+
+  // Sin fuga por reconexion: lo que se suma desde el calentamiento queda
+  // dentro del margen.
+  const first = samples[0].pss;
+  const last = samples[samples.length - 1].pss;
+  if (last > first * 1.1)
+    throw new Error(`la memoria crecio de ${first.toFixed(1)} MB a ${last.toFixed(1)} MB en ${RECONNECTIONS - warmup} reconexiones`);
+});
+
 flow("el texto de la consola sobrevive a reiniciar la app", async (session, restart) => {
   await seedProfiles(session, [profile("e2e-local", "E2E local", "local")]);
   await connect(session, "E2E local");
@@ -251,7 +366,7 @@ async function startDriver(profile) {
 // recorrido. El patron va anclado al principio: la linea de comandos de este
 // script tambien contiene la ruta de la app.
 async function stopApp() {
-  const pattern = `^${APP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`;
+  const pattern = appPattern();
   const alive = () => {
     try {
       execFileSync("pgrep", ["-f", pattern]);
