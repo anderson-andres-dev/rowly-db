@@ -231,7 +231,9 @@ for (const { name, body } of flows) {
     await session.quit();
     driver.kill();
     await new Promise((resolve) => driver.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    // La WebView puede seguir escribiendo su almacenamiento un instante tras
+    // cerrarse (ENOTEMPTY): se reintenta.
+    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 process.exit(failures === 0 ? 0 : 1);
