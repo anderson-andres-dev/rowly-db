@@ -1,12 +1,11 @@
 {
   "format": 1,
-  "about": "Fila de SQL_ENGINE §6 -> pruebas, ambito, motores y compuerta. `real` corre en cada version de `verified` (tools/test-dbs/lines.json); `lines` en cada probe; `e2e` en la app real; `driver-manual` necesita KHIPU_TEST_*. Lo valida tools/inventory/coverage.mjs.",
+  "about": "Fila de SQL_ENGINE §6 -> pruebas, ambito, motores y compuerta. `real` corre en cada version de `verified` (tools/test-dbs/lines.json); `lines` en cada probe; `e2e` en la app real. Lo valida tools/inventory/coverage.mjs.",
   "scopes": {
     "unit": "pr",
     "e2e": "pr",
     "real": "engine-pr",
-    "lines": "engine-pr",
-    "driver-manual": "manual"
+    "lines": "engine-pr"
   },
   "rows": {
     "S1": {
@@ -593,27 +592,69 @@
       "gap": "El SQL de edicion, exportacion y filtros no se ejecuta en un servidor (§9); solo unitarios"
     },
     "D1": {
-      "status": "partial",
+      "status": "covered",
       "tests": [
         {
-          "file": "crates/drivers/mysql/src/lib.rs",
-          "name": "execute_query_returns_result_set_with_null_and_types",
-          "scope": "driver-manual",
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "connects_and_lists_schemas_and_tables",
+          "scope": "real",
           "engines": [
             "mysql",
-            "mariadb"
+            "mariadb",
+            "postgres"
           ]
         },
         {
-          "file": "crates/drivers/postgres/src/lib.rs",
-          "name": "execute_query_returns_result_set_with_null_and_types",
-          "scope": "driver-manual",
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "a_result_set_keeps_values_and_nulls",
+          "scope": "real",
           "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "truncating_leaves_the_next_queries_complete",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "ddl_returns_a_command",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "a_server_error_keeps_its_code_and_position",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "the_session_keeps_the_server_defaults",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
             "postgres"
           ]
         }
-      ],
-      "gap": "Tests de driver con KHIPU_TEST_*: segunda via a un servidor, fuera del CI (§9 P3)"
+      ]
     },
     "D2": {
       "status": "covered",
@@ -631,27 +672,19 @@
       ]
     },
     "D3": {
-      "status": "partial",
+      "status": "covered",
       "tests": [
         {
-          "file": "crates/drivers/mysql/src/lib.rs",
-          "name": "introspect_schema_classifies_every_object_kind",
-          "scope": "driver-manual",
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "introspection_classifies_every_object_kind",
+          "scope": "real",
           "engines": [
             "mysql",
-            "mariadb"
-          ]
-        },
-        {
-          "file": "crates/drivers/postgres/src/lib.rs",
-          "name": "introspect_schema_classifies_every_object_kind",
-          "scope": "driver-manual",
-          "engines": [
+            "mariadb",
             "postgres"
           ]
         }
-      ],
-      "gap": "Solo con KHIPU_TEST_* (§9 P3)"
+      ]
     },
     "D4": {
       "status": "gap",
@@ -673,19 +706,42 @@
       "status": "partial",
       "tests": [
         {
-          "file": "crates/drivers/mysql/src/lib.rs",
-          "name": "tls_required_encrypts_or_fails_with_an_actionable_message",
-          "scope": "driver-manual",
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "tls_auto_always_connects_and_reports_what_it_negotiated",
+          "scope": "real",
           "engines": [
             "mysql",
-            "mariadb"
+            "mariadb",
+            "postgres"
           ]
         },
         {
-          "file": "crates/drivers/postgres/src/lib.rs",
+          "file": "crates/server-tests/tests/contract.rs",
           "name": "tls_required_encrypts_or_fails_with_an_actionable_message",
-          "scope": "driver-manual",
+          "scope": "real",
           "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "tls_disabled_connects_unencrypted",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "tls_verify_ca_rejects_self_signed_certificates",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
             "postgres"
           ]
         },
@@ -699,7 +755,7 @@
           ]
         }
       ],
-      "gap": "La negociacion real solo con KHIPU_TEST_* (§9 P3)"
+      "gap": "VerifyCa y VerifyIdentity aceptando una CA configurada: ningun servidor de prueba usa un certificado firmado por una CA propia. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, asi que en ellas solo se prueba el camino sin TLS"
     },
     "D6": {
       "status": "partial",

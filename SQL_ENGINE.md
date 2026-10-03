@@ -127,7 +127,7 @@ Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, pinned in `lines.js
 
 Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. **Proven by** names the test available today; its presence does not mean it already runs on all those releases. A row with no test is a gap, not a pass.
 
-Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
+Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `contract` = `crates/server-tests/tests/contract.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
 
 ### 6.1 Safety
 
@@ -171,11 +171,11 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 
 | # | Property | Proven by |
 |---|---|---|
-| D1 | Result sets, NULLs, types, truncation and DDL commands behave correctly | driver tests `execute_query_*` (`crates/drivers/*/src/lib.rs`, `#[ignore]`, `KHIPU_TEST_*` variables) |
+| D1 | Result sets, NULLs, types, truncation and DDL commands behave correctly | `contract` `connects_and_lists_schemas_and_tables`, `a_result_set_keeps_values_and_nulls`, `truncating_leaves_the_next_queries_complete`, `ddl_returns_a_command`, `a_server_error_keeps_its_code_and_position`, `the_session_keeps_the_server_defaults` |
 | D2 | `CALL` and `SHOW CREATE` return their rows | `real` `call_and_show_create_return_their_rows` |
-| D3 | Introspection classifies every object kind | driver tests `introspect_schema_classifies_every_object_kind` |
+| D3 | Introspection classifies every object kind | `contract` `introspection_classifies_every_object_kind` |
 | D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes | partly, through G2; a direct check is a **gap** (§9) |
-| D5 | TLS modes negotiate or fail with an actionable message | driver tests `tls_*` |
+| D5 | TLS modes negotiate or fail with an actionable message | `contract` `tls_*`, against what each image offers (`tls` in `lines.json`); accepting a configured CA is a **gap** (§9) |
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`) |
@@ -207,7 +207,7 @@ Where it is declared today: lexical and call rules in each `SqlProfile` (`app/sr
 | Gate | When | What runs | Automated |
 |---|---|---|---|
 | **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, test inventory check, and the E2E walks in the real app (Linux, WebKitGTK) | Yes: `.github/workflows/quality.yml` and `e2e.yml` |
-| **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | Yes: `.github/workflows/sql-engine.yml` runs the matrix on every verified exact release, D7/D8 on every probe, and fails when a release lacks complete evidence. Driver tests (D1, D3, D5) are still manual (§9) |
+| **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | Yes: `.github/workflows/sql-engine.yml` runs the matrix on every verified exact release, D7/D8 on every probe, and fails when a release lacks complete evidence. |
 | **Exact release or pack** | Before advertising a verified release or publishing its line pack (§11) | Complete matrix on that release and the line's other verified releases; D7 against the previous line if behavior changes | No |
 | **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | No |
 
@@ -237,9 +237,6 @@ tools/test-dbs/lines.sh up postgres          # or mysql, mariadb; no argument: a
 cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1
 tools/test-dbs/lines.sh down postgres
 
-# Driver tests (KHIPU_TEST_<ENGINE>_* variables, see CONTRIBUTING.md)
-cargo test -p khipu-driver-mysql -- --ignored
-cargo test -p khipu-driver-postgres -- --ignored
 ```
 
 In CI, each verified exact release runs in its own job against its pinned image; the harness stops if the server is not the declared release or if its global `sql_mode` was left in another mode. The last job (`tools/test-dbs/evidence.mjs`) requires, for every release in `verified`, the declared server and every real-server test passing with none ignored, and lists the N/As. A release without that evidence is not advertised as verified.
@@ -279,7 +276,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Other generated SQL (G7) is not run on a server | P2 | |
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
-| Two ways to reach a real server: the driver tests (`KHIPU_TEST_*`) and `rowly-server-tests` (`tools/test-dbs`) | P3 | One suite on `tools/test-dbs` (§10). |
+| `VerifyCa` and `VerifyIdentity` accepting a configured CA are not tested (D5): no test server uses a certificate from a CA of our own, and the PostgreSQL and MariaDB 10.6 images offer no TLS | P2 | Generate a CA in `tools/test-dbs` and serve its certificate. |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 

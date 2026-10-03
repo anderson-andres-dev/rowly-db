@@ -62,7 +62,7 @@ function rustEntry(path) {
   const src = readFileSync(join(ROOT, path), "utf8");
   const tests = (src.match(/#\[(tokio::)?test/g) ?? []).length;
   const ignored = (src.match(/^\s*#\[ignore/gm) ?? []).length;
-  const env = [...new Set([...src.matchAll(/"((?:KHIPU_TEST|ROWLY)_[A-Z_]*)/g)].map((m) => m[1]))].sort();
+  const env = [...new Set([...src.matchAll(/"(ROWLY_[A-Z_]*)/g)].map((m) => m[1]))].sort();
   const crate = path.startsWith("app/src-tauri") ? "app/src-tauri" : path.split("/").slice(0, path.startsWith("crates/drivers") ? 3 : 2).join("/");
   return { kind: "rust", crate, tests, ignored, environment: ignored > 0 ? "real-server" : "none", env };
 }

@@ -127,7 +127,7 @@ Datasets: Sakila en MySQL y MariaDB, Pagila en PostgreSQL, fijados en `lines.jso
 
 Cada fila es una propiedad que el motor debe tener **en cada línea soportada y en cada versión exacta anunciada como verificada** donde aplique. **Lo demuestra** nombra el test disponible hoy; su presencia no implica que ya corra en todas esas versiones. Una fila sin test es un hueco, no un acierto.
 
-Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `front/` = `app/src/lib/`. Son las ubicaciones de hoy; §10 describe la estructura a la que se mueven.
+Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `contract` = `crates/server-tests/tests/contract.rs`, `front/` = `app/src/lib/`. Son las ubicaciones de hoy; §10 describe la estructura a la que se mueven.
 
 ### 6.1 Seguridad
 
@@ -171,11 +171,11 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 
 | # | Propiedad | Lo demuestra |
 |---|---|---|
-| D1 | Los conjuntos de resultados, los NULL, los tipos, el truncado y los comandos DDL se comportan bien | tests de driver `execute_query_*` (`crates/drivers/*/src/lib.rs`, `#[ignore]`, variables `KHIPU_TEST_*`) |
+| D1 | Los conjuntos de resultados, los NULL, los tipos, el truncado y los comandos DDL se comportan bien | `contract` `connects_and_lists_schemas_and_tables`, `a_result_set_keeps_values_and_nulls`, `truncating_leaves_the_next_queries_complete`, `ddl_returns_a_command`, `a_server_error_keeps_its_code_and_position`, `the_session_keeps_the_server_defaults` |
 | D2 | `CALL` y `SHOW CREATE` devuelven sus filas | `real` `call_and_show_create_return_their_rows` |
-| D3 | La introspección clasifica cada tipo de objeto | tests de driver `introspect_schema_classifies_every_object_kind` |
+| D3 | La introspección clasifica cada tipo de objeto | `contract` `introspection_classifies_every_object_kind` |
 | D4 | El **contenido** introspectado coincide con el servidor: columnas, tipos, claves, parámetros de rutinas y sus modos | en parte, a través de G2; una comprobación directa es un **hueco** (§9) |
-| D5 | Los modos TLS negocian o fallan con un mensaje accionable | tests de driver `tls_*` |
+| D5 | Los modos TLS negocian o fallan con un mensaje accionable | `contract` `tls_*`, frente a lo que ofrece cada imagen (`tls` en `lines.json`); aceptar una CA configurada es un **hueco** (§9) |
 | D6 | La versión del servidor se lee y se asigna a su línea, incluidas formas como `5.5.5-10.11.6-MariaDB` | la lectura de la versión: tests unitarios de `crates/drivers/*/src/version.rs`; la asignación a una línea es un **hueco** (§9) |
 | D7 | Cada línea de §5.3 se distingue de la anterior, en sus dos extremos | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | El driver lee cada tipo de columna que puede devolver una línea soportada | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<motor>/<línea>/reads.sql`) |
@@ -207,7 +207,7 @@ Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`
 | Compuerta | Cuándo | Qué corre | Automática |
 |---|---|---|---|
 | **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, comprobación del inventario de tests y los recorridos E2E en la app real (Linux, WebKitGTK) | Sí: `.github/workflows/quality.yml` y `e2e.yml` |
-| **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | Sí: `.github/workflows/sql-engine.yml` corre la matriz en cada versión exacta verificada, D7/D8 en cada probe, y falla si una versión no tiene la evidencia completa. Los tests de driver (D1, D3, D5) siguen siendo manuales (§9) |
+| **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | Sí: `.github/workflows/sql-engine.yml` corre la matriz en cada versión exacta verificada, D7/D8 en cada probe, y falla si una versión no tiene la evidencia completa. |
 | **Versión exacta o paquete** | Antes de anunciar una versión verificada o publicar su paquete de línea (§11) | Matriz completa en esa versión y en las demás versiones verificadas de la línea afectada; D7 frente a línea anterior si cambia el comportamiento | No |
 | **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | No |
 
@@ -237,9 +237,6 @@ tools/test-dbs/lines.sh up postgres          # o mysql, mariadb; sin argumento: 
 cargo test -p rowly-server-tests --test version_lines -- --ignored --test-threads=1
 tools/test-dbs/lines.sh down postgres
 
-# Tests de driver (variables KHIPU_TEST_<MOTOR>_*, ver CONTRIBUTING.es.md)
-cargo test -p khipu-driver-mysql -- --ignored
-cargo test -p khipu-driver-postgres -- --ignored
 ```
 
 En CI, cada versión exacta verificada corre en su propio job contra su imagen fijada; el harness se detiene si el servidor no es la versión declarada o si su `sql_mode` global quedó en otro modo. El último job (`tools/test-dbs/evidence.mjs`) exige, para cada versión de `verified`, el servidor declarado y todas las pruebas reales en verde, ninguna ignorada, y enumera los N/A. Una versión sin esa evidencia no se anuncia como verificada.
@@ -279,7 +276,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | El resto del SQL generado (G7) no se ejecuta en un servidor | P2 | |
 | Los cuerpos de las rutinas de PostgreSQL no se analizan (A5) | P2 | |
 | Unicode más allá de `SELECT INTO`: nombres, posiciones, UTF-8 ↔ UTF-16 entre Rust y el editor (A8) | P2 | |
-| Dos maneras de llegar a un servidor real: los tests de driver (`KHIPU_TEST_*`) y `rowly-server-tests` (`tools/test-dbs`) | P3 | Una sola suite sobre `tools/test-dbs` (§10). |
+| No se prueba que `VerifyCa` y `VerifyIdentity` acepten una CA configurada (D5): ningún servidor de prueba usa un certificado de una CA propia, y las imágenes de PostgreSQL y MariaDB 10.6 no ofrecen TLS | P2 | Generar una CA en `tools/test-dbs` y servir su certificado. |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | Los vectores de MySQL 9 se ven como `[1,2.5,-3]`. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
 

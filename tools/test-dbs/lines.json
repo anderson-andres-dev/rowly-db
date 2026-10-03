@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "about": "Fuente unica de servidores de prueba (SQL_ENGINE §10.1). `engines`: un probe por extremo de cada linea (D7). `verified`: las versiones exactas que Rowly DB declara verificadas; cada una corre la matriz completa (§6). Imagenes fijadas por digest; el harness compara la version que devuelve el servidor con `version`.",
+  "about": "Fuente unica de servidores de prueba (SQL_ENGINE §10.1). `engines`: un probe por extremo de cada linea (D7). `verified`: las versiones exactas que Rowly DB declara verificadas; cada una corre la matriz completa (§6). Imagenes fijadas por digest; el harness compara la version que devuelve el servidor con `version`. `tls` (solo en `verified`): lo que el servidor ofrece en su imagen, `encrypted`, `fallback` o `none` (D5).",
   "registry": "public.ecr.aws/docker/library",
   "datasets": {
     "sakila": {
@@ -25,61 +25,72 @@
       {
         "version": "8.0.46",
         "image": "mysql:8.0.46",
-        "digest": "sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b"
+        "digest": "sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b",
+        "tls": "encrypted"
       },
       {
         "version": "8.4.11",
         "image": "mysql:8.4.11",
-        "digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242"
+        "digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+        "tls": "encrypted"
       },
       {
         "version": "9.7.2",
         "image": "mysql:9.7.2",
-        "digest": "sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497"
+        "digest": "sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497",
+        "tls": "encrypted"
       }
     ],
     "mariadb": [
       {
         "version": "10.6.28",
         "image": "mariadb:10.6.28",
-        "digest": "sha256:23616f0bd3aff922f4dea4130f1d0a09f3571d20b7b36c8f49840672dc309e8c"
+        "digest": "sha256:23616f0bd3aff922f4dea4130f1d0a09f3571d20b7b36c8f49840672dc309e8c",
+        "tls": "none"
       },
       {
         "version": "11.8.9",
         "image": "mariadb:11.8.9",
-        "digest": "sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15"
+        "digest": "sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15",
+        "tls": "encrypted"
       }
     ],
     "postgres": [
       {
         "version": "13.23",
         "image": "postgres:13.23",
-        "digest": "sha256:4689940c683801b4ab839ab3b0a0a3555a5fe425371422310944e89eca7d8068"
+        "digest": "sha256:4689940c683801b4ab839ab3b0a0a3555a5fe425371422310944e89eca7d8068",
+        "tls": "none"
       },
       {
         "version": "14.24",
         "image": "postgres:14.24",
-        "digest": "sha256:c2427de38f998489d36de7ca3553db2134872c400f2b08be4b824e5c50e4d619"
+        "digest": "sha256:c2427de38f998489d36de7ca3553db2134872c400f2b08be4b824e5c50e4d619",
+        "tls": "none"
       },
       {
         "version": "15.19",
         "image": "postgres:15.19",
-        "digest": "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550"
+        "digest": "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
+        "tls": "none"
       },
       {
         "version": "16.15",
         "image": "postgres:16.15",
-        "digest": "sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54"
+        "digest": "sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54",
+        "tls": "none"
       },
       {
         "version": "17.11",
         "image": "postgres:17.11",
-        "digest": "sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f"
+        "digest": "sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f",
+        "tls": "none"
       },
       {
         "version": "18.6",
         "image": "postgres:18.6",
-        "digest": "sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722"
+        "digest": "sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722",
+        "tls": "none"
       }
     ]
   },

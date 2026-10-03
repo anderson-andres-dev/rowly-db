@@ -9,7 +9,7 @@
 // evidence.jsonl (lo que escribe ROWLY_EVIDENCE) y real.log (la salida de
 // cargo test). Completa quiere decir: el servidor que corrio es el que
 // lines.json declara (version y digest) y pasaron todas las pruebas de
-// real_server.rs, sin ninguna ignorada. Lo que una version no tiene sale
+// real_server.rs y contract.rs, sin ninguna ignorada. Lo que una version no tiene sale
 // como N/A, con su prueba. Con GITHUB_STEP_SUMMARY el resumen va ahi.
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
@@ -20,8 +20,11 @@ const dir = process.argv[2];
 if (!dir) throw new Error("uso: evidence.mjs <dir>");
 
 const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
-const source = readFileSync(join(ROOT, "crates/server-tests/tests/real_server.rs"), "utf8");
-const expected = (source.match(/#\[tokio::test\]/g) ?? []).length;
+// Las suites que corre cada job de version (sql-engine.yml).
+const SUITES = ["real_server", "contract"];
+const expected = SUITES.map((suite) => readFileSync(join(ROOT, `crates/server-tests/tests/${suite}.rs`), "utf8"))
+  .map((source) => (source.match(/#\[tokio::test\]/g) ?? []).length)
+  .reduce((sum, count) => sum + count, 0);
 const ENGINE = { mysql: "MySql", mariadb: "MariaDb", postgres: "Postgres" };
 
 const problems = [];
@@ -38,12 +41,18 @@ for (const [engine, servers] of Object.entries(lines.verified)) {
       .map((line) => JSON.parse(line))
       .filter((record) => record.engine === ENGINE[engine]);
     const ran = records.find((record) => record.digest);
-    const result = read(join(job, "real.log")).match(/test result: (\w+)\. (\d+) passed; (\d+) failed; (\d+) ignored/);
+    // Una linea "test result" por suite; se suman.
+    const results = [...read(join(job, "real.log")).matchAll(/test result: (\w+)\. (\d+) passed; (\d+) failed; (\d+) ignored/g)];
+    const result = results.length === SUITES.length && [
+      null,
+      results.every((r) => r[1] === "ok") ? "ok" : "FAILED",
+      ...[2, 3, 4].map((at) => String(results.reduce((sum, r) => sum + Number(r[at]), 0))),
+    ];
     const missing = [];
     if (!ran) missing.push("sin registro del servidor");
     else if (ran.version !== server.version || ran.digest !== server.digest)
       missing.push(`corrio ${ran.version} ${ran.digest}, lines.json declara ${server.digest}`);
-    if (!result) missing.push("sin resultado de cargo test");
+    if (!result) missing.push(`sin el resultado de las ${SUITES.length} suites (${results.length})`);
     else if (result[1] !== "ok" || Number(result[2]) !== expected || result[4] !== "0")
       missing.push(`${result[2]} de ${expected} pruebas, ${result[3]} fallidas, ${result[4]} ignoradas`);
     for (const record of records.filter((record) => record.na)) {

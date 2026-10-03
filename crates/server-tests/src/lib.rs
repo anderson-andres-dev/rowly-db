@@ -3,8 +3,8 @@
 //! `cargo test -p rowly-server-tests -- --ignored --test-threads=1`.
 
 use khipu_driver_core::{
-    ConnectionConfig, DbConnector, QueryExecutionOptions, QueryExecutionResult, SchemaObjects,
-    TlsMode,
+    ConnectionConfig, DbConnector, DriverError, QueryExecutionOptions, QueryExecutionResult,
+    SchemaObjects, TlsMode,
 };
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
@@ -58,6 +58,27 @@ impl Engine {
     /// `rowly_test` en Postgres.
     pub fn scope(self) -> &'static str {
         "rowly_test"
+    }
+
+    /// La conexion de prueba con otro modo TLS (D5).
+    pub fn config_with_tls(self, tls_mode: TlsMode) -> ConnectionConfig {
+        ConnectionConfig {
+            tls_mode,
+            ..self.config()
+        }
+    }
+
+    /// El driver del motor tal cual lo usa la app, para el contrato de los
+    /// drivers (D1, D3, D5). La version del servidor la comprueba
+    /// `Conn::open`, que cada prueba abre antes.
+    pub async fn connector(
+        self,
+        config: &ConnectionConfig,
+    ) -> Result<Box<dyn DbConnector>, DriverError> {
+        Ok(match self {
+            Engine::Postgres => Box::new(PostgresConnector::connect(config).await?),
+            _ => Box::new(MySqlConnector::connect(config).await?),
+        })
     }
 
     fn config(self) -> ConnectionConfig {
@@ -486,6 +507,26 @@ pub fn selected(engines: impl IntoIterator<Item = Engine>) -> Vec<Engine> {
         .into_iter()
         .filter(|&engine| engine_selected(engine))
         .collect()
+}
+
+/// Lo que el servidor del contenedor ofrece de TLS, segun lines.json
+/// (`tls` de su version en `verified`): `encrypted` (certificado propio del
+/// servidor), `fallback` (TLS que rustls no negocia) o `none`.
+pub fn declared_tls(engine: Engine) -> String {
+    let declared = declared_version(engine);
+    lines_json()["verified"][engine.name()]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|server| server["version"] == declared.version.as_str())
+        .and_then(|server| server["tls"].as_str())
+        .unwrap_or_else(|| {
+            panic!(
+                "{engine:?} {}: falta `tls` en verified de tools/test-dbs/lines.json",
+                declared.version
+            )
+        })
+        .to_string()
 }
 
 /// ROWLY_ENGINES=mysql,postgres limita la prueba a esos motores.
