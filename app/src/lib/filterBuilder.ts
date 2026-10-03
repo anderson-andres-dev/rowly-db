@@ -65,10 +65,10 @@ export function newCondition(column = "", join: FilterJoin = "and"): FilterCondi
   return { id: crypto.randomUUID(), join, column, operator: "=", value: "", value2: "" };
 }
 
-// Un nombre simple va tal cual; el resto, con las comillas del motor.
+// El nombre como lo lee el motor: tal cual si es simple, con comillas si es
+// reservado, tiene caracteres raros o (en Postgres) mayusculas.
 export function quoteIdentifier(name: string, driver: ConnectionDriver): string {
-  if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(name)) return name;
-  return engineFor(driver).quoteIdentifier(name);
+  return engineFor(driver).identifier(name);
 }
 
 const NUMERIC_TYPE = /int|serial|decimal|numeric|float|double|real|money|number|bit/i;
