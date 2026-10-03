@@ -30,7 +30,7 @@ beforeEach(async () => {
   g.document = new EventTarget();
   g.Element = class {};
   const zones = await import("./focusZones");
-  ({ runCommand } = await import("./commands"));
+  ({ runCommand } = await import("./workspace/commands"));
   cleanup = zones.installFocusZones(() => false);
 });
 

@@ -1,5 +1,5 @@
 import { MySQL } from "@codemirror/lang-sql";
-import { byAnalyzerLocation, byNearFragment, byQuotedName, byServerPosition, firstLocated } from "$lib/sqlDiagnostics";
+import { byAnalyzerLocation, byNearFragment, byQuotedName, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
 import { COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, caseInsensitiveName } from "./common";
 import type { EngineProfile, TlsModeName } from "./types";
 

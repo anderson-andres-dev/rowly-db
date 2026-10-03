@@ -1,5 +1,5 @@
 import { PostgreSQL } from "@codemirror/lang-sql";
-import { byAnalyzerLocation, byQuotedName, byServerPosition, firstLocated } from "$lib/sqlDiagnostics";
+import { byAnalyzerLocation, byQuotedName, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
 import { ansiString, COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, foldedName } from "./common";
 import type { EngineProfile, TlsModeName } from "./types";
 

@@ -8,11 +8,11 @@ import { EditorSelection, type EditorState, type StateEffect } from "@codemirror
 import type { EditorView } from "@codemirror/view";
 import type { SqlProfile } from "$lib/engines";
 import type { MessageKey, MessageParams } from "$lib/i18n";
-import { clearDiagnosticsIn } from "$lib/sqlDiagnostics";
-import { setExecutionMarker } from "$lib/sqlExecutionMarker";
-import { formatSqlText } from "$lib/sqlFormatter";
-import { normalizePastedSql } from "$lib/sqlPaste";
-import { sqlLexical, statementNear } from "$lib/sqlStatementIndex";
+import { clearDiagnosticsIn } from "$lib/editor/diagnostics";
+import { setExecutionMarker } from "$lib/editor/executionMarker";
+import { formatSqlText } from "$lib/editor/formatter";
+import { normalizePastedSql } from "$lib/editor/paste";
+import { sqlLexical, statementNear } from "$lib/editor/statementIndex";
 import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
 
 export interface TextRange {
@@ -22,7 +22,7 @@ export interface TextRange {
   selected: boolean;
 }
 
-// La seleccion, o la sentencia bajo el cursor (sqlStatementIndex.ts): nunca
+// La seleccion, o la sentencia bajo el cursor (editor/statementIndex.ts): nunca
 // el documento entero; sin sentencias, nada.
 export function currentSqlRange(state: EditorState): TextRange | null {
   const selection = state.selection.main;

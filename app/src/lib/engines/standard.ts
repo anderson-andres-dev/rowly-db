@@ -1,5 +1,5 @@
 import { StandardSQL } from "@codemirror/lang-sql";
-import { byAnalyzerLocation, byServerPosition, firstLocated } from "$lib/sqlDiagnostics";
+import { byAnalyzerLocation, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
 import { ansiString, COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, caseInsensitiveName } from "./common";
 import type { SqlProfile } from "./types";
 

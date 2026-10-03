@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { registerCommand } from "$lib/commands";
+import { registerCommand } from "$lib/workspace/commands";
 import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.

@@ -12,11 +12,11 @@
     type FilterCondition,
     type FilterJoin,
     type FilterOperator,
-  } from "$lib/filterBuilder";
+  } from "$lib/results/filterBuilder";
   import type { TableTab } from "$lib/stores/queryConsoles";
 
   // Filtros de una pestaña de tabla: constructor visual con filas columna ·
-  // operador · valor unidas con Y / O (filterBuilder.ts arma el WHERE). El
+  // operador · valor unidas con Y / O (results/filterBuilder.ts arma el WHERE). El
   // orden se hace con clic en los encabezados del grid. Intro aplica (vuelve
   // a consultar), Esc vuelve a lo aplicado. El error de un filtro se muestra
   // aca mismo, sin salir de la pestaña.

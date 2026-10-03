@@ -8,7 +8,7 @@ export interface CatalogTableRef {
 
 export interface DefinitionLinkOptions {
   // undefined si la palabra bajo el cursor no es una tabla conocida del
-  // catalogo activo (ver resolveCatalogTable en sqlSchema.ts).
+  // catalogo activo (ver resolveCatalogTable en editor/completionSource.ts).
   resolveTable: (word: string) => CatalogTableRef | undefined;
   onOpen: (ref: CatalogTableRef) => void;
 }

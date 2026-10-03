@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import { highlightSql } from "$lib/sqlHighlight";
+  import { highlightSql } from "$lib/editor/highlight";
   import type { LogEntry } from "$lib/stores/executionLog";
 
   // El resaltado de cada sentencia, una sola vez por entrada: la pestaña se

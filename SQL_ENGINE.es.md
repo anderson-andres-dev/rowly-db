@@ -154,10 +154,10 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | A1 | No se marca nada que un servidor real acepte: el corpus, todas las definiciones de Sakila y Pagila, las consolas mezcladas | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
 | A2 | Los errores reales se marcan donde están | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
 | A3 | **Ningún prefijo del SQL del corpus entra en pánico**, escrito letra a letra | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
-| A4 | Mientras se escribe, solo se ven errores reales: no lo que está sin terminar, ni la última palabra, ni un nombre que aún puede definirse | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/sqlDiagnostics.dom.test.ts` |
+| A4 | Mientras se escribe, solo se ven errores reales: no lo que está sin terminar, ni la última palabra, ni un nombre que aún puede definirse | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/editor/diagnostics.dom.test.ts` |
 | A5 | Los cuerpos de las rutinas se revisan por dentro | MySQL/MariaDB: `diag` `valid_routine_structures_are_not_objected_to`, `a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is`. PostgreSQL: **hueco** (§9) |
 | A6 | Los nombres se comprueban contra el catálogo con las reglas de mayúsculas del motor | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
-| A7 | Los errores del servidor se ubican donde ocurren, a partir de mensajes reales del servidor | `front/engines/contract.test.ts` (`FIXTURES`), `front/sqlDiagnostics.test.ts` |
+| A7 | Los errores del servidor se ubican donde ocurren, a partir de mensajes reales del servidor | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
 | A8 | Las posiciones son correctas con texto multibyte | `diag` `select_into_keeps_positions_with_multibyte_characters`; una cobertura más amplia de Unicode es un **hueco** (§9) |
 | A9 | La sintaxis que una línea eliminó se marca en esa línea, con su reemplazo, y no en las anteriores | **hueco** (§9): el analizador tiene un solo dialecto por motor |
 
@@ -166,10 +166,10 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | # | Propiedad | Lo demuestra |
 |---|---|---|
 | G1 | Los identificadores y literales que escribe la app se vuelven a leer con el mismo valor, también con una comilla dentro | `crates/engine/src/lib.rs` `mod contract`, `front/engines/contract.test.ts` |
-| G2 | Cada `CALL` que escribe el autocompletado real corre en el servidor con los argumentos correctos (IN, OUT, INOUT, DEFAULT, VARIADIC, sin nombre, nombres entre comillas) | `real` `completion_calls_run_on_the_real_servers` (llama al código TypeScript a través de `front/sqlCatalogCompletions.server.test.ts`) |
-| G3 | Sin una lista de parámetros fiable, la app escribe los paréntesis con el cursor dentro en vez de inventar argumentos | `front/sqlCatalogCompletions.test.ts` |
-| G4 | Insertar una sugerencia cuenta como escritura para los diagnósticos | `front/sqlCatalogCompletions.test.ts` (aserción de `input.complete`) |
-| G5 | Autocompletado de punta a punta con el dialecto del motor: FROM, JOIN, alias, ON | `front/engines/contract.test.ts`, `front/sqlCatalogCompletions.test.ts` |
+| G2 | Cada `CALL` que escribe el autocompletado real corre en el servidor con los argumentos correctos (IN, OUT, INOUT, DEFAULT, VARIADIC, sin nombre, nombres entre comillas) | `real` `completion_calls_run_on_the_real_servers` (llama al código TypeScript a través de `front/editor/catalogCompletions.server.test.ts`) |
+| G3 | Sin una lista de parámetros fiable, la app escribe los paréntesis con el cursor dentro en vez de inventar argumentos | `front/editor/catalogCompletions.test.ts` |
+| G4 | Insertar una sugerencia cuenta como escritura para los diagnósticos | `front/editor/catalogCompletions.test.ts` (aserción de `input.complete`) |
+| G5 | Autocompletado de punta a punta con el dialecto del motor: FROM, JOIN, alias, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
 | G6 | Los alias automáticos y los nombres generados llevan comillas cuando son reservados en **cualquier** línea del motor | `front/engines/contract.test.ts` cubre una lista por motor; las palabras por línea son un **hueco** (§9) |
 | G7 | El resto del SQL generado corre en el servidor: el INSERT/UPDATE de la edición de resultados, las exportaciones, los filtros | **hueco** (§9); solo lo cubren tests unitarios |
 

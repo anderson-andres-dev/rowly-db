@@ -1350,7 +1350,7 @@ fn completion_fixtures(engine: Engine) -> Vec<(&'static str, &'static str, Optio
     }
 }
 
-/// El CALL que escribe el autocompletado (app/src/lib/sqlCatalogCompletions.ts,
+/// El CALL que escribe el autocompletado (app/src/lib/editor/catalogCompletions.ts,
 /// via su test .server) para cada procedure de `schemas`.
 fn completion_calls(
     engine: Engine,
@@ -1625,7 +1625,7 @@ fn char_offset(text: &str, position: khipu_engine::diagnostics::Position) -> usi
 }
 
 /// Lo que el editor mostraria con el cursor al final de `prefix` mientras se
-/// escribe (app/src/lib/sqlDiagnostics.ts, whileTyping).
+/// escribe (app/src/lib/editor/diagnostics.ts, whileTyping).
 fn shown_while_typing(
     prefix: &str,
     found: &[khipu_engine::diagnostics::Diagnostic],

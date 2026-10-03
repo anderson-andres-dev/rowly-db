@@ -8,14 +8,14 @@ import { sql, type SQLDialect } from "@codemirror/lang-sql";
 import { Compartment, EditorState, type Extension, type StateEffect } from "@codemirror/state";
 import type { SqlProfile } from "$lib/engines";
 import { translate, type MessageKey } from "$lib/i18n";
-import type { RoutineIndex } from "$lib/sqlCallHints";
-import { buildCompletionSource, resolveCatalogTable, type buildSqlSchema } from "$lib/sqlSchema";
-import type { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
+import type { RoutineIndex } from "$lib/editor/callHints";
+import { buildCompletionSource, resolveCatalogTable, type buildSqlSchema } from "$lib/editor/completionSource";
+import type { buildCatalogCompletions } from "$lib/editor/catalogCompletions";
 import { definitionLinkExtension, type CatalogTableRef } from "$lib/sqlDefinitionLink";
-import { autoUppercaseSqlKeywords } from "$lib/sqlEditorBehavior";
-import { buildTabCompletionKeymap, indentationExtension } from "$lib/sqlIndentation";
+import { autoUppercaseSqlKeywords } from "$lib/editor/behavior";
+import { buildTabCompletionKeymap, indentationExtension } from "$lib/editor/indentation";
 import { parameterHintConfig } from "$lib/sqlParameterHints";
-import { sqlLexical } from "$lib/sqlStatementIndex";
+import { sqlLexical } from "$lib/editor/statementIndex";
 import { buildCmTheme } from "$lib/theming/codemirrorTheme";
 
 // Frases propias de CodeMirror (plegado, anuncios de lector de pantalla, "ir

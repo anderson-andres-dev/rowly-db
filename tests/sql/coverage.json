@@ -341,7 +341,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlDiagnostics.dom.test.ts",
+          "file": "app/src/lib/editor/diagnostics.dom.test.ts",
           "name": "errores en el editor",
           "scope": "unit",
           "engines": [
@@ -415,7 +415,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlDiagnostics.test.ts",
+          "file": "app/src/lib/editor/diagnostics.test.ts",
           "name": "ubicar un error de ejecucion",
           "scope": "unit",
           "engines": [
@@ -486,7 +486,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlCatalogCompletions.server.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.server.test.ts",
           "name": "CALL escrito por el autocompletado",
           "scope": "real",
           "engines": [
@@ -501,7 +501,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "catalogo SQL",
           "scope": "unit",
           "engines": [
@@ -516,7 +516,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "input.complete",
           "scope": "unit",
           "engines": [
@@ -541,7 +541,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "catalogo SQL",
           "scope": "unit",
           "engines": [
@@ -582,7 +582,7 @@
           ]
         },
         {
-          "file": "app/src-tauri/src/export.rs",
+          "file": "app/src-tauri/src/services/export.rs",
           "name": "fn ",
           "scope": "unit",
           "engines": [

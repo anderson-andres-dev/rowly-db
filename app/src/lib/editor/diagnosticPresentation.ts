@@ -18,8 +18,8 @@ import {
   visibleDiagnosticCount,
   type QuickFix,
   type SqlDiagnostic,
-} from "$lib/sqlDiagnostics";
-import { groupByFixes } from "$lib/sqlErrorHelp";
+} from "$lib/editor/diagnostics";
+import { groupByFixes } from "$lib/editor/errorHelp";
 import type { QueryExecutionResult } from "$lib/types";
 
 type Text = (key: MessageKey, params?: MessageParams) => string;

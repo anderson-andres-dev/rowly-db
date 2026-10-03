@@ -8,7 +8,7 @@
   import { LOCALE_NAMES, LOCALES, localePreference, t, type LocalePreference, type MessageKey } from "$lib/i18n";
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
   import { requestedScheme, themeChoice, type SchemePreference } from "$lib/theming/theme";
-  import { commandsCollide, type CommandGroup } from "$lib/commands";
+  import { commandsCollide, type CommandGroup } from "$lib/workspace/commands";
   import { formatShortcutEvent, resetAllShortcuts, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import {
@@ -116,7 +116,7 @@
   const indentSizeOptions = [2, 4, 8].map((size) => ({ value: String(size), label: String(size) }));
 
   // --- Atajos -------------------------------------------------------------
-  // Agrupados como en el registro de comandos (lib/commands.ts). Dos
+  // Agrupados como en el registro de comandos (lib/workspace/commands.ts). Dos
   // atajos iguales chocan si actuan en la misma zona o uno es global:
   // Ejecutar (editor) y Aplicar cambios (resultado) comparten Ctrl+Enter a
   // proposito.

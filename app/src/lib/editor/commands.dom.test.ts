@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { ENGINES } from "$lib/engines";
-import { executionMarkerField, executionMarker } from "$lib/sqlExecutionMarker";
-import { sqlLexical, statementIndex, statementIndexComplete, statementIndexStep } from "$lib/sqlStatementIndex";
+import { executionMarkerField, executionMarker } from "$lib/editor/executionMarker";
+import { sqlLexical, statementIndex, statementIndexComplete, statementIndexStep } from "$lib/editor/statementIndex";
 import { createEditorCommands, currentSqlRange, executionRequest, mappedCursorOffset } from "./commands";
 
 let view: EditorView | undefined;

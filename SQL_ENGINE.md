@@ -154,10 +154,10 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `real` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
 | A2 | Real errors are reported where they are | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
 | A3 | **No prefix of any corpus SQL panics**, typed one character at a time | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
-| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/sqlDiagnostics.dom.test.ts` |
+| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `real` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/editor/diagnostics.dom.test.ts` |
 | A5 | Routine bodies are checked inside | MySQL/MariaDB: `diag` `valid_routine_structures_are_not_objected_to`, `a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is`. PostgreSQL: **gap** (§9) |
 | A6 | Names are checked against the catalog with the engine's case rules | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
-| A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/sqlDiagnostics.test.ts` |
+| A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
 | A8 | Positions stay right with multibyte text | `diag` `select_into_keeps_positions_with_multibyte_characters`; broader Unicode coverage is a **gap** (§9) |
 | A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines | **gap** (§9): the analyzer has one dialect per engine |
 
@@ -166,10 +166,10 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | # | Property | Proven by |
 |---|---|---|
 | G1 | Identifiers and literals written by the app read back as the same value, including an internal quote character | `crates/engine/src/lib.rs` `mod contract`, `front/engines/contract.test.ts` |
-| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) | `real` `completion_calls_run_on_the_real_servers` (calls the TypeScript code through `front/sqlCatalogCompletions.server.test.ts`) |
-| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/sqlCatalogCompletions.test.ts` |
-| G4 | Inserting a suggestion counts as typing for diagnostics | `front/sqlCatalogCompletions.test.ts` (`input.complete` assertion) |
-| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/sqlCatalogCompletions.test.ts` |
+| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) | `real` `completion_calls_run_on_the_real_servers` (calls the TypeScript code through `front/editor/catalogCompletions.server.test.ts`) |
+| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/editor/catalogCompletions.test.ts` |
+| G4 | Inserting a suggestion counts as typing for diagnostics | `front/editor/catalogCompletions.test.ts` (`input.complete` assertion) |
+| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
 | G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine | `front/engines/contract.test.ts` covers one list per engine; per-line words are a **gap** (§9) |
 | G7 | Other generated SQL runs on the server: the INSERT/UPDATE from result editing, exports, filters | **gap** (§9); covered by unit tests only |
 

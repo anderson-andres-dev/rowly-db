@@ -6,7 +6,7 @@
     statementIndex,
     statementsChangedIn,
     statementTextAt,
-  } from "$lib/sqlStatementIndex";
+  } from "$lib/editor/statementIndex";
   import { createAnalysisSession } from "$lib/editor/analysisSession";
   import { createEditorConfiguration } from "$lib/editor/configuration";
   import { createEditorCommands, currentSqlRange } from "$lib/editor/commands";
@@ -17,14 +17,14 @@
     serverDiagnostics,
     stopTypingIn,
   } from "$lib/editor/diagnosticPresentation";
-  import { buildRoutineIndex, type RoutineIndex } from "$lib/sqlCallHints";
+  import { buildRoutineIndex, type RoutineIndex } from "$lib/editor/callHints";
   import { parameterHints } from "$lib/sqlParameterHints";
   import { registerConsoleTextFlush } from "$lib/stores/queryConsoles";
   import {
     addDiagnostics,
     sqlDiagnostics,
     type SqlDiagnostic,
-  } from "$lib/sqlDiagnostics";
+  } from "$lib/editor/diagnostics";
   import { standardSql, type SqlProfile } from "$lib/engines";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
@@ -40,16 +40,16 @@
     buildSqlSchema,
     dialectFor,
     extractDefaultTable,
-  } from "$lib/sqlSchema";
-  import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
-  import { commentEditing } from "$lib/sqlCommentEditing";
-  import { commentStyle } from "$lib/sqlCommentStyle";
+  } from "$lib/editor/completionSource";
+  import { buildCatalogCompletions } from "$lib/editor/catalogCompletions";
+  import { commentEditing } from "$lib/editor/commentEditing";
+  import { commentStyle } from "$lib/editor/commentStyle";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import { shortcuts } from "$lib/stores/shortcuts";
-  import { registerCommands } from "$lib/commands";
+  import { registerCommands } from "$lib/workspace/commands";
   import { editorSettings } from "$lib/stores/editorSettings";
   import { notifyError } from "$lib/stores/notifications";
-  import { activeStatementHighlight } from "$lib/sqlEditorBehavior";
+  import { activeStatementHighlight } from "$lib/editor/behavior";
   import {
     executionMarker,
     executionMarkerField,
@@ -58,15 +58,15 @@
     setPartStatus,
     updateExecutionMarker,
     type ExecutionPart,
-  } from "$lib/sqlExecutionMarker";
+  } from "$lib/editor/executionMarker";
   import type { QueryExecutionResult } from "$lib/types";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { writeClipboard as copyToClipboard } from "$lib/clipboard";
-  import { normalizePastedSql } from "$lib/sqlPaste";
+  import { normalizePastedSql } from "$lib/editor/paste";
   import "$lib/sqlEditorIcons.css";
   import "$lib/styles/editorSearch.css";
-  import { editorSearch, openReplacePanel, toggleSearchPanel } from "$lib/editorSearchPanel";
+  import { editorSearch, openReplacePanel, toggleSearchPanel } from "$lib/editor/search";
   import { locale, t } from "$lib/i18n";
 
   let {
@@ -174,7 +174,7 @@
     return true;
   }
 
-  // Comandos del editor (lib/commands.ts); la tecla la pone keybindings.ts,
+  // Comandos del editor (lib/workspace/commands.ts); la tecla la pone keybindings.ts,
   // en captura, antes que los keymaps de CodeMirror (el Mod-a de basicSetup
   // no disparaba de forma confiable en este webview). Solo con el foco en el
   // texto: en la barra de busqueda, Ctrl+A o Ctrl+Enter son de ella.
@@ -356,14 +356,14 @@
         configured.completion,
         configured.definitionLink,
         configured.tabCompletion,
-        // /* se cierra solo (sqlCommentEditing.ts) y la jerarquia dentro de
-        // los comentarios (sqlCommentStyle.ts).
+        // /* se cierra solo (editor/commentEditing.ts) y la jerarquia dentro de
+        // los comentarios (editor/commentStyle.ts).
         commentEditing,
         commentStyle,
         configured.indentation,
         configured.lexical,
         // Pegar y arrastrar: sin los espacios invisibles de otras apps, segun
-        // como escribe el SQL el motor de la conexion (sqlPaste.ts).
+        // como escribe el SQL el motor de la conexion (editor/paste.ts).
         EditorView.clipboardInputFilter.of((text, state) => normalizePastedSql(text, state.facet(sqlLexical))),
         // Aire bajo la ultima linea: se puede desplazar mas alla del final y
         // el cursor no se queda pegado al borde, asi el popup de sugerencias
@@ -404,7 +404,7 @@
           // "alias." de por medio, siempre sugiere tablas, sea que estes
           // despues de FROM o de WHERE. Detectar la tabla del FROM actual y
           // pasarla como defaultTable hace que sus columnas tambien aparezcan
-          // sin calificar (ver comentario largo en sqlSchema.ts). Solo con el
+          // sin calificar (ver comentario largo en editor/completionSource.ts). Solo con el
           // texto de la sentencia actual.
           const head = update.state.selection.main.head;
           const current = statementTextAt(update.state, head);

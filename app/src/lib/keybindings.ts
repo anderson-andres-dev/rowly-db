@@ -1,10 +1,10 @@
 import { get } from "svelte/store";
-import { runFirstCommand } from "$lib/commands";
+import { runFirstCommand } from "$lib/workspace/commands";
 import { activeZone } from "$lib/focusZones";
 import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 
 // Despachador unico de atajos: traduce la tecla a los comandos que la usan
-// (stores/shortcuts.ts) y los ejecuta en la zona activa (lib/commands.ts).
+// (stores/shortcuts.ts) y los ejecuta en la zona activa (lib/workspace/commands.ts).
 // Ningun componente escucha teclas para sus acciones; registran comandos.
 //
 // En captura, para llegar antes que CodeMirror y el grid: si un comando

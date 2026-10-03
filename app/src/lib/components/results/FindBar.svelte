@@ -3,7 +3,7 @@
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { ArrowDown, ArrowUp, Search, X } from "@lucide/svelte";
-  import type { FindOptions } from "$lib/gridFind";
+  import type { FindOptions } from "$lib/results/gridFind";
   import { numberFormat, t } from "$lib/i18n";
 
   // Barra de busqueda del grid (Ctrl+F): fila propia entre la barra de

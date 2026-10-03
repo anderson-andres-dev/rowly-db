@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
-import { COPY_FORMATS, type CopyFormat } from "$lib/gridClipboard";
+import { COPY_FORMATS, type CopyFormat } from "$lib/results/gridClipboard";
 
 // Formato con que Ctrl+C copia varias celdas del grid (selector de la
 // barra del resultado). Se recuerda entre sesiones.

@@ -3,9 +3,9 @@
   import { Check, Minus, Search } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { numberFormat } from "$lib/i18n";
-  import type { ValueCount } from "$lib/columnFilters";
+  import type { ValueCount } from "$lib/results/columnFilters";
 
-  // Filtro local de una columna (columnFilters.ts): sus valores distintos con
+  // Filtro local de una columna (results/columnFilters.ts): sus valores distintos con
   // cuantas filas quedan de cada uno, para marcar o desmarcar. Se aplica al
   // instante; buscar solo acota la lista. Esc o un clic afuera lo cierran.
   let {

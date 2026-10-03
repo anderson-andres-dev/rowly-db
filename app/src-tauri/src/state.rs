@@ -2,8 +2,8 @@
 //! con su catalogo compartido (`Arc<SchemaCatalog>`, armado una vez cada vez
 //! que cambian los schemas) y las consultas en curso que se pueden cancelar.
 
-use crate::catalog_adapter;
 use crate::engine_context::ConnectionEngineContext;
+use crate::services::catalog;
 use khipu_driver_core::{
     DbConnector, Message, QueryCancel, QueryExecutionOptions, QueryExecutionResult, SchemaObjects,
     TlsStatus,
@@ -65,7 +65,7 @@ pub(crate) async fn uses_no_backslash_escapes(
 }
 
 pub(crate) fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<SchemaCatalog> {
-    Arc::new(catalog_adapter::tables_to_catalog(
+    Arc::new(catalog::tables_to_catalog(
         schemas
             .values()
             .flat_map(|objects| objects.tables.iter().cloned()),
