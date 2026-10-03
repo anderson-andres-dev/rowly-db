@@ -23,7 +23,7 @@
 
   import { extractFromContext } from "$lib/sqlSchema";
   import { sqlTokens } from "$lib/sqlContext";
-  import { cancelQuery, classifyStatements, countQueryRows, executeQuery, type PageRequest } from "$lib/queryExecution";
+  import { classifyStatements, countQueryRows, type PageRequest } from "$lib/queryExecution";
   import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
   import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
   import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
@@ -116,6 +116,9 @@
   import { nextSort } from "$lib/gridSort";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import { invalidCells } from "$lib/cellTypes";
+  import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
+  import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
+  import { createExecutionSession } from "$lib/workspace/executionSession";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -134,16 +137,20 @@
   let selectedTabByConsole = $state<Record<string, string>>({});
 
   function tabExists(consoleId: string, tab: string): boolean {
-    if (tab === "output") return true;
+    if (tab === OUTPUT_TAB) return true;
     if (tab === consoleId) return executionForConsole($queryConsoles, consoleId).result?.type === "resultSet";
     return ($pinnedResults[consoleId] ?? []).some((item) => resultKey(consoleId, item.id) === tab);
   }
 
   const selectedTab = $derived.by(() => {
-    if (!activeConsole) return "output";
-    const chosen = selectedTabByConsole[activeConsole.id];
-    if (chosen && tabExists(activeConsole.id, chosen)) return chosen;
-    return liveExecution.result?.type === "resultSet" ? activeConsole.id : "output";
+    if (!activeConsole) return OUTPUT_TAB;
+    const consoleId = activeConsole.id;
+    return visibleTab(
+      consoleId,
+      selectedTabByConsole[consoleId],
+      (tab) => tabExists(consoleId, tab),
+      liveExecution.result?.type === "resultSet",
+    );
   });
 
   function selectTab(consoleId: string, tab: string) {
@@ -151,7 +158,7 @@
   }
 
   // Clave cuyo estado se muestra (con la Salida elegida, la normal).
-  const viewKey = $derived(activeConsole ? (selectedTab === "output" ? activeConsole.id : selectedTab) : "");
+  const viewKey = $derived(activeConsole ? (selectedTab === OUTPUT_TAB ? activeConsole.id : selectedTab) : "");
   const execution = $derived(executionForConsole($queryConsoles, viewKey));
   const activeProfile = $derived($connectionProfiles.find((profile) => profile.id === profileId));
   // Tabla principal (primer FROM) de la consulta que produjo el resultado
@@ -159,17 +166,9 @@
   // desde la ejecucion. Solo resuelve el caso simple (sin JOIN); con varias
   // tablas se toma la primera, igual que el resto de heuristicas de
   // sqlSchema.ts.
-  // Primera tabla despues de FROM, tal como esta escrita (con su schema si
-  // lo trae), sin comillas. extractFromContext es del autocompletado y
-  // depende de la posicion del cursor: sobre el texto entero a veces no
-  // resuelve una consulta simple.
-  function firstFromTable(sql: string): { schema?: string; table: string } | undefined {
-    const match = /\bfrom\s+((?:[`"]?[\w$]+[`"]?\s*\.\s*)?[`"]?[\w$]+[`"]?)/i.exec(sql);
-    if (!match) return undefined;
-    const parts = match[1].split(".").map((part) => part.trim().replace(/^[`"]|[`"]$/g, ""));
-    return parts.length === 2 ? { schema: parts[0], table: parts[1] } : { table: parts[0] };
-  }
-
+  // firstFromTable complementa a extractFromContext, que es del
+  // autocompletado y depende de la posicion del cursor: sobre el texto
+  // entero a veces no resuelve una consulta simple.
   const resultTableName = $derived.by(() => {
     const sql = execution.resultSql;
     if (!sql) return undefined;
@@ -208,27 +207,12 @@
     if (liveExecution.result?.type === "resultSet") {
       tabs.push({ key: consoleId, label: labelForKey(consoleId) ?? $t("workspace.result"), pinned: false });
     }
-    const order = resultTabOrder[consoleId];
-    if (!order) return tabs;
-    const rank = (key: string) => {
-      const index = order.indexOf(key);
-      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-    };
-    return tabs
-      .map((tab, index) => ({ tab, index }))
-      .sort((a, b) => rank(a.tab.key) - rank(b.tab.key) || a.index - b.index)
-      .map(({ tab }) => tab);
+    return orderTabs(tabs, resultTabOrder[consoleId]);
   });
 
-  // Cuando una pestaña cambia de clave (fijar: la normal pasa a ser una
-  // fijada; desfijar sin otra normal: al reves) conserva su lugar: se
-  // reemplaza una clave por la otra en el orden, en la misma posicion.
-  // Nada se reacomoda solo; lo nuevo va al final.
   function keepTabPosition(consoleId: string, fromKey: string, toKey: string) {
     const current = resultTabs.map((tab) => tab.key);
-    const order = (resultTabOrder[consoleId] ?? current).map((key) => (key === fromKey ? toKey : key));
-    if (!order.includes(toKey)) order.push(toKey);
-    resultTabOrder = { ...resultTabOrder, [consoleId]: order };
+    resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
   }
 
   function reorderResultTabs(from: number, to: number) {
@@ -569,43 +553,18 @@
     return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
   }
 
-  function tableSql(item: QueryConsole): string {
-    const table = item.table;
-    if (!table) return "";
-    const parts = [`SELECT * FROM ${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`];
-    // El orden se hace con clic en los encabezados del grid.
-    if (table.where.trim()) parts.push(`WHERE ${table.where.trim()}`);
-    return parts.join(" ");
-  }
-
   // Un filtro con error no borra lo que se estaba viendo: el error queda al
   // lado de los filtros y en la Salida.
-  // Los filtros se ejecutan mientras se arman: nunca dos consultas a la vez
-  // por pestaña. Si llega un cambio mientras una corre, al terminar se
-  // ejecuta una sola vez mas con lo ultimo (lee los filtros del store).
-  const tableRunning = new Set<string>();
-  const tableRerun = new Set<string>();
-
-  async function runTableQuery(consoleId: string) {
-    if (tableRunning.has(consoleId)) {
-      tableRerun.add(consoleId);
-      return;
-    }
-    tableRunning.add(consoleId);
-    try {
-      await runTableQueryOnce(consoleId);
-    } finally {
-      tableRunning.delete(consoleId);
-    }
-    if (tableRerun.delete(consoleId)) void runTableQuery(consoleId);
-  }
+  // Los filtros se ejecutan mientras se arman: una sola consulta a la vez
+  // por pestaña (oneQueryAtATime); la vuelta extra lee los filtros del store.
+  const runTableQuery = oneQueryAtATime(runTableQueryOnce);
 
   async function runTableQueryOnce(consoleId: string) {
     const item = get(queryConsoles).consoles.find((candidate) => candidate.id === consoleId);
     if (!item?.table) return;
     if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
     setQuerySort(consoleId, []);
-    const sql = tableSql(item);
+    const sql = tableSql(item.table, quoteIdentifier);
     const startedAt = Date.now();
     const started = performance.now();
     const { response, cancelled } = await executeCancellable(consoleId, sql, null, firstPage(consoleId));
@@ -631,7 +590,7 @@
       tableFilterError = { ...tableFilterError, [consoleId]: null };
     }
     applyExecuteQueryResponse(consoleId, sql, response);
-    selectTab(consoleId, response.result.type === "resultSet" ? consoleId : "output");
+    selectTab(consoleId, response.result.type === "resultSet" ? consoleId : OUTPUT_TAB);
     dropUnpinnedResults(consoleId);
   }
 
@@ -643,14 +602,9 @@
   // Columnas que ofrece el constructor de filtros: las del catalogo (con su
   // tipo, para citar bien los valores); si la tabla no esta en el catalogo,
   // las del resultado.
-  const tableFilterColumns = $derived.by(() => {
-    const table = activeConsole?.table;
-    if (!table) return [];
-    const fromCatalog = $catalogTables.find((item) => item.schema === table.schema && item.name === table.name);
-    if (fromCatalog) return fromCatalog.columns.map((column) => ({ name: column.name, dataType: column.dataType }));
-    const result = liveExecution.result;
-    return result?.type === "resultSet" ? result.columns.map((column) => ({ name: column.name, dataType: column.type })) : [];
-  });
+  const tableFilterColumns = $derived(
+    activeConsole?.table ? filterColumns(activeConsole.table, $catalogTables, liveExecution.result) : [],
+  );
 
   // Al abrir (o volver a) una pestaña de tabla sin datos todavia, se carga.
   $effect(() => {
@@ -753,36 +707,10 @@
   // al servidor que la interrumpa (cancel_query). Termina con el error del
   // servidor (o, en MySQL, a veces con un resultado parcial): en la Salida
   // queda como "cancelada", no como error.
-  const runningExecutions = new Map<string, string>();
-  let cancelling = $state<Record<string, boolean>>({});
-
-  async function executeCancellable(
-    consoleId: string,
-    sql: string,
-    confirmed: DestructiveStatement | null,
-    page: PageRequest,
-  ): Promise<{ response: ExecuteQueryResponse; cancelled: boolean }> {
-    const executionId = crypto.randomUUID();
-    runningExecutions.set(consoleId, executionId);
-    try {
-      const response = await executeQuery(sql, confirmed, page, executionId);
-      return { response, cancelled: cancelling[consoleId] === true };
-    } finally {
-      if (runningExecutions.get(consoleId) === executionId) runningExecutions.delete(consoleId);
-      const { [consoleId]: _done, ...rest } = cancelling;
-      cancelling = rest;
-    }
-  }
-
-  function cancelExecution(consoleId: string): boolean {
-    const executionId = runningExecutions.get(consoleId);
-    if (!executionId) return false;
-    if (!cancelling[consoleId]) {
-      cancelling = { ...cancelling, [consoleId]: true };
-      void cancelQuery(executionId);
-    }
-    return true;
-  }
+  const executions = createExecutionSession();
+  const cancelling = executions.cancelling;
+  const executeCancellable = executions.run;
+  const cancelExecution = executions.cancel;
 
   const CATALOG_DDL = new Set(["create", "drop", "alter", "rename", "comment"]);
 
@@ -838,7 +766,7 @@
     }
     applyExecuteQueryResponse(key, sql, response, paging);
     if (response.type === "completed") {
-      selectTab(consoleId, response.result.type === "resultSet" ? key : "output");
+      selectTab(consoleId, response.result.type === "resultSet" ? key : OUTPUT_TAB);
       await refreshAfterDdl(sql, response.result, cancelled);
     }
   }
@@ -1287,7 +1215,7 @@
       const message = $t("workspace.output.scriptInvalid", { index: invalid + 1, error: checks[invalid].error ?? "" });
       appendLog(consoleId, { kind: "error", text: message });
       finishQueryExecution(consoleId, sql, { type: "error", message });
-      selectTab(consoleId, "output");
+      selectTab(consoleId, OUTPUT_TAB);
       return;
     }
     const confirmations = checks.map((check) => check.confirmation ?? null);
@@ -1374,7 +1302,7 @@
     }
 
     recordQuery(profileId, { sql, at: startedAt, durationMs: performance.now() - started, outcome });
-    selectTab(consoleId, outcome === "error" || !lastResultTab ? "output" : lastResultTab);
+    selectTab(consoleId, outcome === "error" || !lastResultTab ? OUTPUT_TAB : lastResultTab);
   }
 
   // La confirmacion del guard llama aqui. takeQueryConfirmation() retira el
@@ -1628,7 +1556,7 @@
         outputLog={activeConsole ? ($executionLog[activeConsole.id] ?? []) : []}
         consoleRunning={liveExecution.isExecuting}
         oncancelquery={() => activeConsole && cancelExecution(activeConsole.id)}
-        cancellingQuery={!!activeConsole && cancelling[activeConsole.id] === true}
+        cancellingQuery={!!activeConsole && $cancelling[activeConsole.id] === true}
         tabs={resultTabs}
         activeTab={selectedTab}
         onselecttab={(tab) => activeConsole && selectTab(activeConsole.id, tab)}
