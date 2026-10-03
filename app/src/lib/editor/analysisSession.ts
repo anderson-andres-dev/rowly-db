@@ -116,34 +116,34 @@ export function analysisDiagnostics(
   });
 }
 
-// Los resultados del analisis por texto de sentencia, para el catalogo y el
+// Lo que del contexto de la conexion (ConnectionEngineContext) fija lo que
+// dijo el analisis: otra conexion (aunque sea el mismo perfil) u otros
+// schemas cargados, otros resultados. null sin conexion.
+export interface AnalysisContext {
+  generation: number;
+  schemaEpoch: number;
+}
+
+// Los resultados del analisis por texto de sentencia, para el contexto y el
 // motor vigentes. Viven fuera del editor: cada pestaña monta su propio editor,
 // y con la cache adentro volver a una pestaña reanalizaba el documento entero
-// en el backend. Por conexion tambien (dos conexiones del mismo motor con el
-// catalogo todavia vacio no comparten resultados) y por las tablas que crea el
-// documento: con otras, lo que se dijo de una sentencia cambia.
+// en el backend. Una sola a la vez: la de otro contexto se suelta entera, asi
+// que reconectar no la hace crecer (el tope por entradas esta en
+// sqlAnalysis.ts). Tambien cuentan las tablas que crea el documento: con
+// otras, lo que se dijo de una sentencia cambia.
 let shared: {
-  profileId: string | null;
-  tables: unknown;
+  context: AnalysisContext | null;
   engine: SqlProfile;
   created: string;
   cache: Map<string, unknown>;
 } | null = null;
 
-export function analysisCacheFor<Raw>(
-  profileId: string | null,
-  tables: unknown,
-  engine: SqlProfile,
-  created: string,
-): Map<string, Raw> {
-  if (
-    !shared ||
-    shared.profileId !== profileId ||
-    shared.tables !== tables ||
-    shared.engine !== engine ||
-    shared.created !== created
-  ) {
-    shared = { profileId, tables, engine, created, cache: new Map() };
+const sameContext = (a: AnalysisContext | null, b: AnalysisContext | null) =>
+  a === b || (!!a && !!b && a.generation === b.generation && a.schemaEpoch === b.schemaEpoch);
+
+export function analysisCacheFor<Raw>(context: AnalysisContext | null, engine: SqlProfile, created: string): Map<string, Raw> {
+  if (!shared || !sameContext(shared.context, context) || shared.engine !== engine || shared.created !== created) {
+    shared = { context, engine, created, cache: new Map() };
   }
   return shared.cache as Map<string, Raw>;
 }
@@ -151,14 +151,15 @@ export function analysisCacheFor<Raw>(
 export interface AnalysisSessionOptions {
   view: () => EditorView | undefined;
   text: Text;
-  // analyze_sql; reemplazable en las pruebas.
-  analyze?: (statements: string[], created: string[]) => Promise<AnalysisDiagnostic[][]>;
+  // analyze_sql; reemplazable en las pruebas. El backend rechaza lo pedido
+  // con otro contexto: se descarta y se vuelve a pedir con el nuevo.
+  analyze?: (statements: string[], created: string[], context: AnalysisContext | null) => Promise<AnalysisDiagnostic[][]>;
 }
 
 export interface AnalysisSession {
-  // Otra conexion, otro catalogo u otro motor: los nombres se vuelven a
+  // Otra conexion, otros schemas u otro motor: los nombres se vuelven a
   // revisar. Con los mismos no hace nada.
-  setContext(profileId: string | null, tables: unknown, engine: SqlProfile): void;
+  setContext(context: AnalysisContext | null, engine: SqlProfile): void;
   // Un cambio del documento: se reanaliza lo que cambio tras la pausa.
   noteChanges(changes: ChangeSet, statementsChanged: Region | null): void;
   schedule(): void;
@@ -170,16 +171,22 @@ export interface AnalysisSession {
 export function createAnalysisSession(options: AnalysisSessionOptions): AnalysisSession {
   const analyze =
     options.analyze ??
-    ((statements, created) => invoke<AnalysisDiagnostic[][]>("analyze_sql", { statements, created }));
+    ((statements, created, context) =>
+      invoke<AnalysisDiagnostic[][]>("analyze_sql", {
+        statements,
+        created,
+        generation: context?.generation ?? 0,
+        schemaEpoch: context?.schemaEpoch ?? 0,
+      }));
   // Las tablas que crea el documento (sqlCreatedTables.ts), para que el
   // analisis no las de por inexistentes. Se vuelven a buscar en cada ronda.
   let createdNames: string[] = [];
   let createdKey = "";
-  let context: { profileId: string | null; tables: unknown; engine: SqlProfile } | null = null;
+  let current: { context: AnalysisContext | null; engine: SqlProfile } | null = null;
 
   const runner: AnalysisRunner<AnalysisDiagnostic[]> = new AnalysisRunner<AnalysisDiagnostic[]>({
     view: options.view,
-    analyze: (statements) => analyze(statements, createdNames),
+    analyze: (statements) => analyze(statements, createdNames, current?.context ?? null),
     toDiagnostics: (start, statement, found) => analysisDiagnostics(start, statement, found, options.text),
     prepare: () => {
       const view = options.view();
@@ -189,17 +196,19 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
       if (key === createdKey) return;
       createdNames = names;
       createdKey = key;
-      if (context) runner.useCache(analysisCacheFor(context.profileId, context.tables, context.engine, createdKey));
+      if (current) runner.useCache(analysisCacheFor(current.context, current.engine, createdKey));
       runner.markAllDirty();
     },
   });
   runner.markAllDirty();
 
   return {
-    setContext(profileId, tables, engine) {
-      if (context && context.profileId === profileId && context.tables === tables && context.engine === engine) return;
-      context = { profileId, tables, engine };
-      runner.useCache(analysisCacheFor(profileId, tables, engine, createdKey));
+    setContext(context, engine) {
+      if (current && sameContext(current.context, context) && current.engine === engine) return;
+      // Una copia: el objeto del store puede cambiar de identidad sin cambiar
+      // de contexto.
+      current = { context: context && { generation: context.generation, schemaEpoch: context.schemaEpoch }, engine };
+      runner.useCache(analysisCacheFor(current.context, engine, createdKey));
       runner.markAllDirty();
       runner.schedule();
     },

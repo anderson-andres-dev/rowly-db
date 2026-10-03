@@ -34,7 +34,8 @@ hereda la certificación de otro parche.
 
 El estado **soportada / en gracia / sin soporte** es otro dato: describe el
 ciclo de vida del fabricante, no si una sentencia es segura. Actualmente lo
-calcula `engines/vendorSupport.ts` a partir de `vendorSupport.json`; no debe
+calcula el backend al conectar (`app/src-tauri/src/engine_context.rs`, con
+`tools/support/vendor-support.json`) y llega en el contexto de §2; no debe
 activar ni desactivar capacidades SQL. Una extensión de la tienda tampoco
 puede declarar un motor o una línea de soporte.
 

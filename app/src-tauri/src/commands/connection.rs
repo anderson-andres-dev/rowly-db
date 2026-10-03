@@ -1,10 +1,12 @@
 //! Conectar, desconectar, probar una conexion y las contrasenas guardadas.
 
+use crate::engine_context::{ConnectionEngineContext, SessionMode};
 use crate::state::{ActiveConnection, AppState, build_catalog, uses_no_backslash_escapes};
 use crate::{credentials, drivers};
 use khipu_driver_core::{ConnectionConfig, ConnectionErrorKind, DriverError, Message};
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::sync::atomic::Ordering;
 /// Why connecting (or testing a connection) failed: the cause, which the
 /// frontend explains in the app's language, and the raw detail to copy.
 #[derive(Debug, Serialize)]
@@ -40,8 +42,13 @@ pub async fn connect(
     let mut schemas = BTreeMap::new();
     schemas.insert(connected.default_schema.clone(), connected.default_objects);
     let catalog = build_catalog(&schemas);
-    let no_backslash_escapes =
-        uses_no_backslash_escapes(&*connected.connector, kind.dialect()).await;
+    let session_mode = SessionMode {
+        no_backslash_escapes: uses_no_backslash_escapes(&*connected.connector, kind.dialect())
+            .await,
+    };
+    let generation = state.generations.fetch_add(1, Ordering::Relaxed) + 1;
+    let context =
+        ConnectionEngineContext::new(generation, kind.dialect(), connected.server, session_mode);
 
     state
         .connections
@@ -53,8 +60,7 @@ pub async fn connect(
                 connector: connected.connector,
                 dialect: kind.dialect(),
                 production: production.unwrap_or(false),
-                no_backslash_escapes,
-                server_version: connected.server_version,
+                context,
                 tls: connected.tls,
                 default_schema: connected.default_schema,
                 available_schemas: connected.available_schemas,

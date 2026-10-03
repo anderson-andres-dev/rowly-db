@@ -1,3 +1,5 @@
+import type { ConnectionDriver } from "$lib/connections";
+
 export interface CatalogColumn {
   name: string;
   dataType: string;
@@ -170,8 +172,30 @@ export interface TestConnectionReport {
   tls: TlsStatus;
 }
 
+export type SupportStatus = "supported" | "grace" | "unsupported" | "newer";
+
+// Lo que el backend sabe del motor de la conexion, armado una vez al
+// conectar (ConnectionEngineContext en src-tauri/src/engine_context.rs). De
+// solo lectura: el frontend no deduce motor ni version de la etiqueta.
+export interface ConnectionEngineContext {
+  // Sube en cada conexion: lo pedido con otra ya no vale.
+  generation: number;
+  // El motor con que se parte, analiza y protege el SQL (el del perfil).
+  engineId: ConnectionDriver;
+  // El servidor como lo detecto el driver; `label` es solo para mostrar.
+  server: { engine: ConnectionDriver; version: number[]; label: string };
+  sessionMode: { noBackslashEscapes: boolean };
+  // La linea de comportamiento efectiva (tools/test-dbs/lines.json).
+  line: string | null;
+  // Sube cuando cambian los schemas cargados.
+  schemaEpoch: number;
+  // Ciclo de vida del fabricante: solo para mostrar.
+  support: { status: SupportStatus; release?: string; eol?: string } | null;
+  verification: "verified" | "unverified";
+}
+
 export interface DatabaseExplorer {
-  serverVersion: string;
+  context: ConnectionEngineContext;
   tls: TlsStatus;
   defaultSchema: string;
   availableSchemas: string[];

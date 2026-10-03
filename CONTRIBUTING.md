@@ -57,7 +57,7 @@ cargo test -p rowly-server-tests -- --ignored --test-threads=1
 
 `tools/test-dbs/lines.sh` checks version-line boundaries. CI runs all of this on every engine PR, for every verified exact release (`.github/workflows/sql-engine.yml`); the commands and rules are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Do not advertise a release as verified without its complete evidence.
 
-When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `app/src/lib/engines/vendorSupport.json` and update the table in [SQL_ENGINE.md, §5](SQL_ENGINE.md#5-version-lines) from the same evidence.
+When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `tools/support/vendor-support.json` and update the table in [SQL_ENGINE.md, §5](SQL_ENGINE.md#5-version-lines) from the same evidence.
 
 ## Adding a database engine
 
@@ -73,7 +73,7 @@ It creates the engine's `EngineDefinition` in `crates/engine/src/dialects/<id>.r
 2. **The definition.** Write every field of `EngineDefinition` with the engine's own answer, proven against its server, and remove the `PENDIENTE` block. An inherited value nobody tested is an engine that silently follows another one's rules. Valid syntax its parser cannot read goes in `unparsed_syntax`.
 3. **`cargo test`** names the rest of the Rust side: `DatabaseKind` and its driver in `app/src-tauri/src/drivers.rs` (a new protocol is a crate in `crates/drivers/<protocol>` implementing `DbConnector`), `Engine` in `crates/server-tests`, and the shared contract.
 4. **Frontend.** `ConnectionDriver` in `app/src/lib/connections.ts` (name, logo, default port), its profile in `app/src/lib/engines/<id>.ts`, `ENGINES` and the `FIXTURES` of `contract.test.ts`. Its identifier quote, backslash rule and executable comments must match `tests/engines/contract.json`; then remove `"pending"`.
-5. **Servers and support.** Lines, probes and verified releases pinned by digest in `tools/test-dbs/lines.json` (and its container), vendor dates in `app/src/lib/engines/vendorSupport.json`.
+5. **Servers and support.** Lines, probes and verified releases pinned by digest in `tools/test-dbs/lines.json` (and its container), vendor dates in `tools/support/vendor-support.json`.
 6. **The matrix.** `node tools/inventory/coverage.mjs` lists every `SQL_ENGINE.md` row without an answer for the engine: a test that includes it, an `N/A` with a reason, or a declared gap (`gapEngines`).
 
 Then run the engine gate on every exact release you intend to advertise and check that existing engines remain green. An integration without the full matrix remains experimental, not verified support.

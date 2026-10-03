@@ -10,7 +10,7 @@ pub struct ServerVersion(pub u32);
 /// Compatibility floor: the oldest major version introspection is written
 /// against, the one that introduced `pg_sequence`, `relispartition` and
 /// declarative partitioning. It is not a support threshold: vendor support
-/// comes from the support window (SQL_ENGINE.md §5.2, `vendorSupport.json`)
+/// comes from the support window (SQL_ENGINE.md §5.2, `tools/support/vendor-support.json`)
 /// and verification from `verified` in `tools/test-dbs/lines.json`. Older
 /// servers still connect, with their line, and load what they can, with a
 /// warning.
@@ -23,18 +23,26 @@ impl ServerVersion {
         Self(raw.trim().parse().unwrap_or(0))
     }
 
-    pub fn display(&self) -> String {
-        // Since 10 the number is major * 10000 + minor; before, 9.6.24 was
-        // 90624, with a two-component major.
+    /// Since 10 the number is major * 10000 + minor; before, 9.6.24 was
+    /// 90624, with a two-component major.
+    pub fn numbers(&self) -> Vec<u32> {
         if self.0 >= 100_000 {
-            format!("PostgreSQL {}.{}", self.0 / 10_000, self.0 % 10_000)
+            vec![self.0 / 10_000, self.0 % 10_000]
         } else {
-            format!(
-                "PostgreSQL {}.{}.{}",
-                self.0 / 10_000,
-                (self.0 / 100) % 100,
-                self.0 % 100
-            )
+            vec![self.0 / 10_000, (self.0 / 100) % 100, self.0 % 100]
+        }
+    }
+
+    pub fn display(&self) -> String {
+        let numbers: Vec<String> = self.numbers().iter().map(u32::to_string).collect();
+        format!("PostgreSQL {}", numbers.join("."))
+    }
+
+    pub fn identity(&self) -> khipu_driver_core::ServerIdentity {
+        khipu_driver_core::ServerIdentity {
+            engine: "postgres",
+            version: self.numbers(),
+            label: self.display(),
         }
     }
 
@@ -81,6 +89,15 @@ mod tests {
         assert_eq!(ServerVersion(160002).display(), "PostgreSQL 16.2");
         assert_eq!(ServerVersion(100023).display(), "PostgreSQL 10.23");
         assert_eq!(ServerVersion(90624).display(), "PostgreSQL 9.6.24");
+    }
+
+    #[test]
+    fn the_identity_carries_the_numbers_not_only_the_label() {
+        let identity = ServerVersion(130023).identity();
+        assert_eq!(identity.engine, "postgres");
+        assert_eq!(identity.version, vec![13, 23]);
+        assert_eq!(identity.label, "PostgreSQL 13.23");
+        assert_eq!(ServerVersion(90624).identity().version, vec![9, 6, 24]);
     }
 
     #[test]

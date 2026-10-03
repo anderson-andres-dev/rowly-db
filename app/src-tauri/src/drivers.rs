@@ -1,6 +1,6 @@
 use khipu_driver_core::{
     ConnectionConfig, DbConnector, DriverError, QueryExecutionOptions, QueryExecutionResult,
-    SchemaObjects, TlsStatus,
+    SchemaObjects, ServerIdentity, TlsStatus,
 };
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
@@ -35,7 +35,7 @@ impl DatabaseKind {
 /// `execute_query` and the database explorer keep using the same pool.
 pub struct ConnectedDatabase {
     pub connector: Arc<dyn DbConnector>,
-    pub server_version: String,
+    pub server: ServerIdentity,
     pub tls: TlsStatus,
     /// The schema the profile resolves unqualified names against (see
     /// `DbConnector::current_schema`); always loaded, never hidden.
@@ -81,7 +81,7 @@ async fn report<C: DbConnector>(connector: C) -> Result<TestConnectionReport, Dr
     };
 
     Ok(TestConnectionReport {
-        server_version: connector.server_version(),
+        server_version: connector.server().label,
         default_schema: connector.current_schema().await.ok(),
         latency_ms,
         tls: connector.tls_status(),
@@ -116,7 +116,7 @@ async fn open<C: DbConnector + 'static>(connector: C) -> Result<ConnectedDatabas
     }
 
     Ok(ConnectedDatabase {
-        server_version: connector.server_version(),
+        server: connector.server(),
         tls: connector.tls_status(),
         connector: Arc::new(connector),
         default_schema,

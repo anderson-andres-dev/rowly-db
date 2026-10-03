@@ -152,7 +152,7 @@
         : explorer.tls.encrypted === false
           ? $t("explorer.tls.unencrypted")
           : $t("explorer.tls.unknown");
-    return `${connectionLabel}\n${explorer.serverVersion} · ${tls}`;
+    return `${connectionLabel}\n${explorer.context.server.label} · ${tls}`;
   });
   const nodes = $derived(
     explorer ? buildExplorerTree(explorer, filter, $pinnedTables[profileId] ?? [], $t("explorer.pinned")) : [],
