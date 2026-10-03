@@ -131,16 +131,25 @@ mod tests {
     use khipu_engine::Dialect;
 
     /// Los nombres que manda el frontend (`ConnectionDriver`, en
-    /// app/src/lib/connections.ts), cada uno con su motor propio.
+    /// app/src/lib/connections.ts), los de tests/engines/contract.json: cada
+    /// uno llega como su motor propio, y no hay otro.
     #[test]
     fn cada_motor_del_frontend_llega_como_el_suyo() {
-        for (name, dialect) in [
-            ("mysql", Dialect::MySql),
-            ("mariadb", Dialect::MariaDb),
-            ("postgres", Dialect::Postgres),
-        ] {
-            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(name)).unwrap();
-            assert_eq!(kind.dialect(), dialect, "{name}");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/engines/contract.json");
+        let contract: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let ids: Vec<&str> = contract["engines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|engine| engine["id"].as_str().unwrap())
+            .collect();
+        for id in &ids {
+            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(id)).unwrap();
+            assert_eq!(kind.dialect().id(), *id);
         }
+        let all: Vec<&str> = Dialect::ALL.iter().map(|dialect| dialect.id()).collect();
+        assert_eq!(all, ids);
     }
 }

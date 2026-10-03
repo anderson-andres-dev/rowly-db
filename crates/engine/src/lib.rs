@@ -149,6 +149,29 @@ mod contract {
         }
     }
 
+    /// tests/engines/contract.json: lo mismo que deciden el backend y el
+    /// frontend para cada motor, en el mismo orden.
+    #[test]
+    fn coincide_con_el_contrato_compartido_con_el_frontend() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/engines/contract.json");
+        let contract: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let ours: Vec<serde_json::Value> = ALL
+            .iter()
+            .map(|dialect| {
+                let definition = dialect.definition();
+                serde_json::json!({
+                    "id": definition.id,
+                    "identifierQuote": definition.identifier_quote.to_string(),
+                    "backslashEscapes": definition.backslash_escapes,
+                    "executableComments": definition.executable_comments,
+                })
+            })
+            .collect();
+        assert_eq!(contract["engines"].as_array().unwrap(), &ours);
+    }
+
     #[test]
     fn cada_motor_tiene_su_identidad() {
         let ids: Vec<&str> = ALL.iter().map(|dialect| dialect.id()).collect();
