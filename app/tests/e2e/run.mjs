@@ -357,8 +357,9 @@ flow(`${RECONNECTIONS} reconexiones alternando MySQL y PostgreSQL: cada una con 
   // Sin fuga por reconexion, desde el calentamiento: el heap de JavaScript
   // que queda vivo tras recolectar, el backend y lo montado en el DOM. El
   // PSS del WebKitWebProcess no entra: sube con la memoria que el recolector
-  // ya libero y WebKit retiene, y se aplana solo (medido hasta 1500
-  // reconexiones, con JIT y sin el, con el heap vivo plano; SQL_ENGINE §9).
+  // ya libero y WebKit retiene, y se aplana solo hacia las 600-700
+  // reconexiones (medido hasta 1500, con JIT y sin el, con el heap vivo
+  // plano). Se informa en la salida.
   const first = samples[0];
   const last = samples[samples.length - 1];
   const grew = (what, before, after, allowed) => {
