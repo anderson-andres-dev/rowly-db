@@ -2,7 +2,7 @@
 
 English | [Español](README.es.md)
 
-Reproducible measurements that every consolidation phase is compared against. They are **regression gates**, not latency promises: each phase compares itself with the reference on the same machine, and a result within the reference's measured spread is repeated before any decision. Benchmarks are kept apart from the functional tests so that a loaded shared runner cannot fail a pull request.
+Reproducible measurements that every performance-sensitive change is compared against. They are **regression gates**, not latency promises: each change is compared with the reference on the same machine, and a result within the reference's measured spread is repeated before any decision. Benchmarks are kept apart from the functional tests so that a loaded shared runner cannot fail a pull request.
 
 ```text
 tools/bench/
@@ -13,6 +13,18 @@ tools/bench/
 crates/server-tests/examples/catalog_bench.rs
                             connect, introspection, guard and analysis per engine (real servers)
 ```
+
+## Budget
+
+| Scenario | What is measured | Rule |
+|---|---|---|
+| Cold and warm startup, 20 runs | Time to window, PSS once settled, initial JS | No more than 5 % over the reference median; within the machine's spread, repeat before deciding |
+| Five minutes without interaction, with and without a connection | CPU, memory, timers, backend calls | No growing slope; no work or network from disabled extensions |
+| Typing in 10,000 lines and opening a 1 M-line document | Per-keystroke index, analysis and context cost | Within the reference spread; large documents get no more than 10 % worse and never block the UI |
+| 300 reconnections and 300 console cycles | Live heap, objects, backend, mounted editors and styles | After warm-up, no sustained slope; any growth is explained and bounded (see [Resource cycles](#resource-cycles)) |
+| MySQL, MariaDB and PostgreSQL with small and large catalogs | Connection, introspection, analysis | A UI change or a disabled extension adds no SQL queries |
+
+The percentages are **regression** gates, not latency promises on every machine. A failure is reproduced on the same machine and comes with a CPU, memory or frame trace.
 
 ## Running
 
@@ -45,6 +57,7 @@ Compare only against a reference taken on the same machine and system:
 |---|---|---|
 | `baseline/v0.3.0` | The published release binary (`rowly-db-bin 0.3.0-1`), with Beekeeper Studio and the engine benchmark | Omarchy, kernel 7.2.5, profile `performance` |
 | `baseline/v0.3.0-cachyos` | `v0.3.0` built from its tag (`npx tauri build --no-bundle`), the same way as the branch it is compared with | CachyOS, kernel 7.1.8, profile `balanced` (same CPU) |
+| `baseline/c5-cachyos` | The end of the consolidation, measured alternating with `v0.3.0-cachyos` in the same session; `node-editor.json` is the median of 5 runs | CachyOS, kernel 7.1.8, `balanced` profile |
 
 `node-editor.json` has no dispersion field, so a single run against another single run can flag noise at the microsecond scale. Before calling it a regression, repeat both sides (five alternating runs) and compare medians.
 

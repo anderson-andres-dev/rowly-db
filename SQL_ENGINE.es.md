@@ -283,6 +283,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | Los cuerpos de las rutinas de PostgreSQL no se analizan (A5) | P2 | |
 | Unicode más allá de `SELECT INTO`: nombres, posiciones, UTF-8 ↔ UTF-16 entre Rust y el editor (A8) | P2 | |
 | No se prueba que `VerifyCa` y `VerifyIdentity` acepten una CA configurada (D5): ningún servidor de prueba usa un certificado de una CA propia, y las imágenes de PostgreSQL y MariaDB 10.6 no ofrecen TLS | P2 | Generar una CA en `tools/test-dbs` y servir su certificado. |
+| El fuzz del guard en PostgreSQL 13 genera 37 casos peligrosos de 4000, y la prueba exige más de 30 para medir algo (S2) | P2 | Poco margen: un cambio del corpus o de los esqueletos puede hacerla fallar sin que el guard cambie. Ampliar los esqueletos de PostgreSQL o fijar el mínimo por versión. |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | Los vectores de MySQL 9 se ven como `[1,2.5,-3]`. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
 
