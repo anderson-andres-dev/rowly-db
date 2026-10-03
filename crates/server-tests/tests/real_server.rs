@@ -5,18 +5,24 @@ use rowly_server_tests::*;
 struct Entry {
     drop: Option<String>,
     call: Option<String>,
+    /// `-- needs: <capacidad>`: la entrada usa algo que agrega una linea
+    /// (`capability`); en las anteriores es N/A, si el servidor la rechaza.
+    needs: Option<String>,
     sql: String,
 }
 
 fn parse(entry: &str) -> Entry {
     let mut drop = None;
     let mut call = None;
+    let mut needs = None;
     let mut body = Vec::new();
     for line in entry.lines() {
         if let Some(rest) = line.strip_prefix("-- drop:") {
             drop = Some(rest.trim().to_string());
         } else if let Some(rest) = line.strip_prefix("-- call:") {
             call = Some(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("-- needs:") {
+            needs = Some(rest.trim().to_string());
         } else {
             body.push(line);
         }
@@ -24,6 +30,7 @@ fn parse(entry: &str) -> Entry {
     Entry {
         drop,
         call,
+        needs,
         sql: body.join("\n").trim().to_string(),
     }
 }
@@ -63,6 +70,23 @@ async fn the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_serve
                     Ok(_) => {}
                 }
             }
+            if let Some(name) = &entry.needs {
+                match conn.lacks(engine, "A1", name, &entry.sql).await {
+                    Err(message) => {
+                        failures.push(message);
+                        continue;
+                    }
+                    // N/A en esta version; el guard la acepta igual.
+                    Ok(true) => {
+                        if let Err(message) = classification(engine, &entry.sql) {
+                            failures
+                                .push(format!("{engine:?} el guard rechazo: {head}\n  {message}"));
+                        }
+                        continue;
+                    }
+                    Ok(false) => {}
+                }
+            }
             match conn.guarded(engine, &entry.sql).await {
                 Err(message) => {
                     failures.push(format!("{engine:?} el guard rechazo: {head}\n  {message}"))
@@ -88,6 +112,18 @@ async fn the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_serve
         }
     }
     assert!(failures.is_empty(), "\n{}\n", failures.join("\n"));
+}
+
+/// La definicion de la fila de un SHOW CREATE. NULL quiere decir que el
+/// usuario de prueba no puede ver el cuerpo: es el entorno, no el motor.
+fn shown_definition(shown: &[Vec<Option<String>>], column: usize) -> String {
+    let row = shown.first().expect("SHOW CREATE sin filas");
+    row[column].clone().unwrap_or_else(|| {
+        panic!(
+            "SHOW CREATE devolvio la definicion NULL de {:?}: el usuario de prueba no puede ver el cuerpo (permisos de tools/test-dbs/up.sh)",
+            row.first().cloned().flatten()
+        )
+    })
 }
 
 async fn rows_of(conn: &Conn, sql: &str) -> Vec<Vec<Option<String>>> {
@@ -117,7 +153,7 @@ async fn the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted()
             for row in routines {
                 let (kind, name) = (row[0].clone().unwrap(), row[1].clone().unwrap());
                 let shown = rows_of(&conn, &format!("SHOW CREATE {kind} sakila.`{name}`")).await;
-                let definition = shown[0][2].clone().unwrap();
+                let definition = shown_definition(&shown, 2);
                 checked += 1;
                 if let Err(message) = classification(engine, &definition) {
                     failures.push(format!(
@@ -155,7 +191,7 @@ async fn the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted()
             for row in rows_of(&conn, "SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = 'sakila'").await {
                 let name = row[0].clone().unwrap();
                 let shown = rows_of(&conn, &format!("SHOW CREATE TRIGGER sakila.`{name}`")).await;
-                let definition = shown[0][2].clone().unwrap();
+                let definition = shown_definition(&shown, 2);
                 checked += 1;
                 if let Err(message) = classification(engine, &definition) {
                     failures.push(format!("{engine:?} trigger {name}: el guard rechazo\n  {message}\n{definition}"));
@@ -169,7 +205,7 @@ async fn the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted()
             {
                 let name = row[0].clone().unwrap();
                 let shown = rows_of(&conn, &format!("SHOW CREATE VIEW sakila.`{name}`")).await;
-                let definition = shown[0][1].clone().unwrap();
+                let definition = shown_definition(&shown, 1);
                 checked += 1;
                 if let Err(message) = classification(engine, &definition) {
                     failures.push(format!(
@@ -570,10 +606,19 @@ fn mutate(rng: &mut Lcg, text: &str, fragments: &[&str], payload: &str) -> Strin
     text
 }
 
-fn skeletons(engine: Engine) -> Vec<String> {
+/// Las bases del fuzz: el corpus de rutinas que la version del servidor
+/// tiene (lo que es N/A no corre ni sano) y los ataques.
+fn skeletons(engine: Engine, version: &[u32]) -> Vec<String> {
     let mut list: Vec<String> = entries(routines_corpus(engine))
         .iter()
-        .map(|raw| parse(raw).sql)
+        .map(|raw| parse(raw))
+        .filter(|entry| {
+            entry
+                .needs
+                .as_ref()
+                .is_none_or(|name| version >= capability(engine, name).since.as_slice())
+        })
+        .map(|entry| entry.sql)
         .collect();
     list.extend(
         entries(attacks_corpus(engine))
@@ -597,7 +642,7 @@ async fn fuzzing_the_guard_against_the_real_servers_finds_no_second_statement() 
     let mut coverage = Vec::new();
     for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
-        let bases = skeletons(engine);
+        let bases = skeletons(engine, &conn.version());
         let fragments = if engine.is_mysql_family() {
             FRAGMENTS_MYSQL
         } else {
@@ -678,7 +723,7 @@ async fn real_sql(engine: Engine, conn: &Conn) -> Vec<(String, String)> {
         for row in rows_of(conn, "SELECT routine_type, routine_name FROM information_schema.routines WHERE routine_schema = 'sakila'").await {
             let (kind, name) = (row[0].clone().unwrap(), row[1].clone().unwrap());
             let shown = rows_of(conn, &format!("SHOW CREATE {kind} sakila.`{name}`")).await;
-            found.push((format!("{kind} {name}"), shown[0][2].clone().unwrap()));
+            found.push((format!("{kind} {name}"), shown_definition(&shown, 2)));
         }
         for row in rows_of(
             conn,
@@ -688,7 +733,7 @@ async fn real_sql(engine: Engine, conn: &Conn) -> Vec<(String, String)> {
         {
             let name = row[0].clone().unwrap();
             let shown = rows_of(conn, &format!("SHOW CREATE TRIGGER sakila.`{name}`")).await;
-            found.push((format!("trigger {name}"), shown[0][2].clone().unwrap()));
+            found.push((format!("trigger {name}"), shown_definition(&shown, 2)));
         }
         for row in rows_of(
             conn,
@@ -698,7 +743,7 @@ async fn real_sql(engine: Engine, conn: &Conn) -> Vec<(String, String)> {
         {
             let name = row[0].clone().unwrap();
             let shown = rows_of(conn, &format!("SHOW CREATE VIEW sakila.`{name}`")).await;
-            found.push((format!("vista {name}"), shown[0][1].clone().unwrap()));
+            found.push((format!("vista {name}"), shown_definition(&shown, 1)));
         }
     } else {
         for row in rows_of(conn, "SELECT pg_get_functiondef(p.oid), p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p') AND l.lanname <> 'c' ORDER BY p.oid").await {
@@ -757,14 +802,32 @@ fn is_syntax_error(result: &khipu_driver_core::QueryExecutionResult) -> bool {
     text.contains("\"1064\"") || text.contains("\"42601\"")
 }
 
-fn mixed_statements(text: &str) -> Vec<String> {
+/// Las sentencias del fixture, cada una con la capacidad que necesita: la
+/// clave opcional `needs` da pares `[comienzo de la sentencia, capacidad]`, y
+/// cada comienzo tiene que encontrar exactamente una sentencia.
+fn mixed_statements(text: &str) -> Vec<(String, Option<String>)> {
     let value: serde_json::Value = serde_json::from_str(text).expect("fixture JSON");
-    value["statements"]
+    let statements: Vec<String> = value["statements"]
         .as_array()
         .expect("statements")
         .iter()
         .map(|statement| statement.as_str().expect("texto").to_string())
-        .collect()
+        .collect();
+    let mut needs: Vec<Option<String>> = vec![None; statements.len()];
+    for pair in value["needs"].as_array().into_iter().flatten() {
+        let (start, name) = (pair[0].as_str().unwrap(), pair[1].as_str().unwrap());
+        let found: Vec<usize> = (0..statements.len())
+            .filter(|&at| statements[at].starts_with(start))
+            .collect();
+        assert_eq!(
+            found.len(),
+            1,
+            "needs «{start}»: {} sentencias",
+            found.len()
+        );
+        needs[found[0]] = Some(name.to_string());
+    }
+    statements.into_iter().zip(needs).collect()
 }
 
 /// Las consolas mezcladas del corpus compartido (las que prueba el divisor):
@@ -805,7 +868,10 @@ async fn the_mixed_console_corpus_runs_through_guard_and_server() {
         "COPY ",
     ];
     let mut failures = Vec::new();
-    for (engine, text) in fixtures {
+    for (engine, text) in fixtures
+        .into_iter()
+        .filter(|(engine, _)| engine_selected(*engine))
+    {
         let conn = Conn::open(engine).await;
         let setup: &[&str] = if engine.is_mysql_family() {
             &["DROP DATABASE IF EXISTS core", "CREATE DATABASE core"]
@@ -820,12 +886,28 @@ async fn the_mixed_console_corpus_runs_through_guard_and_server() {
                 error_text(&result)
             );
         }
-        for statement in mixed_statements(text) {
+        for (statement, needs) in mixed_statements(text) {
             let head: String = statement
                 .chars()
                 .take(70)
                 .collect::<String>()
                 .replace('\n', " ");
+            if let Some(name) = &needs {
+                match conn.lacks(engine, "A1", name, &statement).await {
+                    Err(message) => {
+                        failures.push(message);
+                        continue;
+                    }
+                    Ok(true) => {
+                        if let Err(message) = classification(engine, &statement) {
+                            failures
+                                .push(format!("{engine:?} el guard rechazo: {head}\n  {message}"));
+                        }
+                        continue;
+                    }
+                    Ok(false) => {}
+                }
+            }
             match conn.guarded(engine, &statement).await {
                 Err(message) => {
                     failures.push(format!("{engine:?} el guard rechazo: {head}\n  {message}"))
@@ -1083,8 +1165,10 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
             assert!(!is_error(&result), "{sql}: {}", error_text(&result));
         }
         for mut template in entries(valid_corpus(engine)) {
-            // Cabeceras: `-- only: mysql|mariadb` y `-- no-exec`.
+            // Cabeceras: `-- only: mysql|mariadb`, `-- no-exec` y
+            // `-- needs: <capacidad>`.
             let mut execute = true;
+            let mut needs = None;
             while let Some(line) = template.lines().next().filter(|l| l.starts_with("-- ")) {
                 if let Some(only) = line.strip_prefix("-- only:") {
                     let wanted = only.trim();
@@ -1096,6 +1180,8 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
                     }
                 } else if line == "-- no-exec" {
                     execute = false;
+                } else if let Some(name) = line.strip_prefix("-- needs:") {
+                    needs = Some(name.trim().to_string());
                 } else {
                     break;
                 }
@@ -1124,6 +1210,16 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
             if !execute {
                 continue;
             }
+            if let Some(name) = &needs {
+                match conn.lacks(engine, "A1", name, &sql).await {
+                    Err(message) => {
+                        failures.push(message);
+                        continue;
+                    }
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                }
+            }
             let result = conn.raw(&sql).await;
             if is_error(&result) && !per_connection.iter().any(|prefix| sql.starts_with(prefix)) {
                 failures.push(format!(
@@ -1147,42 +1243,50 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
 /// Procedures con todas las formas de parametro que el autocompletado debe
 /// escribir bien: sin parametros, IN implicito, OUT, INOUT, DEFAULT, VARIADIC,
 /// sin nombre, tipos con comas, nombres con espacios, guiones, mayusculas y
-/// palabras reservadas. (nombre, CREATE).
-fn completion_fixtures(engine: Engine) -> Vec<(&'static str, &'static str)> {
+/// palabras reservadas. (nombre, CREATE, capacidad que necesita).
+fn completion_fixtures(engine: Engine) -> Vec<(&'static str, &'static str, Option<&'static str>)> {
     if engine.is_mysql_family() {
         vec![
-            ("sim_none", "CREATE PROCEDURE sim_none() BEGIN END"),
+            ("sim_none", "CREATE PROCEDURE sim_none() BEGIN END", None),
             (
                 "sim_in",
                 "CREATE PROCEDURE sim_in(IN a INT, IN b VARCHAR(20)) BEGIN SELECT a, b; END",
+                None,
             ),
             (
                 "sim_implicit",
                 "CREATE PROCEDURE sim_implicit(a INT, b DATE) BEGIN END",
+                None,
             ),
             (
                 "sim_out",
                 "CREATE PROCEDURE sim_out(IN a INT, OUT total DECIMAL(10,2)) BEGIN SET total = 1; END",
+                None,
             ),
             (
                 "sim_inout",
                 "CREATE PROCEDURE sim_inout(INOUT counter INT) BEGIN SET counter = 1; END",
+                None,
             ),
             (
                 "sim_types",
                 "CREATE PROCEDURE sim_types(IN e ENUM('a','b'), IN d DECIMAL(8,2), IN s SET('x','y')) BEGIN END",
+                None,
             ),
             (
                 "Sim Mixto-1",
                 "CREATE PROCEDURE `Sim Mixto-1`(IN `Param Uno` INT, OUT `p-dos` INT) BEGIN SET `p-dos` = 1; END",
+                None,
             ),
             (
                 "SIM_UPPER",
                 "CREATE PROCEDURE SIM_UPPER(IN X INT) BEGIN END",
+                None,
             ),
             (
                 "order",
                 "CREATE PROCEDURE `order`(IN `select` INT) BEGIN END",
+                None,
             ),
         ]
     } else {
@@ -1190,46 +1294,57 @@ fn completion_fixtures(engine: Engine) -> Vec<(&'static str, &'static str)> {
             (
                 "sim_none",
                 "CREATE PROCEDURE rowly_test.sim_none() LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "sim_in",
                 "CREATE PROCEDURE rowly_test.sim_in(a int, b text) LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "sim_out",
                 "CREATE PROCEDURE rowly_test.sim_out(a int, OUT total numeric) LANGUAGE plpgsql AS $$ BEGIN total := 1; END $$",
+                Some("OUT parameters in procedures"),
             ),
             (
                 "sim_inout",
                 "CREATE PROCEDURE rowly_test.sim_inout(INOUT counter int) LANGUAGE plpgsql AS $$ BEGIN counter := 1; END $$",
+                None,
             ),
             (
                 "sim_default",
                 "CREATE PROCEDURE rowly_test.sim_default(a int, b int DEFAULT 5) LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "sim_unnamed",
                 "CREATE PROCEDURE rowly_test.sim_unnamed(int, text) LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "sim_variadic",
                 "CREATE PROCEDURE rowly_test.sim_variadic(a int, VARIADIC rest int[]) LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "sim_types",
                 "CREATE PROCEDURE rowly_test.sim_types(d numeric(8,2), t timestamp with time zone, j jsonb) LANGUAGE sql AS $$ SELECT 1 $$",
+                None,
             ),
             (
                 "Sim Mixto-1",
                 r#"CREATE PROCEDURE rowly_test."Sim Mixto-1"("Param Uno" int, OUT "p-dos" int) LANGUAGE plpgsql AS $$ BEGIN "p-dos" := 1; END $$"#,
+                Some("OUT parameters in procedures"),
             ),
             (
                 "SIM_Mayus",
                 r#"CREATE PROCEDURE rowly_test."SIM_Mayus"(x int) LANGUAGE sql AS $$ SELECT 1 $$"#,
+                None,
             ),
             (
                 "order",
                 r#"CREATE PROCEDURE rowly_test."order"("select" int) LANGUAGE sql AS $$ SELECT 1 $$"#,
+                None,
             ),
         ]
     }
@@ -1311,20 +1426,33 @@ async fn completion_calls_run_on_the_real_servers() {
     let mut checked = 0;
     for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
-        let fixtures = completion_fixtures(engine);
-        for (name, create) in &fixtures {
+        // Lo que la version no tiene es N/A (y el servidor tiene que
+        // rechazarlo): ni se crea ni se exige en el autocompletado.
+        let mut fixtures = Vec::new();
+        for (name, create, needs) in completion_fixtures(engine) {
             let drop = if engine.is_mysql_family() {
                 format!("DROP PROCEDURE IF EXISTS `{name}`")
             } else {
                 format!("DROP PROCEDURE IF EXISTS rowly_test.\"{name}\"")
             };
             let _ = conn.raw(&drop).await;
+            if let Some(capability) = needs {
+                match conn.lacks(engine, "G2", capability, create).await {
+                    Err(message) => {
+                        failures.push(message);
+                        continue;
+                    }
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                }
+            }
             let result = conn.raw(create).await;
             assert!(
                 !is_error(&result),
                 "{engine:?} {name}: {}",
                 error_text(&result)
             );
+            fixtures.push((name, create));
         }
         // MySQL: las de prueba en la base actual y Sakila en otra (con su
         // schema delante). Postgres: las de prueba fuera del schema actual.

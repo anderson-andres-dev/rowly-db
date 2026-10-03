@@ -52,6 +52,11 @@ done
 if selected mysql; then
   docker exec rowly-test-mysql mysql -uroot -prowly -e "GRANT SHOW_ROUTINE ON *.* TO 'rowly'@'%'" 2>/dev/null
 fi
+# MariaDB, hasta 11.2, solo al definidor o a quien lee mysql.proc; desde 11.3
+# basta con ALL sobre la base (incluye SHOW CREATE ROUTINE).
+if selected mariadb; then
+  docker exec rowly-test-mariadb mariadb -uroot -prowly -e "GRANT SELECT ON mysql.proc TO 'rowly'@'%'"
+fi
 
 if selected postgres; then
   pg() { docker exec -i rowly-test-postgres psql -v ON_ERROR_STOP=1 -q -U rowly "$@"; }

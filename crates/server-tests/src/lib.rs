@@ -36,6 +36,15 @@ impl Engine {
         self != Engine::Postgres
     }
 
+    /// Su nombre en ROWLY_ENGINES, lines.json y tests/sql.
+    pub fn name(self) -> &'static str {
+        match self {
+            Engine::MySql => "mysql",
+            Engine::MariaDb => "mariadb",
+            Engine::Postgres => "postgres",
+        }
+    }
+
     /// El contenedor de tools/test-dbs que lo sirve.
     pub fn container(self) -> &'static str {
         match self {
@@ -166,6 +175,47 @@ impl Conn {
         .map_err(|error| error.to_string())
     }
 
+    /// La version exacta del servidor, para compararla: `[13, 23]`.
+    pub fn version(&self) -> Vec<u32> {
+        version_numbers(exact_version(&self.server_version()))
+    }
+
+    /// Si el servidor tiene `capability` (ver `capability`). Si no la tiene,
+    /// `sql` (lo que la usa) tiene que fallar en el servidor: solo entonces
+    /// se registra como N/A de la fila `row`, con la linea donde empieza y el
+    /// archivo que lo demuestra. Si el servidor lo acepta, la capacidad esta
+    /// mal declarada y la prueba lo dice.
+    pub async fn lacks(
+        &self,
+        engine: Engine,
+        row: &str,
+        name: &str,
+        sql: &str,
+    ) -> Result<bool, String> {
+        let capability = capability(engine, name);
+        if self.version() >= capability.since {
+            return Ok(false);
+        }
+        let result = self.raw(sql).await;
+        if !is_error(&result) {
+            return Err(format!(
+                "{engine:?} {}: «{name}» empieza en {} segun {}, pero el servidor acepto:\n  {}",
+                exact_version(&self.server_version()),
+                dotted(&capability.since),
+                capability.proof,
+                sql.chars().take(120).collect::<String>()
+            ));
+        }
+        record(format!(
+            "{{\"engine\":\"{engine:?}\",\"version\":\"{}\",\"row\":\"{row}\",\"na\":{},\"since\":\"{}\",\"proof\":\"{}\"}}",
+            exact_version(&self.server_version()),
+            serde_json::Value::from(name),
+            dotted(&capability.since),
+            capability.proof
+        ));
+        Ok(true)
+    }
+
     /// La version que informa el servidor, como la muestra la app.
     pub fn server_version(&self) -> String {
         match self {
@@ -238,6 +288,76 @@ impl Conn {
             _ => None,
         }
     }
+}
+
+/// Los numeros de una version: `[11, 8, 9]` de "11.8.9" o "11.8.9-MariaDB".
+pub fn version_numbers(text: &str) -> Vec<u32> {
+    text.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
+        .unwrap_or("")
+        .split('.')
+        .filter_map(|part| part.parse().ok())
+        .collect()
+}
+
+fn dotted(version: &[u32]) -> String {
+    version
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// Una capacidad que agrega una linea de version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Capability {
+    /// Desde que version existe: la linea, o su `-- since:`.
+    pub since: Vec<u32>,
+    /// El archivo cuya entrada lo demuestra (D7).
+    pub proof: String,
+}
+
+/// Una capacidad por su nombre: el comentario de su entrada en
+/// `tests/sql/<motor>/<linea>/accepts.sql`. D7 demuestra que el servidor la
+/// acepta desde esa linea y la rechaza en la anterior, asi que un N/A tiene
+/// un motivo verificable y la frontera se declara una sola vez.
+pub fn capability(engine: Engine, name: &str) -> Capability {
+    let key = |text: &str| text.trim().trim_end_matches('.').to_lowercase();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/sql")
+        .join(engine.name());
+    let mut lines: Vec<_> = std::fs::read_dir(&root)
+        .unwrap_or_else(|_| panic!("{}", root.display()))
+        .filter_map(|dir| dir.ok())
+        .filter(|dir| dir.path().join("accepts.sql").is_file())
+        .collect();
+    lines.sort_by_key(|dir| version_numbers(&dir.file_name().to_string_lossy()));
+    for dir in lines {
+        let line = dir.file_name().to_string_lossy().to_string();
+        let text = std::fs::read_to_string(dir.path().join("accepts.sql")).unwrap();
+        for entry in entries(&text) {
+            let comments: Vec<&str> = entry
+                .lines()
+                .filter_map(|line| line.strip_prefix("--"))
+                .collect();
+            if !comments.iter().any(|comment| key(comment) == key(name)) {
+                continue;
+            }
+            let since = comments
+                .iter()
+                .find_map(|comment| comment.trim().strip_prefix("since:"))
+                .map(version_numbers)
+                .unwrap_or_else(|| version_numbers(&line));
+            return Capability {
+                since,
+                proof: format!("tests/sql/{}/{line}/accepts.sql", engine.name()),
+            };
+        }
+    }
+    panic!(
+        "{engine:?}: «{name}» no esta en ningun tests/sql/{}/<linea>/accepts.sql; declarala ahi para que D7 la demuestre",
+        engine.name()
+    )
 }
 
 /// La version exacta de lo que muestra la app ("8.4.11" de "MySQL 8.4.11").
@@ -327,20 +447,25 @@ pub fn declared_version(engine: Engine) -> Declared {
 }
 
 /// Una linea por servidor y corrida: la evidencia de la version exacta
-/// (SQL_ENGINE §7). Con ROWLY_EVIDENCE=<archivo> tambien se agrega ahi.
+/// (SQL_ENGINE §7).
 fn evidence(engine: Engine, declared: &Declared) {
-    use std::sync::Mutex;
-    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    let line = format!(
+    record(format!(
         "{{\"engine\":\"{engine:?}\",\"version\":\"{}\",\"image\":\"{}\",\"digest\":\"{}\"}}",
         declared.version, declared.image, declared.digest
-    );
+    ));
+}
+
+/// Una linea de evidencia, una vez por corrida. Con ROWLY_EVIDENCE=<archivo>
+/// tambien se agrega ahi.
+fn record(line: String) {
+    use std::sync::Mutex;
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
     let mut seen = SEEN.lock().unwrap();
     if seen.contains(&line) {
         return;
     }
     seen.push(line.clone());
-    eprintln!("servidor verificado: {line}");
+    eprintln!("evidencia: {line}");
     if let Ok(path) = std::env::var("ROWLY_EVIDENCE") {
         use std::io::Write;
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -367,18 +492,13 @@ pub fn selected(engines: impl IntoIterator<Item = Engine>) -> Vec<Engine> {
 /// Un nombre que no es de ningun motor se rechaza: si no, la prueba no
 /// seleccionaria nada y pasaria sin medir.
 pub fn engine_selected(engine: Engine) -> bool {
-    let name = |engine: Engine| match engine {
-        Engine::MySql => "mysql",
-        Engine::MariaDb => "mariadb",
-        Engine::Postgres => "postgres",
-    };
     match std::env::var("ROWLY_ENGINES") {
         Ok(list) => {
             let asked: Vec<&str> = list.split(',').map(str::trim).collect();
             if let Some(unknown) = asked.iter().find(|asked| {
                 !Engine::ALL
                     .iter()
-                    .any(|&e| asked.eq_ignore_ascii_case(name(e)))
+                    .any(|&e| asked.eq_ignore_ascii_case(e.name()))
             }) {
                 panic!(
                     "ROWLY_ENGINES={list}: {unknown:?} no es un motor (mysql, mariadb, postgres)"
@@ -386,7 +506,7 @@ pub fn engine_selected(engine: Engine) -> bool {
             }
             asked
                 .iter()
-                .any(|asked| asked.eq_ignore_ascii_case(name(engine)))
+                .any(|asked| asked.eq_ignore_ascii_case(engine.name()))
         }
         Err(_) => true,
     }
@@ -493,4 +613,44 @@ pub fn admin(engine: Engine, sql: &str) {
         "admin fallo: {sql}\n{}",
         String::from_utf8_lossy(&status.stderr)
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_capability_starts_in_the_line_whose_accepts_declares_it() {
+        let merge = capability(Engine::Postgres, "MERGE.");
+        assert_eq!(merge.since, vec![15]);
+        assert_eq!(merge.proof, "tests/sql/postgres/15/accepts.sql");
+        // Sin punto final y con otras mayusculas es la misma.
+        assert_eq!(capability(Engine::Postgres, "merge"), merge);
+        assert_eq!(
+            capability(Engine::Postgres, "OUT parameters in procedures").since,
+            vec![14]
+        );
+    }
+
+    #[test]
+    fn since_inside_a_line_wins_over_the_line() {
+        let default = capability(Engine::MariaDb, "DEFAULT on procedure parameters.");
+        assert_eq!(default.since, vec![11, 8]);
+        assert_eq!(default.proof, "tests/sql/mariadb/11.7/accepts.sql");
+    }
+
+    #[test]
+    #[should_panic(expected = "declarala ahi para que D7 la demuestre")]
+    fn an_undeclared_capability_stops_the_test() {
+        capability(Engine::Postgres, "time travel");
+    }
+
+    #[test]
+    fn versions_compare_by_their_numbers() {
+        assert_eq!(version_numbers("11.8.9-MariaDB"), vec![11, 8, 9]);
+        assert_eq!(version_numbers("PostgreSQL 13.23"), vec![13, 23]);
+        assert!(version_numbers("13.23") < vec![14]);
+        assert!(version_numbers("10.6.28") < vec![11, 8]);
+        assert!(version_numbers("14.0") >= vec![14]);
+    }
 }
