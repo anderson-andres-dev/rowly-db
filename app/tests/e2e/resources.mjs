@@ -58,9 +58,17 @@ async function startApp(profileDir) {
       XDG_CACHE_HOME: join(profileDir, "cache"),
       WEBKIT_INSPECTOR_HTTP_SERVER: INSPECTOR,
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  const page = await connectInspector(INSPECTOR);
+  // Lo que diga la app, para el reporte de un fallo.
+  app.output = "";
+  const keep = (chunk) => (app.output = (app.output + chunk).slice(-4000));
+  app.stdout.on("data", keep);
+  app.stderr.on("data", keep);
+  const page = await connectInspector(INSPECTOR).catch((error) => {
+    error.app = app;
+    throw error;
+  });
   await waitFor(page, "la app", "document.readyState === 'complete' && !!document.querySelector('body *')");
   return { app, page };
 }
@@ -288,7 +296,10 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
   let app = null;
   let page = null;
   try {
-    ({ app, page } = await startApp(profileDir));
+    ({ app, page } = await startApp(profileDir).catch((error) => {
+      app = error.app ?? null;
+      throw error;
+    }));
     await body(page, app);
     console.log(`ok    ${name} (${Date.now() - started} ms)`);
   } catch (error) {
@@ -296,6 +307,7 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
     console.log(`FALLO ${name}\n      ${error.message}`);
     const screen = await page?.evaluate("document.body.innerText.slice(0, 600)").catch(() => "");
     console.log(`      pantalla: ${String(screen ?? "").replace(/\s+/g, " ")}`);
+    if (app) console.log(`      app (salida ${app.exitCode ?? "viva"}): ${app.output.trim().slice(-1500)}`);
   } finally {
     page?.close();
     if (app) await stop(app);

@@ -15,7 +15,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // La pagina inspeccionable: el servidor HTTP lista cada una con el socket
 // que la abre ("/socket/1/1/WebPage").
 async function pageSocket(address) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  // Una build debug recien compilada tarda en abrir la ventana.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     const html = await fetch(`http://${address}/`).then(
       (response) => response.text(),
       () => "",
@@ -24,7 +25,7 @@ async function pageSocket(address) {
     if (path) return `ws://${address}${path}`;
     await sleep(100);
   }
-  throw new Error(`el inspector de ${address} no lista ninguna pagina`);
+  throw new Error(`el inspector de ${address} no listo ninguna pagina en 30 s`);
 }
 
 // Una conexion a la pagina: `send` para cualquier metodo del protocolo y
