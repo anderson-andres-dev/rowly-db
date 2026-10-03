@@ -66,3 +66,6 @@ jobs:
 
       - name: Inventario de tests al dia
         run: node tools/inventory/tests.mjs --check
+
+      - name: Cobertura de SQL_ENGINE (tests/sql/coverage.json)
+        run: node tools/inventory/coverage.mjs

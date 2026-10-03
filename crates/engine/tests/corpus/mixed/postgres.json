@@ -32,5 +32,10 @@
     "SELECT E'a\\';b' AS escaped, $$literal; inner $tag$ text$$ AS body;",
     "DO $body1$ BEGIN PERFORM 1; END $body1$;",
     "SELECT 1 /* outer; /* inner; */ outer; */;"
+  ],
+  "needs": [
+    ["CREATE FUNCTION audit.one()", "SQL-standard function bodies."],
+    ["CREATE PROCEDURE audit.refresh_counts()", "SQL-standard function bodies."],
+    ["MERGE INTO audit.users", "MERGE."]
   ]
 }

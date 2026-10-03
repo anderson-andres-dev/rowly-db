@@ -24,10 +24,12 @@ CREATE OR REPLACE FUNCTION rowly_test.rt_attrs(n int) RETURNS int
 CREATE OR REPLACE FUNCTION rowly_test.rt_quoted(n int) RETURNS int AS 'SELECT n + 1;' LANGUAGE sql
 -- ---
 -- drop: DROP FUNCTION IF EXISTS rowly_test.rt_return(int)
+-- needs: SQL-standard function bodies.
 -- call: SELECT rowly_test.rt_return(2)
 CREATE OR REPLACE FUNCTION rowly_test.rt_return(n int) RETURNS int LANGUAGE sql RETURN n + 10
 -- ---
 -- drop: DROP FUNCTION IF EXISTS rowly_test.rt_atomic(int)
+-- needs: SQL-standard function bodies.
 -- call: SELECT rowly_test.rt_atomic(3)
 CREATE OR REPLACE FUNCTION rowly_test.rt_atomic(n int) RETURNS int
 LANGUAGE sql
@@ -37,6 +39,7 @@ BEGIN ATOMIC
 END
 -- ---
 -- drop: DROP FUNCTION IF EXISTS rowly_test.rt_alias(int)
+-- needs: SQL-standard function bodies.
 -- call: SELECT rowly_test.rt_alias(3)
 CREATE OR REPLACE FUNCTION rowly_test.rt_alias(n int) RETURNS int
 LANGUAGE sql

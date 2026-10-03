@@ -1,0 +1,134 @@
+name: SQL engine
+
+# Compuerta de motor de SQL_ENGINE §7: la suite contra servidores reales en
+# cada version exacta declarada verificada (`verified` de
+# tools/test-dbs/lines.json) y la demostracion de lineas (D7/D8) en cada
+# probe. La matriz sale de lines.json: no hay una segunda lista de versiones.
+
+on:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "app/src-tauri/**"
+      - "app/src/lib/engines/**"
+      - "app/src/lib/sql*.ts"
+      - "tests/sql/**"
+      - "tools/test-dbs/**"
+      - "Cargo.lock"
+      - ".github/workflows/sql-engine.yml"
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      fuzz_cases:
+        description: "Casos de fuzz por motor (SQL_ENGINE §7: 4000 por PR de motor)"
+        default: "4000"
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    # Con `shell: bash` GitHub agrega pipefail: un fallo antes de `tee` cuenta.
+    shell: bash
+
+jobs:
+  matrix:
+    name: Versiones declaradas
+    runs-on: ubuntu-latest
+    outputs:
+      verified: ${{ steps.read.outputs.verified }}
+      engines: ${{ steps.read.outputs.engines }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          python3 - >> "$GITHUB_OUTPUT" <<'PY'
+          import json
+          d = json.load(open("tools/test-dbs/lines.json"))
+          verified = [{"engine": e, "version": v["version"]} for e, vs in d["verified"].items() for v in vs]
+          print("verified=" + json.dumps(verified))
+          print("engines=" + json.dumps(list(d["engines"])))
+          PY
+
+  real:
+    name: ${{ matrix.engine }} ${{ matrix.version }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.verified) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90
+      # G2 escribe los CALL con el autocompletado real (TypeScript, vitest).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: npm ci
+        working-directory: app
+        run: npm ci
+      - name: Compilar la suite
+        run: cargo test -p rowly-server-tests --test real_server --test contract --locked --no-run
+      - name: Servidor ${{ matrix.engine }} ${{ matrix.version }} con Sakila/Pagila
+        run: tools/test-dbs/up.sh "${{ matrix.engine }}=${{ matrix.version }}"
+      - name: Matriz real y contrato de los drivers (SQL_ENGINE §6)
+        env:
+          ROWLY_ENGINES: ${{ matrix.engine }}
+          ROWLY_FUZZ_CASES: ${{ inputs.fuzz_cases || '4000' }}
+          ROWLY_EVIDENCE: evidence.jsonl
+        run: cargo test -p rowly-server-tests --test real_server --test contract --locked -- --ignored --test-threads=1 2>&1 | tee real.log
+      - name: Evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-${{ matrix.engine }}-${{ matrix.version }}
+          path: |
+            crates/server-tests/evidence.jsonl
+            real.log
+
+  lines:
+    name: Lineas ${{ matrix.engine }} (D7/D8)
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: ${{ fromJSON(needs.matrix.outputs.engines) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90
+      - name: Compilar la suite
+        run: cargo test -p rowly-server-tests --test version_lines --locked --no-run
+      - name: Un servidor por extremo de cada linea
+        run: tools/test-dbs/lines.sh up "${{ matrix.engine }}"
+      - name: Demostracion de lineas
+        env:
+          ROWLY_ENGINES: ${{ matrix.engine }}
+        run: cargo test -p rowly-server-tests --test version_lines --locked -- --ignored --test-threads=1 2>&1 | tee lines.log
+      - name: Registro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lines-${{ matrix.engine }}
+          path: lines.log
+
+  report:
+    name: Evidencia por version
+    # Tambien cuando falla un job: el reporte dice que version quedo incompleta.
+    needs: [matrix, real]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: real-*
+          path: evidence
+      - name: Cada version verificada con su matriz completa
+        run: node tools/test-dbs/evidence.mjs evidence

@@ -90,6 +90,7 @@ SELECT id FROM {s}.t_basic UNION ALL SELECT id FROM {s}.t_child ORDER BY id LIMI
 -- ---
 SELECT * FROM {s}.t_basic WHERE name ~* '^a' AND price IS DISTINCT FROM 0 AND id = ANY (ARRAY[1, 2, 3]) FOR UPDATE SKIP LOCKED
 -- ---
+-- needs: MERGE.
 MERGE INTO {s}.t_basic t USING (SELECT 1 AS id, 'm' AS name) s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name WHEN NOT MATCHED THEN INSERT (id, name) OVERRIDING SYSTEM VALUE VALUES (s.id, s.name)
 -- ---
 SET search_path TO public
