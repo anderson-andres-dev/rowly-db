@@ -817,8 +817,68 @@
       "status": "partial",
       "tests": [
         {
+          "file": "app/src-tauri/src/engine_context.rs",
+          "name": "the_context_keeps_its_shape",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/engine_context.rs",
+          "name": "the_line_is_the_closest_one_below_and_the_floor_below_the_first",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/engine_context.rs",
+          "name": "only_the_exact_versions_of_lines_json_are_verified",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/engine_context.rs",
+          "name": "a_request_from_another_generation_or_epoch_is_no_longer_current",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
           "file": "app/src-tauri/src/drivers.rs",
           "name": "cada_motor_del_frontend_llega_como_el_suyo",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/editor/analysisSession.test.ts",
+          "name": "an answer asked for with the previous connection is not applied after reconnecting",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/stores/connectionCatalog.test.ts",
+          "name": "the active engine is the one the backend reports, with its session mode",
           "scope": "unit",
           "engines": [
             "mysql",
@@ -835,9 +895,18 @@
             "mariadb",
             "postgres"
           ]
+        },
+        {
+          "file": "app/tests/e2e/run.mjs",
+          "name": "reconexiones alternando MySQL y PostgreSQL: cada una con su servidor, sin crecer en memoria",
+          "scope": "e2e",
+          "engines": [
+            "mysql",
+            "postgres"
+          ]
         }
       ],
-      "gap": "Contexto tipado e invalidacion completos (M3, §9)"
+      "gap": "Un SET sql_mode dentro de la sesion no actualiza el contexto ni el guard (§9)"
     }
   }
 }
