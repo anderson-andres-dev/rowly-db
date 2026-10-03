@@ -99,15 +99,16 @@ export class Session {
     }
   }
 
-  // Un acorde X11 cuenta como entregado cuando la pagina ve su tecla principal
-  // (window.__e2eDown, el registro que instala run.mjs). Si no llega, la
-  // ventana no tenia el foco de X: se repite, y a la tercera se detiene
-  // diciendo quien lo tenia. Sin registro no hay como comprobarlo.
+  // Un acorde X11 cuenta como entregado cuando la pagina ve su tecla
+  // principal, al bajar o al subir (window.__e2eSeen, el registro que instala
+  // run.mjs). Si no llega, la ventana no tenia el foco de X: se repite, y a la
+  // tercera se detiene diciendo quien lo tenia. Sin registro no hay como
+  // comprobarlo.
   async x11(chord) {
     const last = chord[chord.length - 1];
     const key = DOM_KEYS[last] ?? last;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const before = await this.script("return window.__e2eDown?.length ?? null");
+      const before = await this.script("return window.__e2eSeen?.length ?? null");
       x11Chord(chord);
       if (before === null) {
         await sleep(100);
@@ -116,7 +117,7 @@ export class Session {
       const deadline = Date.now() + 1000;
       while (Date.now() < deadline) {
         const seen = await this.script(
-          "return window.__e2eDown.slice(arguments[0]).includes(arguments[1])",
+          "return window.__e2eSeen.slice(arguments[0]).includes(arguments[1])",
           before,
           key,
         );

@@ -90,13 +90,14 @@ async function connect(session, name) {
   // comprobar la entrega de los acordes.
   await session.script(`
     window.__e2eKeys = [];
-    // Las teclas principales recibidas: con esto webdriver.mjs comprueba que
-    // un acorde X11 llego.
-    window.__e2eDown = [];
+    // Las teclas principales recibidas, al bajar o al subir: con esto
+    // webdriver.mjs comprueba que un acorde X11 llego. Con Ctrl+A, WebKitGTK
+    // consume el keydown de la "a" y la pagina solo ve su keyup.
+    window.__e2eSeen = [];
     for (const type of ["keydown", "keyup"]) {
       window.addEventListener(type, (e) => {
         const t = e.target;
-        if (type === "keydown" && !["Control", "Shift", "Alt", "Meta"].includes(e.key)) window.__e2eDown.push(e.key);
+        if (!["Control", "Shift", "Alt", "Meta"].includes(e.key)) window.__e2eSeen.push(e.key);
         window.__e2eKeys.push(type[3] + ":" + (e.ctrlKey ? "Ctrl+" : "") + e.key + "@" + (t.className || t.tagName));
         if (window.__e2eKeys.length > 80) window.__e2eKeys.shift();
       }, true);
