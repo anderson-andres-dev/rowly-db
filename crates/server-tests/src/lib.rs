@@ -353,16 +353,41 @@ fn evidence(engine: Engine, declared: &Declared) {
     }
 }
 
+/// Los motores de `engines` que pide ROWLY_ENGINES. Cada prueba recorre sus
+/// motores con esto: en CI cada job levanta un solo servidor, y una prueba que
+/// intentara conectar a otro fallaria por el job, no por el motor.
+pub fn selected(engines: impl IntoIterator<Item = Engine>) -> Vec<Engine> {
+    engines
+        .into_iter()
+        .filter(|&engine| engine_selected(engine))
+        .collect()
+}
+
 /// ROWLY_ENGINES=mysql,postgres limita la prueba a esos motores.
+/// Un nombre que no es de ningun motor se rechaza: si no, la prueba no
+/// seleccionaria nada y pasaria sin medir.
 pub fn engine_selected(engine: Engine) -> bool {
+    let name = |engine: Engine| match engine {
+        Engine::MySql => "mysql",
+        Engine::MariaDb => "mariadb",
+        Engine::Postgres => "postgres",
+    };
     match std::env::var("ROWLY_ENGINES") {
-        Ok(list) => list.split(',').any(|name| {
-            name.trim().eq_ignore_ascii_case(match engine {
-                Engine::MySql => "mysql",
-                Engine::MariaDb => "mariadb",
-                Engine::Postgres => "postgres",
-            })
-        }),
+        Ok(list) => {
+            let asked: Vec<&str> = list.split(',').map(str::trim).collect();
+            if let Some(unknown) = asked.iter().find(|asked| {
+                !Engine::ALL
+                    .iter()
+                    .any(|&e| asked.eq_ignore_ascii_case(name(e)))
+            }) {
+                panic!(
+                    "ROWLY_ENGINES={list}: {unknown:?} no es un motor (mysql, mariadb, postgres)"
+                );
+            }
+            asked
+                .iter()
+                .any(|asked| asked.eq_ignore_ascii_case(name(engine)))
+        }
         Err(_) => true,
     }
 }

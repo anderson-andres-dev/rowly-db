@@ -39,7 +39,7 @@ fn routines_corpus(engine: Engine) -> &'static str {
 #[ignore = "requiere tools/test-dbs/up.sh"]
 async fn the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server() {
     let mut failures = Vec::new();
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         for raw in entries(routines_corpus(engine)) {
             let entry = parse(&raw);
@@ -105,7 +105,7 @@ async fn rows_of(conn: &Conn, sql: &str) -> Vec<Vec<Option<String>>> {
 async fn the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted() {
     let mut failures = Vec::new();
     let mut checked = 0;
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         if engine.is_mysql_family() {
             let routines = rows_of(&conn, "SELECT routine_type, routine_name FROM information_schema.routines WHERE routine_schema = 'sakila'").await;
@@ -226,7 +226,7 @@ async fn the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted()
 #[ignore = "requiere tools/test-dbs/up.sh"]
 async fn call_and_show_create_return_their_rows() {
     use khipu_driver_core::QueryExecutionResult::{Command, ResultSet};
-    for engine in [Engine::MySql, Engine::MariaDb] {
+    for engine in selected([Engine::MySql, Engine::MariaDb]) {
         let conn = Conn::open(engine).await;
         for sql in [
             "DROP PROCEDURE IF EXISTS rt_sel",
@@ -381,7 +381,7 @@ async fn try_text(conn: &Conn, engine: Engine, text: &str) -> Verdict {
 #[ignore = "requiere tools/test-dbs/up.sh"]
 async fn no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server() {
     let mut violations = Vec::new();
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let (mut total, mut accepted, mut dangerous) = (0, 0, 0);
         for template in entries(attacks_corpus(engine)) {
@@ -595,10 +595,7 @@ async fn fuzzing_the_guard_against_the_real_servers_finds_no_second_statement() 
         .unwrap_or(4000);
     let mut violations = Vec::new();
     let mut coverage = Vec::new();
-    for engine in Engine::ALL {
-        if !engine_selected(engine) {
-            continue;
-        }
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let bases = skeletons(engine);
         let fragments = if engine.is_mysql_family() {
@@ -732,7 +729,7 @@ async fn real_sql(engine: Engine, conn: &Conn) -> Vec<(String, String)> {
 async fn the_analyzer_marks_nothing_in_sql_the_real_servers_accept() {
     let mut false_positives = Vec::new();
     let mut checked = 0;
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         for (name, sql) in real_sql(engine, &conn).await {
             checked += 1;
@@ -869,7 +866,7 @@ async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
         "SELECT 1 /*!50000 ; {x} ; SELECT '\\' */",
     ];
     let mut failures = Vec::new();
-    for engine in [Engine::MySql, Engine::MariaDb] {
+    for engine in selected([Engine::MySql, Engine::MariaDb]) {
         let mode_on = NoBackslashEscapes::on(engine);
         let conn = mode_on.open().await;
         let mode = conn
@@ -1011,7 +1008,7 @@ async fn what_damages_data_never_passes_as_not_destructive() {
     ];
     let mut failures = Vec::new();
     let mut damaging = 0;
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let mut templates: Vec<&str> = common.to_vec();
         match engine {
@@ -1066,7 +1063,7 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
     ];
     let mut failures = Vec::new();
     let mut checked = 0;
-    for engine in Engine::ALL {
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let scope = if engine.is_mysql_family() {
             "core"
@@ -1312,10 +1309,7 @@ fn call_arguments(call: &str) -> (&str, Vec<&str>) {
 async fn completion_calls_run_on_the_real_servers() {
     let mut failures = Vec::new();
     let mut checked = 0;
-    for engine in Engine::ALL {
-        if !engine_selected(engine) {
-            continue;
-        }
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let fixtures = completion_fixtures(engine);
         for (name, create) in &fixtures {
@@ -1538,10 +1532,7 @@ fn shown_while_typing(
 async fn typing_real_sql_shows_nothing_that_is_only_unfinished() {
     let mut noise: std::collections::BTreeMap<String, (usize, String)> = Default::default();
     let mut checked = 0;
-    for engine in Engine::ALL {
-        if !engine_selected(engine) {
-            continue;
-        }
+    for engine in selected(Engine::ALL) {
         let conn = Conn::open(engine).await;
         let schema = if engine.is_mysql_family() {
             "sakila"

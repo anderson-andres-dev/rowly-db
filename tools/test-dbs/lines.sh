@@ -29,6 +29,12 @@ up() {
   probes "$@" | while read -r engine line image port version; do
     box=$(name "$engine" "$version")
     if [ -n "$(docker ps -aq -f name="^$box$")" ]; then docker start "$box" >/dev/null; continue; fi
+    # Reintentos: el registro publico limita las descargas anonimas en paralelo.
+    for attempt in 1 2 3 4 5 6; do
+      docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null && break
+      [ "$attempt" = 6 ] && { echo "no se pudo descargar $image" >&2; exit 1; }
+      sleep $((attempt * 20))
+    done
     case "$engine" in
       mysql|mariadb)
         docker run -d --name "$box" -p "127.0.0.1:$port:3306" --tmpfs /var/lib/mysql \

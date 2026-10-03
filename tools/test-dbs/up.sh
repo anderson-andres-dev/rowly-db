@@ -22,6 +22,13 @@ for arg in "$@"; do
   fi
 done
 [ ${#services[@]} -eq 0 ] && services=(mysql mariadb postgres)
+# El registro publico limita las descargas anonimas: con muchos jobs a la vez
+# responde "toomanyrequests". Se reintenta con espera creciente.
+for attempt in 1 2 3 4 5 6; do
+  docker compose pull -q "${services[@]}" && break
+  [ "$attempt" = 6 ] && { echo "no se pudo descargar la imagen" >&2; exit 1; }
+  sleep $((attempt * 20))
+done
 docker compose up -d "${services[@]}"
 selected() { [[ " ${services[*]} " == *" $1 "* ]]; }
 
