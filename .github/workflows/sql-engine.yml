@@ -117,3 +117,18 @@ jobs:
         with:
           name: lines-${{ matrix.engine }}
           path: lines.log
+
+  report:
+    name: Evidencia por version
+    # Tambien cuando falla un job: el reporte dice que version quedo incompleta.
+    needs: [matrix, real]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: real-*
+          path: evidence
+      - name: Cada version verificada con su matriz completa
+        run: node tools/test-dbs/evidence.mjs evidence

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Valida tests/sql/coverage.json contra SQL_ENGINE §6 y el codigo:
 // cada fila tiene entrada; cada prueba citada existe (archivo y nombre);
-// "partial" y "gap" dicen que falta; un N/A por motor dice por que.
+// "partial" y "gap" dicen que falta; un N/A por motor dice por que; y cada
+// prueba contra servidores reales (crates/server-tests/tests) prueba alguna
+// fila: no hay huerfanas.
 //
 //   node tools/inventory/coverage.mjs           informe y exit 1 si algo falla
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
@@ -37,6 +39,19 @@ for (const [row, entry] of Object.entries(coverage.rows)) {
       continue;
     }
     if (!readFileSync(path, "utf8").includes(test.name)) problems.push(`${row}: "${test.name}" no aparece en ${test.file}`);
+  }
+}
+
+// Huerfanas: una prueba real que no prueba ninguna fila.
+const SERVER_TESTS = "crates/server-tests/tests";
+const cited = new Set(
+  Object.values(coverage.rows).flatMap((entry) => entry.tests.map((test) => `${test.file}#${test.name}`)),
+);
+for (const name of readdirSync(join(ROOT, SERVER_TESTS)).filter((file) => file.endsWith(".rs"))) {
+  const file = `${SERVER_TESTS}/${name}`;
+  const source = readFileSync(join(ROOT, file), "utf8");
+  for (const [, test] of source.matchAll(/#\[(?:tokio::)?test\]\s*(?:#\[[^\]]*\]\s*)*(?:async\s+)?fn\s+(\w+)/g)) {
+    if (!cited.has(`${file}#${test}`)) problems.push(`${file}: ${test} no prueba ninguna fila (huerfana)`);
   }
 }
 

@@ -245,6 +245,26 @@
             "mariadb",
             "postgres"
           ]
+        },
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/real_server.rs",
+          "name": "the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
         }
       ]
     },
