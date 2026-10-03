@@ -143,7 +143,10 @@ let consoleCounter = 0;
 
 // Un flujo con la vista y el backend falsos; los stores son los reales, con
 // una consola nueva por prueba.
-function flowFixture(answers: Record<string, Answer> = {}, options: { classify?: StatementCheck[] } = {}) {
+function flowFixture(
+  answers: Record<string, Answer> = {},
+  options: { classify?: StatementCheck[]; count?: (sql: string) => Promise<number> } = {},
+) {
   const consoleId = `flow-${++consoleCounter}`;
   const executed: { sql: string; confirmed: unknown }[] = [];
   const shown: string[] = [];
@@ -183,7 +186,8 @@ function flowFixture(answers: Record<string, Answer> = {}, options: { classify?:
     newId: () => crypto.randomUUID(),
   };
   const classify = async (statements: string[]) => options.classify ?? statements.map(() => ({}));
-  const flow = createExecutionFlow(view, createExecutionSession(backend), classify);
+  const count = options.count ?? (async () => 0);
+  const flow = createExecutionFlow(view, createExecutionSession(backend), classify, count);
   return {
     consoleId,
     flow,
@@ -319,6 +323,31 @@ describe("createExecutionFlow", () => {
     expect(fixture.state().sort).toEqual([{ column: 0, descending: false }]);
     // Solo la ejecucion nueva queda en el historial.
     expect(fixture.history()).toHaveLength(1);
+  });
+
+  it("counts the rows of the query that produced the result and keeps the total; a failure is logged", async () => {
+    const counted: string[] = [];
+    const fixture = flowFixture(
+      { "SELECT id FROM t": rows(2) },
+      {
+        count: async (sql) => {
+          counted.push(sql);
+          if (counted.length > 1) throw new Error("timeout");
+          return 1234;
+        },
+      },
+    );
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    expect(await fixture.flow.count(fixture.consoleId)).toBe(1234);
+    expect(fixture.state().totalRows).toBe(1234);
+    expect(fixture.log().slice(-2)).toEqual([
+      "query: SELECT COUNT(*) FROM (SELECT id FROM t)",
+      expect.stringMatching(/^info: workspace\.output\.totalOther/),
+    ]);
+    expect(await fixture.flow.count(fixture.consoleId)).toBeNull();
+    expect(fixture.state().counting).toBe(false);
+    expect(fixture.log().at(-1)).toBe("error: Error: timeout");
+    expect(counted).toEqual(["SELECT id FROM t", "SELECT id FROM t"]);
   });
 
   it("a table tab keeps the rows it showed when a filter fails, and reports the error", async () => {

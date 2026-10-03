@@ -21,7 +21,6 @@
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
-  import { countQueryRows } from "$lib/queryExecution";
   import { queryHistory } from "$lib/stores/queryHistory";
   import { STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
   import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
@@ -38,15 +37,11 @@
   import { copySettings } from "$lib/stores/copyFormat";
   import { numberFormat, t } from "$lib/i18n";
   import {
-    addPinnedTab,
     addResultTab,
     consoleOfKey,
-    forgetPinnedResults,
     pinnedResults,
-    removePinnedTab,
     resultKey,
     setResultPinned,
-    unpinnedTabs,
   } from "$lib/stores/pinnedResults";
   import {
     EMPTY_EDITS,
@@ -54,11 +49,9 @@
   } from "$lib/resultEditing";
   import {
     editStateFor,
-    forgetResultEdits,
     resultEdits,
     commitResultEdits,
     undoResultEdit,
-    moveResultEdits,
   } from "$lib/stores/resultEdits";
   import type {
     CatalogColumn,
@@ -78,18 +71,21 @@
     setTableFilters,
     type QueryConsole,
     type TableTab,
-    setQueryCounting,
-    clearQueryResult,
-    forgetExecutionState,
-    moveExecutionState,
-    setQueryTotalRows,
     updateQueryConsoleSql,
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
-  import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
+  import {
+    OUTPUT_TAB,
+    createResultTabActions,
+    firstFromTable,
+    orderTabs,
+    pinnedIdOf,
+    replaceTabKey,
+    visibleTab,
+  } from "$lib/workspace/resultTabs";
   import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
   import { createExecutionFlow, formatMs as formatDuration } from "$lib/workspace/executionSession";
   import { createResultChanges } from "$lib/workspace/resultChanges";
@@ -189,6 +185,19 @@
     const current = resultTabs.map((tab) => tab.key);
     resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
   }
+
+  // Fijar, desfijar, cerrar y olvidar (workspace/resultTabs.ts).
+  const tabActions = createResultTabActions({
+    selectTab,
+    keepPosition: keepTabPosition,
+    confirmDiscard: (key) => confirmDiscardPending(key),
+  });
+  const pinCurrentResult = tabActions.pin;
+  const unpinTab = tabActions.unpin;
+  const replaceableKeys = tabActions.replaceableKeys;
+  const dropUnpinnedResults = tabActions.dropUnpinned;
+  const forgetConsoleResults = tabActions.forgetConsole;
+  const closeResultTab = tabActions.close;
 
   function reorderResultTabs(from: number, to: number) {
     if (!activeConsole) return;
@@ -613,6 +622,7 @@
   const reloadResult = executions.reload;
   const navigatePage = executions.navigate;
   const sortResult = executions.sort;
+  const countTotalRows = executions.count;
 
   // --- Edicion del resultado -------------------------------------------
   const editState = $derived(activeConsole ? editStateFor($resultEdits, viewKey) : null);
@@ -633,68 +643,6 @@
     };
   });
 
-  // Fijar: la pestaña normal pasa a ser una fijada CON TODO su estado
-  // (pagina, total, cambios pendientes, historial): sigue funcionando igual,
-  // solo que la proxima ejecucion ya no la reemplaza.
-  function pinCurrentResult(consoleId: string) {
-    if (executionForConsole($queryConsoles, consoleId).result?.type !== "resultSet") return;
-    const id = addPinnedTab(consoleId);
-    const key = resultKey(consoleId, id);
-    keepTabPosition(consoleId, consoleId, key);
-    moveExecutionState(consoleId, key);
-    moveResultEdits(consoleId, key);
-    selectTab(consoleId, key);
-  }
-
-  // Desfijar NO cierra ni reemplaza nada: la pestaña sigue abierta tal
-  // cual y la proxima ejecucion es la que la reemplaza. Si no hay una
-  // pestaña normal abierta, pasa directamente a serlo, en su mismo lugar.
-  function unpinTab(key: string) {
-    const consoleId = consoleOfKey(key);
-    const id = pinnedIdOf(key);
-    if (id === null) return;
-    if (executionForConsole($queryConsoles, consoleId).result?.type === "resultSet") {
-      setResultPinned(consoleId, id, false);
-      return;
-    }
-    keepTabPosition(consoleId, key, consoleId);
-    moveExecutionState(key, consoleId);
-    moveResultEdits(key, consoleId);
-    removePinnedTab(consoleId, id);
-    selectTab(consoleId, consoleId);
-  }
-
-  function pinnedIdOf(key: string): number | null {
-    const match = /#pin(\d+)$/.exec(key);
-    return match ? Number(match[1]) : null;
-  }
-
-  function forgetResultTab(key: string) {
-    forgetExecutionState(key);
-    forgetResultEdits(key);
-    const id = pinnedIdOf(key);
-    if (id !== null) removePinnedTab(consoleOfKey(key), id);
-  }
-
-  // Una ejecucion nueva reemplaza la pestaña normal y las desfijadas.
-  function replaceableKeys(consoleId: string): string[] {
-    return [consoleId, ...unpinnedTabs($pinnedResults, consoleId).map((item) => resultKey(consoleId, item.id))];
-  }
-
-  function dropUnpinnedResults(consoleId: string) {
-    for (const item of unpinnedTabs($pinnedResults, consoleId)) forgetResultTab(resultKey(consoleId, item.id));
-  }
-
-  // Al cerrar la consola, sus pestañas fijadas (y su estado) se van con ella.
-  function forgetConsoleResults(consoleId: string) {
-    for (const item of $pinnedResults[consoleId] ?? []) {
-      const key = resultKey(consoleId, item.id);
-      forgetExecutionState(key);
-      forgetResultEdits(key);
-    }
-    forgetPinnedResults(consoleId);
-  }
-
   function exportTableName(key: string): string {
     const info = editStateFor($resultEdits, key).info;
     return info ? `${info.target.schema}.${info.target.table}` : (labelForKey(key) ?? $t("grid.defaultTableName"));
@@ -711,44 +659,6 @@
       }),
     });
     notifySuccess($t(one ? "workspace.notify.exportedOne" : "workspace.notify.exportedOther", params));
-  }
-
-  // × de una pestaña de resultado: la quita (con cambios pendientes
-  // pregunta antes). La normal queda vacia; una fijada desaparece.
-  async function closeResultTab(key: string) {
-    if (!(await confirmDiscardPending(key))) return;
-    if (key === consoleOfKey(key)) {
-      clearQueryResult(key);
-      forgetResultEdits(key);
-    } else {
-      forgetResultTab(key);
-    }
-  }
-
-  async function countTotalRows(key: string): Promise<number | null> {
-    const consoleId = consoleOfKey(key);
-    const sql = executionForConsole($queryConsoles, key).resultSql;
-    if (!sql) return null;
-    setQueryCounting(key, true);
-    const started = performance.now();
-    appendLog(consoleId, { kind: "query", schema: logSchema, text: `SELECT COUNT(*) FROM (${sql.trim()})` });
-    try {
-      const total = await countQueryRows(sql);
-      setQueryTotalRows(key, sql, total);
-      appendLog(consoleId, {
-        kind: "info",
-        text: $t(total === 1 ? "workspace.output.totalOne" : "workspace.output.totalOther", {
-          count: $numberFormat.format(total),
-          ms: formatMs(performance.now() - started),
-        }),
-      });
-      return total;
-    } catch (error) {
-      setQueryCounting(key, false);
-      appendLog(consoleId, { kind: "error", text: String(error) });
-      notifyError(error);
-      return null;
-    }
   }
 
   // Ctrl+Alt+Abajo / Ctrl+Alt+Arriba.

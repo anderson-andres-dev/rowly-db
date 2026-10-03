@@ -18,6 +18,7 @@ import { get, writable, type Readable } from "svelte/store";
 import {
   cancelQuery,
   classifyStatements,
+  countQueryRows,
   executeQuery,
   type PageRequest,
   type StatementCheck,
@@ -37,7 +38,9 @@ import {
   finishQueryExecution,
   queryConsoles,
   requireQueryConfirmation,
+  setQueryCounting,
   setQuerySort,
+  setQueryTotalRows,
   stopQueryExecution,
   takeQueryConfirmation,
 } from "$lib/stores/queryConsoles";
@@ -193,6 +196,9 @@ export interface ExecutionFlow {
   // error del filtro, null si salio bien, o undefined si no llego a correr
   // (otra ejecucion en curso, cambios sin descartar o una confirmacion).
   table(consoleId: string, sql: string): Promise<string | null | undefined>;
+  // El total de filas de la consulta del resultado (COUNT(*)), con su
+  // registro en la Salida; null si no se pudo.
+  count(key: string): Promise<number | null>;
   firstPage(key: string): PageRequest;
 }
 
@@ -206,6 +212,7 @@ export function createExecutionFlow(
   view: ExecutionView,
   session: ExecutionSession = createExecutionSession(),
   classify: (statements: string[]) => Promise<StatementCheck[]> = classifyStatements,
+  countRows: (sql: string) => Promise<number> = countQueryRows,
 ): ExecutionFlow {
   const execution = (key: string) => executionForConsole(get(queryConsoles), key);
   const outcomeText = (result: QueryExecutionResult, offset: number, elapsedMs: number) =>
@@ -505,6 +512,32 @@ export function createExecutionFlow(
       view.showTab(consoleId, response.result.type === "resultSet" ? consoleId : OUTPUT_TAB);
       view.dropUnpinned(consoleId);
       return error;
+    },
+
+    async count(key) {
+      const consoleId = consoleOfKey(key);
+      const sql = execution(key).resultSql;
+      if (!sql) return null;
+      setQueryCounting(key, true);
+      const started = performance.now();
+      appendLog(consoleId, { kind: "query", schema: view.schema(), text: `SELECT COUNT(*) FROM (${sql.trim()})` });
+      try {
+        const total = await countRows(sql);
+        setQueryTotalRows(key, sql, total);
+        appendLog(consoleId, {
+          kind: "info",
+          text: view.text(total === 1 ? "workspace.output.totalOne" : "workspace.output.totalOther", {
+            count: view.number(total),
+            ms: formatMs(performance.now() - started, view.number),
+          }),
+        });
+        return total;
+      } catch (error) {
+        setQueryCounting(key, false);
+        appendLog(consoleId, { kind: "error", text: String(error) });
+        view.notifyError(error);
+        return null;
+      }
     },
   };
 }
