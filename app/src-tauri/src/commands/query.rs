@@ -208,6 +208,25 @@ pub async fn execute_query(
     Ok(ExecuteQueryResponse::Completed { result, page })
 }
 
+/// Lo que se vuelve a leer del servidor sin que el usuario lo ejecute de nuevo
+/// (contar filas, exportar): solo una lectura, y lo decide el guard con las
+/// opciones de la sesion (NO_BACKSLASH_ESCAPES incluido), como en
+/// execute_query. `Err`: el guard no lo pudo leer.
+pub(crate) fn read_only(
+    sql: &str,
+    dialect: Dialect,
+    production: bool,
+    options: GuardOptions,
+) -> Result<bool, Message> {
+    match classify_sql_with(sql, dialect, production, options) {
+        Ok(DestructiveClassification::NotDestructive) => {
+            Ok(khipu_engine::pagination::is_read_only_query(sql, dialect))
+        }
+        Ok(DestructiveClassification::RequiresConfirmation(_)) => Ok(false),
+        Err(error) => Err(error.to_string().into()),
+    }
+}
+
 /// What a script needs to know before running anything: for each
 /// statement, whether it needs confirmation (same rules as `execute_query`)
 /// or can't be analyzed at all. The frontend confirms them all at once and
@@ -344,18 +363,22 @@ pub async fn count_query_rows(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<u64, Message> {
-    let (connector, dialect) = {
-        let guard = state
-            .connections
-            .lock()
-            .expect("connections mutex poisoned");
-        let active = guard
-            .get(window.label())
-            .ok_or_else(|| Message::key("noActiveConnection"))?;
-        (Arc::clone(&active.connector), active.dialect)
-    };
-    let count_sql = khipu_engine::pagination::count_sql(sql.trim(), dialect)
+    let sql = sql.trim();
+    let (connector, count_sql) = with_active_connection(&window, &state, |active| {
+        // El texto llega de la UI: el guard decide aqui, no la ejecucion
+        // anterior que la UI recuerda.
+        read_only(
+            sql,
+            active.dialect,
+            active.production,
+            active.guard_options(),
+        )?
+        .then_some(())
         .ok_or_else(|| Message::key("count.unsupported"))?;
+        let count_sql = khipu_engine::pagination::count_sql(sql, active.dialect)
+            .ok_or_else(|| Message::key("count.unsupported"))?;
+        Ok((Arc::clone(&active.connector), count_sql))
+    })?;
     match connector
         .execute_query(&count_sql, QueryExecutionOptions { max_rows: 1 })
         .await
@@ -413,6 +436,31 @@ mod tests {
             check_statement(bad, Dialect::MySql, false, GuardOptions::default())
                 .error
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn only_what_the_guard_reads_as_a_single_read_is_counted_or_exported() {
+        let plain = GuardOptions::default();
+        let read = |sql: &str, options| read_only(sql, Dialect::MySql, false, options);
+        assert_eq!(read("SELECT * FROM t", plain), Ok(true));
+        assert_eq!(read("DELETE FROM t WHERE id = 1", plain), Ok(false));
+        assert_eq!(read("UPDATE t SET a = 1 RETURNING a", plain), Ok(false));
+        assert!(read("SELECT 1; DELETE FROM t", plain).is_err());
+        // Con NO_BACKSLASH_ESCAPES la barra no escapa: lo que sigue a la
+        // cadena es otra sentencia, y el guard lo ve.
+        let sql = "SELECT '\\'; DELETE FROM t; -- '";
+        let no_escapes = GuardOptions {
+            no_backslash_escapes: true,
+        };
+        assert!(read(sql, no_escapes).is_err());
+        // Con las reglas normales la barra escapa la comilla: es una sola
+        // lectura. Sin las opciones de la sesion se habria contado.
+        assert_eq!(read(sql, plain), Ok(true));
+        // En produccion, leer no pide confirmacion: se puede contar.
+        assert_eq!(
+            read_only("SELECT 1", Dialect::Postgres, true, plain),
+            Ok(true)
         );
     }
 

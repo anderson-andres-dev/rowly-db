@@ -1,6 +1,7 @@
 //! Lo que se hace con un resultado: editar sus filas desde el grid y
 //! exportarlo a un archivo.
 
+use crate::commands::query::read_only;
 use crate::export;
 use crate::result_editing;
 use crate::state::{AppState, with_active_connection};
@@ -124,7 +125,13 @@ pub async fn export_query_to_file(
     let sql = sql.trim().to_string();
     let path = export::validated_path(&path)?;
     let (connector, export_sql, dialect) = with_active_connection(&window, &state, |active| {
-        if !khipu_engine::pagination::is_read_only_query(&sql, active.dialect) {
+        // El guard decide, con las opciones de la sesion (commands::query::read_only).
+        if !read_only(
+            &sql,
+            active.dialect,
+            active.production,
+            active.guard_options(),
+        )? {
             return Err(Message::key("export.readOnly"));
         }
         // El archivo sale en el mismo orden que el grid (orden de los
