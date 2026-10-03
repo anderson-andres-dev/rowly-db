@@ -72,10 +72,10 @@ for (const engine of contract.engines) {
 // Cada motor tiene sus lineas de version y las fechas de su fabricante: sin
 // ellas no hay servidores que probar ni ventana de soporte (SQL_ENGINE §5).
 const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
-const vendor = JSON.parse(readFileSync(join(ROOT, "app/src/lib/engines/vendorSupport.json"), "utf8"));
+const vendor = JSON.parse(readFileSync(join(ROOT, "tools/support/vendor-support.json"), "utf8"));
 for (const engine of ENGINES) {
   if (!lines.engines?.[engine]?.length) problems.push(`${engine}: sin lineas en tools/test-dbs/lines.json (engines)`);
-  if (!vendor[engine]?.length) problems.push(`${engine}: sin fechas en app/src/lib/engines/vendorSupport.json`);
+  if (!vendor[engine]?.length) problems.push(`${engine}: sin fechas en tools/support/vendor-support.json`);
 }
 
 // Huerfanas: una prueba real que no prueba ninguna fila.

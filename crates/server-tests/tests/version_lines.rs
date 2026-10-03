@@ -24,7 +24,7 @@ struct Probe {
 /// Lo que cada probe devuelve tiene que ser la version exacta que declara
 /// lines.json: una etiqueta movida o una imagen equivocada no prueba la linea.
 fn check_version(engine_name: &str, probe: &Probe, conn: &Conn) {
-    let actual = exact_version(&conn.server_version()).to_string();
+    let actual = conn.exact_version();
     assert_eq!(
         actual, probe.version,
         "{engine_name}: {} en 127.0.0.1:{} informa {actual}, lines.json declara {}",
@@ -156,7 +156,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                 }
                 ends.push(Server {
                     image: probe.image.clone(),
-                    version: conn.server_version(),
+                    version: conn.exact_version(),
                     conn,
                 });
             }
@@ -299,7 +299,7 @@ async fn every_column_type_a_line_returns_is_read() {
                     panic!("{engine_name} {} ({}): {error}\nlevantalo con tools/test-dbs/lines.sh up {engine_name}", line.name, probe.image)
                 });
                 check_version(&engine_name, probe, &conn);
-                let version = conn.server_version();
+                let version = conn.exact_version();
                 // Cada test prepara lo suyo (SQL_ENGINE.md §10.2).
                 for statement in &fixture(
                     &repo()

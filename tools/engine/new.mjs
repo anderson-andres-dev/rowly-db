@@ -124,7 +124,7 @@ console.log(`Motor ${id} empezado (a partir de ${like}). Lo que falta, en orden:
      (npm run check los pide).
   4. tests/engines/contract.json: sus valores reales; quitar "pending".
   5. tools/test-dbs/lines.json (lineas, probes y verified, por digest),
-     docker-compose y up.sh; app/src/lib/engines/vendorSupport.json.
+     docker-compose y up.sh; tools/support/vendor-support.json.
   6. tests/sql/coverage.json: una respuesta para ${id} en cada fila
      (node tools/inventory/coverage.mjs dice cuales faltan).
   7. SQL_ENGINE (EN + ES): §5.3, §6.5 y lo que cambie en §9; CONTRIBUTING.

@@ -4,7 +4,7 @@
 
 use khipu_driver_core::{
     ConnectionConfig, DbConnector, DriverError, QueryExecutionOptions, QueryExecutionResult,
-    SchemaObjects, TlsMode,
+    SchemaObjects, ServerIdentity, TlsMode,
 };
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
@@ -144,7 +144,7 @@ impl Conn {
             );
         }
         let declared = declared_version(engine);
-        let actual = exact_version(&conn.server_version()).to_string();
+        let actual = conn.exact_version();
         assert_eq!(
             actual,
             declared.version,
@@ -198,7 +198,7 @@ impl Conn {
 
     /// La version exacta del servidor, para compararla: `[13, 23]`.
     pub fn version(&self) -> Vec<u32> {
-        version_numbers(exact_version(&self.server_version()))
+        self.server().version
     }
 
     /// Si el servidor tiene `capability` (ver `capability`). Si no la tiene,
@@ -221,7 +221,7 @@ impl Conn {
         if !is_error(&result) {
             return Err(format!(
                 "{engine:?} {}: «{name}» empieza en {} segun {}, pero el servidor acepto:\n  {}",
-                exact_version(&self.server_version()),
+                self.exact_version(),
                 dotted(&capability.since),
                 capability.proof,
                 sql.chars().take(120).collect::<String>()
@@ -229,7 +229,7 @@ impl Conn {
         }
         record(format!(
             "{{\"engine\":\"{engine:?}\",\"version\":\"{}\",\"row\":\"{row}\",\"na\":{},\"since\":\"{}\",\"proof\":\"{}\"}}",
-            exact_version(&self.server_version()),
+            self.exact_version(),
             serde_json::Value::from(name),
             dotted(&capability.since),
             capability.proof
@@ -237,12 +237,17 @@ impl Conn {
         Ok(true)
     }
 
-    /// La version que informa el servidor, como la muestra la app.
-    pub fn server_version(&self) -> String {
+    /// El servidor como lo detecta el driver (motor, version y etiqueta).
+    pub fn server(&self) -> ServerIdentity {
         match self {
-            Conn::My(connector) => connector.server_version(),
-            Conn::Pg(connector) => connector.server_version(),
+            Conn::My(connector) => connector.server(),
+            Conn::Pg(connector) => connector.server(),
         }
+    }
+
+    /// La version exacta, como la declara lines.json: `"13.23"`.
+    pub fn exact_version(&self) -> String {
+        dotted(&self.version())
     }
 
     /// Ejecuta tal cual, sin guard: lo que haria el servidor con el texto.
@@ -379,11 +384,6 @@ pub fn capability(engine: Engine, name: &str) -> Capability {
         "{engine:?}: «{name}» no esta en ningun tests/sql/{}/<linea>/accepts.sql; declarala ahi para que D7 la demuestre",
         engine.name()
     )
-}
-
-/// La version exacta de lo que muestra la app ("8.4.11" de "MySQL 8.4.11").
-pub fn exact_version(display: &str) -> &str {
-    display.rsplit(' ').next().unwrap_or(display)
 }
 
 /// Un servidor de lines.json: imagen fijada por digest y version declarada.

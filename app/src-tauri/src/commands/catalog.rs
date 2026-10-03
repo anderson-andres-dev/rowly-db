@@ -54,7 +54,7 @@ pub async fn set_visible_schemas(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<DatabaseExplorer, Message> {
-    let (connector, mut wanted, mut to_load, default_schema) = {
+    let (connector, generation, mut wanted, mut to_load, default_schema) = {
         let guard = state
             .connections
             .lock()
@@ -73,6 +73,7 @@ pub async fn set_visible_schemas(
         let to_load = schemas_to_load(&wanted, &active.schemas, refresh.unwrap_or(false));
         (
             Arc::clone(&active.connector),
+            active.context.generation,
             wanted,
             to_load,
             active.default_schema.clone(),
@@ -111,9 +112,10 @@ pub async fn set_visible_schemas(
     let active = guard
         .get_mut(window.label())
         .ok_or_else(|| Message::key("noActiveConnection"))?;
-    // Si mientras se introspectaba se conecto a otra base, lo cargado es de
-    // la conexion anterior y no se mezcla con la nueva.
-    if !Arc::ptr_eq(&active.connector, &connector) {
+    // Si mientras se introspectaba se conecto a otra base (otra generacion,
+    // aunque sea el mismo perfil), lo cargado es de la conexion anterior y no
+    // se mezcla con la nueva.
+    if active.context.generation != generation {
         return Err(Message::key("connectionChanged"));
     }
     if let Some(names) = available {

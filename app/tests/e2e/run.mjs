@@ -19,6 +19,8 @@
 //     tambien los cambios del grid, que el backend rechaza sin ella
 //   - contar el total pasa por el guard del backend y cuenta en la base
 //   - el texto de la consola sobrevive a reiniciar la app
+//
+// Los ciclos de recursos (reconexiones, memoria) estan en resources.mjs.
 
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -268,8 +270,11 @@ async function stopApp() {
   if (alive()) throw new Error("la app no termino tras SIGKILL");
 }
 
+// E2E_ONLY=<texto>: solo los recorridos cuyo nombre lo contiene (para
+// diagnosticar uno sin correr todos).
+const only = process.env.E2E_ONLY;
 let failures = 0;
-for (const { name, body } of flows) {
+for (const { name, body } of flows.filter((candidate) => !only || candidate.name.includes(only))) {
   resetData();
   const profile = mkdtempSync(join(tmpdir(), "rowly-e2e-"));
   const driver = await startDriver(profile);

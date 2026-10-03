@@ -7,7 +7,8 @@ use futures_util::TryStreamExt;
 use khipu_driver_core::{
     ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
     QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
-    SchemaObjects, TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
+    SchemaObjects, ServerIdentity, TlsMode, TlsStatus, TransactionError, TransactionStatement,
+    probe_tcp,
 };
 use sqlx::postgres::{
     PgConnectOptions, PgConnection, PgDatabaseError, PgErrorPosition, PgPoolOptions,
@@ -158,8 +159,8 @@ impl DbConnector for PostgresConnector {
         })
     }
 
-    fn server_version(&self) -> String {
-        self.version.display()
+    fn server(&self) -> ServerIdentity {
+        self.version.identity()
     }
 
     fn tls_status(&self) -> TlsStatus {

@@ -99,7 +99,7 @@ async fn main() {
             let start = Instant::now();
             let conn = Conn::open(engine).await;
             connect.push(ms(start));
-            version = conn.server_version();
+            version = conn.server().label;
         }
         let conn = Conn::open(engine).await;
         let small_schema = match engine {

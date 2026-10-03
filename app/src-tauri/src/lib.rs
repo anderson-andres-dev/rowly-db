@@ -3,6 +3,7 @@ mod commands;
 mod console_texts;
 mod credentials;
 mod drivers;
+mod engine_context;
 mod export;
 mod result_editing;
 mod sql_files;

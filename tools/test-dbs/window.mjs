@@ -10,15 +10,16 @@
 //
 //   node tools/test-dbs/window.mjs [--today AAAA-MM-DD]
 //
-// La regla es la de app/src/lib/engines/vendorSupport.ts (la que ve la UI):
-// soportada hasta su fin de soporte; las LTS, 12 meses mas de gracia.
+// La regla es la de app/src-tauri/src/engine_context.rs (la que llega a la UI
+// en el contexto de la conexion): soportada hasta su fin de soporte; las LTS,
+// 12 meses mas de gracia.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
-const releases = JSON.parse(readFileSync(join(ROOT, "app/src/lib/engines/vendorSupport.json"), "utf8"));
+const releases = JSON.parse(readFileSync(join(ROOT, "tools/support/vendor-support.json"), "utf8"));
 const at = process.argv.indexOf("--today");
 const today = at >= 0 ? new Date(`${process.argv[at + 1]}T12:00:00Z`) : new Date();
 
@@ -54,7 +55,7 @@ for (const engine of Object.keys(lines.engines)) {
   const inWindow = (releases[engine] ?? []).filter((release) => status(release) !== "unsupported");
   for (const server of verified) {
     const release = (releases[engine] ?? []).find((candidate) => prefix(server.version, candidate.release));
-    const state = release ? status(release) : "sin fechas en vendorSupport.json";
+    const state = release ? status(release) : "sin fechas en vendor-support.json";
     report.push(`${engine} ${server.version} (linea ${lineOf(engine, server.version)}): ${state}`);
     if (state !== "supported" && state !== "grace")
       problems.push(`${engine} ${server.version} esta en verified pero fuera de la ventana (${state}): sale de verified; la linea sigue conectando y en D7`);

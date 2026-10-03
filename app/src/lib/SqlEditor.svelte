@@ -25,7 +25,7 @@
     sqlDiagnostics,
     type SqlDiagnostic,
   } from "$lib/sqlDiagnostics";
-  import { engineFor, standardSql, type SqlProfile } from "$lib/engines";
+  import { standardSql, type SqlProfile } from "$lib/engines";
   import { notifySuccess } from "$lib/stores/notifications";
   import DiagnosticPopup from "$lib/components/DiagnosticPopup.svelte";
   import { onMount, onDestroy, untrack } from "svelte";
@@ -35,15 +35,13 @@
   import { scrollPastEnd } from "@codemirror/view";
   import { EditorSelection } from "@codemirror/state";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
-  import { catalogTables, connection, databaseExplorer } from "$lib/stores/connection";
-  import { connectionProfiles } from "$lib/stores/connectionProfiles";
+  import { activeEngine, catalogTables, databaseExplorer } from "$lib/stores/connection";
   import {
     buildSqlSchema,
     dialectFor,
     extractDefaultTable,
   } from "$lib/sqlSchema";
   import { buildCatalogCompletions } from "$lib/sqlCatalogCompletions";
-  import { vendorSupport } from "$lib/engines/vendorSupport";
   import { commentEditing } from "$lib/sqlCommentEditing";
   import { commentStyle } from "$lib/sqlCommentStyle";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
@@ -241,8 +239,10 @@
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
   // que recorre F2.
   let diagnosticCount = $state(0);
-  // Sin soporte del fabricante: una etiqueta junto a la version, sin mas.
-  const serverSupport = $derived($databaseExplorer?.serverVersion ? vendorSupport($databaseExplorer.serverVersion) : null);
+  // La version del servidor y su estado, como los dio el backend al conectar
+  // (ConnectionEngineContext). Sin soporte del fabricante: una etiqueta junto
+  // a la version, sin mas.
+  const serverContext = $derived($databaseExplorer?.context ?? null);
   let scrollbarWidth = $state(0);
   let scrollbarHeight = $state(0);
   // El fondo del editor (cambia con el tema): el contador lo toma para leerse
@@ -501,12 +501,12 @@
   // activa (ver arriba para el resto de la reconfiguracion, atada al texto).
   $effect(() => {
     const tables = $catalogTables;
-    const profile = $connectionProfiles.find((candidate) => candidate.id === $connection.profileId);
     // El schema de la conexion (search_path en Postgres, la base elegida en
     // MySQL): sus tablas van sin prefijo.
     const defaultSchema = $databaseExplorer?.defaultSchema;
 
-    const nextEngine = profile ? engineFor(profile.driver) : standardSql;
+    // El motor y el modo de la conexion, como los dio el backend.
+    const nextEngine = $activeEngine ?? standardSql;
     sqlSchema = buildSqlSchema(tables, {
       defaultSchema, engine: nextEngine,
       explorerSchemas: $databaseExplorer?.schemas ?? [],
@@ -525,7 +525,7 @@
     reconfigureCompletion();
     // Otro catalogo o dialecto: los nombres se vuelven a revisar (el efecto
     // tambien corre con otros cambios de la conexion; ahi no hace falta).
-    analysis.setContext($connection.profileId ?? null, tables, engine);
+    analysis.setContext($databaseExplorer?.context ?? null, engine);
   });
 
   onDestroy(() => {
@@ -554,17 +554,27 @@
     style:right={`${scrollbarWidth + 10}px`}
     style:--problems-background={editorBackground || undefined}
   >
-    {#if $databaseExplorer?.serverVersion}
-      <span class="server-version" use:tooltip={{ label: $t("editor.serverVersion"), placement: "above" }}>
-        {$databaseExplorer.serverVersion}
+    {#if serverContext}
+      {@const support = serverContext.support}
+      <span
+        class="server-version"
+        use:tooltip={{
+          label:
+            serverContext.verification === "unverified" && serverContext.line
+              ? $t("editor.serverUnverified", { line: serverContext.line })
+              : $t("editor.serverVersion"),
+          placement: "above",
+        }}
+      >
+        {serverContext.server.label}
       </span>
-      {#if serverSupport?.status === "unsupported"}
+      {#if support?.status === "unsupported" && support.eol}
         <span
           class="server-unsupported"
           use:tooltip={{
             label: $t("editor.serverUnsupportedHint", {
-              version: $databaseExplorer.serverVersion,
-              date: new Intl.DateTimeFormat($locale, { month: "long", year: "numeric" }).format(new Date(`${serverSupport.eol}T12:00:00Z`)),
+              version: serverContext.server.label,
+              date: new Intl.DateTimeFormat($locale, { month: "long", year: "numeric" }).format(new Date(`${support.eol}T12:00:00Z`)),
             }),
             placement: "above",
           }}

@@ -57,7 +57,7 @@ cargo test -p rowly-server-tests -- --ignored --test-threads=1
 
 `tools/test-dbs/lines.sh` comprueba los límites de las líneas de versión. El CI corre todo esto en cada PR de motor, en cada versión exacta verificada (`.github/workflows/sql-engine.yml`); los comandos y las reglas están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). No anuncies una versión como verificada sin su evidencia completa.
 
-Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `app/src/lib/engines/vendorSupport.json` y actualiza la tabla de [SQL_ENGINE.es.md, §5](SQL_ENGINE.es.md#5-líneas-de-versión) con la misma evidencia.
+Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `tools/support/vendor-support.json` y actualiza la tabla de [SQL_ENGINE.es.md, §5](SQL_ENGINE.es.md#5-líneas-de-versión) con la misma evidencia.
 
 ## Agregar un motor de base de datos
 
@@ -73,7 +73,7 @@ Crea el `EngineDefinition` del motor en `crates/engine/src/dialects/<id>.rs` (co
 2. **La definición.** Escribe cada campo de `EngineDefinition` con la respuesta propia del motor, probada contra su servidor, y quita el bloque `PENDIENTE`. Un valor heredado que nadie probó es un motor que sigue en silencio las reglas de otro. La sintaxis válida que su parser no lee va en `unparsed_syntax`.
 3. **`cargo test`** nombra el resto del lado Rust: `DatabaseKind` y su driver en `app/src-tauri/src/drivers.rs` (un protocolo nuevo es un crate en `crates/drivers/<protocolo>` que implementa `DbConnector`), `Engine` en `crates/server-tests` y el contrato compartido.
 4. **Frontend.** `ConnectionDriver` en `app/src/lib/connections.ts` (nombre, logo, puerto por defecto), su perfil en `app/src/lib/engines/<id>.ts`, `ENGINES` y los `FIXTURES` de `contract.test.ts`. La comilla de identificadores, la regla de la barra invertida y los comentarios ejecutables tienen que coincidir con `tests/engines/contract.json`; después quita `"pending"`.
-5. **Servidores y soporte.** Líneas, probes y versiones verificadas fijadas por digest en `tools/test-dbs/lines.json` (y su contenedor), fechas del fabricante en `app/src/lib/engines/vendorSupport.json`.
+5. **Servidores y soporte.** Líneas, probes y versiones verificadas fijadas por digest en `tools/test-dbs/lines.json` (y su contenedor), fechas del fabricante en `tools/support/vendor-support.json`.
 6. **La matriz.** `node tools/inventory/coverage.mjs` enumera cada fila de `SQL_ENGINE.es.md` sin respuesta para el motor: una prueba que lo incluya, un `N/A` con motivo o un hueco declarado (`gapEngines`).
 
 Después corre la compuerta de motor en cada versión exacta que quieras anunciar y comprueba que los motores existentes siguen verdes. Una integración sin matriz completa queda como experimental, no como soporte verificado.

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ConnectionDriver } from "$lib/connections";
+  import type { SqlProfile } from "$lib/engines";
   import { tooltip } from "$lib/tooltip";
   import { Filter, Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
@@ -25,7 +25,7 @@
   let {
     filters,
     columns,
-    driver,
+    engine,
     error = null,
     busy = false,
     onapply,
@@ -34,7 +34,9 @@
     // Lo aplicado ahora (lo que se ve en el grid).
     filters: Filters;
     columns: { name: string; dataType: string }[];
-    driver: ConnectionDriver;
+    // El motor y el modo de la conexion (activeEngine): como se escriben los
+    // nombres y los literales.
+    engine: SqlProfile;
     error?: string | null;
     busy?: boolean;
     onapply: (filters: Filters) => void;
@@ -60,7 +62,7 @@
     if (incoming !== lastAppliedConditions) conditions = draftConditions(filters.conditions);
   });
 
-  const builtWhere = $derived(buildWhere(conditions, driver, typeOf));
+  const builtWhere = $derived(buildWhere(conditions, engine, typeOf));
 
   // Se ejecuta sola mientras se arma: cuando se deja de escribir un momento
   // y solo si el WHERE cambio (una condicion a medias no cambia nada).

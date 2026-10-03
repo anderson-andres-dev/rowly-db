@@ -293,6 +293,11 @@ pub fn analyze_sql(
     // Lo que crea el documento (CREATE [TEMPORARY] TABLE/VIEW): ver
     // `CatalogView::created`.
     created: Option<Vec<String>>,
+    // La generacion y el `schema_epoch` del contexto con que el editor arma
+    // su cache (ConnectionEngineContext): si la conexion o sus schemas ya
+    // cambiaron, el resultado se guardaria con la clave de otros.
+    generation: u64,
+    schema_epoch: u64,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
@@ -300,6 +305,9 @@ pub fn analyze_sql(
     // copia); el analisis corre despues, sin bloquear execute_query.
     let (catalog, dialect, default_schema, loaded_schemas) =
         with_active_connection(&window, &state, |active| {
+            if !active.context.is_current(generation, schema_epoch) {
+                return Err(Message::key("analysisOutdated"));
+            }
             Ok((
                 Arc::clone(&active.catalog),
                 active.dialect,
