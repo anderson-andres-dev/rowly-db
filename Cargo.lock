@@ -2545,6 +2545,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "khipu-driver-core",
+ "khipu-engine",
  "sqlx",
  "tokio",
 ]
@@ -2556,6 +2557,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "khipu-driver-core",
+ "khipu-engine",
  "sqlx",
  "tokio",
 ]

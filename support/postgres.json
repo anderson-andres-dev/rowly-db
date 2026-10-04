@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "engine": "postgres",
+  "lines": [
+    { "line": "10", "revision": 1, "capabilities": { "catalogV10": "10" } },
+    {
+      "line": "11",
+      "revision": 1,
+      "capabilities": { "procedures": "11", "indexIncludeColumns": "11" }
+    },
+    {
+      "line": "12",
+      "revision": 1,
+      "removedSyntax": [{ "words": ["WITH", "OIDS", "$"] }]
+    },
+    {
+      "line": "14",
+      "revision": 1,
+      "removedSyntax": [{ "words": ["!", "$"], "instead": "factorial()" }]
+    },
+    { "line": "15", "revision": 1 },
+    { "line": "16", "revision": 1 },
+    { "line": "17", "revision": 1 },
+    { "line": "18", "revision": 1 }
+  ]
+}

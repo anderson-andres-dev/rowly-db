@@ -110,6 +110,23 @@ fn entry_since(entry: &str) -> Option<Vec<u32>> {
         .find_map(since)
 }
 
+/// El analizador, con la linea del servidor, marca la sentencia como
+/// sintaxis que esa linea o una anterior elimino (A9).
+fn marks_removed_syntax(engine: Engine, sql: &str, line: &khipu_engine::lines::Line) -> bool {
+    khipu_engine::diagnostics::analyze_statement_with(
+        sql,
+        engine.dialect(),
+        None,
+        false,
+        Some(line),
+    )
+    .iter()
+    .any(|diagnostic| {
+        matches!(&diagnostic.message, khipu_engine::diagnostics::DiagnosticMessage::Key { key, .. }
+                if key.starts_with("diagnostic.removedInLine"))
+    })
+}
+
 struct Server {
     image: String,
     version: String,
@@ -130,6 +147,7 @@ impl Server {
 async fn every_version_line_is_told_apart_from_the_previous_one() {
     let mut failures = Vec::new();
     let mut report = Vec::new();
+    let mut removed_marked = 0;
     for (engine_name, lines) in registry() {
         let engine = engine_named(&engine_name);
         if !engine_selected(engine) {
@@ -153,6 +171,14 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                         )
                     });
                 check_version(&engine_name, probe, &conn);
+                // D6: la version que informa el servidor real cae en la linea
+                // que este probe demuestra (support/<motor>.json).
+                let effective = engine.dialect().lines().effective(&conn.version());
+                assert_eq!(
+                    effective.line, line.name,
+                    "{engine_name} {}: support/{engine_name}.json la asigna a la linea {}",
+                    probe.version, effective.line
+                );
                 for statement in &setup {
                     let _ = conn.raw(statement).await;
                 }
@@ -229,6 +255,23 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                                     .is_none_or(|from| version_numbers(&server.version) >= *from);
                             let should_pass = changed == new_in_line;
                             let outcome = server.accepts(sql).await;
+                            // A9: lo que el analizador marca como eliminado en
+                            // la linea de este servidor, el servidor lo rechaza.
+                            let line_of_server = engine
+                                .dialect()
+                                .lines()
+                                .effective(&version_numbers(&server.version));
+                            if marks_removed_syntax(engine, sql, line_of_server) {
+                                removed_marked += 1;
+                                if outcome.is_ok() {
+                                    failures.push(format!(
+                                        "{engine_name} {}: «{}» marcado como eliminado en {} y el servidor lo acepta",
+                                        line.name,
+                                        label(sql),
+                                        server.version
+                                    ));
+                                }
+                            }
                             if outcome.is_ok() != should_pass {
                                 failures.push(format!(
                                     "{engine_name} {}: «{}» en {} ({}) {}\n    {}",
@@ -258,6 +301,9 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
             ));
         }
     }
+    report.push(format!(
+        "sintaxis eliminada marcada por el analizador (A9): {removed_marked}"
+    ));
     println!("{}", report.join("\n"));
     assert!(
         failures.is_empty(),

@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "engine": "mysql",
+  "lines": [
+    { "line": "5.7", "revision": 1 },
+    {
+      "line": "8.0",
+      "revision": 1,
+      "capabilities": { "checkConstraints": "8.0.16" },
+      "reservedWords": ["rank"]
+    },
+    {
+      "line": "8.4",
+      "revision": 1,
+      "removedSyntax": [
+        { "words": ["^", "SHOW", "SLAVE", "STATUS"], "instead": "SHOW REPLICA STATUS" },
+        { "words": ["^", "SHOW", "MASTER", "STATUS"], "instead": "SHOW BINARY LOG STATUS" }
+      ]
+    },
+    { "line": "9", "revision": 1 }
+  ]
+}
