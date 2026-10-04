@@ -42,6 +42,7 @@ El motor no depende de ningún driver, ni siquiera de `driver-core`. Los drivers
 | `lib.rs` | Compone la app y registra los comandos. Nada más. |
 | `state.rs` | `AppState`: una `ActiveConnection` por ventana, con su conector, su catálogo compartido (`Arc<SchemaCatalog>`, rehecho solo cuando cambian los schemas) y las consultas que se pueden cancelar. |
 | `engine_context.rs` | El contexto de motor de cada conexión, armado una vez al conectar: generación, motor, servidor detectado, modo de sesión, línea efectiva y su revisión (de `support/<motor>.json`), `schemaEpoch`, soporte del fabricante y verificación. El frontend lo recibe de solo lectura. |
+| `support.rs` | Los paquetes de soporte de versión (SQL_ENGINE §11): índice y paquetes firmados, instalación atómica, quitar y desactivar, y las líneas activas de cada motor. La red solo cuando el usuario la pide; sin ella, las líneas incluidas. |
 | `commands/` | Un archivo por dominio (`query`, `catalog`, `connection`, `files`, `results`). Cada comando adapta sus argumentos y llama a lo que ya existe; no repite el guard, el catálogo ni los pools. |
 | `services/` | Lo que hacen los comandos, sin Tauri: el catálogo del motor, los textos de las consolas, los archivos `.sql`, exportar y editar resultados. |
 
@@ -66,6 +67,7 @@ Todo lo que ejecuta SQL pasa por el guard antes de llegar al driver, con el modo
 | :--- | :--- | :--- |
 | Conexión | `ActiveConnection` en el backend; `stores/connection.ts` en el frontend | Al volver a la lista (`disconnect`) o al cerrar la ventana |
 | Motor, versión y modo | `ConnectionEngineContext` | Nunca cambia: reconectar crea otra generación |
+| Líneas activas y paquetes de soporte | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` solo las muestra | Al instalar, quitar o desactivar; cada conexión conserva las que tomó al conectar |
 | Catálogo | `ActiveConnection.catalog`; `catalogTables` y `databaseExplorer` en el frontend | Cada cambio de schemas sube `schemaEpoch` |
 | Caché del análisis | `editor/analysisSession.ts`, una sola a la vez | Otra generación, otro `schemaEpoch`, otro motor u otras tablas creadas por el documento; `analyze_sql` rechaza lo pedido con otro contexto |
 | Consolas y su texto | `stores/queryConsoles.ts` | Al cerrar la consola |

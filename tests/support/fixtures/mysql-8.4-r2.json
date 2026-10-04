@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "engine": "mysql",
+  "requiresApp": "0.3.0",
+  "line": {
+    "line": "8.4",
+    "revision": 2,
+    "removedSyntax": [
+      {
+        "words": [
+          "^",
+          "SHOW",
+          "SLAVE",
+          "STATUS"
+        ],
+        "instead": "SHOW REPLICA STATUS"
+      },
+      {
+        "words": [
+          "^",
+          "SHOW",
+          "MASTER",
+          "STATUS"
+        ],
+        "instead": "SHOW BINARY LOG STATUS"
+      },
+      {
+        "words": [
+          "^",
+          "SHOW",
+          "SLAVE",
+          "HOSTS"
+        ],
+        "instead": "SHOW REPLICAS"
+      }
+    ],
+    "reservedWords": [
+      "qualify"
+    ]
+  }
+}

@@ -4,6 +4,7 @@ mod drivers;
 mod engine_context;
 mod services;
 mod state;
+mod support;
 mod text_encoding;
 mod updates;
 mod webkit_env;
@@ -30,6 +31,12 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState::default())
+        // Las lineas activas con los paquetes de soporte instalados; sin
+        // ellos, o si alguno no es valido, las incluidas.
+        .setup(|app| {
+            support::activate_installed(app.handle());
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.try_state::<AppState>() {
@@ -73,7 +80,12 @@ pub fn run() {
             updates::update_context,
             updates::list_releases,
             updates::install_release,
-            updates::restart_app
+            updates::restart_app,
+            support::support_lines,
+            support::check_support_updates,
+            support::install_support_package,
+            support::remove_support_package,
+            support::set_support_line_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -118,7 +118,7 @@ fn marks_removed_syntax(engine: Engine, sql: &str, line: &khipu_engine::lines::L
         engine.dialect(),
         None,
         false,
-        Some(line),
+        Some((&engine.dialect().lines(), line)),
     )
     .iter()
     .any(|diagnostic| {
@@ -173,7 +173,8 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                 check_version(&engine_name, probe, &conn);
                 // D6: la version que informa el servidor real cae en la linea
                 // que este probe demuestra (support/<motor>.json).
-                let effective = engine.dialect().lines().effective(&conn.version());
+                let lines = engine.dialect().lines();
+                let effective = lines.effective(&conn.version());
                 assert_eq!(
                     effective.line, line.name,
                     "{engine_name} {}: support/{engine_name}.json la asigna a la linea {}",
@@ -257,10 +258,8 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             let outcome = server.accepts(sql).await;
                             // A9: lo que el analizador marca como eliminado en
                             // la linea de este servidor, el servidor lo rechaza.
-                            let line_of_server = engine
-                                .dialect()
-                                .lines()
-                                .effective(&version_numbers(&server.version));
+                            let lines = engine.dialect().lines();
+                            let line_of_server = lines.effective(&version_numbers(&server.version));
                             if marks_removed_syntax(engine, sql, line_of_server) {
                                 removed_marked += 1;
                                 if outcome.is_ok() {

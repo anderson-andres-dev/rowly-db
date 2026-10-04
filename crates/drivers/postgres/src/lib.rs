@@ -24,6 +24,10 @@ pub struct PostgresConnector {
     /// out of the pool, so it opens with the same options and session.
     console: ConsoleConnection<PgConnection>,
     version: version::ServerVersion,
+    /// What introspection reads, decided once on connect from the engine's
+    /// active lines: a support pack installed later applies from the next
+    /// connection, never halfway through this one.
+    capabilities: version::Capabilities,
     tls: TlsStatus,
 }
 
@@ -155,10 +159,12 @@ impl DbConnector for PostgresConnector {
                 .await
                 .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))?;
         let tls = tls::read_status(&pool, fell_back).await;
+        let version = version::ServerVersion::parse(&raw_version);
         Ok(Self {
             pool,
             console: ConsoleConnection::default(),
-            version: version::ServerVersion::parse(&raw_version),
+            capabilities: version.capabilities(),
+            version,
             tls,
         })
     }
@@ -198,7 +204,7 @@ impl DbConnector for PostgresConnector {
 
     async fn introspect_schema(&self, schema: &str) -> Result<SchemaObjects, DriverError> {
         let mut objects =
-            introspect::introspect_schema(&self.pool, schema, self.version.capabilities()).await?;
+            introspect::introspect_schema(&self.pool, schema, self.capabilities).await?;
         if self.version.is_below_compatibility_floor() {
             objects.warnings.insert(
                 0,

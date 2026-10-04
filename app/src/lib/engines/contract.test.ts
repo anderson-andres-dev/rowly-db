@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
-import { ENGINES, standardSql, type SqlProfile } from "$lib/engines";
+import { ENGINES, engineForContext, standardSql, type SqlProfile } from "$lib/engines";
+import type { ConnectionEngineContext } from "$lib/types";
 import type { ConnectionDriver } from "$lib/connections";
 import type { ExecutionError } from "$lib/editor/diagnostics";
 import { splitStatements } from "$lib/sqlStatements";
@@ -281,6 +282,34 @@ describe("lineas de version", () => {
     // MariaDB cita tambien lo que reservan las lineas de MySQL: una comilla
     // de mas no rompe nada.
     expect(ENGINES.mariadb.identifier("rank")).toBe("`rank`");
+  });
+
+  it("una reservada que trae un paquete de soporte se cita en esa conexion (P, G6)", () => {
+    const context = (reservedWords: string[], noBackslashEscapes = false): ConnectionEngineContext => ({
+      generation: 1,
+      engineId: "mysql",
+      server: { engine: "mysql", version: [8, 4, 11], label: "MySQL 8.4.11" },
+      sessionMode: { noBackslashEscapes },
+      line: { id: "8.4", revision: 2, origin: "downloaded" },
+      reservedWords,
+      schemaEpoch: 0,
+      support: null,
+      verification: "verified",
+    });
+    // Lo que la app ya cita no crea otro perfil.
+    expect(engineForContext(context(["rank"]))).toBe(ENGINES.mysql);
+    const withPack = engineForContext(context(["rank", "qualify"]));
+    expect(withPack.identifier("qualify")).toBe("`qualify`");
+    expect(withPack.identifier("Qualify")).toBe("`Qualify`");
+    expect(withPack.identifier("users")).toBe("users");
+    expect(withPack.reservedWords.has("qualify")).toBe(true);
+    expect(ENGINES.mysql.identifier("qualify")).toBe("qualify");
+    // La misma revision es el mismo perfil (clave de las caches), y se suma
+    // al modo de la sesion.
+    expect(engineForContext(context(["qualify", "rank"]))).toBe(withPack);
+    const both = engineForContext(context(["qualify"], true));
+    expect(both.identifier("qualify")).toBe("`qualify`");
+    expect(both.lexical.backslashEscapes).toBe(false);
   });
 
   it("el frontend no deduce linea ni version: las recibe del backend", async () => {

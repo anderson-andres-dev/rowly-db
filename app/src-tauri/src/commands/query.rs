@@ -339,6 +339,10 @@ pub fn analyze_sql(
                 active.schemas.keys().cloned().collect::<Vec<_>>(),
             ))
         })?;
+    // La linea con la instantanea de lineas que la conexion tomo al conectar.
+    let line = line
+        .as_ref()
+        .and_then(|(lines, id)| lines.get(id).map(|line| (&**lines, line)));
     let view = khipu_engine::diagnostics::CatalogView {
         tables: &catalog.tables,
         loaded_schemas: loaded_schemas.iter().map(String::as_str).collect(),

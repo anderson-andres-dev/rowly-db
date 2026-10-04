@@ -12,10 +12,10 @@
 
 use khipu_driver_core::ServerIdentity;
 use khipu_engine::Dialect;
-use khipu_engine::lines::{Line, compare, numbers};
+use khipu_engine::lines::{EngineLines, Origin, compare, numbers};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +36,16 @@ pub(crate) struct ConnectionEngineContext {
     /// la mas cercana por debajo de su version; por debajo de la primera, la
     /// primera. None solo si el driver informa un motor sin registrar.
     pub(crate) line: Option<LineIdentity>,
+    /// Las reservadas de todas las lineas del motor del perfil, de la misma
+    /// instantanea: el SQL que escribe el editor las cita (G6) aunque las
+    /// haya traido un paquete descargado.
+    pub(crate) reserved_words: Vec<String>,
+    /// Las lineas del motor del servidor tal como estaban al conectar
+    /// (`Dialect::lines`): de aqui salen `line` y las reglas del analisis.
+    /// Un paquete instalado despues no las cambia; vale desde la conexion
+    /// siguiente, que es otra generacion.
+    #[serde(skip)]
+    pub(crate) lines: Option<Arc<EngineLines>>,
     /// Sube cada vez que cambian los schemas cargados (`set_schemas`): un
     /// refresco o un DDL no crean una generacion nueva.
     pub(crate) schema_epoch: u64,
@@ -45,11 +55,13 @@ pub(crate) struct ConnectionEngineContext {
     pub(crate) verification: Verification,
 }
 
-/// Que linea y que revision de sus datos se aplican a la conexion.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Que linea, que revision de sus datos y de donde (la app o un paquete
+/// descargado) se aplican a la conexion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct LineIdentity {
-    pub(crate) id: &'static str,
+    pub(crate) id: String,
     pub(crate) revision: u32,
+    pub(crate) origin: Origin,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -97,10 +109,37 @@ impl ConnectionEngineContext {
         server: ServerIdentity,
         session_mode: SessionMode,
     ) -> Self {
+        let lines = Dialect::from_id(server.engine).map(Dialect::lines);
+        let profile_lines = match &lines {
+            Some(lines) if server.engine == dialect.id() => Arc::clone(lines),
+            _ => dialect.lines(),
+        };
+        Self::with_lines(
+            generation,
+            dialect,
+            server,
+            session_mode,
+            lines,
+            &profile_lines,
+        )
+    }
+
+    /// Con las lineas ya tomadas: las del motor del servidor y las del motor
+    /// del perfil (las mismas si coinciden).
+    pub(crate) fn with_lines(
+        generation: u64,
+        dialect: Dialect,
+        server: ServerIdentity,
+        session_mode: SessionMode,
+        lines: Option<Arc<EngineLines>>,
+        profile_lines: &EngineLines,
+    ) -> Self {
         Self {
             generation,
             engine_id: dialect.id(),
-            line: effective_line(server.engine, &server.version),
+            line: lines.as_ref().map(|lines| identity(lines, &server.version)),
+            reserved_words: profile_lines.reserved_words().map(str::to_string).collect(),
+            lines,
             support: vendor_support(server.engine, &server.version, &today()),
             verification: verification(server.engine, &server.version),
             server,
@@ -118,12 +157,12 @@ impl ConnectionEngineContext {
     /// La linea con que se analiza el SQL: la del servidor, si es del motor
     /// del perfil. Un MariaDB detras de un perfil MySQL no aplica reglas de
     /// lineas de MariaDB al SQL de MySQL.
-    pub(crate) fn analysis_line(&self) -> Option<&'static Line> {
-        let line = self.line?;
+    pub(crate) fn analysis_line(&self) -> Option<(Arc<EngineLines>, String)> {
+        let line = self.line.as_ref()?;
         if self.server.engine != self.engine_id {
             return None;
         }
-        Dialect::from_id(self.engine_id)?.lines().get(line.id)
+        Some((Arc::clone(self.lines.as_ref()?), line.id.clone()))
     }
 }
 
@@ -163,12 +202,57 @@ fn dotted(version: &[u32]) -> String {
         .join(".")
 }
 
-fn effective_line(engine: &str, version: &[u32]) -> Option<LineIdentity> {
-    let line = Dialect::from_id(engine)?.lines().effective(version);
-    Some(LineIdentity {
-        id: &line.line,
+fn identity(lines: &EngineLines, version: &[u32]) -> LineIdentity {
+    let line = lines.effective(version);
+    LineIdentity {
+        id: line.line.clone(),
         revision: line.revision,
-    })
+        origin: line.origin,
+    }
+}
+
+#[cfg(test)]
+fn effective_line(engine: &str, version: &[u32]) -> Option<LineIdentity> {
+    Some(identity(&Dialect::from_id(engine)?.lines(), version))
+}
+
+/// Las versiones exactas que la app tiene por verificadas para un motor: la
+/// evidencia compilada, nunca lo que diga un paquete.
+pub(crate) fn verified_versions(engine: &str) -> Vec<String> {
+    LINES
+        .verified
+        .get(engine)
+        .map(|servers| {
+            servers
+                .iter()
+                .map(|server| server.version.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// El soporte del fabricante de una linea: el mejor de sus versiones del
+/// fabricante (SQL_ENGINE.md §5.2: una linea esta soportada mientras lo este
+/// alguna). None si ninguna version conocida cae en ella.
+pub(crate) fn line_support(
+    engine: &str,
+    lines: &EngineLines,
+    line: &str,
+    today: &str,
+) -> Option<SupportStatus> {
+    let rank = |status: SupportStatus| match status {
+        SupportStatus::Supported => 3,
+        SupportStatus::Grace => 2,
+        SupportStatus::Newer => 1,
+        SupportStatus::Unsupported => 0,
+    };
+    RELEASES
+        .get(engine)?
+        .iter()
+        .map(|release| numbers(&release.release))
+        .filter(|release| lines.effective(release).line == line)
+        .filter_map(|release| vendor_support(engine, &release, today).map(|found| found.status))
+        .max_by_key(|status| rank(*status))
 }
 
 fn verification(engine: &str, version: &[u32]) -> Verification {
@@ -232,7 +316,7 @@ fn one_year_after(date: &str) -> String {
 
 /// La fecha de hoy en UTC, `AAAA-MM-DD` (algoritmo de dias civiles de
 /// Howard Hinnant: sin dependencias de fechas).
-fn today() -> String {
+pub(crate) fn today() -> String {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
@@ -323,19 +407,19 @@ mod tests {
     #[test]
     fn the_line_is_the_closest_one_below_and_the_floor_below_the_first() {
         let line = |engine: &str, version: &str| {
-            effective_line(engine, &numbers(version)).map(|line| line.id)
+            effective_line(engine, &numbers(version)).map(|line| line.id.to_string())
         };
-        assert_eq!(line("mysql", "8.4.11"), Some("8.4"));
-        assert_eq!(line("mysql", "8.3.0"), Some("8.0"));
+        assert_eq!(line("mysql", "8.4.11").as_deref(), Some("8.4"));
+        assert_eq!(line("mysql", "8.3.0").as_deref(), Some("8.0"));
         // Mas nueva que las probadas: la linea mas cercana por debajo
         // (SQL_ENGINE.md §5.2).
-        assert_eq!(line("mysql", "12.1.0"), Some("9"));
-        assert_eq!(line("mariadb", "11.4.13"), Some("10.6"));
-        assert_eq!(line("postgres", "13.23"), Some("12"));
+        assert_eq!(line("mysql", "12.1.0").as_deref(), Some("9"));
+        assert_eq!(line("mariadb", "11.4.13").as_deref(), Some("10.6"));
+        assert_eq!(line("postgres", "13.23").as_deref(), Some("12"));
         // Debajo del piso conecta con la primera linea, la del piso.
-        assert_eq!(line("mysql", "5.6.51"), Some("5.7"));
-        assert_eq!(line("postgres", "9.6.24"), Some("10"));
-        assert_eq!(line("sqlite", "3.46.0"), None);
+        assert_eq!(line("mysql", "5.6.51").as_deref(), Some("5.7"));
+        assert_eq!(line("postgres", "9.6.24").as_deref(), Some("10"));
+        assert_eq!(line("sqlite", "3.46.0").as_deref(), None);
     }
 
     #[test]
@@ -353,13 +437,21 @@ mod tests {
             )
         };
         let mysql = context(Dialect::MySql, "mysql", vec![8, 4, 11]);
-        let line = mysql.analysis_line().expect("MySQL 8.4 con perfil MySQL");
-        assert_eq!(line.line, mysql.line.unwrap().id);
-        assert_eq!(line.revision, mysql.line.unwrap().revision);
+        let (lines, id) = mysql.analysis_line().expect("MySQL 8.4 con perfil MySQL");
+        let line = lines.get(&id).unwrap();
+        let shown = mysql.line.clone().unwrap();
+        // P: lo que ve el frontend (`line`) es lo que usa el analisis.
+        assert_eq!(
+            (line.line.as_str(), line.revision),
+            (shown.id.as_str(), shown.revision)
+        );
         // Un MariaDB detras de un perfil MySQL muestra su linea, pero el SQL
         // de MySQL no se analiza con reglas de lineas de MariaDB.
         let mariadb = context(Dialect::MySql, "mariadb", vec![11, 8, 9]);
-        assert_eq!(mariadb.line.map(|line| line.id), Some("11.7"));
+        assert_eq!(
+            mariadb.line.as_ref().map(|line| line.id.as_str()),
+            Some("11.7")
+        );
         assert!(mariadb.analysis_line().is_none());
     }
 
@@ -427,7 +519,8 @@ mod tests {
                 "engineId": "mysql",
                 "server": { "engine": "mariadb", "version": [11, 8, 9], "label": "MariaDB 11.8.9" },
                 "sessionMode": { "noBackslashEscapes": true },
-                "line": { "id": "11.7", "revision": 1 },
+                "line": { "id": "11.7", "revision": 1, "origin": "included" },
+                "reservedWords": ["rank"],
                 "schemaEpoch": 0,
                 "verification": "verified",
             })

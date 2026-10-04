@@ -9,6 +9,11 @@ pub mod pagination;
 pub mod parser;
 
 pub use dialects::{DoBlocks, EngineDefinition, InsertDefaults, RoutineBodies};
+use std::sync::{Arc, OnceLock, RwLock};
+
+/// Las lineas activas de cada motor, cuando la app instalo paquetes (`Dialect::lines`).
+static ACTIVE_LINES: RwLock<[Option<Arc<lines::EngineLines>>; Dialect::ALL.len()]> =
+    RwLock::new([const { None }; Dialect::ALL.len()]);
 
 /// El SQL de cada motor (SQL_ENGINE.es.md). Lo que cambia de uno a otro esta
 /// en su `EngineDefinition` (dialects/); este es el registro: el unico `match`
@@ -48,19 +53,45 @@ impl Dialect {
         Dialect::ALL.into_iter().find(|dialect| dialect.id() == id)
     }
 
-    /// Sus lineas de version (lines.rs): la unica declaracion de lo que
-    /// cambia de una version a otra.
-    pub fn lines(self) -> &'static lines::EngineLines {
-        static PARSED: [std::sync::OnceLock<lines::EngineLines>; Dialect::ALL.len()] =
-            [const { std::sync::OnceLock::new() }; Dialect::ALL.len()];
-        let index = Dialect::ALL
+    /// Sus lineas incluidas en la app (`support/<motor>.json`), sin paquetes:
+    /// las que quedan siempre, con o sin red.
+    pub fn bundled_lines(self) -> &'static Arc<lines::EngineLines> {
+        static PARSED: [OnceLock<Arc<lines::EngineLines>>; Dialect::ALL.len()] =
+            [const { OnceLock::new() }; Dialect::ALL.len()];
+        PARSED[self.index()].get_or_init(|| {
+            Arc::new(
+                lines::EngineLines::parse(self.definition().lines)
+                    .unwrap_or_else(|error| panic!("support/{}.json: {error}", self.id())),
+            )
+        })
+    }
+
+    /// Sus lineas activas (lines.rs): las incluidas, o las que la app armo
+    /// con los paquetes instalados (`activate_lines`). Quien las usa toma
+    /// esta instantanea una vez (al conectar) y la conserva: un paquete
+    /// nuevo vale desde la conexion siguiente.
+    pub fn lines(self) -> Arc<lines::EngineLines> {
+        ACTIVE_LINES.read().expect("lineas activas")[self.index()]
+            .clone()
+            .unwrap_or_else(|| Arc::clone(self.bundled_lines()))
+    }
+
+    /// Reemplaza las lineas activas del motor por un conjunto ya validado
+    /// (`EngineLines::with_packages`). Solo la app lo llama, al arrancar y al
+    /// instalar, quitar o desactivar un paquete.
+    pub fn activate_lines(self, active: lines::EngineLines) -> Result<(), String> {
+        if active.engine != self.id() {
+            return Err(format!("lineas de {} para {}", active.engine, self.id()));
+        }
+        ACTIVE_LINES.write().expect("lineas activas")[self.index()] = Some(Arc::new(active));
+        Ok(())
+    }
+
+    fn index(self) -> usize {
+        Dialect::ALL
             .iter()
             .position(|dialect| *dialect == self)
-            .expect("cada motor esta en ALL");
-        PARSED[index].get_or_init(|| {
-            lines::EngineLines::parse(self.definition().lines)
-                .unwrap_or_else(|error| panic!("support/{}.json: {error}", self.id()))
-        })
+            .expect("cada motor esta en ALL")
     }
 
     /// El parser de sqlparser para el motor. sqlparser no tiene uno de

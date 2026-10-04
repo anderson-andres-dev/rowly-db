@@ -24,6 +24,10 @@ pub struct MySqlConnector {
     /// out of the pool, so it opens with the same options and session.
     console: ConsoleConnection<MySqlConnection>,
     version: version::ServerVersion,
+    /// What introspection reads, decided once on connect from the engine's
+    /// active lines: a support pack installed later applies from the next
+    /// connection, never halfway through this one.
+    capabilities: version::Capabilities,
     tls: TlsStatus,
 }
 
@@ -219,10 +223,12 @@ impl DbConnector for MySqlConnector {
             .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))
             .and_then(|row| text_column(&row, 0))?;
         let tls = tls::read_status(&pool, fell_back).await;
+        let version = version::ServerVersion::parse(&raw_version);
         Ok(Self {
             pool,
             console: ConsoleConnection::default(),
-            version: version::ServerVersion::parse(&raw_version),
+            capabilities: version.capabilities(),
+            version,
             tls,
         })
     }
@@ -270,7 +276,7 @@ impl DbConnector for MySqlConnector {
 
     async fn introspect_schema(&self, schema: &str) -> Result<SchemaObjects, DriverError> {
         let mut objects =
-            introspect::introspect_schema(&self.pool, schema, self.version.capabilities()).await?;
+            introspect::introspect_schema(&self.pool, schema, self.capabilities).await?;
         if self.version.is_below_compatibility_floor() {
             objects.warnings.insert(
                 0,
