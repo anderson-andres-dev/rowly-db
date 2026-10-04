@@ -89,6 +89,12 @@ count as active maintenance.
 
 Recalculate the window before each release using official lifecycle dates from [MySQL](https://www.mysql.com/support/eol-notice.html), [MariaDB Community](https://mariadb.org/about/) and [PostgreSQL](https://www.postgresql.org/support/versioning/). Use `endoflife.date` as a cross-check, never the sole authority.
 
+Three facts are kept apart, each with its own source:
+
+- **Compatibility floor** (`COMPATIBILITY_FLOOR_*` in each driver's `version.rs`: MySQL 5.7, MariaDB 10.3, PostgreSQL 10): the oldest release whose catalog the driver is written to read. It never refuses a connection: an older server connects with its line, loads what its catalog has, and the explorer says some objects may be missing. It says nothing about support.
+- **Support window** (this section; vendor dates in `app/src/lib/engines/vendorSupport.json`): decides the tag the editor shows and which lines the engine PR gate covers. `tools/test-dbs/window.mjs`, in the PR gate, fails when `verified` and the window disagree: every line with a supported or grace release has a verified release, and no verified release is outside the window.
+- **Verification** (`verified` in `tools/test-dbs/lines.json`): the exact releases that pass the complete matrix with evidence (§7).
+
 Vendor support and Rowly DB verification are separate facts. **Every exact server release advertised as verified** must pass every applicable row in §6, with evidence from §7 and §10. An unverified release may connect using conservative rules from its line, but it is not advertised as verified. The table in §5.3 reflects testing available today; it does not certify every patch in its ranges. A behavior line groups rules; the exact release identifies the server tested. No patch automatically inherits another patch's verification.
 
 **Rules per use:**
@@ -267,7 +273,6 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 | Gap | Severity | Note |
 |---|---|---|
-| The minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | Align the support window. |
 | The integrated confirmation test (S7) covers only the console and result editing on one MySQL release, and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add the other engines and releases, reconnect and mode changes. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. The UI does not yet distinguish verified from unverified exact releases. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |

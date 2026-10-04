@@ -89,6 +89,12 @@ parches no cuenta como mantenimiento activo.
 
 La ventana se recalcula al preparar cada release, con las fechas oficiales del [ciclo de MySQL](https://www.mysql.com/support/eol-notice.html), [MariaDB Community](https://mariadb.org/about/) y [PostgreSQL](https://www.postgresql.org/support/versioning/). `endoflife.date` sirve para contrastar, nunca como única autoridad.
 
+Tres datos se mantienen separados, cada uno con su fuente:
+
+- **Piso de compatibilidad** (`COMPATIBILITY_FLOOR_*` en el `version.rs` de cada driver: MySQL 5.7, MariaDB 10.3, PostgreSQL 10): la versión más antigua cuyo catálogo el driver sabe leer. Nunca rechaza una conexión: un servidor más antiguo conecta con su línea, carga lo que tenga su catálogo y el explorador avisa que pueden faltar objetos. No dice nada del soporte.
+- **Ventana de soporte** (esta sección; fechas del fabricante en `app/src/lib/engines/vendorSupport.json`): decide la etiqueta que muestra el editor y qué líneas cubre la compuerta de PR de motor. `tools/test-dbs/window.mjs`, en la compuerta de PR, falla si `verified` y la ventana no coinciden: cada línea con una versión soportada o en gracia tiene una versión verificada, y ninguna versión verificada queda fuera de la ventana.
+- **Verificación** (`verified` en `tools/test-dbs/lines.json`): las versiones exactas que pasan la matriz completa con evidencia (§7).
+
 El soporte del fabricante y la verificación de Rowly DB son datos distintos. **Cada versión exacta anunciada como verificada** debe pasar todas las filas aplicables de §6, con evidencia de §7 y §10. Una versión sin esa evidencia puede conectar con reglas conservadoras de su línea, pero no se anuncia como verificada. La tabla de §5.3 refleja las pruebas disponibles hoy; no certifica todos los parches de sus rangos. Una línea de comportamiento agrupa reglas; la versión exacta identifica el servidor probado. Ningún parche hereda automáticamente la verificación de otro.
 
 **Reglas según el uso:**
@@ -267,7 +273,6 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 
 | Hueco | Severidad | Nota |
 |---|---|---|
-| Los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Ajustar la ventana de soporte. |
 | La prueba integrada de confirmación (S7) solo cubre la consola y la edición de resultados en una versión de MySQL, y no hay contexto tipado e invalidación completos por conexión (D9) | P2 | Añadir los demás motores y versiones, reconexión y cambio de modo. Los recorridos E2E corren solo en Linux; Windows (WebView2) y macOS (WKWebView) siguen siendo humo manual de release. La UI aún no distingue versión exacta verificada de no verificada. |
 | El analizador tiene un solo dialecto por motor: no puede marcar la sintaxis que una línea eliminó (A9), y las palabras reservadas son una lista por motor (G6) | P2 | Llega con la declaración por línea de abajo. |
 | Las capacidades se declaran en tres lugares (§6.5), en código y no por línea | P2 | Una sola declaración por línea, como datos. Es también lo que llevan los paquetes de soporte de versión (§11). |
