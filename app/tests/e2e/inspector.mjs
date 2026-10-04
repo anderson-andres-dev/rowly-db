@@ -76,15 +76,24 @@ export async function connectInspector(address) {
   return { send, evaluate, close: () => ws.close() };
 }
 
-// El heap de JavaScript que queda vivo tras recolectar dos veces: MB y
-// objetos (snapshot de Heap: [id, tamaño, clase, flags] por nodo).
+// El heap de JavaScript que queda vivo tras recolectar dos veces: MB,
+// objetos y cuantos de cada clase (snapshot de Heap: [id, tamaño, clase,
+// flags] por nodo).
 export async function liveHeap(inspector) {
   await inspector.send("Heap.gc");
   await sleep(300);
   await inspector.send("Heap.gc");
   const { snapshotData } = await inspector.send("Heap.snapshot");
-  const nodes = JSON.parse(snapshotData).nodes;
+  const { nodes, nodeClassNames } = JSON.parse(snapshotData);
   let bytes = 0;
-  for (let index = 1; index < nodes.length; index += 4) bytes += nodes[index];
-  return { mb: bytes / 1048576, objects: nodes.length / 4 };
+  // Por clase, para decir que crecio si algo crece.
+  const classes = {};
+  for (let index = 0; index < nodes.length; index += 4) {
+    bytes += nodes[index + 1];
+    const name = nodeClassNames[nodes[index + 2]];
+    const entry = (classes[name] ??= { count: 0, bytes: 0 });
+    entry.count += 1;
+    entry.bytes += nodes[index + 1];
+  }
+  return { mb: bytes / 1048576, objects: nodes.length / 4, classes };
 }

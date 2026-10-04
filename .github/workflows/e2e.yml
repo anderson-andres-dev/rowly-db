@@ -61,6 +61,7 @@ jobs:
         run: npm ci
 
       - name: Compilar la app (debug, sin instaladores)
+        id: build
         working-directory: app
         run: npx tauri build --debug --no-bundle
 
@@ -72,7 +73,8 @@ jobs:
         run: xvfb-run --auto-servernum node tests/e2e/run.mjs --app "$GITHUB_WORKSPACE/target/debug/rowly-db"
 
       - name: Ciclos de recursos
-        if: ${{ !cancelled() }}
+        # Tambien si fallan los recorridos, pero no sin la app compilada.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: app
         env:
           E2E_MYSQL_PORT: "3306"
