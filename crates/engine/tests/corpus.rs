@@ -1,11 +1,15 @@
-//! Corpus de SQL valido y realista (tests/corpus/valid): ninguna sentencia
-//! puede dar un diagnostico. Es la red contra los falsos positivos: una
-//! consulta real que se marque mal se pega en el archivo que corresponde y
-//! queda cubierta.
+//! Corpus de SQL valido y realista (`no-diagnostics.sql` en tests/sql,
+//! SQL_ENGINE §10.1): ninguna sentencia puede dar un diagnostico. Es la red
+//! contra los falsos positivos: una consulta real que se marque mal se pega
+//! en el archivo que corresponde y queda cubierta.
 //!
-//! - `common.sql`: valida en todos los motores (`Dialect::ALL`).
-//! - `mysql.sql`: MySQL y MariaDB.
-//! - `postgres.sql`: PostgreSQL.
+//! - `common/no-diagnostics.sql`: valida en todos los motores (`Dialect::ALL`).
+//! - `mysql/common/no-diagnostics.sql`: MySQL y MariaDB.
+//! - `postgres/common/no-diagnostics.sql`: PostgreSQL.
+//!
+//! Las consolas mezcladas (`<motor>/common/mixed.json`) y los errores que
+//! tienen que seguir viendose (`common/mixed-errors.json`) los comparte el
+//! frontend (sqlMixedCorpus.test.ts) y `analysis` (crates/server-tests).
 //!
 //! Se revisa contra el catalogo de abajo; las tablas que el propio archivo
 //! crea (`CREATE [TEMPORARY] TABLE x`) cuentan como creadas en el documento,
@@ -181,8 +185,13 @@ fn created(sql: &str, dialect: Dialect) -> Vec<String> {
     names
 }
 
+/// Un archivo de tests/sql (SQL_ENGINE §10.1), relativo a esa carpeta.
+fn sql_path(file: &str) -> String {
+    format!("{}/../../tests/sql/{file}", env!("CARGO_MANIFEST_DIR"))
+}
+
 fn check(file: &str, dialects: &[Dialect]) {
-    let path = format!("{}/tests/corpus/valid/{file}", env!("CARGO_MANIFEST_DIR"));
+    let path = sql_path(file);
     let sql = std::fs::read_to_string(&path).expect("el archivo del corpus existe");
     let tables = catalog();
     let mut problems = Vec::new();
@@ -218,33 +227,39 @@ fn check(file: &str, dialects: &[Dialect]) {
 
 #[test]
 fn lo_comun_no_da_falsos_positivos_en_ningun_motor() {
-    check("common.sql", &Dialect::ALL);
+    check("common/no-diagnostics.sql", &Dialect::ALL);
 }
 
 #[test]
 fn lo_de_mysql_y_mariadb_no_da_falsos_positivos() {
-    check("mysql.sql", &[Dialect::MySql, Dialect::MariaDb]);
+    check(
+        "mysql/common/no-diagnostics.sql",
+        &[Dialect::MySql, Dialect::MariaDb],
+    );
 }
 
 #[test]
 fn lo_de_postgres_no_da_falsos_positivos() {
-    check("postgres.sql", &[Dialect::Postgres]);
+    check("postgres/common/no-diagnostics.sql", &[Dialect::Postgres]);
 }
 
 #[test]
 fn consolas_mezcladas_no_dan_falsos_positivos() {
     for (file, dialects) in [
-        ("mysql.json", &[Dialect::MySql, Dialect::MariaDb][..]),
-        ("mariadb.json", &[Dialect::MariaDb][..]),
-        ("postgres.json", &[Dialect::Postgres][..]),
+        (
+            "mysql/common/mixed.json",
+            &[Dialect::MySql, Dialect::MariaDb][..],
+        ),
+        ("mariadb/common/mixed.json", &[Dialect::MariaDb][..]),
+        ("postgres/common/mixed.json", &[Dialect::Postgres][..]),
     ] {
-        let path = format!("{}/tests/corpus/mixed/{file}", env!("CARGO_MANIFEST_DIR"));
+        let path = sql_path(file);
         let text = std::fs::read_to_string(path).unwrap();
         let fixture: serde_json::Value = serde_json::from_str(&text).unwrap();
         let sql = fixture["sql"].as_str().unwrap();
         let statements = fixture["statements"].as_array().unwrap();
         assert!(
-            statements.len() > 20 || file == "mariadb.json" && statements.len() >= 3,
+            statements.len() > 20 || file.starts_with("mariadb/") && statements.len() >= 3,
             "{file}: corpus insuficiente"
         );
         let mut after = 0;
@@ -268,10 +283,7 @@ fn consolas_mezcladas_no_dan_falsos_positivos() {
 
 #[test]
 fn errores_ordinarios_siguen_detectandose() {
-    let path = format!(
-        "{}/tests/corpus/mixed/errors.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let path = sql_path("common/mixed-errors.json");
     let text = std::fs::read_to_string(path).unwrap();
     let cases: serde_json::Value = serde_json::from_str(&text).unwrap();
     for case in cases.as_array().unwrap() {
@@ -319,10 +331,7 @@ fn comentario_mysql_de_version_no_da_diagnosticos() {
 
 #[test]
 fn rutinas_mysql_validas_no_dan_falsos_positivos() {
-    let path = format!(
-        "{}/tests/corpus/mixed/valid_routines.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let path = sql_path("common/mixed-routines.json");
     let text = std::fs::read_to_string(path).unwrap();
     let cases: Vec<String> = serde_json::from_str(&text).unwrap();
     assert!(cases.len() >= 20);

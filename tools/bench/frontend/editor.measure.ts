@@ -13,7 +13,7 @@ import { EditorState, Text } from "@codemirror/state";
 import { MySQL } from "@codemirror/lang-sql";
 import { it } from "vitest";
 import { ENGINES } from "$lib/engines";
-import { classifyContext } from "$lib/sqlContext";
+import { classifyContext } from "$lib/editor/context";
 import { splitStatements } from "$lib/sqlStatements";
 import {
   statementIndexComplete,
@@ -21,7 +21,7 @@ import {
   statementIndexStep,
   statementNear,
   statementTextAt,
-} from "$lib/sqlStatementIndex";
+} from "$lib/editor/statementIndex";
 
 const STATEMENT =
   "SELECT u.id, u.name, o.total\nFROM users u\nJOIN orders o ON o.user_id = u.id\nWHERE o.total > 100 AND u.name LIKE 'a%';\n";

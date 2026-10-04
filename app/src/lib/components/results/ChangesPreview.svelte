@@ -4,8 +4,8 @@
   import { FilePenLine } from "@lucide/svelte";
   import { t, type MessageKey } from "$lib/i18n";
   import { blocksHeldEnter, confirmsOnEnter } from "$lib/dialogKeys";
-  import { highlightSql } from "$lib/sqlHighlight";
-  import type { ChangeError, ResultChanges } from "$lib/resultEditing";
+  import { highlightSql } from "$lib/editor/highlight";
+  import type { ChangeError, ResultChanges } from "$lib/results/resultEditing";
 
   // Vista previa de los cambios pendientes: el SQL exacto que se va a
   // ejecutar. Llega ya generado (el padre lo pide al backend ANTES de abrir

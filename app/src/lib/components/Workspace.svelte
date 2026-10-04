@@ -2,7 +2,7 @@
   import { onePerFrame } from "$lib/onePerFrame";
   import { get } from "svelte/store";
   import { focusZoneAction } from "$lib/focusZones";
-  import { registerCommand, registerCommands } from "$lib/commands";
+  import { registerCommand, registerCommands } from "$lib/workspace/commands";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
@@ -19,11 +19,11 @@
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
-  import { extractFromContext } from "$lib/sqlSchema";
+  import { extractFromContext } from "$lib/editor/completionSource";
   import { queryHistory } from "$lib/stores/queryHistory";
   import { STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
-  import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
-  import { parameterColumns, type ParameterColumn } from "$lib/sqlParameterTypes";
+  import { findParameters, parameterNames, substituteParameters } from "$lib/workspace/parameters";
+  import { parameterColumns, type ParameterColumn } from "$lib/editor/parameterTypes";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog } from "$lib/stores/executionLog";
@@ -44,7 +44,7 @@
   import {
     EMPTY_EDITS,
     pendingCount,
-  } from "$lib/resultEditing";
+  } from "$lib/results/resultEditing";
   import {
     editStateFor,
     resultEdits,
@@ -134,7 +134,7 @@
   // vigente — no la del texto actual del editor, que puede haber cambiado
   // desde la ejecucion. Solo resuelve el caso simple (sin JOIN); con varias
   // tablas se toma la primera, igual que el resto de heuristicas de
-  // sqlSchema.ts.
+  // editor/completionSource.ts.
   // firstFromTable complementa a extractFromContext, que es del
   // autocompletado y depende de la posicion del cursor: sobre el texto
   // entero a veces no resuelve una consulta simple.
@@ -415,7 +415,7 @@
     void files.requestClose(id);
   }
 
-  // Comandos de las pestañas (lib/commands.ts); la tecla la pone
+  // Comandos de las pestañas (lib/workspace/commands.ts); la tecla la pone
   // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
   $effect(() => {
     const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
@@ -671,9 +671,9 @@
     return true;
   }
 
-  // Parametros con nombre (:nombre, sqlParameters.ts): se piden antes de
+  // Parametros con nombre (:nombre, workspace/parameters.ts): se piden antes de
   // ejecutar, cada uno con el tipo de la columna con que se compara
-  // (sqlParameterTypes.ts, del catalogo ya cargado), y se reemplazan en el
+  // (editor/parameterTypes.ts, del catalogo ya cargado), y se reemplazan en el
   // texto. null: se cancelo el dialogo.
   let parametersPrompt = $state<{
     parameters: { name: string; column: ParameterColumn | null }[];

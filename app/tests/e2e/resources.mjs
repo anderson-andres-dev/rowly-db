@@ -30,7 +30,9 @@ const option = (name, fallback) => {
 };
 const APP = option("--app");
 if (!APP) throw new Error("falta --app <binario>");
-const INSPECTOR = "127.0.0.1:9333";
+// El inspector de cada app: un puerto por ciclo, para no chocar con el de
+// la anterior mientras termina de cerrarse.
+let INSPECTOR = "127.0.0.1:9333";
 const MYSQL_PORT = Number(process.env.E2E_MYSQL_PORT ?? 3306);
 const MYSQL = process.env.E2E_MYSQL_CLI ?? "mysql";
 const PG_PORT = Number(process.env.E2E_PG_PORT ?? 5432);
@@ -51,8 +53,11 @@ function sql(statement) {
 
 // --- La app -----------------------------------------------------------------
 
-async function startApp(profileDir) {
+async function startApp(profileDir, port) {
+  INSPECTOR = `127.0.0.1:${port}`;
   const app = spawn(APP, [], {
+    // Su propio grupo: al terminar se cierran tambien sus procesos de WebKit.
+    detached: true,
     env: {
       ...process.env,
       XDG_DATA_HOME: join(profileDir, "data"),
@@ -68,6 +73,7 @@ async function startApp(profileDir) {
   app.stdout.on("data", keep);
   app.stderr.on("data", keep);
   const page = await connectInspector(INSPECTOR).catch((error) => {
+    error.message += ` (la app ${app.exitCode === null ? "seguia viva" : `termino con ${app.exitCode}`})`;
     error.app = app;
     throw error;
   });
@@ -112,6 +118,7 @@ function pss(pid) {
     }
   }
   const byName = {};
+  const anonymousByName = {};
   const ticksByName = {};
   let total = 0;
   let ticks = 0;
@@ -124,15 +131,18 @@ function pss(pid) {
       ticks += own;
       const comm = readFileSync(`/proc/${process}/comm`, "utf8").trim();
       ticksByName[comm] = (ticksByName[comm] ?? 0) + own;
-      const mb = Number(readFileSync(`/proc/${process}/smaps_rollup`, "utf8").match(/^Pss:\s+(\d+)/m)?.[1] ?? 0) / 1024;
+      const rollup = readFileSync(`/proc/${process}/smaps_rollup`, "utf8");
+      const mb = Number(rollup.match(/^Pss:\s+(\d+)/m)?.[1] ?? 0) / 1024;
+      const anonymous = Number(rollup.match(/^Anonymous:\s+(\d+)/m)?.[1] ?? 0) / 1024;
       const name = readFileSync(`/proc/${process}/comm`, "utf8").trim();
       byName[name] = (byName[name] ?? 0) + mb;
+      anonymousByName[name] = (anonymousByName[name] ?? 0) + anonymous;
       total += mb;
     } catch {
       // Termino mientras se leia.
     }
   }
-  return { total, byName, ticks, ticksByName };
+  return { total, byName, anonymousByName, ticks, ticksByName };
 }
 
 const DOM = `({
@@ -141,12 +151,15 @@ const DOM = `({
   styles: document.querySelectorAll("style").length,
 })`;
 
+// La memoria de los procesos se lee antes de recolectar: el snapshot del
+// heap pasa por la app y la infla un momento.
 async function sample(page, app, index) {
-  return { index, heap: await liveHeap(page), pss: pss(app.pid), dom: await page.evaluate(DOM) };
+  const memory = pss(app.pid);
+  return { index, pss: memory, heap: await liveHeap(page), dom: await page.evaluate(DOM) };
 }
 
 const format = ({ index, heap, pss, dom }) =>
-  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
+  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; backend propio ${(pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0).toFixed(1)} MB; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
     pss.byName,
   )
     .map(([name, mb]) => `${name} ${mb.toFixed(1)}`)
@@ -165,7 +178,7 @@ function classGrowth(first, last) {
 
 // Sin fuga desde el calentamiento: heap vivo, objetos vivos, backend y lo
 // montado en el DOM.
-function assertStable(samples) {
+function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) => s.index >= 2 * WARMUP) : samples) {
   if (samples.length < 2) throw new Error("hacen falta dos muestras: menos ciclos que el calentamiento");
   const first = samples[0];
   const last = samples[samples.length - 1];
@@ -178,14 +191,17 @@ function assertStable(samples) {
   };
   grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
   grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
-  // El PSS del backend sube y baja con cada conexion (en CI, entre ~142 y
-  // ~165 MB de una muestra a otra): una fuga sube su piso. Se compara el
-  // minimo de la segunda mitad de las muestras con el de la primera.
-  const backend = (s) => s.pss.byName[basename(APP).slice(0, 15)] ?? 0;
-  const half = Math.ceil(samples.length / 2);
+  // La memoria propia de la app (Anonymous: su heap y su pila), no su PSS:
+  // el PSS reparte las bibliotecas compartidas entre quienes las usan, y
+  // sube solo cuando muere otro proceso que las compartia. Sube y baja con
+  // cada conexion; una fuga sube su piso, asi que se compara el minimo de la
+  // segunda mitad de las muestras con el de la primera, desde el ciclo 100:
+  // del 50 al 100 todavia calienta (sus caches de conexion).
+  const backend = (s) => s.pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0;
+  const half = Math.ceil(memory.length / 2);
   const floor = (part) => Math.min(...part.map(backend));
-  const before = floor(samples.slice(0, half));
-  grew("el piso del PSS del backend (MB)", before, floor(samples.slice(half)), Math.max(2, before * 0.05));
+  const before = floor(memory.slice(0, half));
+  grew("el piso de la memoria propia del backend (MB)", before, floor(memory.slice(half)), Math.max(2, before * 0.05));
   for (const key of ["editors", "styles"])
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
@@ -383,8 +399,14 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
   const before = await sample(page, app, 0);
   // La CPU se cuenta solo en el reposo: recolectar y tomar el snapshot del
   // heap tambien gastan, y no son de la app.
+  // Muestras de memoria cada 30 s, sin recolectar (para no sumar trabajo).
   const idleStart = pss(app.pid);
-  await sleep(IDLE_SECONDS * 1000);
+  const during = [{ index: 0, pss: idleStart }];
+  for (let elapsed = 30; elapsed <= IDLE_SECONDS; elapsed += 30) {
+    await sleep(30000);
+    during.push({ index: elapsed, pss: pss(app.pid) });
+  }
+  await sleep((IDLE_SECONDS % 30) * 1000);
   const idleEnd = pss(app.pid);
   const after = await sample(page, app, IDLE_SECONDS);
   const idle = await page.evaluate("window.__idle");
@@ -403,6 +425,11 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
     .join(", ");
   console.log(`        ${format(before)}\n        ${format(after)}`);
   console.log(
+    `        memoria propia por proceso cada 30 s: ${during
+      .map(({ index, pss }) => `${index}: ${Object.entries(pss.anonymousByName).map(([name, mb]) => `${name} ${mb.toFixed(1)}`).join(" / ")}`)
+      .join("; ")}`,
+  );
+  console.log(
     `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
       `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
       `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
@@ -414,21 +441,31 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
   // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
   // continuo (sondeos, bucles), que se ve muy por encima.
   if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
-  assertStable([before, after]);
+  // El heap vivo y el DOM, del principio al final; la memoria propia de la
+  // app, por pisos de las muestras cada 30 s.
+  assertStable([before, after], during);
 });
 
 // --- Ejecucion --------------------------------------------------------------
 
 async function stop(app) {
-  if (app.exitCode !== null) return;
-  app.kill("SIGTERM");
+  const group = (signal) => {
+    try {
+      process.kill(-app.pid, signal);
+    } catch {
+      // Ya no queda nadie en el grupo.
+    }
+  };
+  group("SIGTERM");
   for (let i = 0; i < 50 && app.exitCode === null; i += 1) await sleep(100);
-  if (app.exitCode === null) app.kill("SIGKILL");
+  group("SIGKILL");
 }
 
 const only = process.env.E2E_ONLY;
 let failures = 0;
+let port = 9333;
 for (const { name, body } of cycles.filter((candidate) => !only || candidate.name.includes(only))) {
+  port += 1;
   sql(
     "DROP DATABASE IF EXISTS rowly_e2e; CREATE DATABASE rowly_e2e; " +
       "CREATE TABLE rowly_e2e.victim (id INT PRIMARY KEY, name VARCHAR(20)); " +
@@ -439,7 +476,14 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
   let app = null;
   let page = null;
   try {
-    ({ app, page } = await startApp(profileDir).catch((error) => {
+    // Si la app no llega a mostrar su pagina (paso alguna vez en CI en el
+    // tercer arranque), se cierra y se intenta una vez mas, en otro puerto.
+    ({ app, page } = await startApp(profileDir, port).catch(async (error) => {
+      console.log(`      reintento: ${error.message}`);
+      if (error.app) await stop(error.app);
+      port += 100;
+      return startApp(profileDir, port);
+    }).catch((error) => {
       app = error.app ?? null;
       throw error;
     }));

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import mysqlFixture from "../../../crates/engine/tests/corpus/mixed/mysql.json";
-import mariadbFixture from "../../../crates/engine/tests/corpus/mixed/mariadb.json";
-import postgresFixture from "../../../crates/engine/tests/corpus/mixed/postgres.json";
-import errorFixture from "../../../crates/engine/tests/corpus/mixed/errors.json";
+import mysqlFixture from "../../../tests/sql/mysql/common/mixed.json";
+import mariadbFixture from "../../../tests/sql/mariadb/common/mixed.json";
+import postgresFixture from "../../../tests/sql/postgres/common/mixed.json";
+import errorFixture from "../../../tests/sql/common/mixed-errors.json";
 import { ENGINES } from "./engines";
 import { SCAN_OVERLAP, initialScanState, scanChunk, splitStatements, statementAt } from "./sqlStatements";
 

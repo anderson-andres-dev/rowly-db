@@ -2,18 +2,18 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 129,
+    "files": 131,
     "tests": 1405,
     "ignored": 26,
     "byDecision": {
-      "keep": 74,
-      "move": 52,
-      "rewrite": 3,
+      "keep": 131,
+      "move": 0,
+      "rewrite": 0,
       "remove": 0
     },
     "byGate": {
       "pr": 125,
-      "engine-pr": 4,
+      "engine-pr": 6,
       "manual": 0,
       "release": 0
     },
@@ -22,26 +22,6 @@
     ]
   },
   "tests": [
-    {
-      "path": "app/src-tauri/src/catalog_adapter.rs",
-      "domain": "desktop",
-      "owner": "app/src-tauri/src/catalog_adapter.rs",
-      "property": "El esquema del driver se convierte en el catalogo del motor",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/services/catalog.rs",
-      "sqlEngineRows": [
-        "D4"
-      ],
-      "kind": "rust",
-      "crate": "app/src-tauri",
-      "tests": 2,
-      "ignored": 0,
-      "environment": "none",
-      "env": [],
-      "durationMs": 0
-    },
     {
       "path": "app/src-tauri/src/commands/catalog.rs",
       "domain": "desktop",
@@ -115,23 +95,6 @@
       "durationMs": null
     },
     {
-      "path": "app/src-tauri/src/console_texts.rs",
-      "domain": "desktop",
-      "owner": "app/src-tauri/src/console_texts.rs",
-      "property": "Textos de consola fuera de localStorage, con poda",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/commands/files.rs",
-      "kind": "rust",
-      "crate": "app/src-tauri",
-      "tests": 1,
-      "ignored": 0,
-      "environment": "none",
-      "env": [],
-      "durationMs": 0
-    },
-    {
       "path": "app/src-tauri/src/credentials.rs",
       "domain": "connections",
       "owner": "app/src-tauri/src/credentials.rs",
@@ -186,27 +149,6 @@
       "durationMs": null
     },
     {
-      "path": "app/src-tauri/src/export.rs",
-      "domain": "desktop",
-      "owner": "app/src-tauri/src/export.rs",
-      "property": "Exportar escribe CSV/JSON/SQL con el dialecto y una ruta valida",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/commands/results.rs",
-      "sqlEngineRows": [
-        "G1",
-        "G7"
-      ],
-      "kind": "rust",
-      "crate": "app/src-tauri",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "none",
-      "env": [],
-      "durationMs": 0
-    },
-    {
       "path": "app/src-tauri/src/lib.rs",
       "domain": "desktop",
       "owner": "app/src-tauri/src/lib.rs",
@@ -223,14 +165,68 @@
       "durationMs": 0
     },
     {
-      "path": "app/src-tauri/src/result_editing.rs",
+      "path": "app/src-tauri/src/services/catalog.rs",
       "domain": "desktop",
-      "owner": "app/src-tauri/src/result_editing.rs",
+      "owner": "app/src-tauri/src/services/catalog.rs",
+      "property": "El esquema del driver se convierte en el catalogo del motor",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D4"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/services/console_texts.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/services/console_texts.rs",
+      "property": "Textos de consola fuera de localStorage, con poda",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/services/export.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/services/export.rs",
+      "property": "Exportar escribe CSV/JSON/SQL con el dialecto y una ruta valida",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G1",
+        "G7"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/services/result_editing.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/services/result_editing.rs",
       "property": "Solo resultados con clave son editables; sentencias exactas",
       "risk": "P1",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/commands/results.rs",
+      "decision": "keep",
       "sqlEngineRows": [
         "G7"
       ],
@@ -243,14 +239,13 @@
       "durationMs": 0
     },
     {
-      "path": "app/src-tauri/src/sql_files.rs",
+      "path": "app/src-tauri/src/services/sql_files.rs",
       "domain": "desktop",
-      "owner": "app/src-tauri/src/sql_files.rs",
+      "owner": "app/src-tauri/src/services/sql_files.rs",
       "property": "Archivos .sql: codificacion y renombrado seguros",
       "risk": "P2",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src-tauri/src/commands/files.rs",
+      "decision": "keep",
       "kind": "rust",
       "crate": "app/src-tauri",
       "tests": 2,
@@ -332,84 +327,19 @@
       "durationMs": 3
     },
     {
-      "path": "app/src/lib/cellTypes.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/cellTypes.ts",
-      "property": "Un valor editado que el tipo de la columna no admite se marca antes de aplicar",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/cellTypes.test.ts",
-      "kind": "ts",
-      "tests": 19,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "cellTypes",
-        "resultEditing"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 17
-    },
-    {
-      "path": "app/src/lib/columnFilters.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/columnFilters.ts",
-      "property": "Los filtros por columna ocultan y cuentan filas sin consultar la base",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/columnFilters.test.ts",
-      "kind": "ts",
-      "tests": 10,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "columnFilters"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 38
-    },
-    {
-      "path": "app/src/lib/commands.test.ts",
-      "domain": "workspace",
-      "owner": "app/src/lib/commands.ts",
-      "property": "Un comando registrado tiene una sola politica de teclas y menus y se libera al desmontar",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/workspace/commands.test.ts",
-      "kind": "ts",
-      "tests": 5,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "commands"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 5
-    },
-    {
-      "path": "app/src/lib/connectionErrors.test.ts",
+      "path": "app/src/lib/connections/connectionErrors.test.ts",
       "domain": "connections",
-      "owner": "app/src/lib/connectionErrors.ts",
+      "owner": "app/src/lib/connections/connectionErrors.ts",
       "property": "Un fallo de conexion se explica con una accion concreta",
       "risk": "P3",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/connections/connectionErrors.test.ts",
+      "decision": "keep",
       "kind": "ts",
       "tests": 4,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "connectionErrors"
+        "connections/connectionErrors"
       ],
       "external": [
         "vitest"
@@ -417,21 +347,20 @@
       "durationMs": 5
     },
     {
-      "path": "app/src/lib/connectionIdentity.test.ts",
+      "path": "app/src/lib/connections/connectionIdentity.test.ts",
       "domain": "connections",
-      "owner": "app/src/lib/connectionIdentity.ts",
+      "owner": "app/src/lib/connections/connectionIdentity.ts",
       "property": "Iniciales y color legible del avatar de la conexion (no la identidad del motor)",
       "risk": "P3",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/connections/connectionIdentity.test.ts",
+      "decision": "keep",
       "reason": "No prueba identidad de motor: SQL_ENGINE D9 lo citaba por error y se corrigio en C0",
       "kind": "ts",
       "tests": 3,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "connectionIdentity"
+        "connections/connectionIdentity"
       ],
       "external": [
         "vitest"
@@ -439,25 +368,45 @@
       "durationMs": 2
     },
     {
-      "path": "app/src/lib/connectionTest.test.ts",
+      "path": "app/src/lib/connections/connectionTest.test.ts",
       "domain": "connections",
-      "owner": "app/src/lib/connectionTest.ts",
+      "owner": "app/src/lib/connections/connectionTest.ts",
       "property": "El informe de Probar conexion resume cada paso",
       "risk": "P3",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/connections/connectionTest.test.ts",
+      "decision": "keep",
       "kind": "ts",
       "tests": 5,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "connectionTest"
+        "connections/connectionTest"
       ],
       "external": [
         "vitest"
       ],
       "durationMs": 7
+    },
+    {
+      "path": "app/src/lib/connections/explorerTree.test.ts",
+      "domain": "connections",
+      "owner": "app/src/lib/connections/explorerTree.ts",
+      "property": "El arbol del explorador agrupa objetos y fijados sin perder claves",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 12,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "connections/explorerTree",
+        "types"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 18
     },
     {
       "path": "app/src/lib/dialogKeys.test.ts",
@@ -503,6 +452,33 @@
       "durationMs": 4
     },
     {
+      "path": "app/src/lib/editor/analysisRunner.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/analysisRunner.ts",
+      "property": "El analisis incremental publica diagnosticos en el RangeSet y descarta respuestas viejas",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A4"
+      ],
+      "kind": "ts",
+      "tests": 10,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "analysisRunner",
+        "diagnostics",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": 137
+    },
+    {
       "path": "app/src/lib/editor/analysisSession.test.ts",
       "domain": "editor",
       "owner": "app/src/lib/editor/analysisSession.ts",
@@ -519,9 +495,9 @@
       "environment": "node",
       "dependencies": [
         "analysisSession",
-        "engines",
-        "sqlDiagnostics",
-        "sqlStatementIndex"
+        "editor/diagnostics",
+        "editor/statementIndex",
+        "engines"
       ],
       "external": [
         "@codemirror/state",
@@ -529,6 +505,135 @@
         "vitest"
       ],
       "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/behavior.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/behavior.ts",
+      "property": "Mayusculas automaticas de palabras clave",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "behavior"
+      ],
+      "external": [
+        "@codemirror/lang-sql",
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 9
+    },
+    {
+      "path": "app/src/lib/editor/blankLines.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/sqlStatements.ts",
+      "property": "Una linea en blanco separa sentencias en cada motor, tambien en el editor",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "283 casos parametrizados; revisar si engines/contract.test.ts ya cubre el mismo riesgo",
+      "sqlEngineRows": [
+        "S1"
+      ],
+      "kind": "ts",
+      "tests": 283,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../sqlStatements",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 3185
+    },
+    {
+      "path": "app/src/lib/editor/callHints.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/callHints.ts",
+      "property": "Pistas de argumentos en llamadas",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 9,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../types",
+        "callHints"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 10
+    },
+    {
+      "path": "app/src/lib/editor/catalogCompletions.server.test.ts",
+      "domain": "engines",
+      "owner": "app/src/lib/editor/catalogCompletions.ts",
+      "property": "Puente: escribe los CALL del autocompletado real para que real_server los ejecute",
+      "risk": "P1",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "reason": "Se omite en npm test; lo invoca crates/server-tests",
+      "sqlEngineRows": [
+        "G2"
+      ],
+      "kind": "ts",
+      "tests": 1,
+      "ignored": 1,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../types",
+        "catalogCompletions"
+      ],
+      "external": [
+        "@codemirror/state",
+        "node:fs",
+        "vitest"
+      ],
+      "durationMs": 0
+    },
+    {
+      "path": "app/src/lib/editor/catalogCompletions.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/catalogCompletions.ts",
+      "property": "Sugerencias del catalogo por motor; parentesis sin inventar argumentos",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "kind": "ts",
+      "tests": 35,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../types",
+        "catalogCompletions",
+        "completionSource"
+      ],
+      "external": [
+        "@codemirror/autocomplete",
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 401
     },
     {
       "path": "app/src/lib/editor/commands.dom.test.ts",
@@ -544,9 +649,9 @@
       "environment": "happy-dom",
       "dependencies": [
         "commands",
-        "engines",
-        "sqlExecutionMarker",
-        "sqlStatementIndex"
+        "editor/executionMarker",
+        "editor/statementIndex",
+        "engines"
       ],
       "external": [
         "@codemirror/state",
@@ -554,6 +659,137 @@
         "vitest"
       ],
       "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/commentEditing.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/commentEditing.ts",
+      "property": "Cierre automatico de /* */ segun el motor",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "../engines",
+        "commentEditing",
+        "completionSource"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": 82
+    },
+    {
+      "path": "app/src/lib/editor/commentHighlight.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/commentHighlight.ts",
+      "property": "El resaltado lee los comentarios como el motor (ejecutables incluidos)",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "Base de E0/E1 (Better Comments): la decoracion no altera el SQL",
+      "sqlEngineRows": [
+        "S4"
+      ],
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "completionSource"
+      ],
+      "external": [
+        "@codemirror/language",
+        "@codemirror/state",
+        "@lezer/highlight",
+        "vitest"
+      ],
+      "durationMs": 16
+    },
+    {
+      "path": "app/src/lib/editor/commentStyle.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/commentStyle.ts",
+      "property": "Jerarquia tipografica dentro de comentarios",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 7,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "../engines",
+        "commentStyle",
+        "completionSource",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": 73
+    },
+    {
+      "path": "app/src/lib/editor/completionPolicy.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/completionPolicy.ts",
+      "property": "Politica de autocompletado por posicion",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G5"
+      ],
+      "kind": "ts",
+      "tests": 15,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "completionPolicy",
+        "context"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 8
+    },
+    {
+      "path": "app/src/lib/editor/completionSource.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/completionSource.ts",
+      "property": "Fuente de autocompletado de punta a punta",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G5"
+      ],
+      "kind": "ts",
+      "tests": 21,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../types",
+        "completionSource"
+      ],
+      "external": [
+        "@codemirror/autocomplete",
+        "@codemirror/lang-sql",
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 137
     },
     {
       "path": "app/src/lib/editor/configuration.dom.test.ts",
@@ -569,11 +805,11 @@
       "environment": "happy-dom",
       "dependencies": [
         "configuration",
+        "editor/callHints",
+        "editor/catalogCompletions",
+        "editor/completionSource",
+        "editor/statementIndex",
         "engines",
-        "sqlCallHints",
-        "sqlCatalogCompletions",
-        "sqlSchema",
-        "sqlStatementIndex",
         "stores/editorSettings",
         "theming/theme"
       ],
@@ -585,6 +821,54 @@
         "vitest"
       ],
       "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/context.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/context.ts",
+      "property": "Contexto bajo el cursor: relacion, alias, cola",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G5"
+      ],
+      "kind": "ts",
+      "tests": 32,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "context"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 18
+    },
+    {
+      "path": "app/src/lib/editor/createdTables.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/createdTables.ts",
+      "property": "Tablas que crea el documento cuentan como definidas",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A4"
+      ],
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "editor/createdTables"
+      ],
+      "external": [
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 5
     },
     {
       "path": "app/src/lib/editor/diagnosticPresentation.dom.test.ts",
@@ -603,8 +887,8 @@
       "environment": "happy-dom",
       "dependencies": [
         "diagnosticPresentation",
+        "editor/diagnostics",
         "engines",
-        "sqlDiagnostics",
         "types"
       ],
       "external": [
@@ -616,20 +900,296 @@
       "durationMs": null
     },
     {
-      "path": "app/src/lib/editorSearchPanel.dom.test.ts",
+      "path": "app/src/lib/editor/diagnostics.dom.test.ts",
       "domain": "editor",
-      "owner": "app/src/lib/editorSearchPanel.ts",
-      "property": "Buscar/reemplazar en el EditorView real: alcance, teclado y foco",
+      "owner": "app/src/lib/editor/diagnostics.ts",
+      "property": "En el editor real, mientras se escribe solo se ven errores reales",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A4"
+      ],
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "editor/diagnostics"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": 65
+    },
+    {
+      "path": "app/src/lib/editor/diagnostics.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/diagnostics.ts",
+      "property": "Ubicar un error de ejecucion del servidor segun el motor",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A7"
+      ],
+      "kind": "ts",
+      "tests": 7,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 11
+    },
+    {
+      "path": "app/src/lib/editor/errorHelp.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/errorHelp.ts",
+      "property": "Ayuda y arreglos por codigo de error",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "diagnostics",
+        "errorHelp"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 6
+    },
+    {
+      "path": "app/src/lib/editor/executionMarker.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/executionMarker.ts",
+      "property": "Marcador de ejecucion sigue a la sentencia en scripts enormes",
       "risk": "P2",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/search.dom.test.ts",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 13,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "editor/executionMarker"
+      ],
+      "external": [
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 1627
+    },
+    {
+      "path": "app/src/lib/editor/formatLayout.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/formatLayout.ts",
+      "property": "Formateo conserva textos citados y operadores del motor",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 28,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "formatLayout",
+        "formatter"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 160
+    },
+    {
+      "path": "app/src/lib/editor/formatter.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/formatter.ts",
+      "property": "Formatear un bloque",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "formatter"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 153
+    },
+    {
+      "path": "app/src/lib/editor/highlight.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/highlight.ts",
+      "property": "Resaltado estatico para vistas previas",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "highlight"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 1
+    },
+    {
+      "path": "app/src/lib/editor/indentation.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/indentation.ts",
+      "property": "Tab en el editor real",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
       "kind": "ts",
       "tests": 27,
       "ignored": 0,
       "environment": "happy-dom",
       "dependencies": [
-        "editorSearchPanel"
+        "indentation"
+      ],
+      "external": [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/lang-sql",
+        "@codemirror/language",
+        "@codemirror/state",
+        "codemirror",
+        "vitest"
+      ],
+      "durationMs": 2416
+    },
+    {
+      "path": "app/src/lib/editor/largeDocuments.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/statementIndex.ts",
+      "property": "Documentos de 1M de lineas se indexan sin trabajo proporcional al documento entero",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "Complejidad, no tiempo de WebView: la latencia real va a tools/bench",
+      "kind": "ts",
+      "tests": 5,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../sqlStatements",
+        "behavior",
+        "context",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/lang-sql",
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 963
+    },
+    {
+      "path": "app/src/lib/editor/parameterTypes.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/parameterTypes.ts",
+      "property": "Tipo de cada parametro por su columna",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../types",
+        "../workspace/parameters",
+        "parameterTypes"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 7
+    },
+    {
+      "path": "app/src/lib/editor/paste.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/paste.ts",
+      "property": "Pegar limpia invisibles salvo dentro de cadenas del motor",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 10,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "editor/paste",
+        "editor/statementIndex",
+        "engines/mysql",
+        "engines/postgres",
+        "engines/standard"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": 24
+    },
+    {
+      "path": "app/src/lib/editor/relations.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/relations.ts",
+      "property": "Relaciones y alias de una sentencia",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "relations"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 6
+    },
+    {
+      "path": "app/src/lib/editor/search.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/search.ts",
+      "property": "Buscar/reemplazar en el EditorView real: alcance, teclado y foco",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 27,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "search"
       ],
       "external": [
         "@codemirror/search",
@@ -640,27 +1200,85 @@
       "durationMs": 546
     },
     {
-      "path": "app/src/lib/editorSearchPanel.test.ts",
+      "path": "app/src/lib/editor/search.test.ts",
       "domain": "editor",
-      "owner": "app/src/lib/editorSearchPanel.ts",
+      "owner": "app/src/lib/editor/search.ts",
       "property": "Reglas puras de buscar/reemplazar: mayusculas, modo y alcance",
       "risk": "P2",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/search.test.ts",
+      "decision": "keep",
       "reason": "Revisar solapamiento con la version DOM antes de C3; no se retira sin evidencia",
       "kind": "ts",
       "tests": 10,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "editorSearchPanel"
+        "search"
       ],
       "external": [
         "@codemirror/state",
         "vitest"
       ],
       "durationMs": 14
+    },
+    {
+      "path": "app/src/lib/editor/statementIndex.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/statementIndex.ts",
+      "property": "Indice incremental de sentencias igual al divisor completo",
+      "risk": "P0",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "El archivo mas lento (~10 s): medir que caso domina antes de C1",
+      "sqlEngineRows": [
+        "S1"
+      ],
+      "kind": "ts",
+      "tests": 13,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../../../../tests/sql/mysql/common/mixed.json",
+        "../engines",
+        "../sqlStatements",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 9900
+    },
+    {
+      "path": "app/src/lib/editor/writing.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/completionSource.ts",
+      "property": "Formas reales de escribir: alias, deshacer tras sugerencia",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G4"
+      ],
+      "kind": "ts",
+      "tests": 18,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "../stores/editorSettings",
+        "../types",
+        "completionSource",
+        "statementIndex"
+      ],
+      "external": [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/lang-sql",
+        "@codemirror/state",
+        "vitest"
+      ],
+      "durationMs": 155
     },
     {
       "path": "app/src/lib/engines/contract.test.ts",
@@ -683,13 +1301,13 @@
       "environment": "node",
       "dependencies": [
         "connections",
+        "editor/callHints",
+        "editor/completionSource",
+        "editor/context",
+        "editor/diagnostics",
+        "editor/paste",
+        "editor/relations",
         "engines",
-        "sqlCallHints",
-        "sqlContext",
-        "sqlDiagnostics",
-        "sqlPaste",
-        "sqlRelations",
-        "sqlSchema",
         "sqlStatements",
         "types"
       ],
@@ -699,56 +1317,6 @@
         "vitest"
       ],
       "durationMs": 89
-    },
-    {
-      "path": "app/src/lib/explorerTree.test.ts",
-      "domain": "connections",
-      "owner": "app/src/lib/explorerTree.ts",
-      "property": "El arbol del explorador agrupa objetos y fijados sin perder claves",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/connections/explorerTree.test.ts",
-      "kind": "ts",
-      "tests": 12,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "explorerTree",
-        "types"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 18
-    },
-    {
-      "path": "app/src/lib/filterBuilder.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/filterBuilder.ts",
-      "property": "El WHERE de los filtros cita identificadores y literales del motor",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/filterBuilder.test.ts",
-      "sqlEngineRows": [
-        "G1",
-        "G7"
-      ],
-      "kind": "ts",
-      "tests": 8,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "connections",
-        "engines",
-        "filterBuilder",
-        "types"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 11
     },
     {
       "path": "app/src/lib/focusZones.keys.test.ts",
@@ -787,135 +1355,6 @@
         "vitest"
       ],
       "durationMs": 2
-    },
-    {
-      "path": "app/src/lib/gridClipboard.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridClipboard.ts",
-      "property": "Copiar y pegar bloques del grid conserva forma y valores",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridClipboard.test.ts",
-      "kind": "ts",
-      "tests": 6,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridClipboard",
-        "resultEditing"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 9
-    },
-    {
-      "path": "app/src/lib/gridFind.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridFind.ts",
-      "property": "Buscar en la pagina del grid",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridFind.test.ts",
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridFind",
-        "resultEditing"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 12
-    },
-    {
-      "path": "app/src/lib/gridNavigation.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridNavigation.ts",
-      "property": "Navegacion de celdas con teclado, incluidos bordes",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridNavigation.test.ts",
-      "kind": "ts",
-      "tests": 10,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridNavigation"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 8
-    },
-    {
-      "path": "app/src/lib/gridSelectionSummary.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridSelectionSummary.ts",
-      "property": "Resumen numerico de la seleccion con el formato del idioma",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridSelectionSummary.test.ts",
-      "kind": "ts",
-      "tests": 9,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridSelectionSummary",
-        "resultEditing"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 35
-    },
-    {
-      "path": "app/src/lib/gridSort.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridSort.ts",
-      "property": "Ciclo de orden de encabezados",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridSort.test.ts",
-      "kind": "ts",
-      "tests": 2,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridSort"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 5
-    },
-    {
-      "path": "app/src/lib/gridWindow.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/gridWindow.ts",
-      "property": "La ventana virtual del grid monta solo lo visible",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/gridWindow.test.ts",
-      "kind": "ts",
-      "tests": 14,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "gridWindow"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 7
     },
     {
       "path": "app/src/lib/i18n/backendKeys.test.ts",
@@ -962,55 +1401,6 @@
       "durationMs": 205
     },
     {
-      "path": "app/src/lib/jsonHighlight.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/jsonHighlight.ts",
-      "property": "Resaltado y deteccion de columnas JSON",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/jsonHighlight.test.ts",
-      "kind": "ts",
-      "tests": 6,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "jsonHighlight"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 8
-    },
-    {
-      "path": "app/src/lib/largeDocuments.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlStatementIndex.ts",
-      "property": "Documentos de 1M de lineas se indexan sin trabajo proporcional al documento entero",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/largeDocuments.test.ts",
-      "reason": "Complejidad, no tiempo de WebView: la latencia real va a tools/bench",
-      "kind": "ts",
-      "tests": 5,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlContext",
-        "sqlEditorBehavior",
-        "sqlStatementIndex",
-        "sqlStatements"
-      ],
-      "external": [
-        "@codemirror/lang-sql",
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 963
-    },
-    {
       "path": "app/src/lib/numpadKeys.test.ts",
       "domain": "platform",
       "owner": "app/src/lib/numpadKeys.ts",
@@ -1051,14 +1441,224 @@
       "durationMs": 5
     },
     {
-      "path": "app/src/lib/resultEditing.test.ts",
+      "path": "app/src/lib/results/cellTypes.test.ts",
       "domain": "results",
-      "owner": "app/src/lib/resultEditing.ts",
+      "owner": "app/src/lib/results/cellTypes.ts",
+      "property": "Un valor editado que el tipo de la columna no admite se marca antes de aplicar",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 19,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "cellTypes",
+        "resultEditing"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 17
+    },
+    {
+      "path": "app/src/lib/results/columnFilters.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/columnFilters.ts",
+      "property": "Los filtros por columna ocultan y cuentan filas sin consultar la base",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 10,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "columnFilters"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 38
+    },
+    {
+      "path": "app/src/lib/results/filterBuilder.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/filterBuilder.ts",
+      "property": "El WHERE de los filtros cita identificadores y literales del motor",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "G1",
+        "G7"
+      ],
+      "kind": "ts",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "connections",
+        "engines",
+        "filterBuilder",
+        "types"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 11
+    },
+    {
+      "path": "app/src/lib/results/gridClipboard.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridClipboard.ts",
+      "property": "Copiar y pegar bloques del grid conserva forma y valores",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "gridClipboard",
+        "resultEditing"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 9
+    },
+    {
+      "path": "app/src/lib/results/gridFind.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridFind.ts",
+      "property": "Buscar en la pagina del grid",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "gridFind",
+        "resultEditing"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 12
+    },
+    {
+      "path": "app/src/lib/results/gridNavigation.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridNavigation.ts",
+      "property": "Navegacion de celdas con teclado, incluidos bordes",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 10,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "gridNavigation"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 8
+    },
+    {
+      "path": "app/src/lib/results/gridSelectionSummary.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridSelectionSummary.ts",
+      "property": "Resumen numerico de la seleccion con el formato del idioma",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 9,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "results/gridSelectionSummary",
+        "results/resultEditing"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 35
+    },
+    {
+      "path": "app/src/lib/results/gridSort.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridSort.ts",
+      "property": "Ciclo de orden de encabezados",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "gridSort"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 5
+    },
+    {
+      "path": "app/src/lib/results/gridWindow.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/gridWindow.ts",
+      "property": "La ventana virtual del grid monta solo lo visible",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 14,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "gridWindow"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 7
+    },
+    {
+      "path": "app/src/lib/results/jsonHighlight.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/jsonHighlight.ts",
+      "property": "Resaltado y deteccion de columnas JSON",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "jsonHighlight"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 8
+    },
+    {
+      "path": "app/src/lib/results/resultEditing.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/resultEditing.ts",
       "property": "Edicion de celdas y relleno multiple en el borrador",
       "risk": "P1",
       "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/results/resultEditing.test.ts",
+      "decision": "keep",
       "kind": "ts",
       "tests": 8,
       "ignored": 0,
@@ -1070,225 +1670,6 @@
         "vitest"
       ],
       "durationMs": 7
-    },
-    {
-      "path": "app/src/lib/sqlAnalysis.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlAnalysis.ts",
-      "property": "El analisis incremental publica diagnosticos en el RangeSet y descarta respuestas viejas",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/analysisSession.test.ts",
-      "sqlEngineRows": [
-        "A4"
-      ],
-      "kind": "ts",
-      "tests": 10,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "sqlAnalysis",
-        "sqlDiagnostics",
-        "sqlStatementIndex"
-      ],
-      "external": [
-        "@codemirror/state",
-        "@codemirror/view",
-        "vitest"
-      ],
-      "durationMs": 137
-    },
-    {
-      "path": "app/src/lib/sqlBlankLines.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlStatements.ts",
-      "property": "Una linea en blanco separa sentencias en cada motor, tambien en el editor",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/blankLines.test.ts",
-      "reason": "283 casos parametrizados; revisar si engines/contract.test.ts ya cubre el mismo riesgo",
-      "sqlEngineRows": [
-        "S1"
-      ],
-      "kind": "ts",
-      "tests": 283,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlStatementIndex",
-        "sqlStatements"
-      ],
-      "external": [
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 3185
-    },
-    {
-      "path": "app/src/lib/sqlCallHints.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCallHints.ts",
-      "property": "Pistas de argumentos en llamadas",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/callHints.test.ts",
-      "kind": "ts",
-      "tests": 9,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlCallHints",
-        "types"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 10
-    },
-    {
-      "path": "app/src/lib/sqlCatalogCompletions.server.test.ts",
-      "domain": "engines",
-      "owner": "app/src/lib/sqlCatalogCompletions.ts",
-      "property": "Puente: escribe los CALL del autocompletado real para que real_server los ejecute",
-      "risk": "P1",
-      "gate": "engine-pr",
-      "decision": "keep",
-      "reason": "Se omite en npm test; lo invoca crates/server-tests",
-      "sqlEngineRows": [
-        "G2"
-      ],
-      "kind": "ts",
-      "tests": 1,
-      "ignored": 1,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlCatalogCompletions",
-        "types"
-      ],
-      "external": [
-        "@codemirror/state",
-        "node:fs",
-        "vitest"
-      ],
-      "durationMs": 0
-    },
-    {
-      "path": "app/src/lib/sqlCatalogCompletions.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCatalogCompletions.ts",
-      "property": "Sugerencias del catalogo por motor; parentesis sin inventar argumentos",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/catalogCompletions.test.ts",
-      "sqlEngineRows": [
-        "G3",
-        "G4",
-        "G5"
-      ],
-      "kind": "ts",
-      "tests": 35,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlCatalogCompletions",
-        "sqlSchema",
-        "types"
-      ],
-      "external": [
-        "@codemirror/autocomplete",
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 401
-    },
-    {
-      "path": "app/src/lib/sqlCommentEditing.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCommentEditing.ts",
-      "property": "Cierre automatico de /* */ segun el motor",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/commentEditing.test.ts",
-      "kind": "ts",
-      "tests": 6,
-      "ignored": 0,
-      "environment": "happy-dom",
-      "dependencies": [
-        "engines",
-        "sqlCommentEditing",
-        "sqlSchema"
-      ],
-      "external": [
-        "@codemirror/state",
-        "@codemirror/view",
-        "vitest"
-      ],
-      "durationMs": 82
-    },
-    {
-      "path": "app/src/lib/sqlCommentHighlight.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCommentHighlight.ts",
-      "property": "El resaltado lee los comentarios como el motor (ejecutables incluidos)",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/commentHighlight.test.ts",
-      "reason": "Base de E0/E1 (Better Comments): la decoracion no altera el SQL",
-      "sqlEngineRows": [
-        "S4"
-      ],
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlSchema"
-      ],
-      "external": [
-        "@codemirror/language",
-        "@codemirror/state",
-        "@lezer/highlight",
-        "vitest"
-      ],
-      "durationMs": 16
-    },
-    {
-      "path": "app/src/lib/sqlCommentStyle.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCommentStyle.ts",
-      "property": "Jerarquia tipografica dentro de comentarios",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/commentStyle.test.ts",
-      "kind": "ts",
-      "tests": 7,
-      "ignored": 0,
-      "environment": "happy-dom",
-      "dependencies": [
-        "engines",
-        "sqlCommentStyle",
-        "sqlSchema",
-        "sqlStatementIndex"
-      ],
-      "external": [
-        "@codemirror/language",
-        "@codemirror/state",
-        "@codemirror/view",
-        "vitest"
-      ],
-      "durationMs": 73
     },
     {
       "path": "app/src/lib/sqlComments.test.ts",
@@ -1316,301 +1697,13 @@
       "durationMs": 12
     },
     {
-      "path": "app/src/lib/sqlCompletionPolicy.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCompletionPolicy.ts",
-      "property": "Politica de autocompletado por posicion",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/completionPolicy.test.ts",
-      "sqlEngineRows": [
-        "G5"
-      ],
-      "kind": "ts",
-      "tests": 15,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlCompletionPolicy",
-        "sqlContext"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 8
-    },
-    {
-      "path": "app/src/lib/sqlContext.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlContext.ts",
-      "property": "Contexto bajo el cursor: relacion, alias, cola",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/context.test.ts",
-      "sqlEngineRows": [
-        "G5"
-      ],
-      "kind": "ts",
-      "tests": 32,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlContext"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 18
-    },
-    {
-      "path": "app/src/lib/sqlCreatedTables.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlCreatedTables.ts",
-      "property": "Tablas que crea el documento cuentan como definidas",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/createdTables.test.ts",
-      "sqlEngineRows": [
-        "A4"
-      ],
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "sqlCreatedTables"
-      ],
-      "external": [
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 5
-    },
-    {
-      "path": "app/src/lib/sqlDiagnostics.dom.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlDiagnostics.ts",
-      "property": "En el editor real, mientras se escribe solo se ven errores reales",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/diagnosticPresentation.dom.test.ts",
-      "sqlEngineRows": [
-        "A4"
-      ],
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "happy-dom",
-      "dependencies": [
-        "sqlDiagnostics"
-      ],
-      "external": [
-        "@codemirror/state",
-        "@codemirror/view",
-        "vitest"
-      ],
-      "durationMs": 65
-    },
-    {
-      "path": "app/src/lib/sqlDiagnostics.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlDiagnostics.ts",
-      "property": "Ubicar un error de ejecucion del servidor segun el motor",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/diagnostics.test.ts",
-      "sqlEngineRows": [
-        "A7"
-      ],
-      "kind": "ts",
-      "tests": 7,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 11
-    },
-    {
-      "path": "app/src/lib/sqlEditorBehavior.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlEditorBehavior.ts",
-      "property": "Mayusculas automaticas de palabras clave",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/behavior.test.ts",
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "sqlEditorBehavior"
-      ],
-      "external": [
-        "@codemirror/lang-sql",
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 9
-    },
-    {
-      "path": "app/src/lib/sqlErrorHelp.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlErrorHelp.ts",
-      "property": "Ayuda y arreglos por codigo de error",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/errorHelp.test.ts",
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlDiagnostics",
-        "sqlErrorHelp"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 6
-    },
-    {
-      "path": "app/src/lib/sqlExecutionMarker.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlExecutionMarker.ts",
-      "property": "Marcador de ejecucion sigue a la sentencia en scripts enormes",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/executionMarker.test.ts",
-      "kind": "ts",
-      "tests": 13,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "sqlExecutionMarker"
-      ],
-      "external": [
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 1627
-    },
-    {
-      "path": "app/src/lib/sqlFormatLayout.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlFormatLayout.ts",
-      "property": "Formateo conserva textos citados y operadores del motor",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/formatLayout.test.ts",
-      "kind": "ts",
-      "tests": 28,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlFormatLayout",
-        "sqlFormatter"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 160
-    },
-    {
-      "path": "app/src/lib/sqlFormatter.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlFormatter.ts",
-      "property": "Formatear un bloque",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/formatter.test.ts",
-      "kind": "ts",
-      "tests": 8,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlFormatter"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 153
-    },
-    {
-      "path": "app/src/lib/sqlHighlight.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlHighlight.ts",
-      "property": "Resaltado estatico para vistas previas",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/highlight.test.ts",
-      "kind": "ts",
-      "tests": 2,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "sqlHighlight"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 1
-    },
-    {
-      "path": "app/src/lib/sqlIndentation.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlIndentation.ts",
-      "property": "Tab en el editor real",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/indentation.dom.test.ts",
-      "kind": "ts",
-      "tests": 27,
-      "ignored": 0,
-      "environment": "happy-dom",
-      "dependencies": [
-        "sqlIndentation"
-      ],
-      "external": [
-        "@codemirror/autocomplete",
-        "@codemirror/commands",
-        "@codemirror/lang-sql",
-        "@codemirror/language",
-        "@codemirror/state",
-        "codemirror",
-        "vitest"
-      ],
-      "durationMs": 2416
-    },
-    {
       "path": "app/src/lib/sqlMixedCorpus.test.ts",
       "domain": "engines",
       "owner": "app/src/lib/sqlStatements.ts",
       "property": "El corpus compartido de consolas mezcladas se divide igual que en Rust",
       "risk": "P0",
       "gate": "pr",
-      "decision": "rewrite",
-      "target": "tests/sql/common/",
+      "decision": "keep",
       "reason": "Lee crates/engine/tests/corpus/mixed; pasa a consumir los fixtures canonicos de tests/sql (M1)",
       "sqlEngineRows": [
         "S1",
@@ -1621,10 +1714,10 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "../../../crates/engine/tests/corpus/mixed/errors.json",
-        "../../../crates/engine/tests/corpus/mixed/mariadb.json",
-        "../../../crates/engine/tests/corpus/mixed/mysql.json",
-        "../../../crates/engine/tests/corpus/mixed/postgres.json",
+        "../../../tests/sql/common/mixed-errors.json",
+        "../../../tests/sql/mariadb/common/mixed.json",
+        "../../../tests/sql/mysql/common/mixed.json",
+        "../../../tests/sql/postgres/common/mixed.json",
         "engines",
         "sqlStatements"
       ],
@@ -1632,104 +1725,6 @@
         "vitest"
       ],
       "durationMs": 93
-    },
-    {
-      "path": "app/src/lib/sqlParameterTypes.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlParameterTypes.ts",
-      "property": "Tipo de cada parametro por su columna",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/parameterTypes.test.ts",
-      "kind": "ts",
-      "tests": 4,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlParameterTypes",
-        "sqlParameters",
-        "types"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 7
-    },
-    {
-      "path": "app/src/lib/sqlParameters.edge.test.ts",
-      "domain": "workspace",
-      "owner": "app/src/lib/sqlParameters.ts",
-      "property": "Bordes de parametros: comillas, comentarios, nombres",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/workspace/parameters.test.ts",
-      "reason": "Fusionar con sqlParameters.test.ts solo si los casos se solapan; antes comprobarlo",
-      "kind": "ts",
-      "tests": 21,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlParameterTypes",
-        "sqlParameters",
-        "types"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 35
-    },
-    {
-      "path": "app/src/lib/sqlParameters.test.ts",
-      "domain": "workspace",
-      "owner": "app/src/lib/sqlParameters.ts",
-      "property": "Encontrar y sustituir parametros sin tocar textos",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/workspace/parameters.test.ts",
-      "kind": "ts",
-      "tests": 14,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlParameters"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 13
-    },
-    {
-      "path": "app/src/lib/sqlPaste.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlPaste.ts",
-      "property": "Pegar limpia invisibles salvo dentro de cadenas del motor",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/paste.test.ts",
-      "kind": "ts",
-      "tests": 10,
-      "ignored": 0,
-      "environment": "happy-dom",
-      "dependencies": [
-        "engines/mysql",
-        "engines/postgres",
-        "engines/standard",
-        "sqlPaste",
-        "sqlStatementIndex"
-      ],
-      "external": [
-        "@codemirror/state",
-        "@codemirror/view",
-        "vitest"
-      ],
-      "durationMs": 24
     },
     {
       "path": "app/src/lib/sqlPreviewFormat.test.ts",
@@ -1750,86 +1745,6 @@
         "vitest"
       ],
       "durationMs": 4
-    },
-    {
-      "path": "app/src/lib/sqlRelations.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlRelations.ts",
-      "property": "Relaciones y alias de una sentencia",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/relations.test.ts",
-      "kind": "ts",
-      "tests": 6,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlRelations"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 6
-    },
-    {
-      "path": "app/src/lib/sqlSchema.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlSchema.ts",
-      "property": "Fuente de autocompletado de punta a punta",
-      "risk": "P1",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/completionSource.test.ts",
-      "sqlEngineRows": [
-        "G5"
-      ],
-      "kind": "ts",
-      "tests": 21,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlSchema",
-        "types"
-      ],
-      "external": [
-        "@codemirror/autocomplete",
-        "@codemirror/lang-sql",
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 137
-    },
-    {
-      "path": "app/src/lib/sqlStatementIndex.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlStatementIndex.ts",
-      "property": "Indice incremental de sentencias igual al divisor completo",
-      "risk": "P0",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/statementIndex.test.ts",
-      "reason": "El archivo mas lento (~10 s): medir que caso domina antes de C1",
-      "sqlEngineRows": [
-        "S1"
-      ],
-      "kind": "ts",
-      "tests": 13,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "../../../crates/engine/tests/corpus/mixed/mysql.json",
-        "engines",
-        "sqlStatementIndex",
-        "sqlStatements"
-      ],
-      "external": [
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 9900
     },
     {
       "path": "app/src/lib/sqlStatements.test.ts",
@@ -1854,38 +1769,6 @@
         "vitest"
       ],
       "durationMs": 123
-    },
-    {
-      "path": "app/src/lib/sqlWriting.test.ts",
-      "domain": "editor",
-      "owner": "app/src/lib/sqlSchema.ts",
-      "property": "Formas reales de escribir: alias, deshacer tras sugerencia",
-      "risk": "P2",
-      "gate": "pr",
-      "decision": "move",
-      "target": "app/src/lib/editor/writing.test.ts",
-      "sqlEngineRows": [
-        "G4"
-      ],
-      "kind": "ts",
-      "tests": 18,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "engines",
-        "sqlSchema",
-        "sqlStatementIndex",
-        "stores/editorSettings",
-        "types"
-      ],
-      "external": [
-        "@codemirror/autocomplete",
-        "@codemirror/commands",
-        "@codemirror/lang-sql",
-        "@codemirror/state",
-        "vitest"
-      ],
-      "durationMs": 155
     },
     {
       "path": "app/src/lib/stores/connectionCatalog.test.ts",
@@ -2070,8 +1953,8 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "resultEditing",
-        "resultEdits"
+        "resultEdits",
+        "results/resultEditing"
       ],
       "external": [
         "svelte",
@@ -2222,6 +2105,26 @@
       "durationMs": 27
     },
     {
+      "path": "app/src/lib/workspace/commands.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/commands.ts",
+      "property": "Un comando registrado tiene una sola politica de teclas y menus y se libera al desmontar",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 5,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "commands"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 5
+    },
+    {
       "path": "app/src/lib/workspace/consoleFiles.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/consoleFiles.ts",
@@ -2276,6 +2179,51 @@
       "durationMs": null
     },
     {
+      "path": "app/src/lib/workspace/parameters.edge.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/parameters.ts",
+      "property": "Bordes de parametros: comillas, comentarios, nombres",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "reason": "Fusionar con sqlParameters.test.ts solo si los casos se solapan; antes comprobarlo",
+      "kind": "ts",
+      "tests": 21,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../editor/parameterTypes",
+        "../engines",
+        "../types",
+        "parameters"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 35
+    },
+    {
+      "path": "app/src/lib/workspace/parameters.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/parameters.ts",
+      "property": "Encontrar y sustituir parametros sin tocar textos",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 14,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "../engines",
+        "parameters"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": 13
+    },
+    {
       "path": "app/src/lib/workspace/resultChanges.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/resultChanges.ts",
@@ -2292,7 +2240,7 @@
       "environment": "node",
       "dependencies": [
         "resultChanges",
-        "resultEditing",
+        "results/resultEditing",
         "stores/executionLog",
         "stores/queryConsoles",
         "stores/resultEdits",
@@ -2347,7 +2295,7 @@
       "environment": "node",
       "dependencies": [
         "engines",
-        "filterBuilder",
+        "results/filterBuilder",
         "tableQueries",
         "types"
       ],
@@ -2781,8 +2729,7 @@
       "property": "Corpus valido y mezclado: nada valido se marca; errores ordinarios si",
       "risk": "P1",
       "gate": "pr",
-      "decision": "rewrite",
-      "target": "tests/sql/",
+      "decision": "keep",
       "reason": "Corpus fuera del arbol canonico (SQL_ENGINE §10.1): cada entrada pasa a tests/sql y se retira al pasar el sustituto",
       "sqlEngineRows": [
         "A1",
@@ -2816,6 +2763,28 @@
       "durationMs": null
     },
     {
+      "path": "crates/server-tests/tests/analysis.rs",
+      "domain": "sql-engine",
+      "owner": "crates/server-tests/tests/analysis.rs",
+      "property": "Analizador y divisor contra SQL real: corpus, definiciones de Sakila/Pagila, consolas mezcladas y escritura letra a letra; CALL y SHOW CREATE devuelven filas",
+      "risk": "P0",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A1",
+        "A3",
+        "A4",
+        "D2"
+      ],
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 7,
+      "ignored": 7,
+      "environment": "real-server",
+      "env": [],
+      "durationMs": null
+    },
+    {
       "path": "crates/server-tests/tests/contract.rs",
       "domain": "drivers",
       "owner": "crates/server-tests",
@@ -2837,37 +2806,51 @@
       "durationMs": null
     },
     {
-      "path": "crates/server-tests/tests/real_server.rs",
+      "path": "crates/server-tests/tests/generated.rs",
       "domain": "sql-engine",
-      "owner": "crates/server-tests",
-      "property": "Guard, divisor, analizador, CALL generado y escritura contra servidores reales",
+      "owner": "crates/server-tests/tests/generated.rs",
+      "property": "El CALL que escribe el autocompletado corre en cada servidor con sus argumentos",
       "risk": "P0",
       "gate": "engine-pr",
-      "decision": "rewrite",
-      "target": "crates/server-tests/tests/{safety,generated,editing}.rs",
-      "reason": "Corre en CI por version exacta (sql-engine.yml); falta repartirla en safety/generated/editing y quitar la copia de la clasificacion de SqlEditor (§9)",
+      "decision": "keep",
       "sqlEngineRows": [
-        "S2",
-        "S3",
-        "S5",
-        "A1",
-        "A3",
-        "A4",
-        "D2",
-        "G2"
+        "G2",
+        "D4"
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 12,
-      "ignored": 12,
+      "tests": 1,
+      "ignored": 1,
       "environment": "real-server",
       "env": [
-        "ROWLY_FUZZ_CASES",
-        "ROWLY_FUZZ_SEED",
         "ROWLY_ROUTINES_IN",
         "ROWLY_ROUTINES_OUT"
       ],
-      "durationMs": 0
+      "durationMs": null
+    },
+    {
+      "path": "crates/server-tests/tests/safety.rs",
+      "domain": "sql-engine",
+      "owner": "crates/server-tests/tests/safety.rs",
+      "property": "Seguridad en servidores reales: lo que el guard acepta corre como una sola sentencia (corpus de ataques y fuzz), nada que dañe datos pasa como no destructivo, cadenas segun el modo",
+      "risk": "P0",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "S2",
+        "S3",
+        "S5"
+      ],
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 4,
+      "ignored": 4,
+      "environment": "real-server",
+      "env": [
+        "ROWLY_FUZZ_CASES",
+        "ROWLY_FUZZ_SEED"
+      ],
+      "durationMs": null
     },
     {
       "path": "crates/server-tests/tests/version_lines.rs",
@@ -2876,8 +2859,7 @@
       "property": "Cada linea se distingue de la anterior en sus extremos; tipos leidos por linea",
       "risk": "P1",
       "gate": "engine-pr",
-      "decision": "move",
-      "target": "crates/server-tests/tests/contract.rs",
+      "decision": "keep",
       "reason": "Corre en CI por motor sobre imagenes fijadas por digest (sql-engine.yml); se une al contrato del harness",
       "sqlEngineRows": [
         "D7",

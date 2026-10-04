@@ -11,14 +11,14 @@
 
 /*
  * Iconos del tooltip de autocompletado. Usa la clase cm-completionIcon-<type>
- * segun el "type" de cada Completion (ver sqlSchema.ts). Se enmascara un SVG
+ * segun el "type" de cada Completion (ver editor/completionSource.ts). Se enmascara un SVG
  * de Lucide (mismo set que el resto de la app, via @lucide/svelte) con
  * mask-image y se colorea via background-color para que siga el tema activo
  * en vez de quedar fijo a un color.
  *
  * La mayoria de los iconos usan el mismo gris (--text-secondary), sin
  * distincion de color por tipo: la forma ya distingue tabla/columna/keyword-
- * por-grupo (ver KEYWORD_ICON_TYPES en sqlSchema.ts). La excepcion es
+ * por-grupo (ver KEYWORD_ICON_TYPES en editor/completionSource.ts). La excepcion es
  * columna PK/FK ("column-pk"/"column-fk", ver buildSqlSchema): mismo icono
  * (Lucide "key") que el header del grid de resultados, con el mismo color -
  * dorado para PK, accent para FK - para que se reconozcan igual en los dos
@@ -383,7 +383,7 @@
 
 /*
  * Icono de estado de la ultima ejecucion en el margen (ver
- * sqlExecutionMarker.ts). Igual que los iconos de autocompletado: SVG de
+ * editor/executionMarker.ts). Igual que los iconos de autocompletado: SVG de
  * Lucide enmascarado, con el color puesto por el tema de CodeMirror
  * (codemirrorTheme.ts) segun el estado. "running" gira el "loader-circle".
  */

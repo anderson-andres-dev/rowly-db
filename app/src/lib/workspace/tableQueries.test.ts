@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ENGINES } from "$lib/engines";
-import { quoteIdentifier } from "$lib/filterBuilder";
+import { quoteIdentifier } from "$lib/results/filterBuilder";
 import type { CatalogTable, QueryExecutionResult } from "$lib/types";
 import { filterColumns, oneQueryAtATime, tableSql } from "./tableQueries";
 

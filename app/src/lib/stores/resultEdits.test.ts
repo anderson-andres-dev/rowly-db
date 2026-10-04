@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
-import { EMPTY_EDITS, type PendingEdits } from "$lib/resultEditing";
+import { EMPTY_EDITS, type PendingEdits } from "$lib/results/resultEditing";
 import {
   clearResultPendingEdits,
   commitResultEdits,

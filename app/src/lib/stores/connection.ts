@@ -3,7 +3,7 @@ import { engineForContext } from "$lib/engines";
 import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
-import { toConnectionFailure } from "$lib/connectionErrors";
+import { toConnectionFailure } from "$lib/connections/connectionErrors";
 import { forgetQueryHistory } from "./queryHistory";
 import { getDriver, type ConnectionDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
@@ -48,7 +48,7 @@ export const isProduction = derived(activeProfile, ($profile) => $profile?.envir
 
 // Tablas del catalogo cargado por el ultimo connect() exitoso. Se usa tanto
 // para el arbol de tablas del sidebar (SchemaTree.svelte) como para el
-// autocompletado del editor (SqlEditor.svelte via sqlSchema.ts) - no hay
+// autocompletado del editor (SqlEditor.svelte via editor/completionSource.ts) - no hay
 // comando de Tauri aparte para sugerencias, el catalogo ya viaja completo.
 export const catalogTables = writable<CatalogTable[]>([]);
 

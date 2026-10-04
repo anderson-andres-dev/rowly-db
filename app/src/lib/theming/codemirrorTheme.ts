@@ -13,7 +13,7 @@ import type { EditorPalette, ColorScheme } from './palettes';
  * "function name" tag for user functions. Built-in functions (COUNT, NOW…)
  * come as `standard(name)` and use `palette.builtin` when the theme sets it.
  * `palette.error` is only used by the execution status marker (see
- * sqlExecutionMarker.ts), not for syntax highlighting — there is no linter.
+ * editor/executionMarker.ts), not for syntax highlighting — there is no linter.
  */
 // En los temas claros y en los que piden `tokenChrome`: CodeMirror trae
 // defaults pensados para un editor generico (banda azul en el margen de la
@@ -241,7 +241,7 @@ function createCmTheme(palette: EditorPalette, scheme: ColorScheme): Extension {
 			'.cm-activeStatement.cm-activeStatementStart.cm-activeStatementEnd': {
 				boxShadow: `inset 1px 0 ${palette.activeStatement}, inset -1px 0 ${palette.activeStatement}, inset 0 1px ${palette.activeStatement}, inset 0 -1px ${palette.activeStatement}`
 			},
-			// Marcador de la ultima ejecucion (sqlExecutionMarker.ts): la forma
+			// Marcador de la ultima ejecucion (editor/executionMarker.ts): la forma
 			// del icono sale de sqlEditorIcons.css, el color de la paleta.
 			'.cm-executionStatus-success': {
 				backgroundColor: palette.success

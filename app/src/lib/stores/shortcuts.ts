@@ -1,9 +1,9 @@
 import { browser } from "$app/environment";
 import { derived, writable } from "svelte/store";
-import { commandDefinitions, type CommandDefinition } from "$lib/commands";
+import { commandDefinitions, type CommandDefinition } from "$lib/workspace/commands";
 
 // Capa tecla -> comando: la tecla vigente de cada comando del registro
-// (lib/commands.ts), con los overrides que el usuario reasigne en Ajustes >
+// (lib/workspace/commands.ts), con los overrides que el usuario reasigne en Ajustes >
 // Atajos. Quien ejecuta es keybindings.ts; aqui solo se sabe que tecla
 // corresponde a que id.
 export type ShortcutDefinition = CommandDefinition;

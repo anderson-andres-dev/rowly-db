@@ -33,7 +33,7 @@
     Zap,
   } from "@lucide/svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
-  import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/explorerTree";
+  import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/connections/explorerTree";
   import { t } from "$lib/i18n";
   import type { DatabaseExplorer } from "$lib/types";
   import { pinnedTables, togglePinnedTable } from "$lib/stores/pinnedTables";

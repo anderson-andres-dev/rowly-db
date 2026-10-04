@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Fila de SQL_ENGINE §6 -> pruebas, ambito, motores y compuerta. `real` corre en cada version de `verified` (tools/test-dbs/lines.json); `lines` en cada probe; `e2e` en la app real. Lo valida tools/inventory/coverage.mjs. Cada fila responde por cada motor de tests/engines/contract.json: una prueba que lo incluya, un N/A con motivo o, si es un hueco, el motor en `gapEngines`.",
+  "about": "Fila de SQL_ENGINE §6 -> pruebas, ambito, motores y compuerta. `real` (safety, analysis, generated y contract) corre en cada version de `verified` (tools/test-dbs/lines.json); `lines` en cada probe; `e2e` en la app real. Lo valida tools/inventory/coverage.mjs. Cada fila responde por cada motor de tests/engines/contract.json: una prueba que lo incluya, un N/A con motivo o, si es un hueco, el motor en `gapEngines`.",
   "scopes": {
     "unit": "pr",
     "e2e": "pr",
@@ -37,7 +37,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/safety.rs",
           "name": "no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server",
           "scope": "real",
           "engines": [
@@ -47,7 +47,7 @@
           ]
         },
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/safety.rs",
           "name": "fuzzing_the_guard_against_the_real_servers_finds_no_second_statement",
           "scope": "real",
           "engines": [
@@ -62,7 +62,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/safety.rs",
           "name": "what_damages_data_never_passes_as_not_destructive",
           "scope": "real",
           "engines": [
@@ -120,7 +120,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/safety.rs",
           "name": "the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode",
           "scope": "real",
           "engines": [
@@ -206,7 +206,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "the_analyzer_marks_nothing_in_sql_the_real_servers_accept",
           "scope": "real",
           "engines": [
@@ -216,7 +216,7 @@
           ]
         },
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "common_valid_ddl_and_dml_is_never_objected_to",
           "scope": "real",
           "engines": [
@@ -226,7 +226,7 @@
           ]
         },
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "the_mixed_console_corpus_runs_through_guard_and_server",
           "scope": "real",
           "engines": [
@@ -246,7 +246,7 @@
           ]
         },
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted",
           "scope": "real",
           "engines": [
@@ -256,7 +256,7 @@
           ]
         },
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server",
           "scope": "real",
           "engines": [
@@ -306,7 +306,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "typing_real_sql_shows_nothing_that_is_only_unfinished",
           "scope": "real",
           "engines": [
@@ -331,7 +331,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "typing_real_sql_shows_nothing_that_is_only_unfinished",
           "scope": "real",
           "engines": [
@@ -341,7 +341,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlDiagnostics.dom.test.ts",
+          "file": "app/src/lib/editor/diagnostics.dom.test.ts",
           "name": "errores en el editor",
           "scope": "unit",
           "engines": [
@@ -415,7 +415,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlDiagnostics.test.ts",
+          "file": "app/src/lib/editor/diagnostics.test.ts",
           "name": "ubicar un error de ejecucion",
           "scope": "unit",
           "engines": [
@@ -476,7 +476,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/generated.rs",
           "name": "completion_calls_run_on_the_real_servers",
           "scope": "real",
           "engines": [
@@ -486,7 +486,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlCatalogCompletions.server.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.server.test.ts",
           "name": "CALL escrito por el autocompletado",
           "scope": "real",
           "engines": [
@@ -501,7 +501,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "catalogo SQL",
           "scope": "unit",
           "engines": [
@@ -516,7 +516,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "input.complete",
           "scope": "unit",
           "engines": [
@@ -541,7 +541,7 @@
           ]
         },
         {
-          "file": "app/src/lib/sqlCatalogCompletions.test.ts",
+          "file": "app/src/lib/editor/catalogCompletions.test.ts",
           "name": "catalogo SQL",
           "scope": "unit",
           "engines": [
@@ -582,7 +582,7 @@
           ]
         },
         {
-          "file": "app/src-tauri/src/export.rs",
+          "file": "app/src-tauri/src/services/export.rs",
           "name": "fn ",
           "scope": "unit",
           "engines": [
@@ -663,7 +663,7 @@
       "status": "covered",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/analysis.rs",
           "name": "call_and_show_create_return_their_rows",
           "scope": "real",
           "engines": [
@@ -693,7 +693,7 @@
       "status": "gap",
       "tests": [
         {
-          "file": "crates/server-tests/tests/real_server.rs",
+          "file": "crates/server-tests/tests/generated.rs",
           "name": "completion_calls_run_on_the_real_servers",
           "scope": "real",
           "engines": [

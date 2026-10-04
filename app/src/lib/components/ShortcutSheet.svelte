@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Search } from "@lucide/svelte";
   import { t, type MessageKey } from "$lib/i18n";
-  import type { CommandGroup } from "$lib/commands";
+  import type { CommandGroup } from "$lib/workspace/commands";
   import { shortcuts } from "$lib/stores/shortcuts";
 
   // Hoja de atajos (F1): los vigentes, con los que el usuario reasigno, en

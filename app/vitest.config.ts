@@ -1,7 +1,8 @@
 import { defineConfig } from "vitest/config";
 
-// Solo cubre los modulos puros de sqlContext/sqlCompletionPolicy/sqlSchema
-// (sin DOM ni Tauri) - no hace falta el plugin de SvelteKit para esto.
+// Solo cubre modulos puros como editor/context, editor/completionPolicy y
+// editor/completionSource (sin Tauri) - no hace falta el plugin de SvelteKit
+// para esto.
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],

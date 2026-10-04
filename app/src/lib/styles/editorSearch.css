@@ -1,4 +1,4 @@
-/* Barra de busqueda del editor SQL (editorSearchPanel.ts). DOM creado por
+/* Barra de busqueda del editor SQL (editor/search.ts). DOM creado por
    CodeMirror fuera de Svelte, por eso los estilos son globales; mismo
    lenguaje visual que la barra de busqueda del grid (FindBar.svelte). */
 
@@ -77,7 +77,7 @@
   color: var(--text-secondary);
 }
 
-/* Textarea de una linea que crece hasta 6 (editorSearchPanel.ts ajusta
+/* Textarea de una linea que crece hasta 6 (editor/search.ts ajusta
    rows); en monoespaciada cuando tiene varias lineas, para que se lea como
    el SQL que busca. */
 .kh-search-input {

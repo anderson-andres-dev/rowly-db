@@ -3,7 +3,7 @@ import { get, writable } from "svelte/store";
 
 // Cuenta cuantas veces se acepto cada sugerencia de autocompletado (tabla o
 // columna), persistido igual que connectionProfiles.ts/shortcuts.ts, para
-// darle boost a lo que el usuario realmente usa (ver sqlSchema.ts). No es ML
+// darle boost a lo que el usuario realmente usa (ver editor/completionSource.ts). No es ML
 // como el de DataGrip, pero reordena por el mismo motivo: usar el
 // SqlEditor.svelte.
 

@@ -83,8 +83,8 @@ fn drop_large(engine: Engine) {
 
 fn corpus(engine: Engine) -> &'static str {
     match engine {
-        Engine::Postgres => include_str!("../corpus/postgres/valid.sql"),
-        _ => include_str!("../corpus/mysql/valid.sql"),
+        Engine::Postgres => include_str!("../../../tests/sql/postgres/common/valid.sql"),
+        _ => include_str!("../../../tests/sql/mysql/common/valid.sql"),
     }
 }
 
