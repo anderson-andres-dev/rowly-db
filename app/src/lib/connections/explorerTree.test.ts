@@ -26,7 +26,7 @@ const CONTEXT: ConnectionEngineContext = {
   engineId: "mysql",
   server: { engine: "mysql", version: [8, 4, 0], label: "MySQL 8.4.0" },
   sessionMode: { noBackslashEscapes: false },
-  line: "8.4",
+  line: { id: "8.4", revision: 1 },
   schemaEpoch: 0,
   support: null,
   verification: "unverified",

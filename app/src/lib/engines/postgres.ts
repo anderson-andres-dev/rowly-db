@@ -1,6 +1,7 @@
 import { PostgreSQL } from "@codemirror/lang-sql";
 import { byAnalyzerLocation, byQuotedName, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
-import { ansiString, COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, foldedName } from "./common";
+import postgresLines from "../../../../support/postgres.json";
+import { ansiString, COMMON_RESERVED, COMMON_STARTERS, identifierWith, lineReservedWords, QUOTING_RESERVED, quoteWith, foldedName } from "./common";
 import type { EngineProfile, TlsModeName } from "./types";
 
 // Los valores de sslmode de libpq.
@@ -29,6 +30,7 @@ const RESERVED: ReadonlySet<string> = new Set([
   "using",
   "where",
   "window",
+  ...lineReservedWords(postgresLines),
 ]);
 
 export const postgres: EngineProfile = {
@@ -74,6 +76,7 @@ export const postgres: EngineProfile = {
       "trailing",
       "variadic",
       "window",
+      ...lineReservedWords(postgresLines),
     ]),
     (name) => quoteWith('"', '"', name),
   ),

@@ -69,11 +69,13 @@ for (const engine of contract.engines) {
   else if (rows.length) problems.push(`${engine.id}: sin respuesta en ${rows.join(", ")} (prueba, N/A con motivo o gapEngines)`);
 }
 
-// Cada motor tiene sus lineas de version y las fechas de su fabricante: sin
-// ellas no hay servidores que probar ni ventana de soporte (SQL_ENGINE §5).
+// Cada motor tiene sus lineas de version (support/), sus servidores de prueba
+// y las fechas de su fabricante: sin ellas no hay reglas por linea, servidores
+// que probar ni ventana de soporte (SQL_ENGINE §5).
 const lines = JSON.parse(readFileSync(join(ROOT, "tools/test-dbs/lines.json"), "utf8"));
 const vendor = JSON.parse(readFileSync(join(ROOT, "tools/support/vendor-support.json"), "utf8"));
 for (const engine of ENGINES) {
+  if (!existsSync(join(ROOT, "support", `${engine}.json`))) problems.push(`${engine}: sin support/${engine}.json (sus lineas de version)`);
   if (!lines.engines?.[engine]?.length) problems.push(`${engine}: sin lineas en tools/test-dbs/lines.json (engines)`);
   if (!vendor[engine]?.length) problems.push(`${engine}: sin fechas en tools/support/vendor-support.json`);
 }

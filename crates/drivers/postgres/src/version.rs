@@ -1,6 +1,10 @@
 //! Server version detection and the catalog capabilities derived from it.
 //! Introspection picks its queries from `Capabilities`, never from the raw
-//! version, so every version-dependent decision lives in one place.
+//! version; since which version each capability exists is declared once, in
+//! the engine's lines (`support/postgres.json`, `khipu_engine::lines`).
+
+use khipu_engine::Dialect;
+use khipu_engine::lines::Capability;
 
 /// `server_version_num` as the server reports it: `160002` for 16.2,
 /// `100023` for 10.23 (since 10, the number is major * 10000 + minor).
@@ -51,17 +55,21 @@ impl ServerVersion {
     }
 
     pub fn capabilities(&self) -> Capabilities {
-        let at_least = |major: u32| self.0 >= major * 10_000;
+        // Since which version each one exists is line data
+        // (support/postgres.json); how to read it is this driver's.
+        let lines = Dialect::Postgres.lines();
+        let version = self.numbers();
+        let supports = |capability| lines.supports(capability, &version);
         Capabilities {
             // pg_proc.prokind (and with it, procedures) arrived in 11;
             // before that, aggregates/window functions are told apart by
             // proisagg/proiswindow and everything else is a function.
-            prokind: at_least(11),
-            // 11 added INCLUDE columns to indexes: indnatts counts them,
-            // indnkeyatts (new in 11) doesn't.
-            index_key_attributes: at_least(11),
-            // pg_sequence and relispartition are both 10+.
-            catalog_v10: at_least(10),
+            prokind: supports(Capability::Procedures),
+            // INCLUDE columns in indexes: indnatts counts them, indnkeyatts
+            // doesn't.
+            index_key_attributes: supports(Capability::IndexIncludeColumns),
+            // pg_sequence and relispartition.
+            catalog_v10: supports(Capability::CatalogV10),
         }
     }
 }

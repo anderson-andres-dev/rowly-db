@@ -9,7 +9,7 @@ const context = (engineId: ConnectionDriver, noBackslashEscapes: boolean): Conne
   engineId,
   server: { engine: engineId, version: [8, 4, 11], label: "MySQL 8.4.11" },
   sessionMode: { noBackslashEscapes },
-  line: "8.4",
+  line: { id: "8.4", revision: 1 },
   schemaEpoch: 0,
   support: null,
   verification: "verified",

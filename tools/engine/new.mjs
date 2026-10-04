@@ -17,7 +17,8 @@
 //
 // Mientras quede algo pendiente fallan, con lo que falta:
 //   cargo build      cada match exhaustivo sin el motor (backend, harness)
-//   cargo test       el bloque PENDIENTE y la entrada pending del contrato
+//   cargo test       el bloque PENDIENTE, la entrada pending del contrato y
+//                    sus lineas (hereda las de --like hasta tener support/<id>.json)
 //   npm run check    ConnectionDriver y ENGINES del frontend
 //   coverage.mjs     cada fila de SQL_ENGINE §6 sin respuesta para el motor
 
@@ -123,8 +124,12 @@ console.log(`Motor ${id} empezado (a partir de ${like}). Lo que falta, en orden:
      perfil en app/src/lib/engines/${id}.ts, ENGINES y FIXTURES del contrato
      (npm run check los pide).
   4. tests/engines/contract.json: sus valores reales; quitar "pending".
-  5. tools/test-dbs/lines.json (lineas, probes y verified, por digest),
-     docker-compose y up.sh; tools/support/vendor-support.json.
+  5. support/${id}.json: sus lineas de version como datos (capacidades,
+     reservadas, sintaxis eliminada; crates/engine/src/lines.rs) y
+     \`lines: include_str!("../../../../support/${id}.json")\` en su definicion.
+     Hasta entonces usa las de ${like} y crates/engine/tests/lines.rs falla.
+     Las mismas lineas en tools/test-dbs/lines.json (probes y verified, por
+     digest), docker-compose y up.sh; tools/support/vendor-support.json.
   6. tests/sql/coverage.json: una respuesta para ${id} en cada fila
      (node tools/inventory/coverage.mjs dice cuales faltan).
   7. SQL_ENGINE (EN + ES): §5.3, §6.5 y lo que cambie en §9; CONTRIBUTING.

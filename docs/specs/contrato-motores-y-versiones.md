@@ -22,7 +22,7 @@ esta spec; los contratos permanentes no dependen de ella.
 | Motor que eligió el usuario | `mysql`, `mariadb`, `postgres` | `ConnectionDriver` → `DatabaseKind` → `Dialect` y `EngineProfile` | Léxico, SQL generado, diagnósticos y reglas del guard. MariaDB comparte protocolo con MySQL, pero tiene dialecto propio. |
 | Driver de protocolo | `MySqlConnector` para MySQL y MariaDB | `app/src-tauri/src/drivers.rs` | TLS, conexión, ejecución e introspección. Nunca determina por sí solo el dialecto. |
 | Versión exacta del servidor | `8.4.11`, `11.8.9`, `18.6` | La respuesta del servidor, parseada por el driver | Selección de capacidades y de la línea efectiva; se muestra al usuario. |
-| Línea de comportamiento | MySQL `8.4`, MariaDB `11.7+`, PostgreSQL `18` | Hoy: reglas en `version.rs` y perfiles; futuro: paquete por línea verificado | Cambios de sintaxis/capacidades que la app sabe demostrar. No equivale a un parche ni al estado de soporte del fabricante. |
+| Línea de comportamiento | MySQL `8.4`, MariaDB `11.7+`, PostgreSQL `18` | Desde M4: `support/<motor>.json`, compilado en la app; M5: paquete por línea distribuido | Cambios de sintaxis/capacidades que la app sabe demostrar. No equivale a un parche ni al estado de soporte del fabricante. |
 
 La **versión exacta del servidor**, por ejemplo `8.4.11`, solo se considera
 verificada cuando pasa la matriz aplicable de `SQL_ENGINE`. Varias
@@ -221,7 +221,7 @@ evidencia `tested`, aumentar `revision`, firmar el artefacto, actualizar el
 índice y generar la tabla de líneas de `SQL_ENGINE` §5.3 desde la misma fuente.
 Un futuro `publish.sh` automatiza
 esa secuencia y `check-eol.sh` revisa fechas y líneas sin paquete. Esos
-scripts se implementan en M4; no se presupone que existan hoy.
+scripts son de publicación (M5); no se presupone que existan hoy.
 
 ## 6. Pruebas que siguen a cada motor y línea
 
@@ -313,7 +313,7 @@ por presupuesto de tiempo.
 | M1. Harness y compuerta | Unificar corpus y `lines.json`, fijar imágenes, crear `coverage.json`, harness efímero y reporte; poner la matriz real por versión exacta en CI y quitar el `#[ignore]` de esa ruta. | Cada versión declarada verificada pasa `SQL_ENGINE` completo; los P1 de cobertura de §9 quedan cerrados con evidencia. |
 | M2. Límite de motor | Extraer núcleo común y decisiones por dialecto según §3; registrar IDs exhaustivamente y crear la plantilla de motor. Añadir un motor de prueba de punta a punta en una rama temporal para comprobar la guía. | Agregar un motor tiene pasos finitos y errores claros; MySQL/MariaDB mantienen identidades distintas. |
 | M3. Contexto tipado y cachés | Añadir `ConnectionEngineContext` desde backend, adaptar lectores uno por uno y propagar generación, modo y `schemaEpoch`; limitar cachés. | Frontend deja de parsear etiquetas visibles; 300 reconexiones no crecen en memoria ni mezclan líneas. |
-| M4. Datos por línea | Implementar §5 primero con datos incluidos y líneas demostradas. Migrar una capacidad por PR, con paridad antes/después en todas las versiones exactas declaradas. | Una sola declaración de cada capacidad; matriz completa verde. |
+| M4. Datos por línea | Implementar §5 primero con datos incluidos y líneas demostradas. Migrar una capacidad por PR, con paridad antes/después en todas las versiones exactas declaradas. | Una sola declaración de cada capacidad; matriz completa verde. **Hecho**: un archivo por motor (`support/<motor>.json`, no uno por línea), el id de la línea es su versión inicial y solo entran datos con fixture; formato en `SQL_ENGINE` §5.4. `why`, `support`, `tested`, `requiresApp`, `unparsedSyntax`, `destructiveKeywords` y `errorHelp` quedan para M5 o siguen en el motor. |
 | M5. Distribución | Tras M4: pantalla, índice, firma, descarga, desactivar/quitar y publicación descritos en §5. | Offline y rollback probados; ningún paquete puede saltar el guard ni afirmar verificación sin reporte. |
 
 M0–M3 pertenecen a la consolidación del núcleo. M4–M5 son trabajo de soporte

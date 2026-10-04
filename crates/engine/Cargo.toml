@@ -10,6 +10,5 @@ authors.workspace = true
 [dependencies]
 sqlparser.workspace = true
 serde.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true
+

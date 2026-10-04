@@ -368,7 +368,16 @@ async fn the_analyzer_marks_nothing_in_sql_the_real_servers_accept() {
         let conn = Conn::open(engine).await;
         for (name, sql) in real_sql(engine, &conn).await {
             checked += 1;
-            let found = khipu_engine::diagnostics::analyze_statement(&sql, engine.dialect(), None);
+            // Con la linea del servidor, como en la app: lo que una linea
+            // elimino (A9) tampoco puede marcar lo que este servidor acepta.
+            let line = engine.dialect().lines().effective(&conn.version());
+            let found = khipu_engine::diagnostics::analyze_statement_with(
+                &sql,
+                engine.dialect(),
+                None,
+                false,
+                Some(line),
+            );
             if !found.is_empty() {
                 false_positives.push(format!(
                     "{engine:?} {name}: {:?}\n{}",
@@ -599,7 +608,16 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
             if let Err(message) = classification(engine, &sql) {
                 failures.push(format!("{engine:?} el guard rechazo: {head}\n  {message}"));
             }
-            let found = khipu_engine::diagnostics::analyze_statement(&sql, engine.dialect(), None);
+            // Con la linea del servidor, como en la app: lo que una linea
+            // elimino (A9) tampoco puede marcar lo que este servidor acepta.
+            let line = engine.dialect().lines().effective(&conn.version());
+            let found = khipu_engine::diagnostics::analyze_statement_with(
+                &sql,
+                engine.dialect(),
+                None,
+                false,
+                Some(line),
+            );
             if !found.is_empty() {
                 failures.push(format!(
                     "{engine:?} el analizador marco: {head}\n  {:?}",

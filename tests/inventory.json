@@ -2,24 +2,22 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 133,
-    "tests": 1413,
+    "files": 134,
+    "tests": 1422,
     "ignored": 29,
     "byDecision": {
-      "keep": 133,
+      "keep": 134,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 127,
+      "pr": 128,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
     },
-    "sqlEngineRowsWithoutTest": [
-      "A9"
-    ]
+    "sqlEngineRowsWithoutTest": []
   },
   "tests": [
     {
@@ -142,7 +140,7 @@
       ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 8,
+      "tests": 9,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2780,6 +2778,27 @@
       "environment": "none",
       "env": [],
       "durationMs": 40
+    },
+    {
+      "path": "crates/engine/tests/lines.rs",
+      "domain": "sql-engine",
+      "owner": "crates/engine/src/lines.rs",
+      "property": "Las lineas de cada motor (support/) son validas, eligen la linea correcta por version, y sus reservadas y sintaxis eliminada tienen fixture; nadie vuelve a declarar comportamiento por version por su cuenta",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A9",
+        "G6",
+        "D6"
+      ],
+      "kind": "rust",
+      "crate": "crates/engine",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "crates/server-tests/src/lib.rs",
