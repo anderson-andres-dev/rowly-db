@@ -1,7 +1,7 @@
 //! Conectar, desconectar, probar una conexion y las contrasenas guardadas.
 
-use crate::engine_context::{ConnectionEngineContext, SessionMode};
-use crate::state::{ActiveConnection, AppState, build_catalog, uses_no_backslash_escapes};
+use crate::engine_context::ConnectionEngineContext;
+use crate::state::{ActiveConnection, AppState, build_catalog, read_session_mode};
 use crate::{credentials, drivers};
 use khipu_driver_core::{ConnectionConfig, ConnectionErrorKind, DriverError, Message};
 use serde::Serialize;
@@ -42,10 +42,11 @@ pub async fn connect(
     let mut schemas = BTreeMap::new();
     schemas.insert(connected.default_schema.clone(), connected.default_objects);
     let catalog = build_catalog(&schemas);
-    let session_mode = SessionMode {
-        no_backslash_escapes: uses_no_backslash_escapes(&*connected.connector, kind.dialect())
-            .await,
-    };
+    // El modo de la consola, que al conectar es tambien el del pool.
+    let session_mode = read_session_mode(&*connected.connector, kind.dialect())
+        .await
+        .unwrap_or_default();
+    let console_epoch = connected.connector.console_epoch();
     let generation = state.generations.fetch_add(1, Ordering::Relaxed) + 1;
     let context =
         ConnectionEngineContext::new(generation, kind.dialect(), connected.server, session_mode);
@@ -61,6 +62,8 @@ pub async fn connect(
                 dialect: kind.dialect(),
                 production: production.unwrap_or(false),
                 context,
+                pool_mode: session_mode,
+                console_epoch,
                 tls: connected.tls,
                 default_schema: connected.default_schema,
                 available_schemas: connected.available_schemas,

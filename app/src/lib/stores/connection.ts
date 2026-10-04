@@ -2,7 +2,14 @@ import { derived, get, writable } from "svelte/store";
 import { engineForContext } from "$lib/engines";
 import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
-import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
+import type {
+  CatalogTable,
+  ConnectionEngineContext,
+  ConnectionFailure,
+  DatabaseExplorer,
+  TestConnectionReport,
+  TlsMode,
+} from "$lib/types";
 import { toConnectionFailure } from "$lib/connections/connectionErrors";
 import { forgetQueryHistory } from "./queryHistory";
 import { getDriver, type ConnectionDriver } from "$lib/connections";
@@ -100,6 +107,15 @@ function withTranslatedWarnings(explorer: DatabaseExplorer): DatabaseExplorer {
     ...explorer,
     schemas: explorer.schemas.map((objects) => ({ ...objects, warnings: objects.warnings.map(backendText) })),
   };
+}
+
+// Una sentencia de la consola cambio el modo de la sesion (SET sql_mode): el
+// backend manda el contexto con otra generacion. Si mientras tanto se
+// reconecto, el de la conexion nueva es mas reciente y se queda.
+export function applySessionContext(context: ConnectionEngineContext): void {
+  databaseExplorer.update((explorer) =>
+    explorer && explorer.context.generation < context.generation ? { ...explorer, context } : explorer,
+  );
 }
 
 // Pide al backend que muestre exactamente `schemas` (mas el por defecto) y

@@ -99,8 +99,10 @@ async fn a_result_set_keeps_values_and_nulls() {
 
 /// Truncar en `max_rows` no deja nada a medias: las consultas siguientes del
 /// mismo driver devuelven su resultado completo (en MySQL y MariaDB, el
-/// limite de la sesion vuelve a su valor; en PostgreSQL, una conexion con
-/// muchas filas pendientes no vuelve al pool a descargarlas).
+/// limite de la sesion vuelve a su valor; en PostgreSQL, la conexion de la
+/// consola con muchas filas pendientes se cierra en vez de descargarlas, y la
+/// siguiente sentencia abre otra: la sesion cambia y se nota en
+/// `console_epoch`).
 #[tokio::test]
 #[ignore = "requiere tools/test-dbs/up.sh"]
 async fn truncating_leaves_the_next_queries_complete() {
@@ -121,6 +123,7 @@ async fn truncating_leaves_the_next_queries_complete() {
             &[900, 1_000_000]
         };
         for &pending in few_and_many {
+            let epoch = connector.console_epoch();
             let truncated = connector
                 .execute_query(&series(pending), QueryExecutionOptions { max_rows: 2 })
                 .await;
@@ -149,6 +152,14 @@ async fn truncating_leaves_the_next_queries_complete() {
                     other => panic!("{engine:?} tras truncar {pending}: {other:?}"),
                 }
             }
+            // La primera sentencia abre la consola (epoch 1). Mas filas
+            // pendientes de las que se descargan: se cerro y se abrio otra.
+            let expected = epoch.max(1) + if pending > 100_000 { 2 } else { 0 };
+            assert_eq!(
+                connector.console_epoch(),
+                expected,
+                "{engine:?} tras truncar {pending}"
+            );
         }
     }
 }
@@ -220,6 +231,155 @@ async fn the_session_keeps_the_server_defaults() {
         for sql in checks {
             let row = rows(engine, run(connector.as_ref(), sql).await).remove(0);
             assert_eq!(row[0], row[1], "{engine:?}: {sql}");
+        }
+    }
+}
+
+/// La consola corre en una sola conexion: lo que una sentencia deja en la
+/// sesion (una variable, una tabla temporal, una transaccion, el sql_mode)
+/// vale para las siguientes, aunque entre medio el catalogo use el pool.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn the_console_keeps_its_session_between_statements() {
+    for engine in selected(Engine::ALL) {
+        let connector = connector(engine).await;
+        let (set, read) = if engine.is_mysql_family() {
+            ("SET @rowly_console = 'sigue'", "SELECT @rowly_console")
+        } else {
+            (
+                "SET application_name = 'sigue'",
+                "SELECT current_setting('application_name')",
+            )
+        };
+        ok(engine, connector.as_ref(), set).await;
+        let epoch = connector.console_epoch();
+        ok(
+            engine,
+            connector.as_ref(),
+            "CREATE TEMPORARY TABLE rowly_console_tmp (id INT)",
+        )
+        .await;
+        ok(engine, connector.as_ref(), "BEGIN").await;
+        ok(
+            engine,
+            connector.as_ref(),
+            "INSERT INTO rowly_console_tmp VALUES (1)",
+        )
+        .await;
+        // El catalogo, en el pool, no toca la sesion de la consola.
+        connector
+            .introspect_schema(engine.scope())
+            .await
+            .unwrap_or_else(|error| panic!("{engine:?}: {error}"));
+        let inside = rows(
+            engine,
+            run(connector.as_ref(), "SELECT COUNT(*) FROM rowly_console_tmp").await,
+        );
+        assert_eq!(inside[0][0].as_deref(), Some("1"), "{engine:?}");
+        ok(engine, connector.as_ref(), "ROLLBACK").await;
+        for _ in 0..3 {
+            let row = rows(engine, run(connector.as_ref(), read).await).remove(0);
+            assert_eq!(row[0].as_deref(), Some("sigue"), "{engine:?}");
+            let count = rows(
+                engine,
+                run(connector.as_ref(), "SELECT COUNT(*) FROM rowly_console_tmp").await,
+            );
+            assert_eq!(count[0][0].as_deref(), Some("0"), "{engine:?}: el ROLLBACK");
+        }
+        if engine.is_mysql_family() {
+            ok(
+                engine,
+                connector.as_ref(),
+                "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')",
+            )
+            .await;
+            let mode = rows(
+                engine,
+                run(connector.as_ref(), "SELECT @@SESSION.sql_mode").await,
+            );
+            assert!(
+                mode[0][0]
+                    .as_deref()
+                    .unwrap_or_default()
+                    .contains("NO_BACKSLASH_ESCAPES"),
+                "{engine:?}: {mode:?}"
+            );
+        }
+        assert_eq!(connector.console_epoch(), epoch, "{engine:?}");
+    }
+}
+
+/// Los literales del grid guardan el texto tal cual con la regla de la sesion
+/// que los ejecuta. Con la del motor en una sesion con NO_BACKSLASH_ESCAPES
+/// se guardaba otro texto (`C:\\x` en vez de `C:\x`): la prueba lo mide.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn grid_literals_follow_the_session_mode() {
+    use khipu_engine::editing::{
+        CellValue, ColumnValue, ResultChanges, RowUpdate, build_change_statements,
+    };
+    let text = "C:\\x\\ty 'q'";
+    for engine in selected([Engine::MySql, Engine::MariaDb]) {
+        let connector = connector(engine).await;
+        ok(
+            engine,
+            connector.as_ref(),
+            "CREATE TEMPORARY TABLE rowly_grid_tmp (id INT PRIMARY KEY, note VARCHAR(40))",
+        )
+        .await;
+        ok(
+            engine,
+            connector.as_ref(),
+            "INSERT INTO rowly_grid_tmp VALUES (1, '')",
+        )
+        .await;
+        for no_backslash_escapes in [false, true] {
+            if no_backslash_escapes {
+                ok(
+                    engine,
+                    connector.as_ref(),
+                    "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')",
+                )
+                .await;
+            }
+            for escapes in [true, false] {
+                let changes = ResultChanges {
+                    updates: vec![RowUpdate {
+                        key: vec![ColumnValue {
+                            column: "id".into(),
+                            data_type: "int".into(),
+                            value: CellValue::Text("1".into()),
+                        }],
+                        set: vec![ColumnValue {
+                            column: "note".into(),
+                            data_type: "varchar".into(),
+                            value: CellValue::Text(text.into()),
+                        }],
+                    }],
+                    ..Default::default()
+                };
+                let sql = build_change_statements(
+                    engine.dialect(),
+                    escapes,
+                    None,
+                    "rowly_grid_tmp",
+                    &changes,
+                )
+                .remove(0);
+                ok(engine, connector.as_ref(), sql.trim_end_matches(';')).await;
+                let stored = rows(
+                    engine,
+                    run(connector.as_ref(), "SELECT note FROM rowly_grid_tmp").await,
+                )
+                .remove(0)
+                .remove(0);
+                // Solo la regla de la sesion guarda el texto escrito.
+                assert_eq!(
+                    stored.as_deref() == Some(text),
+                    escapes != no_backslash_escapes,
+                    "{engine:?} NO_BACKSLASH_ESCAPES={no_backslash_escapes}, escapes={escapes}: {sql} -> {stored:?}"
+                );
+            }
         }
     }
 }

@@ -38,8 +38,13 @@ pub fn preview_result_changes(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<String>, Message> {
     with_active_connection(&window, &state, |active| {
-        let statements =
-            result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
+        let statements = result_editing::statements(
+            active.dialect,
+            active.grid_backslash_escapes(),
+            &active.schemas,
+            &target,
+            &changes,
+        )?;
         Ok(statements
             .into_iter()
             .map(|statement| statement.sql)
@@ -68,8 +73,13 @@ pub async fn apply_result_changes(
 ) -> Result<u64, khipu_driver_core::TransactionError> {
     let (connector, statements) = with_active_connection(&window, &state, |active| {
         production_write_allowed(active.production, confirmed.unwrap_or(false))?;
-        let statements =
-            result_editing::statements(active.dialect, &active.schemas, &target, &changes)?;
+        let statements = result_editing::statements(
+            active.dialect,
+            active.grid_backslash_escapes(),
+            &active.schemas,
+            &target,
+            &changes,
+        )?;
         Ok((Arc::clone(&active.connector), statements))
     })
     .map_err(|message| khipu_driver_core::TransactionError {

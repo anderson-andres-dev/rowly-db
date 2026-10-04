@@ -17,14 +17,17 @@ use std::sync::LazyLock;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConnectionEngineContext {
-    /// Sube en cada `connect` de la app (`AppState::generations`): lo que se
-    /// pidio con otra generacion ya no vale.
+    /// Sube en cada `connect` de la app (`AppState::generations`) y cuando
+    /// cambia el modo de la sesion de la consola (`follow_console`): lo que
+    /// se pidio con otra generacion ya no vale.
     pub(crate) generation: u64,
     /// El motor con el que se parte, analiza y protege el SQL: el del perfil.
     pub(crate) engine_id: &'static str,
     /// El servidor como lo detecto el driver; puede ser otro motor que el del
     /// perfil (un MariaDB detras de un perfil MySQL).
     pub(crate) server: ServerIdentity,
+    /// El modo de la sesion de la consola, leido al conectar y otra vez
+    /// despues de cada sentencia que puede cambiarlo.
     pub(crate) session_mode: SessionMode,
     /// La linea de comportamiento del servidor: la mas cercana por debajo de
     /// su version. Por debajo de la primera, la primera, que es el piso de

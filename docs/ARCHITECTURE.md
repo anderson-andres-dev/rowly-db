@@ -18,7 +18,7 @@ The engine parses SQL, keeps the schema catalog and builds suggestions without k
 | :--- | :--- |
 | `crates/engine` | Validates SQL against each dialect's grammar, resolves what is under the cursor and ranks suggestions from the catalog. |
 | `crates/engine-lsp` | Exposes the engine as an LSP server so any editor can use it. |
-| `crates/driver-core` | The `DbConnector` contract every database implements: connect, list schemas, read a full schema and run queries. |
+| `crates/driver-core` | The `DbConnector` contract every database implements: connect, list schemas, read a full schema and run queries. Queries run on one console connection per window (`ConsoleConnection`), so what a statement leaves in the session holds for the next; the catalog and cancelling use the pool. |
 | `crates/drivers/*` | Protocol connectors built on `sqlx`; MySQL and MariaDB share a connector but keep distinct dialects and profiles. |
 | `app/src-tauri` | The desktop shell. It calls the engine and drivers directly, not through LSP, to keep latency low. |
 | `app/src` | Svelte frontend with a CodeMirror 6 editor. |

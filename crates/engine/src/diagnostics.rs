@@ -107,6 +107,28 @@ pub struct CatalogView<'a> {
 /// Cuantos arreglos se prueban para seguir buscando errores.
 const MAX_REPAIRS: usize = 10;
 
+/// Como `analyze_statement`, para una sesion de MySQL / MariaDB con
+/// NO_BACKSLASH_ESCAPES: la barra invertida es un caracter mas dentro de una
+/// cadena. Cada una pasa a `/`, que no escapa nada, para que el tokenizer
+/// corte las cadenas donde las corta el servidor; las posiciones siguen
+/// siendo las del texto original, porque la longitud no cambia.
+pub fn analyze_statement_with(
+    sql: &str,
+    dialect: Dialect,
+    catalog: Option<&CatalogView>,
+    no_backslash_escapes: bool,
+) -> Vec<Diagnostic> {
+    if !no_backslash_escapes || !dialect.backslash_escapes() || !sql.contains('\\') {
+        return analyze_statement(sql, dialect, catalog);
+    }
+    let mut bytes = sql.as_bytes().to_vec();
+    for index in crate::execution_guard::backslashes_in_strings(sql) {
+        bytes[index] = b'/';
+    }
+    let read = String::from_utf8(bytes).expect("solo cambian bytes ASCII");
+    analyze_statement(&read, dialect, catalog)
+}
+
 /// Todos los errores de la sentencia, no solo el primero: el parser se
 /// detiene en uno, asi que cada error con un arreglo seguro (la coma que
 /// falta, la que sobra, `WHER` por `WHERE`) se aplica a una copia y se vuelve
@@ -2525,6 +2547,30 @@ fn join_constraint(operator: &JoinOperator) -> Option<&JoinConstraint> {
 mod tests {
     use super::*;
     use crate::catalog::CatalogColumn;
+
+    #[test]
+    fn with_no_backslash_escapes_the_analysis_reads_strings_like_the_server() {
+        // Con NO_BACKSLASH_ESCAPES, 'C:\' es una cadena completa; con la
+        // regla de MySQL, la comilla queda escapada y la cadena sin cerrar.
+        let sql = "SELECT 'C:\\' AS ruta";
+        assert!(!analyze_statement(sql, Dialect::MySql, None).is_empty());
+        assert!(analyze_statement_with(sql, Dialect::MySql, None, true).is_empty());
+        assert_eq!(
+            analyze_statement_with(sql, Dialect::MySql, None, false),
+            analyze_statement(sql, Dialect::MySql, None)
+        );
+        // Lo que sigue a la cadena se sigue leyendo, en su sitio.
+        let after = "SELECT 'C:\\' AS ruta FROM t WHER x = 1";
+        assert_eq!(
+            analyze_statement_with(after, Dialect::MySql, None, true),
+            analyze_statement(
+                "SELECT 'C:/' AS ruta FROM t WHER x = 1",
+                Dialect::MySql,
+                None
+            )
+        );
+        assert!(!analyze_statement_with(after, Dialect::MySql, None, true).is_empty());
+    }
 
     fn column(name: &str) -> CatalogColumn {
         CatalogColumn {
