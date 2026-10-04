@@ -561,7 +561,7 @@
         use:tooltip={{
           label:
             serverContext.verification === "unverified" && serverContext.line
-              ? $t("editor.serverUnverified", { line: serverContext.line })
+              ? $t("editor.serverUnverified", { line: serverContext.line.id })
               : $t("editor.serverVersion"),
           placement: "above",
         }}

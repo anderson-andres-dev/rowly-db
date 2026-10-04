@@ -23,6 +23,9 @@ export default defineConfig(() => ({
           port: 1421,
         }
       : undefined,
+    // Las lineas de version de cada motor (support/<motor>.json): las
+    // mismas que compila el backend.
+    fs: { allow: ["../support"] },
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],

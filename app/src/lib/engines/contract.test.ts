@@ -258,3 +258,42 @@ describe("contrato compartido con Rust", () => {
     expect(ours).toEqual(contract.engines);
   });
 });
+
+// Las lineas de version (support/<motor>.json): la misma declaracion que
+// compila el backend. G6: lo que una linea vuelve reservado lo cita el SQL
+// generado en cualquier version del motor, y ningun alias automatico lo usa.
+describe("lineas de version", () => {
+  it("cada motor cita las palabras que reserva cualquiera de sus lineas (G6)", async () => {
+    const { readFileSync } = await import("node:fs");
+    let checked = 0;
+    for (const [id, engine] of Object.entries(ENGINES)) {
+      const path = new URL(`../../../../support/${id}.json`, import.meta.url);
+      const data = JSON.parse(readFileSync(path, "utf8")) as { engine: string; lines: { reservedWords?: string[] }[] };
+      expect(data.engine).toBe(id);
+      for (const word of data.lines.flatMap((line) => line.reservedWords ?? [])) {
+        expect(engine.identifier(word), `${id}: ${word}`).toBe(engine.quoteIdentifier(word));
+        expect(engine.reservedWords.has(word), `${id}: ${word} como alias`).toBe(true);
+        expect(aliasFor(`${word}_items`, new Set(), engine.reservedWords)).not.toBe(word);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    // MariaDB cita tambien lo que reservan las lineas de MySQL: una comilla
+    // de mas no rompe nada.
+    expect(ENGINES.mariadb.identifier("rank")).toBe("`rank`");
+  });
+
+  it("el frontend no deduce linea ni version: las recibe del backend", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const root = new URL("../../", import.meta.url);
+    const sources = (readdirSync(root, { recursive: true }) as string[]).filter(
+      (file) => /\.(ts|svelte)$/.test(file) && !/\.test\.ts$/.test(file),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    const inferred = sources.filter((file) => {
+      const text = readFileSync(new URL(file, root), "utf8");
+      return /server\.version\b|server\.label\.(match|split|replace|slice)|\.line\.id\s*[<>=]/.test(text);
+    });
+    expect(inferred).toEqual([]);
+  });
+});
