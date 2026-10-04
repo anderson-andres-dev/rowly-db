@@ -1,4 +1,4 @@
-//! Diagnosticos de SQL mientras se escribe (docs/specs/v0.2-diagnosticos.md).
+//! Diagnosticos de SQL mientras se escribe.
 //!
 //! Dos pasadas por sentencia, sin tocar la base:
 //! 1. Sintaxis: el error de sqlparser con su linea y columna, afinado con
@@ -2955,8 +2955,9 @@ mod tests {
     }
 }
 
-/// El contrato de los diagnosticos (docs/specs/v0.2-perfiles-de-motor.md,
-/// §5): cada caso corre en todos los motores de `Dialect::ALL`. Lo comun se
+/// El contrato de los diagnosticos
+/// (SQL_ENGINE.es.md): cada caso corre en todos los
+/// motores de `Dialect::ALL`. Lo comun se
 /// escribe una vez (`Same`) y un motor nuevo ya lo cumple o falla aca; donde
 /// un motor difiere, el caso lo dice con un `match` exhaustivo (`PerEngine`):
 /// un motor nuevo no compila hasta decidir cada diferencia.

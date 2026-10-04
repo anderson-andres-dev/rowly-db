@@ -21,8 +21,7 @@ import {
   type SqlLexical,
 } from "$lib/sqlStatements";
 
-// Las sentencias del documento, al dia en cada tecla sin recorrerlo entero
-// (diseño en docs/specs/v0.2-documentos-grandes.md, 15a).
+// Las sentencias del documento, al dia en cada tecla sin recorrerlo entero.
 //
 // Se guardan en un RangeSet: mapearlo a traves de un cambio comparte los
 // trozos que no se tocan, y buscar la sentencia de una posicion es

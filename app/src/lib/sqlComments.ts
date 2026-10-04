@@ -1,9 +1,9 @@
 import type { SqlLexical } from "$lib/sqlStatements";
 
-// Donde empieza y acaba un comentario, segun el motor
-// (docs/specs/v0.3-comentarios.md, Parte 1). Las reglas salen solo de
-// `SqlLexical`; los escaneres del editor (divisor, contexto del cursor,
-// parametros, pistas de llamada, formateador, pegado) preguntan aqui.
+// Donde empieza y acaba un comentario, segun el motor.
+// Las reglas salen solo de `SqlLexical`; los escaneres del editor (divisor,
+// contexto del cursor, parametros, pistas de llamada, formateador, pegado)
+// preguntan aqui.
 
 export type CommentKind = "line" | "block" | "executable";
 

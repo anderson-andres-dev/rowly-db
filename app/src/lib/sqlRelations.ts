@@ -1,6 +1,6 @@
 // Las relaciones (tablas con su alias) de una sentencia a medio escribir y
-// los alias automaticos al estilo DataGrip (docs/specs/v0.2-autocompletado.md,
-// §2). Funciones puras sobre el texto de UNA sentencia (statementTextAt):
+// los alias automaticos al estilo DataGrip. Funciones puras sobre el texto de
+// UNA sentencia (statementTextAt):
 // nada recorre el documento.
 
 import { sqlTokens, type Token } from "$lib/sqlContext";

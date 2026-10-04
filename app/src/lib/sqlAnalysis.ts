@@ -4,8 +4,8 @@ import { setAnalysisIn, type SqlDiagnostic } from "$lib/sqlDiagnostics";
 import { statementsFrom } from "$lib/sqlStatementIndex";
 import type { ScannedStatement } from "$lib/sqlStatements";
 
-// Analisis mientras se escribe, a escala (docs/specs/v0.2-documentos-grandes.md,
-// 15d). En vez de mandar las sentencias alrededor del cursor en cada pausa:
+// Analisis mientras se escribe, a escala. En vez de mandar las sentencias
+// alrededor del cursor en cada pausa:
 //
 // - Se lleva la cuenta de las regiones "sucias" (lo editado, y donde el
 //   indice de sentencias dice que cambiaron sus limites); lo demas conserva

@@ -4,7 +4,7 @@ English | [Español](SQL_ENGINE.es.md)
 
 This is the standard every SQL engine in Rowly DB is held to: MySQL, MariaDB and PostgreSQL today, and SQLite or any other engine tomorrow. It defines what has to be proven, on which versions, which test proves it and when it must run.
 
-It answers *what to prove*. *How to wire up an engine in code* is in [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-database-engine) and in the engine profile design ([docs/specs/v0.2-perfiles-de-motor.md](docs/specs/v0.2-perfiles-de-motor.md)).
+This is the **permanent SQL quality contract**. It says what to prove and defines the gates and process for engines, version lines and exact server releases. To locate code and prepare the environment, start with [Architecture](docs/ARCHITECTURE.md) and [Contributing](CONTRIBUTING.md). Implementation proposals may change; this document's obligations remain until a PR changes them with evidence.
 
 Read it before:
 
@@ -14,6 +14,8 @@ Read it before:
 - calling a branch that touches any of those "solid".
 
 When this document and the code disagree, one of them is wrong. Fix whichever it is in the same pull request.
+
+**Contributor path:** find the S/A/G/D property in §6, check the known gaps in §9, add or adjust a fixture from §10, run the gate in §7 and record the engine, line and exact server release in the PR. §12 gives the extra steps for a new engine or release. Paths and commands marked "today" describe the current repository; writing a quality requirement here does not mean it has already been met.
 
 ---
 
@@ -77,17 +79,24 @@ Newer is not a superset. MySQL 8.4 rejects `SELECT 1 AS rank`, `GROUP BY a DESC`
 
 ### 5.2 Support policy
 
+Here "vendor support" means the vendor still publishes new fixes, including
+security fixes; a *Sustaining Support* contract without new patches does not
+count as active maintenance.
+
 - **Supported:** the vendor still supports the release, or it is an LTS release (every PostgreSQL major counts as one) within 12 months after its end of life. Short-term releases (MySQL innovation, MariaDB rolling) get no grace period. A line is supported while any of its releases is.
 - **Unsupported:** older than that. **Nothing is removed**: the line, its pack and the connection stay, and the line proof (D7) keeps covering it. The editor shows a small "no official support" tag next to the server version, whose tooltip explains it. The engine PR gate no longer runs the full suite on it, and a failure there is not a bug.
-- **Newer than tested:** a release newer than every tested one. The app connects with no warning and applies the nearest line below it. The release gate checks it to find out whether it starts a new line.
+- **Newer than tested:** a release newer than every tested one. The app does not block the connection, applies the nearest line below and shows "unverified". The app release gate checks whether it starts a new line.
 
-The window is recalculated when preparing each release, from the vendors' end-of-life dates (endoflife.date). Never from memory.
+Recalculate the window before each release using official lifecycle dates from [MySQL](https://www.mysql.com/support/eol-notice.html), [MariaDB Community](https://mariadb.org/about/) and [PostgreSQL](https://www.postgresql.org/support/versioning/). Use `endoflife.date` as a cross-check, never the sole authority.
+
+Vendor support and Rowly DB verification are separate facts. **Every exact server release advertised as verified** must pass every applicable row in §6, with evidence from §7 and §10. An unverified release may connect using conservative rules from its line, but it is not advertised as verified. The table in §5.3 reflects testing available today; it does not certify every patch in its ranges. A behavior line groups rules; the exact release identifies the server tested. No patch automatically inherits another patch's verification.
 
 **Rules per use:**
 
 - **Generated SQL** (quoting, aliases, `CALL`) applies the strictest rule across all lines of the engine. Quoting `rank` is unnecessary on 5.7 and harmless; not quoting it breaks on 8.0.
 - **Diagnostics** apply the exact line of the connected server, so the editor can say that `SHOW SLAVE STATUS` no longer exists on 8.4 without bothering someone on 5.7.
-- **When the server's line has no pack**, the nearest line below it applies, never one above. Rules of a newer line may not exist on that server.
+- **When the server's line has no pack**, the nearest line below it applies, never one above. If no earlier line exists, use the oldest available line, disclose the uncertainty and disable capabilities not proven on that server; the guard keeps its strictest policy. Rules of a newer line may not exist on that server.
+- **Connection context:** engine, exact release, SQL mode, effective line and revision are fixed together for the connection. Editor and guard use that same identity; switching connections or mode invalidates dependent analysis and caches. A display label never selects the dialect.
 
 ### 5.3 Lines today
 
@@ -96,7 +105,7 @@ Status as of 2026-10-02. **Every line below is proven** against real servers at 
 | Engine | Line | Differences from the previous line | Status | Tested on |
 |---|---|---|---|---|
 | MySQL | 5.7 | Base: no CTE or window functions, `CHECK` parsed and ignored | Unsupported (EOL 2023-10) | — |
-| | 8.0–8.3 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-30 | 8.0.46 |
+| | 8.0–8.3 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-21 | 8.0.46 |
 | | 8.4 | `SHOW SLAVE STATUS` and `SHOW MASTER STATUS` removed. `mysql_native_password` not loaded by default | Supported until 2032 | 8.4.11 |
 | | 9 | `VECTOR` type and vector functions | Supported (9.7 LTS until 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode | Unsupported (EOL 2025-06) | — |
@@ -116,7 +125,7 @@ Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, each pinned to a co
 
 ## 6. The matrix
 
-Each row is a property the engine must have **on every supported line**. **Proven by** names the test that proves it today. A row with no test is a gap, not a pass.
+Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. **Proven by** names the test available today; its presence does not mean it already runs on all those releases. A row with no test is a gap, not a pass.
 
 Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `real` = `crates/server-tests/tests/real_server.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
 
@@ -130,6 +139,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | S4 | Executable and versioned comments are classified as code | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
 | S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) | `real` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
 | S6 | Syntax the parser cannot read is judged by structure, never waved through | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
+| S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; an integrated test is missing (§9) |
 
 ### 6.2 Analysis and diagnostics
 
@@ -169,6 +179,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`) |
+| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `front/connectionIdentity.test.ts` covers part of identity; complete context and invalidation remain a **gap** (§9) |
 
 ### 6.5 Capabilities
 
@@ -189,16 +200,16 @@ What each engine has. N/A is correct where the engine really lacks the feature; 
 | Backslash escapes in strings | yes (unless `NO_BACKSLASH_ESCAPES`) | yes (same) | `E'…'` only | no |
 | `#` comments / dollar quotes / `DELIMITER` | yes / no / client-side | yes / no / client-side | no / yes / no | no / no / no |
 
-Where it is declared in code: the lexical rules and the call rules in each `SqlProfile` (`front/engines/*.ts`); the language rules in `Dialect` (`crates/engine/src/lib.rs`); the version-dependent catalog features in each driver's `version.rs` (`Capabilities`). They move into one declaration per line (§9).
+Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in `Dialect` (`crates/engine/src/lib.rs`); version-dependent catalog features in each driver's `version.rs` (`Capabilities`). Line differences must have one data declaration; the engine and driver remain app code (§9 and §12).
 
 ## 7. Gates
 
 | Gate | When | What runs | Automated |
 |---|---|---|---|
-| **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test` | Partly: CI runs neither `npm test` nor clippy with `-D warnings` yet (§9) |
-| **Engine PR** | A PR that touches the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | The PR gate, plus the real-server suite on **every supported line**, with the default fuzz (4,000 cases per line) | No: run by hand and reported in the PR description |
-| **Pack** | Before publishing or updating a version support pack (§11) | The engine PR gate on that line | No |
-| **Release** | Before a release | The engine PR gate, plus: an extended fuzz with at least three seeds, the driver tests, the newest release of each engine (does it start a new line?), recalculating the support window (§5.2), and a manual UI smoke test (typing, Tab, autocomplete, creating and calling a routine) | No |
+| **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build` | Partly: CI still omits `npm test` and `-D warnings` (§9) |
+| **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | No: the real-server suite is still manual (§9) |
+| **Exact release or pack** | Before advertising a verified release or publishing its line pack (§11) | Complete matrix on that release and the line's other verified releases; D7 against the previous line if behavior changes | No |
+| **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | No |
 
 Commands, today:
 
@@ -207,7 +218,7 @@ Commands, today:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cd app && npm run check && npm test
+cd app && npm run check && npm test && npm run build
 
 # Real-server suite (starts MySQL, MariaDB and PostgreSQL in Docker)
 tools/test-dbs/up.sh
@@ -228,7 +239,7 @@ cargo test -p khipu-driver-mysql -- --ignored
 cargo test -p khipu-driver-postgres -- --ignored
 ```
 
-Today the full suite runs on one release per engine; only the line proof runs on every line (§9). Running the rest by line is part of the test reorganization (§10).
+Today the full suite runs on one release per engine; only line proof runs on the probes in `lines.json` (§9). **The commands above do not certify every patch or yet meet the exact-release gate.** Until it is automated, the PR must attach manual evidence for each affected release and must not advertise a release as verified when an applicable row is missing.
 
 The real-server tests share the table `rowly_test.victim`. Run them with `--test-threads=1`, and never two runs against the same server at the same time.
 
@@ -257,8 +268,9 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Gap | Severity | Note |
 |---|---|---|
 | CI does not run `npm test`, and runs clippy without `-D warnings` | P1 | More than a thousand frontend tests are not checked on pull requests, and a clippy warning does not fail the build. Both are one line in `.github/workflows/quality.yml`. |
-| Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | The test reorganization of §10 and the support window close it. |
+| Lines are proven, but the rest of the suite (typing, generated `CALL`, guard fuzz, destructiveness) runs on one release per engine (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), there is no complete report per exact release, and the minimums in code (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) do not follow §5.2 | P1 | Complete the §10 map, pin and run every declared release, automate §7 and align the support window. |
 | The real-server suite does not run in CI | P2 | Needs Docker in CI; until then it is the manual engine PR gate. |
+| No integrated confirmation test spans keyboard, UI and backend execution (S7), and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add cases per engine and release, including reconnect and mode changes; today's unit tests cover only parts of the flow. The UI does not yet distinguish verified from unverified exact releases. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
 | The incomplete / unresolved / generic classification lives in the frontend (key lists in `SqlEditor.svelte`), and `real` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
@@ -266,7 +278,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Other generated SQL (G7) is not run on a server | P2 | |
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
-| Datasets are not pinned (`tools/test-dbs/fetch.sh` downloads the latest Sakila and Pagila from `master`), and real-server runs do not print the server version | P3 | Both rules of §5 and §10. |
+| Datasets are not pinned (`tools/test-dbs/fetch.sh` downloads the latest Sakila and Pagila from `master`), images in `lines.json` have no digest, and real-server runs do not print the server version | P3 | Pin inputs and emit evidence as required by §5 and §10. |
 | Two ways to reach a real server: the driver tests (`KHIPU_TEST_*`) and `rowly-server-tests` (`tools/test-dbs`) | P3 | One suite on `tools/test-dbs` (§10). |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | MySQL 9 vectors show as `[1,2.5,-3]`. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
@@ -275,10 +287,11 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 ### 10.1 Layout
 
-Shared by the Rust and TypeScript tests:
+Target tree shared by Rust and TypeScript tests:
 
 ```text
 tests/sql/
+  coverage.json          §6 row → test, scope and gate
   common/                SQL valid on every line of every engine
   <engine>/
     setup.sql            run on every server of the engine before its fixtures
@@ -286,14 +299,20 @@ tests/sql/
     <line>/
       accepts.sql        new in this line: the server accepts it here and rejects it on the previous line
       rejects.sql        removed in this line: the server rejects it here and accepted it on the previous line
-  attacks/<engine>/      security corpus, versioned separately
+      reads.sql          types and catalog returned by this line
+      generated.sql      SQL written by Rowly DB, if it differs on this line
+      attacks.sql        line-specific security cases, if they differ
 ```
 
 Unit cases stay next to the code they test. Entries in a `.sql` file are separated by a line `-- ---`; each one is a single statement with a comment saying what it proves. A `-- since: <version>` line in an entry marks a change inside the line (§5.1): before that version, the line behaves like the previous one, and the line needs servers on both sides of it.
 
-The servers of each line are listed in `tools/test-dbs/lines.json`, pulled from the public mirror of the official images (`public.ecr.aws/docker/library`) to avoid Docker Hub's anonymous pull limit.
+`tools/test-dbs/lines.json` is the single source for test engines, lines and exact server releases. Pin each image by digest, and have the harness check the server-reported version before running. Current images come from the public mirror of the official images (`public.ecr.aws/docker/library`); digest pinning and evidence per exact release remain open (§9).
 
 The line fixtures already live here. The rest of the corpus still lives in `crates/server-tests/corpus/<engine>/` (`valid.sql`, `attacks.sql`, `routines.sql`) and `crates/engine/tests/corpus/` (`valid/`, `mixed/`), and moves to this layout (§9). Tests that no longer apply are deleted, not kept "just in case".
+
+`coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test or an `N/A` without a reason fails coverage-map review. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
+
+To migrate an old corpus or test: record the property it protects, add its replacement to the target tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia. The locations in the §6 tables and the §7 commands continue to show **what exists today** until each migration PR updates them.
 
 ### 10.2 Rules
 
@@ -301,13 +320,13 @@ The line fixtures already live here. The rest of the corpus still lives in `crat
 - **Real SQL first.** Prefer what the server itself returns (Sakila/Pagila definitions, `SHOW CREATE`, `pg_get_functiondef`) over hand-written SQL.
 - **Deterministic.** No current time, no unordered results, no locale or time zone assumptions, no random input without a fixed seed. A failing seed is kept as a fixture.
 - **Isolated.** Each test sets up what it needs and cleans up after itself. Destructive tests only run against the test containers, never against a user's database.
-- **One way to reach a server:** `tools/test-dbs`, one container per line, selected by line.
+- **One way to reach a server:** `tools/test-dbs`, one container per declared exact release, selected from the registry. Unlisted releases are not advertised as verified.
 - **Readable failures.** A failure names the engine, the line and exact version, the SQL (or the prefix and offset, for typing), what was expected and what happened.
 - **Uniform names.** Test names say the property they prove, in English, in the same style across Rust and TypeScript.
 
 ### 10.3 Simulations
 
-A simulation is a fixed test, never a one-off script. Each one runs on every supported line, with that line's catalog and rules, and has a fixed seed and a recorded result.
+A simulation is a fixed test, never a one-off script. Each one runs on every exact release declared verified, with its line's catalog and rules, and has a fixed seed and a recorded result.
 
 | Simulation | What it proves |
 |---|---|
@@ -324,35 +343,47 @@ PostgreSQL 14 (14.24)  typing 49,706 prefixes ✓  CALL 11 ✓  fuzz 4,000 seed 
 
 ## 11. Version support packs
 
-The knowledge of each version line ships as a **pack**: data, never code. Its capabilities, reserved words, error help, syntax the parser cannot read, syntax the line removed, its support dates and what it was tested with. It lets Rowly DB support a new server release without releasing a new version of the app, and lets the user see, download and remove the support they have. The design is in [docs/specs/v0.3-soporte-de-versiones.md](docs/specs/v0.3-soporte-de-versiones.md).
+When per-line distribution is implemented, knowledge of a line will travel as a **data pack, never code**: capabilities, reserved words, error help, syntax the parser cannot read or the line removed, support dates and test evidence. A new line can arrive without another app release only when its required mechanisms already exist in the app. Today the rules are still compiled into the app (§6.5 and §9).
 
 Rules:
 
-- **A pack is published only after the pack gate (§7) passes on its line**, and it records the exact server version, date and commit it was tested with.
-- **A pack never relaxes the guard.** It can add destructive keywords; it cannot mark anything as safe. The worst a wrong pack can cause is a false diagnostic, never a safety hole.
+- **A pack is published only after the §7 gate passes on every exact release declared verified for its line.** It records the server release, date, commit and test report; vendor support status is stored separately.
+- **A pack never relaxes the guard.** It can add reasons for confirmation; it cannot mark anything as safe or replace the parser or driver. Incorrect data can still produce wrong diagnostics or generated SQL, so it is validated against a real server too.
 - **Packs are signed** with the same key as app updates, and checked against their format before they are installed.
 - **A pack that needs a mechanism the app does not have** declares the minimum app version it requires, and the app says so instead of installing it.
-- **Every published line ships inside the app and stays there**, supported or not, and works offline. A pack weighs kilobytes; there is no reason to take one out. Downloading exists to receive new lines without waiting for a release.
+- **Every published line is included in the next app release and retained**, supported or not, so it works offline. Downloading lets users receive a new line before that release; removing the downloaded revision restores the bundled one.
 - **Removing or disabling a line is the user's decision, never Rowly DB's.**
-- **§5.3 is generated from the pack index**, so this document and what users can download never disagree.
+- **§5.3 will be generated from versioned pack sources** when distribution exists, rather than a hand-maintained list. The published index and the table must come from the same source.
 
 ## 12. Adding an engine, step by step
 
-The same process applies to every engine. Only what the engine really lacks is marked N/A.
+These operations are distinct: **engine** = SQL and catalog rules; **driver** = protocol and transport; **line** = proven behavior range; **exact release** = tested server binary. MariaDB and MySQL share a driver, but not an identity or dialect. Vendor status (§5.2) is not Rowly DB verification either.
 
-1. **Declare.** Add the engine's column to §6.5 and its lines to §5.3, with the differences that justify each one.
-2. **Wire it in.** Follow [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-database-engine): driver, `DatabaseKind`, `Dialect`, `SqlProfile`. The compiler and the contract tests point at every decision left.
-3. **Test environment.** Add one container per line to `tools/test-dbs/` (for SQLite, a database file per line, built from the pinned dataset).
-4. **Fill the matrix.** For each row of §6.1 to §6.4, add the engine to the existing test. The `PerEngine` cases and `FIXTURES` make the compiler ask for its answers. A row that cannot apply is marked N/A here, with the reason.
-5. **Corpus.** Add `tests/sql/<engine>/` with its common SQL, the `accepts.sql` and `rejects.sql` of each line, and `tests/sql/attacks/<engine>/` for its string and comment rules. For SQLite: `PRAGMA`, `ATTACH`, `WITHOUT ROWID`, `STRICT`, `ON CONFLICT`, `RETURNING`.
-6. **Run the engine PR gate** (§7) on every line. When P0 = 0 and P1 = 0 and every applicable row passes, the engine is Integrable (§4), and its packs can be published.
+### 12.1 New engine
 
-SQLite has no server process. "Real server" means the SQLite library the driver links against, at each line's version. A smaller set of server objects does not lower the bar for the splitter, guard, typing, quoting or safety.
+1. **Choose identity and protocol.** Give it a stable ID in `DatabaseKind`, `Dialect` and `ConnectionDriver`; update exhaustive registries. Reuse a driver only when the protocol and tests for types, TLS and introspection allow it. The [development guide](CONTRIBUTING.md#adding-a-database-engine) lists current paths.
+2. **Implement engine decisions.** Lexing, parser or policy for unread syntax, quoting, generated SQL, guard and catalog are resolved explicitly. Use a "nearby" parser only after proving it neither hides destructive SQL nor flags valid syntax as an error. No case silently falls back to another engine.
+3. **Register tests.** Add its capability column in §6.5, common and per-line fixtures in §10, and a response to every S/A/G/D row. Existing `PerEngine` and `FIXTURES` help but do not replace the real-server matrix. `N/A` needs a documented reason.
+4. **Validate and announce.** Run §7 on every exact release to be advertised, rerun shared contracts for existing engines, and report P0/P1/P2. Only with P0 = 0, P1 = 0 and every applicable row covered does it reach Integrable (§4).
+
+### 12.2 New line of an existing engine
+
+1. Add a corpus case that passes on the new line and fails on the previous one, or vice versa. Without an observable Rowly DB difference, both releases share a line (§5.1).
+2. Declare range, reason and capabilities; add probes at its endpoints and both sides of each `since` in `tools/test-dbs/lines.json`. If a new parser, protocol, type or catalog query is required, first release the app that implements it (§11).
+3. Run D7 and the entire applicable matrix on every exact release to be advertised as verified. Update §5.3 and the §10 report; vendor status is calculated separately.
+
+### 12.3 New exact release within a line
+
+1. Pin that release's image or library by digest in the test registry, read its actual version and check that it matches. Do not infer support from the image name.
+2. Run every applicable §6 row and retain the §10 evidence. If behavior differs, return to 12.2; otherwise keep the line and add the release to the verified set.
+3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to a pack's `tested` evidence.
+
+SQLite has no server process: for these gates "real server" means the SQLite library linked by the driver, with its version and dataset pinned. Having fewer server objects does not lower the bar for the splitter, guard, typing, quoting or safety.
 
 ## 13. Working on an engine (people and AI)
 
 Don't ask for "as many simulations as possible": that gives uneven coverage. Ask for:
 
-> Apply SQL_ENGINE.md to `<engine>` `<line>`: run the `<PR | engine PR | pack | release>` gate, report every P0/P1 with a minimal SQL reproduction, turn each new bug into a permanent test, and update §5, §6 and §9.
+> Apply SQL_ENGINE.md to `<engine>` `<line>` `<exact release>`: run the `<PR | engine PR | exact release | app release>` gate, report every P0/P1 with a minimal SQL reproduction, turn each new bug into a permanent test, and update §5, §6, §9 and §10.
 
 Exploratory testing is welcome, and it found real bugs here: a panic on a half-typed `DECLARE`, and quoting in generated `CALL` arguments. But what it finds becomes a fixture. It never replaces the matrix.

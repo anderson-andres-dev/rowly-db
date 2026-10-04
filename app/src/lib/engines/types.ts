@@ -4,7 +4,7 @@ import type { ErrorHelp } from "$lib/sqlErrorHelp";
 import type { ExplorerRoutine, RoutineParameter } from "$lib/types";
 
 // Todo lo que cambia de un motor a otro, en un solo lugar
-// (docs/specs/v0.2-perfiles-de-motor.md). El resto de la app le pregunta al
+// (SQL_ENGINE.es.md). El resto de la app le pregunta al
 // perfil; nunca compara el nombre del motor ni cae en silencio a otro.
 
 // Como se escribe el SQL del motor (comillas, comentarios, escapes): vive en
