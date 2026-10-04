@@ -569,7 +569,7 @@
       "gap": "Las palabras reservadas son una lista por motor, no por linea (§9)"
     },
     "G7": {
-      "status": "gap",
+      "status": "partial",
       "tests": [
         {
           "file": "crates/engine/src/editing.rs",
@@ -590,9 +590,21 @@
             "mariadb",
             "postgres"
           ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "grid_literals_follow_the_session_mode",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb"
+          ]
         }
       ],
-      "gap": "El SQL de edicion, exportacion y filtros no se ejecuta en un servidor (§9); solo unitarios"
+      "gap": "Solo el UPDATE de la edicion se ejecuta en MySQL y MariaDB (con y sin NO_BACKSLASH_ESCAPES); el INSERT y el DELETE, la exportacion y los filtros siguen solo con unitarios (§9)",
+      "gapEngines": [
+        "postgres"
+      ]
     },
     "D1": {
       "status": "covered",
@@ -749,6 +761,14 @@
           ]
         },
         {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "tls_verification_uses_the_configured_ca",
+          "scope": "real",
+          "engines": [
+            "mysql"
+          ]
+        },
+        {
           "file": "crates/drivers/mysql/src/tls.rs",
           "name": "tls_errors_get_their_own_cause",
           "scope": "unit",
@@ -758,7 +778,7 @@
           ]
         }
       ],
-      "gap": "VerifyCa y VerifyIdentity aceptando una CA configurada: ningun servidor de prueba usa un certificado firmado por una CA propia. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, asi que en ellas solo se prueba el camino sin TLS"
+      "gap": "VerifyCa con la CA correcta falla si el certificado no nombra al host (sqlx 0.8.6 con rustls 0.23.45, falla cerrado) y no se prueba VerifyIdentity aceptando un certificado que nombra al host: ningun servidor de prueba sirve uno. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, y MariaDB 11.8 genera su certificado en memoria"
     },
     "D6": {
       "status": "partial",
@@ -908,9 +928,59 @@
             "mysql",
             "postgres"
           ]
+        },
+        {
+          "file": "app/src-tauri/src/state.rs",
+          "name": "a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/state.rs",
+          "name": "only_statements_that_can_change_the_mode_read_it_again",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/driver-core/src/console.rs",
+          "name": "the_same_connection_serves_every_statement_until_it_is_discarded",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/stores/connectionCatalog.test.ts",
+          "name": "a SET sql_mode in the console moves the editor to the new session mode, never back",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "the_console_keeps_its_session_between_statements",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
         }
       ],
-      "gap": "Un SET sql_mode dentro de la sesion no actualiza el contexto ni el guard (§9)"
+      "gap": "Todavia no hay revision de paquete: los paquetes por linea llegan con M4/M5"
     }
   }
 }

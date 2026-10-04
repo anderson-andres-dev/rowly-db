@@ -263,6 +263,15 @@ async fn completion_calls_run_on_the_real_servers() {
                 })
                 .collect();
             let runnable = format!("{head}({})", values.join(", "));
+            // La consola es una sola sesion: el OUT de un CALL anterior
+            // queda en su variable. Cada CALL empieza con todas en NULL.
+            if engine.is_mysql_family() && !values.is_empty() {
+                let reset: Vec<String> = values
+                    .iter()
+                    .map(|value| format!("{value} = NULL"))
+                    .collect();
+                let _ = conn.raw(&format!("SET {}", reset.join(", "))).await;
+            }
             match conn.guarded(engine, &runnable).await {
                 Err(message) => failures.push(format!(
                     "{engine:?} el guard rechazo: {runnable}\n  {message}"

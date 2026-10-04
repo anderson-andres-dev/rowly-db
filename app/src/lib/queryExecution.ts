@@ -1,4 +1,6 @@
 import { backendText, invoke } from "$lib/backend";
+import { applySessionContext } from "$lib/stores/connection";
+import { notifyError } from "$lib/stores/notifications";
 import type { DestructiveStatement, ExecuteQueryResponse, SortKey } from "$lib/types";
 
 export interface PageRequest {
@@ -28,6 +30,12 @@ export async function executeQuery(
       page,
       executionId,
     });
+    if (response.type === "completed") {
+      // La sentencia cambio el modo de la sesion: el editor, el analisis y
+      // el guard pasan al contexto nuevo.
+      if (response.context) applySessionContext(response.context);
+      if (response.sessionReset) notifyError(backendText({ key: "query.sessionReset" }));
+    }
     // El error de la base llega como texto; el de la app (sin conexion,
     // nada que ejecutar...), como mensaje a traducir.
     if (response.type === "completed" && response.result.type === "error") {

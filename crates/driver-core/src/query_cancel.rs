@@ -4,8 +4,8 @@
 //! (`KILL QUERY <id>` on MySQL/MariaDB, `pg_cancel_backend(pid)` on
 //! Postgres), so the driver records the server-side id of the connection
 //! running it while it runs. The id is cleared as soon as the query ends:
-//! the connection goes back to the pool and a late cancel must not
-//! interrupt whatever it runs next.
+//! the connection runs the next statement and a late cancel must not
+//! interrupt it.
 
 use std::sync::Mutex;
 

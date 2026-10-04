@@ -436,9 +436,23 @@ fn double_backslashes<'a>(
     if !dialect.backslash_escapes() || !options.no_backslash_escapes || !sql.contains('\\') {
         return sql;
     }
-    let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len() + 8);
     let mut copied = 0;
+    for index in backslashes_in_strings(&sql) {
+        out.push_str(&sql[copied..=index]);
+        out.push('\\');
+        copied = index + 1;
+    }
+    out.push_str(&sql[copied..]);
+    Cow::Owned(out)
+}
+
+/// Donde hay una barra invertida dentro de '...' o "..." de MySQL (no en
+/// `...`, ni en comentarios), leyendo las cadenas como el servidor con
+/// NO_BACKSLASH_ESCAPES: la barra no escapa la comilla que la sigue.
+pub(crate) fn backslashes_in_strings(sql: &str) -> Vec<usize> {
+    let bytes = sql.as_bytes();
+    let mut found = Vec::new();
     let mut index = 0;
     while index < bytes.len() {
         match bytes[index] {
@@ -453,9 +467,7 @@ fn double_backslashes<'a>(
                         index += 1;
                     } else {
                         if bytes[index] == b'\\' && quote != b'`' {
-                            out.push_str(&sql[copied..=index]);
-                            out.push('\\');
-                            copied = index + 1;
+                            found.push(index);
                         }
                         index += 1;
                     }
@@ -475,8 +487,7 @@ fn double_backslashes<'a>(
             _ => index += 1,
         }
     }
-    out.push_str(&sql[copied..]);
-    Cow::Owned(out)
+    found
 }
 
 fn line_end(bytes: &[u8], from: usize) -> usize {

@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 131,
-    "tests": 1405,
-    "ignored": 26,
+    "files": 133,
+    "tests": 1413,
+    "ignored": 29,
     "byDecision": {
-      "keep": 131,
+      "keep": 133,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 125,
+      "pr": 127,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -253,6 +253,25 @@
       "environment": "none",
       "env": [],
       "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/state.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/state.rs",
+      "property": "Modo de la sesion de la consola: que sentencias lo releen, otra generacion si cambia, aviso si la sesion se perdio",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D9"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "app/src-tauri/src/text_encoding.rs",
@@ -2379,6 +2398,25 @@
       "durationMs": 0
     },
     {
+      "path": "crates/driver-core/src/console.rs",
+      "domain": "drivers",
+      "owner": "crates/driver-core/src/console.rs",
+      "property": "La consola usa una sola conexion hasta que se descarta; epoch cuenta aperturas y cierres",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D9"
+      ],
+      "kind": "rust",
+      "crate": "crates/driver-core",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
       "path": "crates/driver-core/src/lib.rs",
       "domain": "drivers",
       "owner": "crates/driver-core/src/lib.rs",
@@ -2598,7 +2636,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 24,
+      "tests": 25,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2799,8 +2837,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 11,
-      "ignored": 11,
+      "tests": 14,
+      "ignored": 14,
       "environment": "real-server",
       "env": [],
       "durationMs": null

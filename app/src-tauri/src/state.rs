@@ -2,7 +2,7 @@
 //! con su catalogo compartido (`Arc<SchemaCatalog>`, armado una vez cada vez
 //! que cambian los schemas) y las consultas en curso que se pueden cancelar.
 
-use crate::engine_context::ConnectionEngineContext;
+use crate::engine_context::{ConnectionEngineContext, SessionMode};
 use crate::services::catalog;
 use khipu_driver_core::{
     DbConnector, Message, QueryCancel, QueryExecutionOptions, QueryExecutionResult, SchemaObjects,
@@ -13,7 +13,7 @@ use khipu_engine::catalog::SchemaCatalog;
 use khipu_engine::execution_guard::GuardOptions;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// The connector from the most recent successful `connect` and every schema
@@ -28,6 +28,13 @@ pub(crate) struct ActiveConnection {
     /// Motor, servidor, modo de sesion, linea y generacion, armados una vez
     /// al conectar (engine_context.rs). Solo `schema_epoch` cambia despues.
     pub(crate) context: ConnectionEngineContext,
+    /// El modo de las conexiones del pool, leido al conectar. Los cambios
+    /// del grid se aplican ahi, en su propia transaccion, y sus literales se
+    /// escriben con este modo, no con el de la consola.
+    pub(crate) pool_mode: SessionMode,
+    /// `DbConnector::console_epoch` la ultima vez que se leyo el modo de la
+    /// consola: si cambio, la sesion se perdio y se abrio otra.
+    pub(crate) console_epoch: u64,
     pub(crate) tls: TlsStatus,
     pub(crate) default_schema: String,
     pub(crate) available_schemas: Vec<String>,
@@ -41,26 +48,211 @@ pub(crate) struct ActiveConnection {
     pub(crate) catalog: Arc<SchemaCatalog>,
 }
 
-/// ¿El modo de la sesion lleva NO_BACKSLASH_ESCAPES? Solo en los motores
-/// con `sql_mode_query` (MySQL, MariaDB). Cambia como se parten las cadenas, y
-/// con ello lo que el guard ve.
-pub(crate) async fn uses_no_backslash_escapes(
+/// El modo de la sesion de la consola: ¿lleva NO_BACKSLASH_ESCAPES? Solo en
+/// los motores con `sql_mode_query` (MySQL, MariaDB). Cambia como se parten
+/// las cadenas, y con ello lo que el guard y el analisis ven. `None`: no se
+/// pudo leer (la conexion se perdio).
+pub(crate) async fn read_session_mode(
     connector: &dyn DbConnector,
     dialect: Dialect,
-) -> bool {
+) -> Option<SessionMode> {
     let Some(query) = dialect.definition().sql_mode_query else {
-        return false;
+        return Some(SessionMode::default());
     };
     match connector
         .execute_query(query, QueryExecutionOptions { max_rows: 1 })
         .await
     {
-        QueryExecutionResult::ResultSet { rows, .. } => rows
-            .first()
-            .and_then(|row| row.first())
-            .and_then(|mode| mode.as_deref())
-            .is_some_and(|mode| mode.to_ascii_uppercase().contains("NO_BACKSLASH_ESCAPES")),
-        _ => false,
+        QueryExecutionResult::ResultSet { rows, .. } => Some(SessionMode {
+            no_backslash_escapes: rows
+                .first()
+                .and_then(|row| row.first())
+                .and_then(|mode| mode.as_deref())
+                .is_some_and(|mode| mode.to_ascii_uppercase().contains("NO_BACKSLASH_ESCAPES")),
+        }),
+        _ => None,
+    }
+}
+
+/// Una sentencia que puede cambiar el `sql_mode` de la sesion: la que lo
+/// nombra (`SET [SESSION] sql_mode`, `SET @@sql_mode`, un comentario
+/// ejecutable de un volcado) o un `EXECUTE` de una sentencia preparada. De
+/// mas no importa: solo hace que el modo se vuelva a leer del servidor. Una
+/// rutina no cambia el de quien la llama: MySQL lo restaura al salir.
+pub(crate) fn may_change_session_mode(sql: &str, dialect: Dialect) -> bool {
+    if dialect.definition().sql_mode_query.is_none() {
+        return false;
+    }
+    let lower = sql.to_ascii_lowercase();
+    lower.contains("sql_mode") || lower.contains("execute")
+}
+
+/// Lo que cambio de la sesion de la consola despues de una sentencia.
+#[derive(Debug, Default)]
+pub(crate) struct ConsoleChange {
+    /// El contexto con el modo nuevo (y otra generacion), si cambio.
+    pub(crate) context: Option<ConnectionEngineContext>,
+    /// La conexion de la consola se perdio (o se cerro) y la siguiente
+    /// empieza limpia: sin `SET`, variables, tablas temporales ni la
+    /// transaccion que tuviera.
+    pub(crate) reset: bool,
+}
+
+/// Despues de una sentencia de la consola: si pudo cambiar el modo, o si la
+/// conexion de la consola cambio, se vuelve a leer el modo del servidor. Un
+/// modo distinto es una generacion nueva: el guard, el analisis y el editor
+/// dejan de usar el anterior.
+pub(crate) async fn follow_console(
+    window: &str,
+    state: &AppState,
+    connector: &Arc<dyn DbConnector>,
+    dialect: Dialect,
+    sql: &str,
+) -> ConsoleChange {
+    let known_epoch = {
+        let guard = state
+            .connections
+            .lock()
+            .expect("connections mutex poisoned");
+        match guard.get(window) {
+            Some(active) if Arc::ptr_eq(&active.connector, connector) => active.console_epoch,
+            _ => return ConsoleChange::default(),
+        }
+    };
+    if connector.console_epoch() == known_epoch && !may_change_session_mode(sql, dialect) {
+        return ConsoleChange::default();
+    }
+    let mode = read_session_mode(&**connector, dialect).await;
+    let epoch = connector.console_epoch();
+
+    let mut guard = state
+        .connections
+        .lock()
+        .expect("connections mutex poisoned");
+    let Some(active) = guard
+        .get_mut(window)
+        .filter(|active| Arc::ptr_eq(&active.connector, connector))
+    else {
+        return ConsoleChange::default();
+    };
+    record_console(
+        &mut active.context,
+        &mut active.console_epoch,
+        epoch,
+        mode,
+        &state.generations,
+    )
+}
+
+/// Lo que se leyo de la consola (`epoch` y el modo, si se pudo) sobre lo que
+/// se sabia de ella.
+fn record_console(
+    context: &mut ConnectionEngineContext,
+    known_epoch: &mut u64,
+    epoch: u64,
+    mode: Option<SessionMode>,
+    generations: &AtomicU64,
+) -> ConsoleChange {
+    let reset = epoch != *known_epoch;
+    *known_epoch = epoch;
+    let context = match mode {
+        Some(mode) if mode != context.session_mode => {
+            context.session_mode = mode;
+            context.generation = generations.fetch_add(1, Ordering::Relaxed) + 1;
+            Some(context.clone())
+        }
+        _ => None,
+    };
+    ConsoleChange { context, reset }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use khipu_driver_core::ServerIdentity;
+
+    fn context() -> ConnectionEngineContext {
+        ConnectionEngineContext::new(
+            1,
+            Dialect::MySql,
+            ServerIdentity {
+                engine: "mysql",
+                version: vec![8, 4, 11],
+                label: "MySQL 8.4.11".into(),
+            },
+            SessionMode::default(),
+        )
+    }
+
+    #[test]
+    fn only_statements_that_can_change_the_mode_read_it_again() {
+        for sql in [
+            "SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'",
+            "set @@SQL_MODE = ''",
+            "/*!40101 SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */",
+            "EXECUTE cambiar_modo",
+        ] {
+            assert!(may_change_session_mode(sql, Dialect::MySql), "{sql}");
+            assert!(may_change_session_mode(sql, Dialect::MariaDb), "{sql}");
+        }
+        assert!(!may_change_session_mode("SELECT 1", Dialect::MySql));
+        assert!(!may_change_session_mode("SET @x = 1", Dialect::MySql));
+        // PostgreSQL no tiene sql_mode: su regla es la del motor.
+        assert!(!may_change_session_mode(
+            "SET standard_conforming_strings = off",
+            Dialect::Postgres
+        ));
+    }
+
+    #[test]
+    fn a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset() {
+        let generations = AtomicU64::new(1);
+        let mut context = context();
+        let mut known_epoch = 1;
+        let no_backslash = SessionMode {
+            no_backslash_escapes: true,
+        };
+
+        // El mismo modo en la misma conexion: nada cambia.
+        let change = record_console(
+            &mut context,
+            &mut known_epoch,
+            1,
+            Some(SessionMode::default()),
+            &generations,
+        );
+        assert!(change.context.is_none() && !change.reset);
+        assert_eq!(context.generation, 1);
+
+        // SET sql_mode: otra generacion, con el modo nuevo.
+        let change = record_console(
+            &mut context,
+            &mut known_epoch,
+            1,
+            Some(no_backslash),
+            &generations,
+        );
+        let changed = change.context.expect("contexto nuevo");
+        assert_eq!(changed.generation, 2);
+        assert!(changed.session_mode.no_backslash_escapes);
+        assert!(!change.reset);
+        assert!(!context.is_current(1, 0));
+
+        // La conexion se perdio y se abrio otra, con el modo del servidor.
+        let change = record_console(
+            &mut context,
+            &mut known_epoch,
+            3,
+            Some(SessionMode::default()),
+            &generations,
+        );
+        assert!(change.reset);
+        assert_eq!(change.context.map(|context| context.generation), Some(3));
+
+        // No se pudo leer el modo: se conserva el conocido.
+        let change = record_console(&mut context, &mut known_epoch, 4, None, &generations);
+        assert!(change.reset && change.context.is_none());
+        assert_eq!(context.generation, 3);
     }
 }
 
@@ -73,6 +265,12 @@ pub(crate) fn build_catalog(schemas: &BTreeMap<String, SchemaObjects>) -> Arc<Sc
 }
 
 impl ActiveConnection {
+    /// La regla de la barra invertida en los literales que genera el grid:
+    /// la de las conexiones del pool, donde se aplican (`pool_mode`).
+    pub(crate) fn grid_backslash_escapes(&self) -> bool {
+        self.dialect.backslash_escapes() && !self.pool_mode.no_backslash_escapes
+    }
+
     pub(crate) fn guard_options(&self) -> GuardOptions {
         GuardOptions {
             no_backslash_escapes: self.context.session_mode.no_backslash_escapes,

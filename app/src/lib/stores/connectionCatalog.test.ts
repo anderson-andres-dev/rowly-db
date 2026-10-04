@@ -6,7 +6,16 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("$lib/backend", () => ({ invoke, backendText: (value: unknown) => String(value) }));
 
 import { ENGINES } from "$lib/engines";
-import { activeEngine, catalogTables, connection, databaseExplorer, explorerLoading, refreshCatalog, reset } from "./connection";
+import {
+  activeEngine,
+  applySessionContext,
+  catalogTables,
+  connection,
+  databaseExplorer,
+  explorerLoading,
+  refreshCatalog,
+  reset,
+} from "./connection";
 
 const CONTEXT: ConnectionEngineContext = {
   generation: 1,
@@ -87,4 +96,18 @@ it("the active engine is the one the backend reports, with its session mode", ()
   expect(get(activeEngine)).toBe(ENGINES.postgres);
   reset();
   expect(get(activeEngine)).toBeNull();
+});
+
+it("a SET sql_mode in the console moves the editor to the new session mode, never back", () => {
+  const changed = { ...CONTEXT, generation: 2, sessionMode: { noBackslashEscapes: true } };
+  applySessionContext(changed);
+  expect(get(databaseExplorer)?.context).toBe(changed);
+  expect(get(databaseExplorer)?.defaultSchema).toBe("old");
+  expect(get(activeEngine)?.lexical.backslashEscapes).toBe(false);
+  // Una respuesta atrasada (de antes de reconectar) no pisa la mas nueva.
+  applySessionContext({ ...CONTEXT, generation: 1 });
+  expect(get(databaseExplorer)?.context).toBe(changed);
+  reset();
+  applySessionContext(changed);
+  expect(get(databaseExplorer)).toBeNull();
 });

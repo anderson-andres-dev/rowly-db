@@ -97,16 +97,24 @@ impl Dialect {
         format!("{quote}{}{quote}", ident.replace(quote, &doubled))
     }
 
-    /// Un texto como literal '...': la comilla duplicada y, donde la barra
-    /// invertida escapa, tambien ella y el NUL.
+    /// Un texto como literal '...' con la regla del motor (ver
+    /// `string_literal_with`).
     pub fn string_literal(self, text: &str) -> String {
+        self.string_literal_with(text, self.backslash_escapes())
+    }
+
+    /// Un texto como literal '...' para una sesion que toma (o no) la barra
+    /// invertida como escape: la comilla duplicada y, si escapa, tambien ella
+    /// y el NUL. Con NO_BACKSLASH_ESCAPES en la sesion, la regla del motor
+    /// haria que el servidor guarde un texto distinto del que se escribio.
+    pub fn string_literal_with(self, text: &str, backslash_escapes: bool) -> String {
         let mut out = String::with_capacity(text.len() + 2);
         out.push('\'');
         for character in text.chars() {
             match character {
                 '\'' => out.push_str("''"),
-                '\\' if self.backslash_escapes() => out.push_str("\\\\"),
-                '\0' if self.backslash_escapes() => out.push_str("\\0"),
+                '\\' if backslash_escapes => out.push_str("\\\\"),
+                '\0' if backslash_escapes => out.push_str("\\0"),
                 _ => out.push(character),
             }
         }
