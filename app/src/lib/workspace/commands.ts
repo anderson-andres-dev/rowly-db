@@ -66,12 +66,6 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "previous-result-page", zone: "global", group: "results", defaultKeys: "Ctrl+Alt+ArrowUp" },
 ];
 
-const definitionsById = new Map(commandDefinitions.map((definition) => [definition.id, definition]));
-
-export function commandDefinition(id: string): CommandDefinition | undefined {
-  return definitionsById.get(id);
-}
-
 // Dos comandos con la misma tecla chocan si actuan en la misma zona o si uno
 // es global (el de la zona lo taparia ahi). Ejecutar (editor) y Aplicar
 // cambios (resultado) comparten Ctrl+Enter a proposito.
