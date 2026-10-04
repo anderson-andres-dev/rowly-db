@@ -23,7 +23,7 @@ El motor analiza SQL, mantiene el catálogo del esquema y arma las sugerencias s
 | `app/src-tauri` | La app de escritorio. Llama al motor y a los drivers directamente, sin pasar por LSP, para que la latencia sea mínima. |
 | `app/src` | Frontend en Svelte con el editor CodeMirror 6. |
 
-El motor no depende de ningún driver, ni siquiera de `driver-core`. La app crea cada driver en `app/src-tauri/src/drivers.rs`, trabaja con él a través de `DbConnector` y convierte el esquema que lee en el catálogo del motor en `services/catalog.rs`. Cada perfil de conexión elige su modo TLS y cada driver lo aplica en su propio `tls.rs`.
+El motor no depende de ningún driver, ni siquiera de `driver-core`. Los drivers sí leen las líneas de versión del motor (`khipu_engine::lines`, datos de `support/<motor>.json`) para saber desde qué versión existe cada capacidad del catálogo; cómo la leen es suyo. La app crea cada driver en `app/src-tauri/src/drivers.rs`, trabaja con él a través de `DbConnector` y convierte el esquema que lee en el catálogo del motor en `services/catalog.rs`. Cada perfil de conexión elige su modo TLS y cada driver lo aplica en su propio `tls.rs`.
 
 ## Reglas
 
@@ -41,7 +41,7 @@ El motor no depende de ningún driver, ni siquiera de `driver-core`. La app crea
 | :--- | :--- |
 | `lib.rs` | Compone la app y registra los comandos. Nada más. |
 | `state.rs` | `AppState`: una `ActiveConnection` por ventana, con su conector, su catálogo compartido (`Arc<SchemaCatalog>`, rehecho solo cuando cambian los schemas) y las consultas que se pueden cancelar. |
-| `engine_context.rs` | El contexto de motor de cada conexión, armado una vez al conectar: generación, motor, servidor detectado, modo de sesión, línea efectiva, `schemaEpoch`, soporte del fabricante y verificación. El frontend lo recibe de solo lectura. |
+| `engine_context.rs` | El contexto de motor de cada conexión, armado una vez al conectar: generación, motor, servidor detectado, modo de sesión, línea efectiva y su revisión (de `support/<motor>.json`), `schemaEpoch`, soporte del fabricante y verificación. El frontend lo recibe de solo lectura. |
 | `commands/` | Un archivo por dominio (`query`, `catalog`, `connection`, `files`, `results`). Cada comando adapta sus argumentos y llama a lo que ya existe; no repite el guard, el catálogo ni los pools. |
 | `services/` | Lo que hacen los comandos, sin Tauri: el catálogo del motor, los textos de las consolas, los archivos `.sql`, exportar y editar resultados. |
 
