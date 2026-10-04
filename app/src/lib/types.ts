@@ -186,8 +186,9 @@ export interface ConnectionEngineContext {
   // El servidor como lo detecto el driver; `label` es solo para mostrar.
   server: { engine: ConnectionDriver; version: number[]; label: string };
   sessionMode: { noBackslashEscapes: boolean };
-  // La linea de comportamiento efectiva (tools/test-dbs/lines.json).
-  line: string | null;
+  // La linea de comportamiento efectiva y la revision de sus datos
+  // (support/<motor>.json), elegida por el backend.
+  line: { id: string; revision: number } | null;
   // Sube cuando cambian los schemas cargados.
   schemaEpoch: number;
   // Ciclo de vida del fabricante: solo para mostrar.

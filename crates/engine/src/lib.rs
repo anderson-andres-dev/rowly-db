@@ -4,6 +4,7 @@ pub mod dialects;
 pub mod editing;
 pub mod error_position;
 pub mod execution_guard;
+pub mod lines;
 pub mod pagination;
 pub mod parser;
 
@@ -40,6 +41,26 @@ impl Dialect {
     /// El identificador del motor ("mysql", "mariadb", "postgres").
     pub fn id(self) -> &'static str {
         self.definition().id
+    }
+
+    /// El motor de un identificador: el que informa un driver o el frontend.
+    pub fn from_id(id: &str) -> Option<Dialect> {
+        Dialect::ALL.into_iter().find(|dialect| dialect.id() == id)
+    }
+
+    /// Sus lineas de version (lines.rs): la unica declaracion de lo que
+    /// cambia de una version a otra.
+    pub fn lines(self) -> &'static lines::EngineLines {
+        static PARSED: [std::sync::OnceLock<lines::EngineLines>; Dialect::ALL.len()] =
+            [const { std::sync::OnceLock::new() }; Dialect::ALL.len()];
+        let index = Dialect::ALL
+            .iter()
+            .position(|dialect| *dialect == self)
+            .expect("cada motor esta en ALL");
+        PARSED[index].get_or_init(|| {
+            lines::EngineLines::parse(self.definition().lines)
+                .unwrap_or_else(|error| panic!("support/{}.json: {error}", self.id()))
+        })
     }
 
     /// El parser de sqlparser para el motor. sqlparser no tiene uno de

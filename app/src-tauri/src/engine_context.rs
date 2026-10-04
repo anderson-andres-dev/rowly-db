@@ -3,13 +3,16 @@
 //! frontend lo recibe de solo lectura y no deduce motor ni version de la
 //! etiqueta visible.
 //!
-//! La linea efectiva y la verificacion salen de tools/test-dbs/lines.json; el
-//! soporte del fabricante, de tools/support/vendor-support.json con la regla
-//! de SQL_ENGINE.md §5.2. Los dos se compilan dentro de la app: conectar no
-//! pide nada a la red. Ninguno cambia lo que el guard permite.
+//! La linea efectiva sale de las lineas del motor (`support/<motor>.json`,
+//! `Dialect::lines`); la verificacion, de la evidencia de
+//! tools/test-dbs/lines.json (`verified`); el soporte del fabricante, de
+//! tools/support/vendor-support.json con la regla de SQL_ENGINE.md §5.2. Todo
+//! se compila dentro de la app: conectar no pide nada a la red. Ni la
+//! verificacion ni el soporte cambian lo que el guard permite.
 
 use khipu_driver_core::ServerIdentity;
 use khipu_engine::Dialect;
+use khipu_engine::lines::{Line, compare, numbers};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -29,10 +32,10 @@ pub(crate) struct ConnectionEngineContext {
     /// El modo de la sesion de la consola, leido al conectar y otra vez
     /// despues de cada sentencia que puede cambiarlo.
     pub(crate) session_mode: SessionMode,
-    /// La linea de comportamiento del servidor: la mas cercana por debajo de
-    /// su version. Por debajo de la primera, la primera, que es el piso de
-    /// compatibilidad. None solo si el motor no tiene lineas declaradas.
-    pub(crate) line: Option<String>,
+    /// La linea de comportamiento del servidor, de las lineas de su motor:
+    /// la mas cercana por debajo de su version; por debajo de la primera, la
+    /// primera. None solo si el driver informa un motor sin registrar.
+    pub(crate) line: Option<LineIdentity>,
     /// Sube cada vez que cambian los schemas cargados (`set_schemas`): un
     /// refresco o un DDL no crean una generacion nueva.
     pub(crate) schema_epoch: u64,
@@ -40,6 +43,13 @@ pub(crate) struct ConnectionEngineContext {
     /// fechas para esa version.
     pub(crate) support: Option<VendorSupport>,
     pub(crate) verification: Verification,
+}
+
+/// Que linea y que revision de sus datos se aplican a la conexion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) struct LineIdentity {
+    pub(crate) id: &'static str,
+    pub(crate) revision: u32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -104,22 +114,28 @@ impl ConnectionEngineContext {
     pub(crate) fn is_current(&self, generation: u64, schema_epoch: u64) -> bool {
         self.generation == generation && self.schema_epoch == schema_epoch
     }
+
+    /// La linea con que se analiza el SQL: la del servidor, si es del motor
+    /// del perfil. Un MariaDB detras de un perfil MySQL no aplica reglas de
+    /// lineas de MariaDB al SQL de MySQL.
+    pub(crate) fn analysis_line(&self) -> Option<&'static Line> {
+        let line = self.line?;
+        if self.server.engine != self.engine_id {
+            return None;
+        }
+        Dialect::from_id(self.engine_id)?.lines().get(line.id)
+    }
 }
 
+/// La evidencia de prueba: que versiones exactas pasan la matriz completa.
 #[derive(Deserialize)]
 struct Lines {
     verified: HashMap<String, Vec<VerifiedServer>>,
-    engines: HashMap<String, Vec<LineEntry>>,
 }
 
 #[derive(Deserialize)]
 struct VerifiedServer {
     version: String,
-}
-
-#[derive(Deserialize)]
-struct LineEntry {
-    line: String,
 }
 
 #[derive(Deserialize)]
@@ -139,12 +155,6 @@ static RELEASES: LazyLock<HashMap<String, Vec<Release>>> = LazyLock::new(|| {
         .expect("tools/support/vendor-support.json")
 });
 
-fn numbers(text: &str) -> Vec<u32> {
-    text.split('.')
-        .map(|part| part.parse().unwrap_or(0))
-        .collect()
-}
-
 fn dotted(version: &[u32]) -> String {
     version
         .iter()
@@ -153,32 +163,12 @@ fn dotted(version: &[u32]) -> String {
         .join(".")
 }
 
-/// Compara completando con ceros: `9` es `9.0.0`.
-fn compare(a: &[u32], b: &[u32]) -> std::cmp::Ordering {
-    (0..a.len().max(b.len()))
-        .map(|index| {
-            a.get(index)
-                .copied()
-                .unwrap_or(0)
-                .cmp(&b.get(index).copied().unwrap_or(0))
-        })
-        .find(|order| order.is_ne())
-        .unwrap_or(std::cmp::Ordering::Equal)
-}
-
-fn effective_line(engine: &str, version: &[u32]) -> Option<String> {
-    let lines = LINES.engines.get(engine)?;
-    let mut starts: Vec<(Vec<u32>, &str)> = lines
-        .iter()
-        .map(|entry| (numbers(&entry.line), entry.line.as_str()))
-        .collect();
-    starts.sort_by(|a, b| compare(&a.0, &b.0));
-    starts
-        .iter()
-        .rev()
-        .find(|(start, _)| compare(version, start).is_ge())
-        .or(starts.first())
-        .map(|(_, line)| line.to_string())
+fn effective_line(engine: &str, version: &[u32]) -> Option<LineIdentity> {
+    let line = Dialect::from_id(engine)?.lines().effective(version);
+    Some(LineIdentity {
+        id: &line.line,
+        revision: line.revision,
+    })
 }
 
 fn verification(engine: &str, version: &[u32]) -> Verification {
@@ -332,18 +322,45 @@ mod tests {
 
     #[test]
     fn the_line_is_the_closest_one_below_and_the_floor_below_the_first() {
-        let line = |engine: &str, version: &str| effective_line(engine, &numbers(version));
-        assert_eq!(line("mysql", "8.4.11").as_deref(), Some("8.4"));
-        assert_eq!(line("mysql", "8.3.0").as_deref(), Some("8.0"));
+        let line = |engine: &str, version: &str| {
+            effective_line(engine, &numbers(version)).map(|line| line.id)
+        };
+        assert_eq!(line("mysql", "8.4.11"), Some("8.4"));
+        assert_eq!(line("mysql", "8.3.0"), Some("8.0"));
         // Mas nueva que las probadas: la linea mas cercana por debajo
         // (SQL_ENGINE.md §5.2).
-        assert_eq!(line("mysql", "12.1.0").as_deref(), Some("9"));
-        assert_eq!(line("mariadb", "11.4.13").as_deref(), Some("10.6"));
-        assert_eq!(line("postgres", "13.23").as_deref(), Some("12"));
+        assert_eq!(line("mysql", "12.1.0"), Some("9"));
+        assert_eq!(line("mariadb", "11.4.13"), Some("10.6"));
+        assert_eq!(line("postgres", "13.23"), Some("12"));
         // Debajo del piso conecta con la primera linea, la del piso.
-        assert_eq!(line("mysql", "5.6.51").as_deref(), Some("5.7"));
-        assert_eq!(line("postgres", "9.6.24").as_deref(), Some("10"));
+        assert_eq!(line("mysql", "5.6.51"), Some("5.7"));
+        assert_eq!(line("postgres", "9.6.24"), Some("10"));
         assert_eq!(line("sqlite", "3.46.0"), None);
+    }
+
+    #[test]
+    fn the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine() {
+        let context = |dialect: Dialect, engine: &'static str, version: Vec<u32>| {
+            ConnectionEngineContext::new(
+                1,
+                dialect,
+                ServerIdentity {
+                    engine,
+                    version,
+                    label: String::new(),
+                },
+                SessionMode::default(),
+            )
+        };
+        let mysql = context(Dialect::MySql, "mysql", vec![8, 4, 11]);
+        let line = mysql.analysis_line().expect("MySQL 8.4 con perfil MySQL");
+        assert_eq!(line.line, mysql.line.unwrap().id);
+        assert_eq!(line.revision, mysql.line.unwrap().revision);
+        // Un MariaDB detras de un perfil MySQL muestra su linea, pero el SQL
+        // de MySQL no se analiza con reglas de lineas de MariaDB.
+        let mariadb = context(Dialect::MySql, "mariadb", vec![11, 8, 9]);
+        assert_eq!(mariadb.line.map(|line| line.id), Some("11.7"));
+        assert!(mariadb.analysis_line().is_none());
     }
 
     #[test]
@@ -410,7 +427,7 @@ mod tests {
                 "engineId": "mysql",
                 "server": { "engine": "mariadb", "version": [11, 8, 9], "label": "MariaDB 11.8.9" },
                 "sessionMode": { "noBackslashEscapes": true },
-                "line": "11.7",
+                "line": { "id": "11.7", "revision": 1 },
                 "schemaEpoch": 0,
                 "verification": "verified",
             })

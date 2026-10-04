@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 khipu-driver-core.workspace = true
+khipu-engine.workspace = true
 sqlx = { workspace = true, features = ["postgres"] }
 async-trait.workspace = true
 futures-util.workspace = true

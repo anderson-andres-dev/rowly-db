@@ -39,7 +39,7 @@ Probar cada eslabón por separado es necesario, pero no basta. La cadena tambié
 2. **Tres estados, no dos.** El SQL es *válido*, *inválido* o *incompleto*. Mientras el usuario escribe, lo incompleto es lo normal y no debe parecer un error.
 3. **El SQL generado tiene un listón más alto que el del usuario.** Todo lo que escribe la app (un `CALL` con sus argumentos, un `INSERT` desde la grilla de resultados, un nombre entre comillas) debe ejecutarse en su motor. Eso se demuestra ejecutándolo.
 4. **El servidor decide qué es válido, no cómo se vive.** Si el servidor lo acepta, el analizador no debe marcarlo. Pero el servidor también rechaza `SELECT * F`, y el editor debe entender que el usuario sigue escribiendo.
-5. **Una sola fuente de verdad.** Las comillas, las reglas léxicas y las diferencias entre motores viven en el perfil del motor (`Dialect` en Rust, `SqlProfile` en TypeScript), y las diferencias entre versiones, en la línea de versión (§5). Un test llama al código real, no lo reimplementa. Cuando una copia es inevitable (§9), la copia dice qué replica.
+5. **Una sola fuente de verdad.** Las comillas, las reglas léxicas y las diferencias entre motores viven en el perfil del motor (`Dialect` en Rust, `SqlProfile` en TypeScript), y las diferencias entre versiones, en los datos de la línea de versión (`support/<motor>.json`, §5.4). Un test llama al código real, no lo reimplementa. Cuando una copia es inevitable (§9), la copia dice qué replica.
 6. **Todo bug deja un test.** Un arreglo sin test de regresión está a medias. Un bug que encuentra una exploración, un fuzzer o una IA se convierte en un fixture determinista.
 7. **Las restricciones deliberadas se escriben.** Donde Rowly DB discrepa del servidor a propósito, la decisión va en §8. Si no, la siguiente persona la toma por un bug.
 
@@ -63,7 +63,7 @@ Probar cada eslabón por separado es necesario, pero no basta. La cadena tambié
 | **Estable** | Integrable y, además: publicado en varias versiones sin regresiones P0/P1, con sus compuertas (§7) en el CI. |
 | **Maduro** | Estable y, además, uso real durante varias versiones, en el que los bugs nuevos son casos límite y no fallos de diseño. La madurez pide historial, no una corrida en verde. |
 
-Hoy MySQL, MariaDB y PostgreSQL cumplen todos los criterios de Integrable salvo los huecos P1 de §9. Cerrarlos va primero; para Estable falta, además, la suite contra servidor real en el CI.
+Hoy MySQL, MariaDB y PostgreSQL son Integrables: P0 = 0 y P1 = 0, y cada fila aplicable de §6 pasa en cada versión exacta verificada, con la suite contra servidor real en el CI (`sql-engine.yml`, §7), o su hueco está en §9 como P2 o menos. Para Estable falta historial: publicarse en varias versiones sin regresiones P0/P1. Las compuertas de versión exacta y de release (§7) todavía se corren a mano.
 
 ## 5. Líneas de versión
 
@@ -129,6 +129,20 @@ Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra serv
 
 Datasets: Sakila en MySQL y MariaDB, Pagila en PostgreSQL, fijados en `lines.json` (Sakila por SHA-256, Pagila por commit). Los contenedores están en `tools/test-dbs/`.
 
+### 5.4 Datos de línea
+
+Lo que cambia de una línea a otra para Rowly DB se declara **una sola vez, como datos**, en `support/<motor>.json`, que cada motor registra en su `EngineDefinition` (`lines`) y lee `khipu_engine::lines`. Nada de código por línea: la lógica que usa los datos es la común del núcleo.
+
+| Campo | Qué es | Quién lo usa |
+|---|---|---|
+| `line` | La versión donde empieza; llega hasta la siguiente. Los ids van en orden creciente | La línea efectiva del contexto de conexión (§5.2) |
+| `revision` | Sube cada vez que cambian los datos de la línea | El contexto (`line.revision`) |
+| `capabilities` | Capacidad del catálogo → versión desde la que existe, que puede ser un parche dentro de la línea (`checkConstraints: 8.0.16`) | La introspección de cada driver (`Capabilities`) |
+| `reservedWords` | Palabras que la línea vuelve reservadas | El SQL generado y los alias del frontend, con las de todas las líneas del motor (G6) |
+| `removedSyntax` | Tokens seguidos que la línea eliminó (`^` y `$` anclan al principio y al final de la sentencia) y lo que se usa en su lugar | El analizador, con la línea del servidor (A9) |
+
+El cargador rechaza un formato o un campo desconocidos, líneas desordenadas o repetidas, una revisión 0 y una capacidad fuera de su línea o declarada dos veces. **Un dato solo entra con evidencia**: cada palabra reservada tiene su `AS <palabra>` en el `rejects.sql` de su línea, y cada `removedSyntax` marca una entrada de ese archivo desde su línea y nunca en la anterior (`crates/engine/tests/lines.rs`); D7 demuestra esos fixtures en los servidores reales. Los datos describen el comportamiento; `version_lines` demuestra que la frontera existe. La versión exacta, el soporte del fabricante y la verificación no son datos de línea (§5.2).
+
 ## 6. La matriz
 
 Cada fila es una propiedad que el motor debe tener **en cada línea soportada y en cada versión exacta anunciada como verificada** donde aplique. **Lo demuestra** nombra el test disponible hoy; su presencia no implica que ya corra en todas esas versiones. Una fila sin test es un hueco, no un acierto.
@@ -159,7 +173,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | A6 | Los nombres se comprueban contra el catálogo con las reglas de mayúsculas del motor | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
 | A7 | Los errores del servidor se ubican donde ocurren, a partir de mensajes reales del servidor | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
 | A8 | Las posiciones son correctas con texto multibyte | `diag` `select_into_keeps_positions_with_multibyte_characters`; una cobertura más amplia de Unicode es un **hueco** (§9) |
-| A9 | La sintaxis que una línea eliminó se marca en esa línea, con su reemplazo, y no en las anteriores | **hueco** (§9): el analizador tiene un solo dialecto por motor |
+| A9 | La sintaxis que una línea eliminó se marca en esa línea, con su reemplazo, y no en las anteriores | `crates/engine/tests/lines.rs` `removed_syntax_is_marked_from_its_line_on_and_never_before`: cada `removedSyntax` de §5.4 marca una entrada de su `rejects.sql`, desde su línea y nunca en la anterior; `version_lines` `every_version_line_is_told_apart_from_the_previous_one`: nada que el analizador marque como eliminado con la línea de un servidor real lo acepta ese servidor; `analysis` analiza con la línea del servidor. Lo que MySQL 8.0 eliminó es un **hueco** (§9) |
 
 ### 6.3 SQL generado y autocompletado
 
@@ -170,7 +184,7 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | G3 | Sin una lista de parámetros fiable, la app escribe los paréntesis con el cursor dentro en vez de inventar argumentos | `front/editor/catalogCompletions.test.ts` |
 | G4 | Insertar una sugerencia cuenta como escritura para los diagnósticos | `front/editor/catalogCompletions.test.ts` (aserción de `input.complete`) |
 | G5 | Autocompletado de punta a punta con el dialecto del motor: FROM, JOIN, alias, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
-| G6 | Los alias automáticos y los nombres generados llevan comillas cuando son reservados en **cualquier** línea del motor | `front/engines/contract.test.ts` cubre una lista por motor; las palabras por línea son un **hueco** (§9) |
+| G6 | Los alias automáticos y los nombres generados llevan comillas cuando son reservados en **cualquier** línea del motor | `front/engines/contract.test.ts` (*cada motor cita las palabras que reserva cualquiera de sus lineas*): las `reservedWords` de cada línea (§5.4), más la lista base del motor; `crates/engine/tests/lines.rs` `every_reserved_word_of_a_line_is_one_its_fixtures_prove`: cada una tiene su `AS <palabra>` en el `rejects.sql` de su línea |
 | G7 | El resto del SQL generado corre en el servidor: el INSERT/UPDATE de la edición de resultados, las exportaciones, los filtros | `contract` `grid_literals_follow_the_session_mode`: el `UPDATE` de la edición de resultados guarda tal cual un texto con barras invertidas y comillas, con y sin `NO_BACKSLASH_ESCAPES` (MySQL, MariaDB). El resto es un **hueco** (§9); solo lo cubren tests unitarios |
 
 ### 6.4 Drivers e introspección
@@ -182,10 +196,10 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D3 | La introspección clasifica cada tipo de objeto | `contract` `introspection_classifies_every_object_kind` |
 | D4 | El **contenido** introspectado coincide con el servidor: columnas, tipos, claves, parámetros de rutinas y sus modos | en parte, a través de G2; una comprobación directa es un **hueco** (§9) |
 | D5 | Los modos TLS negocian o fallan con un mensaje accionable | `contract` `tls_*`, frente a lo que ofrece cada imagen (`tls` en `lines.json`). Con una CA configurada (`tls_verification_uses_the_configured_ca`, MySQL, que guarda en su datadir la CA de su propio certificado): `VerifyCa` rechaza un certificado de otra CA, y `VerifyIdentity` rechaza uno que no nombra al host. Que `VerifyCa` acepte la CA correcta, y que `VerifyIdentity` acepte un certificado que nombra al host, son un **hueco** (§9) |
-| D6 | La versión del servidor se lee y se asigna a su línea, incluidas formas como `5.5.5-10.11.6-MariaDB` | la lectura de la versión: tests unitarios de `crates/drivers/*/src/version.rs`; la asignación a una línea es un **hueco** (§9) |
+| D6 | La versión del servidor se lee y se asigna a su línea, incluidas formas como `5.5.5-10.11.6-MariaDB` | la lectura: tests unitarios de `crates/drivers/*/src/version.rs`; la asignación: `crates/engine/tests/lines.rs` (fronteras, versión futura, por debajo del piso, cada probe y cada versión verificada en su línea) y, en cada servidor real, `version_lines` `every_version_line_is_told_apart_from_the_previous_one` |
 | D7 | Cada línea de §5.3 se distingue de la anterior, en sus dos extremos | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | El driver lee cada tipo de columna que puede devolver una línea soportada | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<motor>/<línea>/reads.sql`). Hueco: `VECTOR` de MySQL 9 (§9); sus lecturas llevan `-- gap:` y tienen que fallar con el error conocido |
-| D9 | Motor, versión exacta, modo SQL, línea y revisión son coherentes entre backend y frontend; reconectar o cambiar modo invalida cachés y nunca aplica reglas de otro motor | `app/src-tauri/src/engine_context.rs`: el contexto que arma el backend al conectar (línea efectiva, verificación de la versión exacta, soporte del fabricante) y lo que se pidió con otra generación o `schemaEpoch` no vale. `front/editor/analysisSession.test.ts`: una respuesta pedida con la conexión anterior no se aplica tras reconectar. `front/stores/connectionCatalog.test.ts`: el motor activo es el que dice el backend, con su modo. E2E (`app/tests/e2e/resources.mjs`): 300 reconexiones alternando MySQL y PostgreSQL, cada una con su servidor y su catálogo, sin que crezcan el heap de JavaScript vivo, el backend ni lo montado en el DOM. Cambiar el modo dentro de la sesión de la consola: `app/src-tauri/src/state.rs` lo vuelve a leer después de una sentencia que puede cambiarlo, y un modo distinto es una generación nueva (`a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset`); `contract` `the_console_keeps_its_session_between_statements`: lo que una sentencia deja en la sesión (`SET`, una variable, una tabla temporal, una transacción, el `sql_mode`) vale para la siguiente; `front/stores/connectionCatalog.test.ts`: el editor pasa al modo nuevo y una respuesta atrasada nunca lo devuelve al anterior. Todavía no hay revisión de paquete: no existen paquetes por línea |
+| D9 | Motor, versión exacta, modo SQL, línea y revisión son coherentes entre backend y frontend; reconectar o cambiar modo invalida cachés y nunca aplica reglas de otro motor | `app/src-tauri/src/engine_context.rs`: el contexto que arma el backend al conectar (línea efectiva, verificación de la versión exacta, soporte del fabricante) y lo que se pidió con otra generación o `schemaEpoch` no vale. `front/editor/analysisSession.test.ts`: una respuesta pedida con la conexión anterior no se aplica tras reconectar. `front/stores/connectionCatalog.test.ts`: el motor activo es el que dice el backend, con su modo. E2E (`app/tests/e2e/resources.mjs`): 300 reconexiones alternando MySQL y PostgreSQL, cada una con su servidor y su catálogo, sin que crezcan el heap de JavaScript vivo, el backend ni lo montado en el DOM. La línea efectiva y su revisión salen de `support/<motor>.json` y viajan en el contexto; el análisis solo usa la línea si es del motor del perfil (`engine_context.rs` `the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine`), y el frontend no la deduce de la versión ni de la etiqueta (`front/engines/contract.test.ts`). Cambiar el modo dentro de la sesión de la consola: `app/src-tauri/src/state.rs` lo vuelve a leer después de una sentencia que puede cambiarlo, y un modo distinto es una generación nueva (`a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset`); `contract` `the_console_keeps_its_session_between_statements`: lo que una sentencia deja en la sesión (`SET`, una variable, una tabla temporal, una transacción, el `sql_mode`) vale para la siguiente; `front/stores/connectionCatalog.test.ts`: el editor pasa al modo nuevo y una respuesta atrasada nunca lo devuelve al anterior |
 
 ### 6.5 Capacidades
 
@@ -206,7 +220,7 @@ Lo que tiene cada motor. N/A es correcto donde el motor de verdad no tiene la ca
 | Barra invertida como escape en textos | sí (salvo con `NO_BACKSLASH_ESCAPES`) | sí (igual) | solo en `E'…'` | no |
 | Comentarios `#` / dollar quotes / `DELIMITER` | sí / no / lo resuelve el cliente | sí / no / lo resuelve el cliente | no / sí / no | no / no / no |
 
-Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`app/src/lib/engines/*.ts`); las reglas del lenguaje, en el `EngineDefinition` de cada motor (`crates/engine/src/dialects/`, registrado en `Dialect::definition`); el catálogo dependiente de versión, en el `version.rs` de cada driver (`Capabilities`). Las diferencias de línea deben tener una sola declaración de datos; el motor y el driver siguen siendo código de la app (§9 y §12).
+Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`app/src/lib/engines/*.ts`); las reglas del lenguaje, en el `EngineDefinition` de cada motor (`crates/engine/src/dialects/`, registrado en `Dialect::definition`); desde qué versión existe cada capacidad del catálogo, una sola vez, en los datos de línea (`support/<motor>.json`, §5.4). Cómo la lee cada motor sigue en el `version.rs` de su driver (`Capabilities`), que pregunta a esos datos; un test impide volver a comparar versiones ahí (`crates/engine/tests/lines.rs` `no_known_consumer_declares_versioned_behavior_by_itself_again`).
 
 ## 7. Compuertas
 
@@ -279,8 +293,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | La prueba integrada de confirmación (S7) solo cubre la consola y la edición de resultados en una versión de MySQL | P2 | Añadir los demás motores y versiones. Los recorridos E2E corren solo en Linux; Windows (WebView2) y macOS (WKWebView) siguen siendo humo manual de release. |
 | Rowly DB no sabe si la consola tiene una transacción abierta, así que no avisa antes de cerrar una ventana o desconectar con una | P2 | El sqlx publicado no expone el estado de transacción de las sentencias que corren como texto, y Rowly DB no lo adivina del SQL. Cerrar la conexión de la consola hace que el servidor deshaga la transacción, así que nada se confirma por accidente; solo falta el aviso. |
 | No se sigue PostgreSQL con `standard_conforming_strings = off`: el guard y el analizador leen las cadenas con la regla del motor | P2 | Desde PostgreSQL 9.1 no es el valor por defecto. Por la ruta normal, la barrera de preparación del driver (§8) sigue rechazando varias sentencias. |
-| El analizador tiene un solo dialecto por motor: no puede marcar la sintaxis que una línea eliminó (A9), y las palabras reservadas son una lista por motor (G6) | P2 | Llega con la declaración por línea de abajo. |
-| Las capacidades se declaran en tres lugares (§6.5), en código y no por línea | P2 | Una sola declaración por línea, como datos. Es también lo que llevan los paquetes de soporte de versión (§11). |
+| Lo que MySQL 8.0 eliminó (`GROUP BY … DESC`, `PASSWORD()`, `ENCODE()`, `SQL_CACHE`) no se marca en el editor (A9) | P2 | `removedSyntax` (§5.4) es una secuencia de tokens, y ninguna lo distingue de SQL válido: una columna `sql_cache`, una función propia `encode`, un índice de prefijo sobre una columna `password`. Hace falta un mecanismo estructural en el analizador, con su prueba en cada motor. Lo marca el servidor al ejecutar. |
 | La clasificación de incompleto / no encontrado / genérico vive en el frontend (listas de claves en `app/src/lib/editor/analysisSession.ts`), y `analysis` la replica para simular la escritura | P2 | El analizador debería emitir una categoría con cada diagnóstico. Eso elimina la copia (principio 5). |
 | El contenido introspectado no se comprueba directamente contra el servidor (D4) | P2 | Un ejemplo encontrado al escribir esto: MariaDB 11.8 acepta `DEFAULT` en los parámetros de un procedure, pero su introspección siempre informa `has_default: false`. |
 | El resto del SQL generado (G7) no se ejecuta en un servidor: el `INSERT` y el `DELETE` de la edición de resultados, las exportaciones, los filtros y el `UPDATE` en PostgreSQL | P2 | |
@@ -316,7 +329,7 @@ tests/sql/
 
 Los casos unitarios quedan junto al código que prueban. Las entradas de un `.sql` se separan con una línea `-- ---`; cada una es una sola sentencia con un comentario que dice qué demuestra. Una línea `-- since: <versión>` en una entrada marca un cambio dentro de la línea (§5.1): antes de esa versión, la línea se comporta como la anterior, y la línea necesita servidores a los dos lados de ella.
 
-`tools/test-dbs/lines.json` es la fuente única de motores, líneas y versiones exactas de prueba. Cada imagen está fijada por digest, y el harness compara la versión que devuelve el servidor con la declarada para ese digest antes de ejecutar. Las imágenes vienen del espejo público de las oficiales (`public.ecr.aws/docker/library`).
+`tools/test-dbs/lines.json` es la fuente única de servidores de prueba: probes por línea y versiones exactas verificadas. Sus líneas son las de `support/<motor>.json`, en el mismo orden (`crates/engine/tests/lines.rs`); describen comportamiento allí y se demuestran aquí. Cada imagen está fijada por digest, y el harness compara la versión que devuelve el servidor con la declarada para ese digest antes de ejecutar. Las imágenes vienen del espejo público de las oficiales (`public.ecr.aws/docker/library`).
 
 Una entrada que usa algo que agrega una línea posterior lo dice con `-- needs: <capacidad>` (en un fixture de consola mixta, la clave `needs`). La capacidad se nombra con el comentario de su entrada en `tests/sql/<motor>/<línea>/accepts.sql`, así que la frontera se declara una vez y D7 la demuestra. En una versión anterior el servidor tiene que rechazar la entrada; solo entonces es N/A, y queda en la evidencia con su fila, línea y archivo. Si el servidor la acepta, la capacidad está mal declarada y la prueba falla.
 
@@ -355,7 +368,7 @@ PostgreSQL 14 (14.24)  escritura 49 706 prefijos ✓  CALL 11 ✓  fuzz 4000 sem
 
 ## 11. Paquetes de soporte de versión
 
-Cuando se implemente la distribución por línea, lo que se sabe de ella viajará como un **paquete de datos, nunca código**: capacidades, palabras reservadas, ayuda de errores, sintaxis que el parser no lee o la línea eliminó, fechas de soporte y evidencia de prueba. Una línea nueva podrá llegar sin publicar otra app solo si los mecanismos que necesita ya están en ella. Hoy las reglas siguen compiladas en la app (§6.5 y §9).
+Cuando se implemente la distribución por línea, lo que se sabe de ella viajará como un **paquete de datos, nunca código**: capacidades, palabras reservadas, ayuda de errores, sintaxis que el parser no lee o la línea eliminó, fechas de soporte y evidencia de prueba. Una línea nueva podrá llegar sin publicar otra app solo si los mecanismos que necesita ya están en ella. Hoy los datos de línea (§5.4) se compilan en la app desde `support/`; no hay descarga, índice ni firma.
 
 Reglas:
 
@@ -381,7 +394,7 @@ Estas operaciones son distintas: **motor** = reglas SQL y catálogo; **driver** 
 ### 12.2 Línea nueva de un motor existente
 
 1. Añadir al corpus un caso que pase en la línea nueva y falle en la anterior, o viceversa. Sin diferencia observable para Rowly DB, ambas versiones comparten línea (§5.1).
-2. Declarar rango, motivo y capacidades; agregar probes en los extremos y a ambos lados de cualquier `since` en `tools/test-dbs/lines.json`. Si hacen falta parser, protocolo, tipo o consulta de catálogo nuevos, primero publicar la app que los implementa (§11).
+2. Declarar la línea en `support/<motor>.json` (§5.4: capacidades, reservadas y sintaxis eliminada, cada dato con su fixture) y agregar sus probes en los extremos y a ambos lados de cualquier `since` en `tools/test-dbs/lines.json`. Si hacen falta parser, protocolo, tipo o consulta de catálogo nuevos, primero publicar la app que los implementa (§11).
 3. Ejecutar D7 y toda la matriz aplicable en cada versión exacta que se vaya a anunciar como verificada. Actualizar §5.3 y el reporte de §10; el estado del fabricante se calcula aparte.
 
 ### 12.3 Versión exacta nueva dentro de una línea

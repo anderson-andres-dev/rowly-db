@@ -66,6 +66,13 @@ export const COMMON_RESERVED = [
   "with",
 ];
 
+// Las palabras que alguna linea del motor vuelve reservadas
+// (support/<motor>.json, la misma declaracion que lee el backend): el SQL
+// generado las cita en cualquier version del motor (SQL_ENGINE.es.md §5.2).
+export function lineReservedWords(engineLines: { lines: { line: string; reservedWords?: string[] }[] }): string[] {
+  return engineLines.lines.flatMap((line) => line.reservedWords ?? []);
+}
+
 // El literal del SQL estandar: la comilla simple duplicada. Es tambien lo que
 // se usa sin conexion (copiar un resultado fijado despues de desconectar).
 export function ansiString(value: string): string {

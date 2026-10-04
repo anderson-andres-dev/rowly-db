@@ -52,6 +52,8 @@ pub struct EngineDefinition {
     pub select_into_variable_lists: bool,
     /// La consulta que dice si la sesion usa NO_BACKSLASH_ESCAPES.
     pub sql_mode_query: Option<&'static str>,
+    /// Sus lineas de version, como datos: `support/<motor>.json` (lines.rs).
+    pub lines: &'static str,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

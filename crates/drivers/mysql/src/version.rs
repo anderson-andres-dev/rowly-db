@@ -1,6 +1,10 @@
 //! Server flavor/version detection and the catalog capabilities derived from
 //! it. Introspection picks its queries from `Capabilities`, never from the
-//! raw version, so every version-dependent decision lives in one place.
+//! raw version; since which version each capability exists is declared once,
+//! in the engine's lines (`support/<engine>.json`, `khipu_engine::lines`).
+
+use khipu_engine::Dialect;
+use khipu_engine::lines::Capability;
 
 /// MySQL and MariaDB speak the same protocol and share most of
 /// `information_schema`, but diverged after MySQL 5.5 / MariaDB 10.0 in
@@ -91,32 +95,22 @@ impl ServerVersion {
     }
 
     pub fn capabilities(&self) -> Capabilities {
-        let check_constraints = match self.flavor {
-            // information_schema.check_constraints appeared in 8.0.16, when
-            // CHECK stopped being parsed-and-ignored.
-            Flavor::MySql => {
-                if self.at_least(8, 0, 16) {
-                    CheckConstraints::JoinTableConstraints
-                } else {
-                    CheckConstraints::Unsupported
-                }
-            }
-            // MariaDB has had it since 10.2.1, with TABLE_NAME in the view
-            // itself (and it also lists column-level checks).
-            Flavor::MariaDb => {
-                if self.at_least(10, 2, 1) {
-                    CheckConstraints::WithTableName
-                } else {
-                    CheckConstraints::Unsupported
-                }
-            }
-        };
-
+        // Since which version each one exists is line data
+        // (support/<engine>.json); how to read it is this driver's.
+        let lines = match self.flavor {
+            Flavor::MySql => Dialect::MySql,
+            Flavor::MariaDb => Dialect::MariaDb,
+        }
+        .lines();
+        let version = [self.major, self.minor, self.patch];
+        let supports = |capability| lines.supports(capability, &version);
         Capabilities {
-            check_constraints,
-            // MariaDB 10.3 sequences show up in information_schema.tables
-            // with TABLE_TYPE = 'SEQUENCE'.
-            sequences: self.flavor == Flavor::MariaDb && self.at_least(10, 3, 0),
+            check_constraints: match (supports(Capability::CheckConstraints), self.flavor) {
+                (false, _) => CheckConstraints::Unsupported,
+                (true, Flavor::MySql) => CheckConstraints::JoinTableConstraints,
+                (true, Flavor::MariaDb) => CheckConstraints::WithTableName,
+            },
+            sequences: supports(Capability::Sequences),
         }
     }
 }

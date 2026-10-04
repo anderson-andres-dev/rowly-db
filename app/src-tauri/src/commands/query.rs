@@ -325,7 +325,7 @@ pub fn analyze_sql(
 ) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
     // Solo lo necesario bajo el candado (el catalogo es compartido: no se
     // copia); el analisis corre despues, sin bloquear execute_query.
-    let (catalog, dialect, no_backslash_escapes, default_schema, loaded_schemas) =
+    let (catalog, dialect, no_backslash_escapes, line, default_schema, loaded_schemas) =
         with_active_connection(&window, &state, |active| {
             if !active.context.is_current(generation, schema_epoch) {
                 return Err(Message::key("analysisOutdated"));
@@ -334,6 +334,7 @@ pub fn analyze_sql(
                 Arc::clone(&active.catalog),
                 active.dialect,
                 active.context.session_mode.no_backslash_escapes,
+                active.context.analysis_line(),
                 active.default_schema.clone(),
                 active.schemas.keys().cloned().collect::<Vec<_>>(),
             ))
@@ -352,6 +353,7 @@ pub fn analyze_sql(
                 dialect,
                 Some(&view),
                 no_backslash_escapes,
+                line,
             )
         })
         .collect())

@@ -23,7 +23,7 @@ The engine parses SQL, keeps the schema catalog and builds suggestions without k
 | `app/src-tauri` | The desktop shell. It calls the engine and drivers directly, not through LSP, to keep latency low. |
 | `app/src` | Svelte frontend with a CodeMirror 6 editor. |
 
-The engine depends on no driver, not even `driver-core`. The app creates each driver in `app/src-tauri/src/drivers.rs`, works with it through `DbConnector` and turns the schema it reads into the engine's catalog in `services/catalog.rs`. Each connection profile chooses its TLS mode, and each driver applies it in its own `tls.rs`.
+The engine depends on no driver, not even `driver-core`. Drivers do read the engine's version lines (`khipu_engine::lines`, data from `support/<engine>.json`) to know since which release each catalog capability exists; how they read it is theirs. The app creates each driver in `app/src-tauri/src/drivers.rs`, works with it through `DbConnector` and turns the schema it reads into the engine's catalog in `services/catalog.rs`. Each connection profile chooses its TLS mode, and each driver applies it in its own `tls.rs`.
 
 ## Rules
 
@@ -41,7 +41,7 @@ The engine depends on no driver, not even `driver-core`. The app creates each dr
 | :--- | :--- |
 | `lib.rs` | Builds the app and registers the commands. Nothing else. |
 | `state.rs` | `AppState`: one `ActiveConnection` per window, with its connector, its shared catalog (`Arc<SchemaCatalog>`, rebuilt only when the schemas change) and the queries that can be cancelled. |
-| `engine_context.rs` | Each connection's engine context, built once on connect: generation, engine, detected server, session mode, effective line, `schemaEpoch`, vendor support and verification. The frontend gets it read-only. |
+| `engine_context.rs` | Each connection's engine context, built once on connect: generation, engine, detected server, session mode, effective line and its revision (from `support/<engine>.json`), `schemaEpoch`, vendor support and verification. The frontend gets it read-only. |
 | `commands/` | One file per domain (`query`, `catalog`, `connection`, `files`, `results`). Each command adapts its arguments and calls what already exists; it never repeats the guard, the catalog or the pools. |
 | `services/` | What the commands do, without Tauri: the engine catalog, console texts, `.sql` files, exporting and editing results. |
 

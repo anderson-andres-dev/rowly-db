@@ -22,6 +22,7 @@ pub const DEFINITION: EngineDefinition = EngineDefinition {
     do_blocks: DoBlocks::Anonymous,
     select_into_variable_lists: false,
     sql_mode_query: None,
+    lines: include_str!("../../../../support/postgres.json"),
 };
 
 const UNPARSED_WRITES: &[&[&str]] = &[

@@ -14,6 +14,7 @@
 //! sentencia; el fin es exclusivo. El frontend las pasa a su offset.
 
 use crate::catalog::CatalogTable;
+use crate::lines::Line;
 use crate::{Dialect, RoutineBodies};
 use serde::Serialize;
 use sqlparser::ast::{
@@ -112,12 +113,20 @@ const MAX_REPAIRS: usize = 10;
 /// cadena. Cada una pasa a `/`, que no escapa nada, para que el tokenizer
 /// corte las cadenas donde las corta el servidor; las posiciones siguen
 /// siendo las del texto original, porque la longitud no cambia.
+///
+/// Con la linea del servidor (`line`, de `dialect`), tambien la sintaxis que
+/// esa linea o una anterior elimino (A9). Sin linea (sin conexion, o un
+/// servidor de otro motor que el del perfil), nada de eso.
 pub fn analyze_statement_with(
     sql: &str,
     dialect: Dialect,
     catalog: Option<&CatalogView>,
     no_backslash_escapes: bool,
+    line: Option<&Line>,
 ) -> Vec<Diagnostic> {
+    if let Some(found) = line.and_then(|line| removed_syntax(sql, dialect, line)) {
+        return vec![found];
+    }
     if !no_backslash_escapes || !dialect.backslash_escapes() || !sql.contains('\\') {
         return analyze_statement(sql, dialect, catalog);
     }
@@ -1058,6 +1067,66 @@ fn has_unparsed_syntax(sql: &str, dialect: Dialect) -> bool {
     known
         .iter()
         .any(|pattern| contains_pattern(&words, pattern))
+}
+
+/// La sintaxis que `line` o una linea anterior elimino, marcada donde esta,
+/// con la linea que la elimino y lo que se usa en su lugar
+/// (`support/<motor>.json`, `removedSyntax`).
+fn removed_syntax(sql: &str, dialect: Dialect, line: &Line) -> Option<Diagnostic> {
+    let mut removed = dialect.lines().removed_until(line).peekable();
+    removed.peek()?;
+    let mut tokens: Vec<TokenWithSpan> = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize_with_location()
+        .ok()?
+        .into_iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    while matches!(
+        tokens.last().map(|token| &token.token),
+        Some(Token::SemiColon)
+    ) {
+        tokens.pop();
+    }
+    let words: Vec<String> = tokens
+        .iter()
+        .map(|token| match &token.token {
+            Token::Word(word) if word.quote_style.is_none() => word.value.to_uppercase(),
+            other => other.to_string(),
+        })
+        .collect();
+    removed.find_map(|(removing, syntax)| {
+        let at_start = syntax.words.first().is_some_and(|word| word == "^");
+        let at_end = syntax.words.last().is_some_and(|word| word == "$");
+        let pattern: Vec<&str> = syntax
+            .words
+            .iter()
+            .map(String::as_str)
+            .filter(|word| *word != "^" && *word != "$")
+            .collect();
+        let found = words
+            .windows(pattern.len())
+            .enumerate()
+            .position(|(at, window)| {
+                window
+                    .iter()
+                    .zip(&pattern)
+                    .all(|(word, wanted)| word == wanted)
+                    && (!at_start || at == 0)
+                    && (!at_end || at + pattern.len() == words.len())
+            })?;
+        let message = match &syntax.instead {
+            Some(instead) => DiagnosticMessage::key("diagnostic.removedInLineUse")
+                .with("line", &removing.line)
+                .with("instead", instead),
+            None => DiagnosticMessage::key("diagnostic.removedInLine").with("line", &removing.line),
+        };
+        Some(Diagnostic {
+            start: tokens[found].span.start.into(),
+            end: tokens[found + pattern.len() - 1].span.end.into(),
+            message,
+            suggestions: Vec::new(),
+        })
+    })
 }
 
 /// Las palabras del patron, en orden; cada tramo entre `...` seguido.
@@ -2554,22 +2623,22 @@ mod tests {
         // regla de MySQL, la comilla queda escapada y la cadena sin cerrar.
         let sql = "SELECT 'C:\\' AS ruta";
         assert!(!analyze_statement(sql, Dialect::MySql, None).is_empty());
-        assert!(analyze_statement_with(sql, Dialect::MySql, None, true).is_empty());
+        assert!(analyze_statement_with(sql, Dialect::MySql, None, true, None).is_empty());
         assert_eq!(
-            analyze_statement_with(sql, Dialect::MySql, None, false),
+            analyze_statement_with(sql, Dialect::MySql, None, false, None),
             analyze_statement(sql, Dialect::MySql, None)
         );
         // Lo que sigue a la cadena se sigue leyendo, en su sitio.
         let after = "SELECT 'C:\\' AS ruta FROM t WHER x = 1";
         assert_eq!(
-            analyze_statement_with(after, Dialect::MySql, None, true),
+            analyze_statement_with(after, Dialect::MySql, None, true, None),
             analyze_statement(
                 "SELECT 'C:/' AS ruta FROM t WHER x = 1",
                 Dialect::MySql,
                 None
             )
         );
-        assert!(!analyze_statement_with(after, Dialect::MySql, None, true).is_empty());
+        assert!(!analyze_statement_with(after, Dialect::MySql, None, true, None).is_empty());
     }
 
     fn column(name: &str) -> CatalogColumn {

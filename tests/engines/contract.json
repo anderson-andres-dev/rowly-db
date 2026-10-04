@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Lo que el motor decide igual en Rust (crates/engine/src/dialects, Dialect::definition), en el backend (DatabaseKind de app/src-tauri/src/drivers.rs) y en el frontend (ENGINES de app/src/lib/engines). Cada lado tiene un test que lo compara con este archivo: un motor nuevo, o un cambio de uno de estos valores, se hace en los tres lados y aqui.",
+  "about": "Lo que el motor decide igual en Rust (crates/engine/src/dialects, Dialect::definition), en el backend (DatabaseKind de app/src-tauri/src/drivers.rs) y en el frontend (ENGINES de app/src/lib/engines). Cada lado tiene un test que lo compara con este archivo: un motor nuevo, o un cambio de uno de estos valores, se hace en los tres lados y aqui. Lo que cambia por linea de version no va aqui: va en support/<id>.json, que leen el nucleo, los drivers y el frontend (crates/engine/tests/lines.rs, app/src/lib/engines/contract.test.ts).",
   "engines": [
     { "id": "mysql", "identifierQuote": "`", "backslashEscapes": true, "executableComments": ["/*!"] },
     { "id": "mariadb", "identifierQuote": "`", "backslashEscapes": true, "executableComments": ["/*!", "/*M!"] },

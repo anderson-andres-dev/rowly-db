@@ -20,6 +20,7 @@ pub const DEFINITION: EngineDefinition = EngineDefinition {
     do_blocks: DoBlocks::Expression,
     select_into_variable_lists: true,
     sql_mode_query: Some(SQL_MODE_QUERY),
+    lines: include_str!("../../../../support/mysql.json"),
 };
 
 pub(super) const ROUTINE_KINDS: &[&str] = &["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT"];

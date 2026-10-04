@@ -39,7 +39,7 @@ Testing links in isolation is necessary but not enough. The chain also has to be
 2. **Three states, not two.** SQL is *valid*, *invalid* or *incomplete*. While the user types, incomplete is the normal state and must not look like an error.
 3. **Generated SQL has a stricter bar than user SQL.** Whatever the app writes (a `CALL` with its arguments, an `INSERT` from a result grid, a quoted name) must run on its target engine. That is proven by running it.
 4. **The server decides validity, not experience.** If the server accepts it, the analyzer must not flag it. But the server rejects `SELECT * F` too, and the editor must understand the user is still typing.
-5. **One source of truth.** Quoting, lexical rules and engine differences live in the engine profile (`Dialect` in Rust, `SqlProfile` in TypeScript), and version differences live in the version line (§5). A test calls the real code; it does not reimplement it. When a copy is unavoidable (§9), the copy says what it mirrors.
+5. **One source of truth.** Quoting, lexical rules and engine differences live in the engine profile (`Dialect` in Rust, `SqlProfile` in TypeScript), and version differences live in the version line data (`support/<engine>.json`, §5.4). A test calls the real code; it does not reimplement it. When a copy is unavoidable (§9), the copy says what it mirrors.
 6. **Every bug leaves a test.** A fix without a regression test is unfinished. A bug found by exploration, a fuzzer or an AI becomes a deterministic fixture.
 7. **Deliberate restrictions are written down.** Where Rowly DB disagrees with the server on purpose, the decision goes in §8. Otherwise the next person takes it for a bug.
 
@@ -63,7 +63,7 @@ Testing links in isolation is necessary but not enough. The chain also has to be
 | **Stable** | Integrable, plus: released in several versions without a P0/P1 regression, and its gates (§7) run in CI. |
 | **Mature** | Stable, plus real-world use over several releases, where new bugs are edge cases rather than design flaws. Maturity takes history, not one green run. |
 
-Today MySQL, MariaDB and PostgreSQL meet every Integrable criterion except the P1 gaps in §9. Closing them comes first; Stable also needs the real-server suite in CI.
+Today MySQL, MariaDB and PostgreSQL are Integrable: P0 = 0 and P1 = 0, and every applicable §6 row passes on every verified exact release, with the real-server suite in CI (`sql-engine.yml`, §7), or its gap is in §9 as P2 or lower. Stable still needs history: being released across several versions with no P0/P1 regressions. The exact-release and release gates (§7) are still run by hand.
 
 ## 5. Version lines
 
@@ -129,6 +129,20 @@ Status as of 2026-10-02. **Every line below is proven** against real servers at 
 
 Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, pinned in `lines.json` (Sakila by SHA-256, Pagila by commit). The containers are in `tools/test-dbs/`.
 
+### 5.4 Line data
+
+What changes from one line to the next for Rowly DB is declared **once, as data**, in `support/<engine>.json`, which each engine registers in its `EngineDefinition` (`lines`) and `khipu_engine::lines` reads. No per-line code: the logic that uses the data is the core's shared logic.
+
+| Field | What it is | Who uses it |
+|---|---|---|
+| `line` | The release where it starts; it runs until the next one. Ids go in increasing order | The connection context's effective line (§5.2) |
+| `revision` | Goes up every time the line's data changes | The context (`line.revision`) |
+| `capabilities` | Catalog capability → release it exists from, which may be a patch inside the line (`checkConstraints: 8.0.16`) | Each driver's introspection (`Capabilities`) |
+| `reservedWords` | Words the line makes reserved | Generated SQL and frontend aliases, with those of every line of the engine (G6) |
+| `removedSyntax` | Consecutive tokens the line removed (`^` and `$` anchor to the start and end of the statement) and what to use instead | The analyzer, with the server's line (A9) |
+
+The loader rejects an unknown format or field, unordered or repeated lines, revision 0, and a capability outside its line or declared twice. **A datum only goes in with evidence**: every reserved word has its `AS <word>` in its line's `rejects.sql`, and every `removedSyntax` marks an entry of that file from its line on and never on the previous one (`crates/engine/tests/lines.rs`); D7 proves those fixtures on the real servers. The data describes behavior; `version_lines` proves the boundary exists. The exact release, vendor support and verification are not line data (§5.2).
+
 ## 6. The matrix
 
 Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. **Proven by** names the test available today; its presence does not mean it already runs on all those releases. A row with no test is a gap, not a pass.
@@ -159,7 +173,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | A6 | Names are checked against the catalog with the engine's case rules | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
 | A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
 | A8 | Positions stay right with multibyte text | `diag` `select_into_keeps_positions_with_multibyte_characters`; broader Unicode coverage is a **gap** (§9) |
-| A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines | **gap** (§9): the analyzer has one dialect per engine |
+| A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines | `crates/engine/tests/lines.rs` `removed_syntax_is_marked_from_its_line_on_and_never_before`: every `removedSyntax` of §5.4 marks an entry of its `rejects.sql`, from its line on and never on the previous one; `version_lines` `every_version_line_is_told_apart_from_the_previous_one`: nothing the analyzer marks as removed with a real server's line is accepted by that server; `analysis` analyzes with the server's line. What MySQL 8.0 removed is a **gap** (§9) |
 
 ### 6.3 Generated SQL and autocomplete
 
@@ -170,7 +184,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/editor/catalogCompletions.test.ts` |
 | G4 | Inserting a suggestion counts as typing for diagnostics | `front/editor/catalogCompletions.test.ts` (`input.complete` assertion) |
 | G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
-| G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine | `front/engines/contract.test.ts` covers one list per engine; per-line words are a **gap** (§9) |
+| G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine | `front/engines/contract.test.ts` (*cada motor cita las palabras que reserva cualquiera de sus lineas*): the `reservedWords` of every line (§5.4), plus the engine's base list; `crates/engine/tests/lines.rs` `every_reserved_word_of_a_line_is_one_its_fixtures_prove`: each has its `AS <word>` in its line's `rejects.sql` |
 | G7 | Other generated SQL runs on the server: the INSERT/UPDATE from result editing, exports, filters | `contract` `grid_literals_follow_the_session_mode`: the result-editing `UPDATE` stores a text with backslashes and quotes as written, with and without `NO_BACKSLASH_ESCAPES` (MySQL, MariaDB). The rest is a **gap** (§9); covered by unit tests only |
 
 ### 6.4 Drivers and introspection
@@ -182,10 +196,10 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D3 | Introspection classifies every object kind | `contract` `introspection_classifies_every_object_kind` |
 | D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes | partly, through G2; a direct check is a **gap** (§9) |
 | D5 | TLS modes negotiate or fail with an actionable message | `contract` `tls_*`, against what each image offers (`tls` in `lines.json`). With a configured CA (`tls_verification_uses_the_configured_ca`, MySQL, which keeps the CA of its own certificate in its datadir): `VerifyCa` rejects a certificate from another CA, and `VerifyIdentity` rejects one that does not name the host. `VerifyCa` accepting the right CA, and `VerifyIdentity` accepting a certificate that names the host, are a **gap** (§9) |
-| D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
+| D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | parsing: `crates/drivers/*/src/version.rs` unit tests; mapping: `crates/engine/tests/lines.rs` (boundaries, a future release, below the floor, every probe and every verified release on its line) and, on every real server, `version_lines` `every_version_line_is_told_apart_from_the_previous_one` |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`). Gap: MySQL 9 `VECTOR` (§9); its reads carry `-- gap:` and must fail with the known error |
-| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `app/src-tauri/src/engine_context.rs`: the context the backend builds on connect (effective line, verification of the exact release, vendor support), and anything asked for with another generation or `schemaEpoch` no longer counts. `front/editor/analysisSession.test.ts`: an answer asked for with the previous connection is not applied after reconnecting. `front/stores/connectionCatalog.test.ts`: the active engine is the one the backend reports, with its mode. E2E (`app/tests/e2e/resources.mjs`): 300 reconnections alternating MySQL and PostgreSQL, each with its own server and catalog, with no growth in the live JavaScript heap, the backend or what is mounted in the DOM. Changing the mode within the console session: `app/src-tauri/src/state.rs` reads it again after a statement that can change it, and a different mode is a new generation (`a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset`); `contract` `the_console_keeps_its_session_between_statements`: what one statement leaves in the session (`SET`, a variable, a temporary table, a transaction, the `sql_mode`) holds for the next; `front/stores/connectionCatalog.test.ts`: the editor moves to the new mode and a late answer never moves it back. There is no package revision yet: per-line packages do not exist |
+| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `app/src-tauri/src/engine_context.rs`: the context the backend builds on connect (effective line, verification of the exact release, vendor support), and anything asked for with another generation or `schemaEpoch` no longer counts. `front/editor/analysisSession.test.ts`: an answer asked for with the previous connection is not applied after reconnecting. `front/stores/connectionCatalog.test.ts`: the active engine is the one the backend reports, with its mode. E2E (`app/tests/e2e/resources.mjs`): 300 reconnections alternating MySQL and PostgreSQL, each with its own server and catalog, with no growth in the live JavaScript heap, the backend or what is mounted in the DOM. The effective line and its revision come from `support/<engine>.json` and travel in the context; analysis only uses the line when it belongs to the profile's engine (`engine_context.rs` `the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine`), and the frontend never derives it from the version or the label (`front/engines/contract.test.ts`). Changing the mode within the console session: `app/src-tauri/src/state.rs` reads it again after a statement that can change it, and a different mode is a new generation (`a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset`); `contract` `the_console_keeps_its_session_between_statements`: what one statement leaves in the session (`SET`, a variable, a temporary table, a transaction, the `sql_mode`) holds for the next; `front/stores/connectionCatalog.test.ts`: the editor moves to the new mode and a late answer never moves it back |
 
 ### 6.5 Capabilities
 
@@ -206,7 +220,7 @@ What each engine has. N/A is correct where the engine really lacks the feature; 
 | Backslash escapes in strings | yes (unless `NO_BACKSLASH_ESCAPES`) | yes (same) | `E'…'` only | no |
 | `#` comments / dollar quotes / `DELIMITER` | yes / no / client-side | yes / no / client-side | no / yes / no | no / no / no |
 
-Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in each engine's `EngineDefinition` (`crates/engine/src/dialects/`, registered by `Dialect::definition`); version-dependent catalog features in each driver's `version.rs` (`Capabilities`). Line differences must have one data declaration; the engine and driver remain app code (§9 and §12).
+Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in each engine's `EngineDefinition` (`crates/engine/src/dialects/`, registered by `Dialect::definition`); since which release each catalog capability exists, once, in the line data (`support/<engine>.json`, §5.4). How each engine reads it stays in its driver's `version.rs` (`Capabilities`), which asks that data; a test keeps version comparisons from coming back there (`crates/engine/tests/lines.rs` `no_known_consumer_declares_versioned_behavior_by_itself_again`).
 
 ## 7. Gates
 
@@ -279,8 +293,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | The integrated confirmation test (S7) covers only the console and result editing on one MySQL release | P2 | Add the other engines and releases. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. |
 | Rowly DB does not know whether the console has a transaction open, so it does not warn before closing a window or disconnecting with one | P2 | The published sqlx exposes no transaction status for statements run as text, and Rowly DB does not guess it from the SQL. Closing the console connection makes the server roll the transaction back, so nothing is committed by accident; only the warning is missing. |
 | PostgreSQL with `standard_conforming_strings = off` is not followed: the guard and the analyzer read strings with the engine's rule | P2 | Off is not the default since PostgreSQL 9.1. On the normal path, the driver's preparation barrier (§8) still rejects multiple statements. |
-| The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
-| Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
+| What MySQL 8.0 removed (`GROUP BY … DESC`, `PASSWORD()`, `ENCODE()`, `SQL_CACHE`) is not marked in the editor (A9) | P2 | `removedSyntax` (§5.4) is a token sequence, and none tells these apart from valid SQL: a `sql_cache` column, a user function named `encode`, a prefix index on a `password` column. It needs a structural analyzer mechanism, tested on every engine. The server reports it on execution. |
 | The incomplete / unresolved / generic classification lives in the frontend (key lists in `app/src/lib/editor/analysisSession.ts`), and `analysis` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
 | Introspected content is not checked directly against the server (D4) | P2 | Example found while writing this: MariaDB 11.8 accepts `DEFAULT` on procedure parameters, but its introspection always reports `has_default: false`. |
 | Other generated SQL (G7) is not run on a server: the result-editing `INSERT` and `DELETE`, exports, filters, and the `UPDATE` on PostgreSQL | P2 | |
@@ -316,7 +329,7 @@ tests/sql/
 
 Unit cases stay next to the code they test. Entries in a `.sql` file are separated by a line `-- ---`; each one is a single statement with a comment saying what it proves. A `-- since: <version>` line in an entry marks a change inside the line (§5.1): before that version, the line behaves like the previous one, and the line needs servers on both sides of it.
 
-`tools/test-dbs/lines.json` is the single source for test engines, lines and exact server releases. Each image is pinned by digest, and the harness checks the server-reported version against the one declared for that digest before running. Images come from the public mirror of the official images (`public.ecr.aws/docker/library`).
+`tools/test-dbs/lines.json` is the single source for test servers: probes per line and verified exact releases. Its lines are those of `support/<engine>.json`, in the same order (`crates/engine/tests/lines.rs`); they describe behavior there and are proven here. Each image is pinned by digest, and the harness checks the server-reported version against the one declared for that digest before running. Images come from the public mirror of the official images (`public.ecr.aws/docker/library`).
 
 An entry that uses something a later line adds says so with `-- needs: <capability>` (in a mixed-console fixture, the `needs` key). The capability is named by the comment of its entry in `tests/sql/<engine>/<line>/accepts.sql`, so the boundary is declared once and D7 proves it. On an earlier release the server must reject the entry; only then is it N/A, recorded in the evidence with its row, line and file. If the server accepts it, the capability is declared wrong and the test fails.
 
@@ -355,7 +368,7 @@ PostgreSQL 14 (14.24)  typing 49,706 prefixes ✓  CALL 11 ✓  fuzz 4,000 seed 
 
 ## 11. Version support packs
 
-When per-line distribution is implemented, knowledge of a line will travel as a **data pack, never code**: capabilities, reserved words, error help, syntax the parser cannot read or the line removed, support dates and test evidence. A new line can arrive without another app release only when its required mechanisms already exist in the app. Today the rules are still compiled into the app (§6.5 and §9).
+When per-line distribution is implemented, knowledge of a line will travel as a **data pack, never code**: capabilities, reserved words, error help, syntax the parser cannot read or the line removed, support dates and test evidence. A new line can arrive without another app release only when its required mechanisms already exist in the app. Today the line data (§5.4) is compiled into the app from `support/`; there is no download, index or signature.
 
 Rules:
 
@@ -381,7 +394,7 @@ These operations are distinct: **engine** = SQL and catalog rules; **driver** = 
 ### 12.2 New line of an existing engine
 
 1. Add a corpus case that passes on the new line and fails on the previous one, or vice versa. Without an observable Rowly DB difference, both releases share a line (§5.1).
-2. Declare range, reason and capabilities; add probes at its endpoints and both sides of each `since` in `tools/test-dbs/lines.json`. If a new parser, protocol, type or catalog query is required, first release the app that implements it (§11).
+2. Declare the line in `support/<engine>.json` (§5.4: capabilities, reserved words and removed syntax, each with its fixture) and add its probes at its endpoints and both sides of each `since` in `tools/test-dbs/lines.json`. If a new parser, protocol, type or catalog query is required, first release the app that implements it (§11).
 3. Run D7 and the entire applicable matrix on every exact release to be advertised as verified. Update §5.3 and the §10 report; vendor status is calculated separately.
 
 ### 12.3 New exact release within a line
