@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onePerFrame } from "$lib/onePerFrame";
-  import { quoteIdentifier as quoteSqlIdentifier } from "$lib/filterBuilder";
   import { get } from "svelte/store";
   import { focusZoneAction } from "$lib/focusZones";
   import { registerCommand, registerCommands } from "$lib/commands";
@@ -16,7 +15,7 @@
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
-  import { catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
+  import { activeEngine, catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
@@ -25,7 +24,6 @@
   import { STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
   import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
   import { parameterColumns, type ParameterColumn } from "$lib/sqlParameterTypes";
-  import { engineFor } from "$lib/engines";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
   import { appendLog, executionLog } from "$lib/stores/executionLog";
@@ -470,8 +468,8 @@
   const tableLoadAttempted = new Set<string>();
 
   function quoteIdentifier(name: string): string {
-    // Sin perfil no hay conexion ni pestaña de tabla que armar.
-    return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
+    // Sin conexion no hay pestaña de tabla que armar.
+    return $activeEngine ? $activeEngine.identifier(name) : name;
   }
 
   // Una sola consulta a la vez por pestaña (oneQueryAtATime); la vuelta
@@ -597,7 +595,7 @@
   const executions = createExecutionFlow({
     profileId: () => profileId,
     schema: () => logSchema,
-    lexical: () => (activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL),
+    lexical: () => $activeEngine?.lexical ?? STANDARD_LEXICAL,
     text: (key, params) => $t(key, params),
     number: (value) => $numberFormat.format(value),
     defaultPageSize: () => $defaultPageSize,
@@ -955,13 +953,13 @@
         filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
       />
       {#snippet tableFiltersBar()}
-        {#if activeConsole?.table && activeProfile}
+        {#if activeConsole?.table && $activeEngine}
           {@const consoleId = activeConsole.id}
           {@const table = activeConsole.table}
           <TableFilters
             filters={table}
             columns={tableFilterColumns}
-            driver={activeProfile.driver}
+            engine={$activeEngine}
             error={tableFilterError[consoleId] ?? null}
             busy={liveExecution.isExecuting}
             onapply={(filters) => applyTableFilters(consoleId, filters)}

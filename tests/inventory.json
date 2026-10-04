@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 128,
-    "tests": 1395,
+    "files": 129,
+    "tests": 1403,
     "ignored": 26,
     "byDecision": {
-      "keep": 72,
+      "keep": 74,
       "move": 52,
-      "rewrite": 4,
+      "rewrite": 3,
       "remove": 0
     },
     "byGate": {
-      "pr": 124,
+      "pr": 125,
       "engine-pr": 4,
       "manual": 0,
       "release": 0
@@ -165,6 +165,25 @@
       "environment": "none",
       "env": [],
       "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/engine_context.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/engine_context.rs",
+      "property": "Contexto de motor por conexion: linea efectiva, verificacion exacta, soporte del fabricante (SQL_ENGINE §5.2), forma serializada y lo que vale por generacion y schemaEpoch",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D9"
+      ],
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "app/src-tauri/src/export.rs",
@@ -500,9 +519,13 @@
       "environment": "node",
       "dependencies": [
         "analysisSession",
-        "engines"
+        "engines",
+        "sqlDiagnostics",
+        "sqlStatementIndex"
       ],
       "external": [
+        "@codemirror/state",
+        "@codemirror/view",
         "vitest"
       ],
       "durationMs": null
@@ -678,31 +701,6 @@
       "durationMs": 89
     },
     {
-      "path": "app/src/lib/engines/vendorSupport.test.ts",
-      "domain": "engines",
-      "owner": "app/src/lib/engines/vendorSupport.ts",
-      "property": "El estado del fabricante se calcula por version y no cambia capacidades",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "rewrite",
-      "target": "app/src/lib/engines/vendorSupport.test.ts",
-      "reason": "Hoy deduce el motor de la etiqueta visible (\"MariaDB 11.8.9\"); M3 lo lee del contexto de conexion",
-      "sqlEngineRows": [
-        "D9"
-      ],
-      "kind": "ts",
-      "tests": 3,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "vendorSupport"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": 6
-    },
-    {
       "path": "app/src/lib/explorerTree.test.ts",
       "domain": "connections",
       "owner": "app/src/lib/explorerTree.ts",
@@ -742,7 +740,10 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
-        "filterBuilder"
+        "connections",
+        "engines",
+        "filterBuilder",
+        "types"
       ],
       "external": [
         "vitest"
@@ -1903,6 +1904,7 @@
       "environment": "node",
       "dependencies": [
         "connection",
+        "engines",
         "types"
       ],
       "external": [
@@ -2344,6 +2346,7 @@
       "ignored": 0,
       "environment": "node",
       "dependencies": [
+        "engines",
         "filterBuilder",
         "tableQueries",
         "types"
@@ -2351,6 +2354,23 @@
       "external": [
         "vitest"
       ],
+      "durationMs": null
+    },
+    {
+      "path": "app/tests/e2e/resources.mjs",
+      "domain": "connections",
+      "owner": "app/tests/e2e/resources.mjs",
+      "property": "Ciclos de recursos en la app real: reconectar alternando motores no mezcla servidores ni catalogos, ni hace crecer el heap JS vivo, el backend o el DOM",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D9"
+      ],
+      "kind": "e2e",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "app+inspector+mysql+postgres",
       "durationMs": null
     },
     {
@@ -2529,7 +2549,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/mysql",
-      "tests": 6,
+      "tests": 7,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2587,7 +2607,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/postgres",
-      "tests": 4,
+      "tests": 5,
       "ignored": 0,
       "environment": "none",
       "env": [],

@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { ENGINES } from "$lib/engines";
 import { quoteIdentifier } from "$lib/filterBuilder";
 import type { CatalogTable, QueryExecutionResult } from "$lib/types";
 import { filterColumns, oneQueryAtATime, tableSql } from "./tableQueries";
 
 describe("tableSql", () => {
   it("quotes schema and table with the engine's rules and adds the WHERE", () => {
-    const quote = (name: string) => quoteIdentifier(name, "postgres");
+    const quote = (name: string) => quoteIdentifier(name, ENGINES.postgres);
     expect(tableSql({ schema: "public", name: "Order", where: "  id > 1 " }, quote)).toBe(
       'SELECT * FROM public."Order" WHERE id > 1',
     );
   });
 
   it("omits an empty WHERE", () => {
-    const quote = (name: string) => quoteIdentifier(name, "mysql");
+    const quote = (name: string) => quoteIdentifier(name, ENGINES.mysql);
     expect(tableSql({ schema: "core", name: "fecha alta", where: " " }, quote)).toBe("SELECT * FROM core.`fecha alta`");
   });
 });

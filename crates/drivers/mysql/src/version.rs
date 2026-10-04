@@ -21,7 +21,7 @@ pub struct ServerVersion {
 
 /// Compatibility floor: the oldest versions whose catalog introspection is
 /// written against. It is not a support threshold: vendor support comes from
-/// the support window (SQL_ENGINE.md §5.2, `vendorSupport.json`) and
+/// the support window (SQL_ENGINE.md §5.2, `tools/support/vendor-support.json`) and
 /// verification from `verified` in `tools/test-dbs/lines.json`. Older servers
 /// still connect, with their line, and load what their catalog has, with a
 /// warning.
@@ -69,6 +69,17 @@ impl ServerVersion {
             Flavor::MariaDb => "MariaDB",
         };
         format!("{product} {}.{}.{}", self.major, self.minor, self.patch)
+    }
+
+    pub fn identity(&self) -> khipu_driver_core::ServerIdentity {
+        khipu_driver_core::ServerIdentity {
+            engine: match self.flavor {
+                Flavor::MySql => "mysql",
+                Flavor::MariaDb => "mariadb",
+            },
+            version: vec![self.major, self.minor, self.patch],
+            label: self.display(),
+        }
     }
 
     pub fn is_below_compatibility_floor(&self) -> bool {
@@ -170,6 +181,17 @@ mod tests {
             ServerVersion::parse("11.4.2-MariaDB-ubu2404"),
             version(Flavor::MariaDb, 11, 4, 2)
         );
+    }
+
+    #[test]
+    fn the_identity_is_the_real_engine_with_its_numbers() {
+        let mariadb = ServerVersion::parse("5.5.5-10.11.6-MariaDB").identity();
+        assert_eq!(mariadb.engine, "mariadb");
+        assert_eq!(mariadb.version, vec![10, 11, 6]);
+        assert_eq!(mariadb.label, "MariaDB 10.11.6");
+        let mysql = ServerVersion::parse("8.0.35-0ubuntu0.22.04.1").identity();
+        assert_eq!(mysql.engine, "mysql");
+        assert_eq!(mysql.version, vec![8, 0, 35]);
     }
 
     #[test]

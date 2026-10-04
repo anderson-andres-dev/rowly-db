@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera app/src/lib/engines/vendorSupport.json para SQL_ENGINE.md §5.2.
+"""Genera tools/support/vendor-support.json para SQL_ENGINE.md §5.2.
 
 endoflife.date aporta el listado; los avisos oficiales del fabricante tienen
 prioridad cuando discrepan. Se corre al preparar cada release.
@@ -9,7 +9,7 @@ import pathlib
 import urllib.request
 
 PRODUCTS = {"mysql": "mysql", "mariadb": "mariadb", "postgres": "postgresql"}
-OUT = pathlib.Path(__file__).resolve().parents[2] / "app/src/lib/engines/vendorSupport.json"
+OUT = pathlib.Path(__file__).resolve().parents[2] / "tools/support/vendor-support.json"
 
 # MySQL 8.0 paso a Sustaining Support el 2026-04-21: desde entonces no hay
 # parches nuevos. https://www.mysql.com/support/eol-notice.html

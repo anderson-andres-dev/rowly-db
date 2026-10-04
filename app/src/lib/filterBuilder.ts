@@ -1,5 +1,4 @@
-import type { ConnectionDriver } from "$lib/connections";
-import { engineFor } from "$lib/engines";
+import type { SqlProfile } from "$lib/engines";
 // Constructor visual de filtros de una pestaña de tabla: condiciones
 // (columna · operador · valor) unidas con Y / O, convertidas a la clausula
 // WHERE que se ejecuta. Los operadores se muestran tal cual en SQL, asi se
@@ -67,8 +66,8 @@ export function newCondition(column = "", join: FilterJoin = "and"): FilterCondi
 
 // El nombre como lo lee el motor: tal cual si es simple, con comillas si es
 // reservado, tiene caracteres raros o (en Postgres) mayusculas.
-export function quoteIdentifier(name: string, driver: ConnectionDriver): string {
-  return engineFor(driver).identifier(name);
+export function quoteIdentifier(name: string, engine: SqlProfile): string {
+  return engine.identifier(name);
 }
 
 const NUMERIC_TYPE = /int|serial|decimal|numeric|float|double|real|money|number|bit/i;
@@ -77,11 +76,11 @@ const BOOLEAN_TYPE = /bool/i;
 // Literal SQL para un valor escrito por el usuario: numeros y booleanos
 // tal cual si el tipo de la columna lo es y el texto encaja; todo lo demas,
 // como texto del motor (comillas duplicadas y, en MySQL, la barra invertida).
-export function sqlLiteral(raw: string, dataType: string, driver: ConnectionDriver): string {
+export function sqlLiteral(raw: string, dataType: string, engine: SqlProfile): string {
   const value = raw.trim();
   if (NUMERIC_TYPE.test(dataType) && /^-?\d+(\.\d+)?$/.test(value)) return value;
   if (BOOLEAN_TYPE.test(dataType) && /^(true|false)$/i.test(value)) return value.toUpperCase();
-  return engineFor(driver).quoteString(value);
+  return engine.quoteString(value);
 }
 
 function listValues(raw: string): string[] {
@@ -95,25 +94,25 @@ function listValues(raw: string): string[] {
 // valor que su operador pide): una condicion a medias no filtra.
 export function conditionSql(
   condition: FilterCondition,
-  driver: ConnectionDriver,
+  engine: SqlProfile,
   typeOf: (column: string) => string = () => "",
 ): string | null {
   if (!condition.column) return null;
-  const column = quoteIdentifier(condition.column, driver);
+  const column = quoteIdentifier(condition.column, engine);
   const type = typeOf(condition.column);
   switch (operatorArity(condition.operator)) {
     case "none":
       return `${column} ${condition.operator}`;
     case "one":
       if (condition.value.trim() === "") return null;
-      return `${column} ${condition.operator} ${sqlLiteral(condition.value, type, driver)}`;
+      return `${column} ${condition.operator} ${sqlLiteral(condition.value, type, engine)}`;
     case "two":
       if (condition.value.trim() === "" || condition.value2.trim() === "") return null;
-      return `${column} BETWEEN ${sqlLiteral(condition.value, type, driver)} AND ${sqlLiteral(condition.value2, type, driver)}`;
+      return `${column} BETWEEN ${sqlLiteral(condition.value, type, engine)} AND ${sqlLiteral(condition.value2, type, engine)}`;
     case "list": {
       const values = listValues(condition.value);
       if (values.length === 0) return null;
-      return `${column} ${condition.operator} (${values.map((value) => sqlLiteral(value, type, driver)).join(", ")})`;
+      return `${column} ${condition.operator} (${values.map((value) => sqlLiteral(value, type, engine)).join(", ")})`;
     }
   }
 }
@@ -123,11 +122,11 @@ export function conditionSql(
 // ((a Y b) O c) en vez de dejarlo a la precedencia de SQL.
 export function buildWhere(
   conditions: FilterCondition[],
-  driver: ConnectionDriver,
+  engine: SqlProfile,
   typeOf?: (column: string) => string,
 ): string {
   const parts = conditions
-    .map((condition) => ({ join: condition.join, sql: conditionSql(condition, driver, typeOf) }))
+    .map((condition) => ({ join: condition.join, sql: conditionSql(condition, engine, typeOf) }))
     .filter((part): part is { join: FilterJoin; sql: string } => part.sql !== null);
   if (parts.length === 0) return "";
   const mixed = new Set(parts.slice(1).map((part) => part.join)).size > 1;

@@ -1,6 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import { standardSql, ENGINES } from "$lib/engines";
-import { analysisCacheFor, analysisDiagnostics, type AnalysisDiagnostic } from "./analysisSession";
+import { diagnosticsField, diagnosticsIn } from "$lib/sqlDiagnostics";
+import { statementIndexField } from "$lib/sqlStatementIndex";
+import {
+  analysisCacheFor,
+  analysisDiagnostics,
+  createAnalysisSession,
+  type AnalysisContext,
+  type AnalysisDiagnostic,
+} from "./analysisSession";
 
 const text = (key: string, params?: Record<string, unknown>) => (params ? `${key} ${JSON.stringify(params)}` : key);
 const at = (line: number, column: number) => ({ line, column });
@@ -61,14 +71,97 @@ describe("analysisDiagnostics", () => {
 });
 
 describe("analysisCacheFor", () => {
-  it("is shared by every editor with the same connection, catalog, engine and created tables", () => {
-    const tables = {};
-    const first = analysisCacheFor("p1", tables, ENGINES.mysql, "");
-    expect(analysisCacheFor("p1", tables, ENGINES.mysql, "")).toBe(first);
+  it("is shared by every editor with the same connection context, engine and created tables", () => {
+    const context = { generation: 1, schemaEpoch: 0 };
+    const first = analysisCacheFor(context, ENGINES.mysql, "");
+    // Otro objeto con el mismo contexto: la misma cache.
+    expect(analysisCacheFor({ generation: 1, schemaEpoch: 0 }, ENGINES.mysql, "")).toBe(first);
     // Cualquier cambio de contexto empieza de cero.
-    expect(analysisCacheFor("p2", tables, ENGINES.mysql, "")).not.toBe(first);
-    expect(analysisCacheFor("p1", {}, ENGINES.mysql, "")).not.toBe(first);
-    expect(analysisCacheFor("p1", tables, ENGINES.postgres, "")).not.toBe(first);
-    expect(analysisCacheFor("p1", tables, standardSql, "t")).not.toBe(first);
+    expect(analysisCacheFor({ generation: 2, schemaEpoch: 0 }, ENGINES.mysql, "")).not.toBe(first);
+    expect(analysisCacheFor({ generation: 1, schemaEpoch: 1 }, ENGINES.mysql, "")).not.toBe(first);
+    expect(analysisCacheFor(context, ENGINES.postgres, "")).not.toBe(first);
+    expect(analysisCacheFor(context, standardSql, "t")).not.toBe(first);
+    expect(analysisCacheFor(null, ENGINES.mysql, "")).not.toBe(first);
+  });
+
+  it("only one is kept: reconnecting lets the previous one go", () => {
+    const caches = Array.from({ length: 300 }, (_, generation) => {
+      const cache = analysisCacheFor<string>({ generation, schemaEpoch: 0 }, ENGINES.mysql, "");
+      cache.set("SELECT 1", "ok");
+      return cache;
+    });
+    // La vigente es la ultima; las anteriores no se vuelven a dar.
+    expect(analysisCacheFor({ generation: 299, schemaEpoch: 0 }, ENGINES.mysql, "")).toBe(caches[299]);
+    expect(analysisCacheFor({ generation: 0, schemaEpoch: 0 }, ENGINES.mysql, "")).not.toBe(caches[0]);
+  });
+});
+
+// Lo justo de EditorView que usa el analisis.
+function fakeView(doc: string) {
+  let state = EditorState.create({ doc, extensions: [statementIndexField, diagnosticsField] });
+  return {
+    get state() {
+      return state;
+    },
+    viewport: { from: 0, to: 2000 },
+    dispatch(spec: TransactionSpec) {
+      state = state.update(spec).state;
+    },
+  } as unknown as EditorView;
+}
+
+describe("createAnalysisSession", () => {
+  // R5 (docs/specs/mapa-c0.md): lo que se pidio con una conexion no se aplica
+  // despues de reconectar, aunque la respuesta llegue tarde.
+  it("an answer asked for with the previous connection is not applied after reconnecting", async () => {
+    vi.useFakeTimers();
+    const view = fakeView("SELECT * FROM gone;");
+    const pending: ((found: AnalysisDiagnostic[][]) => void)[] = [];
+    const analyze = vi.fn(
+      (_statements: string[], _created: string[], _context: AnalysisContext | null) =>
+        new Promise<AnalysisDiagnostic[][]>((resolve) => pending.push(resolve)),
+    );
+    const session = createAnalysisSession({ view: () => view, text, analyze });
+    try {
+      session.setContext({ generation: 1, schemaEpoch: 0 }, ENGINES.mysql);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(analyze).toHaveBeenCalledTimes(1);
+      expect(analyze.mock.calls[0][2]).toEqual({ generation: 1, schemaEpoch: 0 });
+
+      // Se reconecta (a otra base) antes de que llegue la respuesta.
+      session.setContext({ generation: 2, schemaEpoch: 0 }, ENGINES.mysql);
+      pending[0]([[found("diagnostic.unknownTable", [1, 15], [1, 19])]]);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(analyze).toHaveBeenCalledTimes(2);
+      expect(analyze.mock.calls[1][2]).toEqual({ generation: 2, schemaEpoch: 0 });
+
+      pending[1]([[]]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(diagnosticsIn(view.state, 0, view.state.doc.length)).toEqual([]);
+    } finally {
+      session.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it("the same context again does not ask the backend again", async () => {
+    vi.useFakeTimers();
+    const view = fakeView("SELECT 1;");
+    const analyze = vi.fn(async (statements: string[]) => statements.map(() => []));
+    const session = createAnalysisSession({ view: () => view, text, analyze });
+    try {
+      session.setContext({ generation: 5, schemaEpoch: 2 }, ENGINES.postgres);
+      await vi.advanceTimersByTimeAsync(500);
+      session.setContext({ generation: 5, schemaEpoch: 2 }, ENGINES.postgres);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(analyze).toHaveBeenCalledTimes(1);
+      // Otros schemas cargados (un refresco tras un DDL): se revisa de nuevo.
+      session.setContext({ generation: 5, schemaEpoch: 3 }, ENGINES.postgres);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(analyze).toHaveBeenCalledTimes(2);
+    } finally {
+      session.destroy();
+      vi.useRealTimers();
+    }
   });
 });

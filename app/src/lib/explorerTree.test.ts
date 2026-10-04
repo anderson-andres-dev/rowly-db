@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildExplorerTree, expandableKeys, type ExplorerNode } from "$lib/explorerTree";
-import type { DatabaseExplorer, ExplorerTable, SchemaObjects } from "$lib/types";
+import type { ConnectionEngineContext, DatabaseExplorer, ExplorerTable, SchemaObjects } from "$lib/types";
 
 function table(name: string, overrides: Partial<ExplorerTable> = {}): ExplorerTable {
   return {
@@ -21,9 +21,20 @@ function schema(name: string, overrides: Partial<SchemaObjects> = {}): SchemaObj
   return { schema: name, tables: [], routines: [], sequences: [], events: [], warnings: [], ...overrides };
 }
 
+const CONTEXT: ConnectionEngineContext = {
+  generation: 1,
+  engineId: "mysql",
+  server: { engine: "mysql", version: [8, 4, 0], label: "MySQL 8.4.0" },
+  sessionMode: { noBackslashEscapes: false },
+  line: "8.4",
+  schemaEpoch: 0,
+  support: null,
+  verification: "unverified",
+};
+
 function explorer(...schemas: SchemaObjects[]): DatabaseExplorer {
   return {
-    serverVersion: "MySQL 8.4.0",
+    context: CONTEXT,
     tls: { encrypted: true, detail: "TLSv1.3", fellBack: false },
     defaultSchema: schemas[0]?.schema ?? "core",
     availableSchemas: schemas.map((objects) => objects.schema),

@@ -1,5 +1,5 @@
 import { derived, get, writable } from "svelte/store";
-import { engineFor } from "$lib/engines";
+import { engineForContext } from "$lib/engines";
 import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
 import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
@@ -40,9 +40,6 @@ export const activeProfile = derived(
     ($connection.connected && $profiles.find((profile) => profile.id === $connection.profileId)) || null,
 );
 
-// El perfil del motor de la conexion activa (lib/engines); null sin
-// conexion.
-export const activeEngine = derived(activeProfile, ($profile) => ($profile ? engineFor($profile.driver) : null));
 
 // La conexion activa es de produccion: el backend ya pide confirmar cada
 // escritura; la interfaz lo hace visible y confirma tambien los cambios del
@@ -58,6 +55,13 @@ export const catalogTables = writable<CatalogTable[]>([]);
 // Todo lo que muestra el arbol del sidebar (SchemaTree.svelte): schemas
 // visibles con sus tablas, vistas, rutinas, etc. null = sin conexion.
 export const databaseExplorer = writable<DatabaseExplorer | null>(null);
+// El perfil del motor de la conexion activa, con su modo de sesion
+// (lib/engines, engineForContext): lo que dice el backend al conectar. null
+// sin conexion.
+export const activeEngine = derived([connection, databaseExplorer], ([$connection, $explorer]) =>
+  $connection.connected && $explorer ? engineForContext($explorer.context) : null,
+);
+
 // true mientras set_visible_schemas introspecta schemas recien elegidos.
 export const explorerLoading = writable(false);
 let connectionGeneration = 0;
