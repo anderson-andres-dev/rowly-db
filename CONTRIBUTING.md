@@ -46,30 +46,16 @@ The **E2E** workflow builds the app and drives it on Linux/WebKitGTK through `ta
 
 ## Tests against a real database
 
-`cargo test --workspace` needs no database. Tests that do are marked `#[ignore]` and run on demand:
+`cargo test --workspace` needs no database. Tests that do are marked `#[ignore]` and run against the servers of `tools/test-dbs` (MySQL, MariaDB and PostgreSQL with the Sakila / Pagila sample databases), one container per exact release, pinned by digest in `tools/test-dbs/lines.json`:
 
 ```bash
-cargo test -p khipu-driver-mysql -- --ignored
-cargo test -p khipu-driver-postgres -- --ignored
+tools/test-dbs/up.sh                       # or one verified release: tools/test-dbs/up.sh postgres=13.23
+cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 
-They read the connection from these variables, where `<ENGINE>` is `MYSQL` or `POSTGRES`:
+`real_server` tests the guard, the statement splitter, the analyzer and the SQL the app writes; `contract` tests the drivers through the API the app uses: results, truncation, errors, session, introspection and TLS (what each image offers is the `tls` of its release in `lines.json`). Before running, the harness checks that the server is the release `lines.json` declares. What a release lacks counts as N/A only if the server rejects it. See `tools/test-dbs/README.md`.
 
-| Variable | Value |
-| :--- | :--- |
-| `KHIPU_TEST_<ENGINE>_HOST` | Server host |
-| `KHIPU_TEST_<ENGINE>_PORT` | Server port |
-| `KHIPU_TEST_<ENGINE>_USER` | User |
-| `KHIPU_TEST_<ENGINE>_PASSWORD` | Password |
-| `KHIPU_TEST_<ENGINE>_DATABASE` | Database |
-| `KHIPU_TEST_<ENGINE>_EXPECT_TLS` | Optional. `encrypted`, `fallback` or `none` |
-| `KHIPU_TEST_<ENGINE>_CA_CERT` | Optional. CA that signed the server certificate |
-
-If one is missing, the test stops and tells you which. `EXPECT_TLS` is what the server should negotiate in automatic mode: `fallback` covers servers with TLS that rustls cannot negotiate, like MySQL 5.7. With `CA_CERT` set, the CA verification modes are tested too, and the certificate must include the test host.
-
-The guard, the statement splitter and the drivers are also tested together against real servers (MySQL, MariaDB and PostgreSQL with the Sakila / Pagila sample databases). `tools/test-dbs/up.sh` starts them in Docker and `cargo test -p rowly-server-tests -- --ignored --test-threads=1` runs the tests; see `tools/test-dbs/README.md`.
-
-`tools/test-dbs/lines.json` and `tools/test-dbs/lines.sh` check version-line boundaries. The full command and its current limits are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Today the real-server suite does not run completely for every exact release or in CI; report tested releases in the PR and do not advertise a release as verified without its entire applicable matrix.
+`tools/test-dbs/lines.sh` checks version-line boundaries. CI runs all of this on every engine PR, for every verified exact release (`.github/workflows/sql-engine.yml`); the commands and rules are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Do not advertise a release as verified without its complete evidence.
 
 When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `app/src/lib/engines/vendorSupport.json` and update the table in [SQL_ENGINE.md, §5](SQL_ENGINE.md#5-version-lines) from the same evidence.
 

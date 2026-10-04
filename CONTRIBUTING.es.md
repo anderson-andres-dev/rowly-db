@@ -46,30 +46,16 @@ El workflow **E2E** compila la app y la maneja en Linux/WebKitGTK con `tauri-dri
 
 ## Pruebas contra una base real
 
-`cargo test --workspace` no necesita ninguna base de datos. Las pruebas que sí la necesitan están marcadas con `#[ignore]` y se ejecutan aparte:
+`cargo test --workspace` no necesita ninguna base de datos. Las pruebas que sí la necesitan están marcadas con `#[ignore]` y corren contra los servidores de `tools/test-dbs` (MySQL, MariaDB y PostgreSQL con las bases de ejemplo Sakila / Pagila), un contenedor por versión exacta, fijado por digest en `tools/test-dbs/lines.json`:
 
 ```bash
-cargo test -p khipu-driver-mysql -- --ignored
-cargo test -p khipu-driver-postgres -- --ignored
+tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=13.23
+cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 
-Leen la conexión de estas variables, donde `<MOTOR>` es `MYSQL` o `POSTGRES`:
+`real_server` prueba el guard, el divisor de sentencias, el analizador y el SQL que escribe la app; `contract` prueba los drivers por la API que usa la app: resultados, truncado, errores, sesión, introspección y TLS (lo que ofrece cada imagen es el `tls` de su versión en `lines.json`). Antes de ejecutar, el harness comprueba que el servidor es la versión que declara `lines.json`. Lo que una versión no tiene cuenta como N/A solo si el servidor lo rechaza. Ver `tools/test-dbs/README.es.md`.
 
-| Variable | Valor |
-| :--- | :--- |
-| `KHIPU_TEST_<MOTOR>_HOST` | Host del servidor |
-| `KHIPU_TEST_<MOTOR>_PORT` | Puerto |
-| `KHIPU_TEST_<MOTOR>_USER` | Usuario |
-| `KHIPU_TEST_<MOTOR>_PASSWORD` | Contraseña |
-| `KHIPU_TEST_<MOTOR>_DATABASE` | Base de datos |
-| `KHIPU_TEST_<MOTOR>_EXPECT_TLS` | Opcional. `encrypted`, `fallback` o `none` |
-| `KHIPU_TEST_<MOTOR>_CA_CERT` | Opcional. CA que firmó el certificado del servidor |
-
-Si falta alguna, la prueba se detiene y te dice cuál. `EXPECT_TLS` es lo que el servidor debería negociar en modo automático: `fallback` es para servidores con un TLS que rustls no puede negociar, como MySQL 5.7. Con `CA_CERT` también se prueban los modos que verifican la CA, y el certificado tiene que incluir el host de la prueba.
-
-El guard, el divisor de sentencias y los drivers también se prueban juntos contra servidores reales (MySQL, MariaDB y PostgreSQL con las bases de ejemplo Sakila / Pagila). `tools/test-dbs/up.sh` las levanta en Docker y `cargo test -p rowly-server-tests -- --ignored --test-threads=1` corre las pruebas; ver `tools/test-dbs/README.es.md`.
-
-`tools/test-dbs/lines.json` y `tools/test-dbs/lines.sh` comprueban los límites de las líneas de versión. El comando completo y sus límites actuales están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). Hoy la suite real no corre completa por cada versión exacta ni en CI; informa las versiones probadas en el PR y no anuncia una versión como verificada sin toda la matriz aplicable.
+`tools/test-dbs/lines.sh` comprueba los límites de las líneas de versión. El CI corre todo esto en cada PR de motor, en cada versión exacta verificada (`.github/workflows/sql-engine.yml`); los comandos y las reglas están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). No anuncies una versión como verificada sin su evidencia completa.
 
 Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `app/src/lib/engines/vendorSupport.json` y actualiza la tabla de [SQL_ENGINE.es.md, §5](SQL_ENGINE.es.md#5-líneas-de-versión) con la misma evidencia.
 

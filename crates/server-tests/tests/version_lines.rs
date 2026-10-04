@@ -17,7 +17,19 @@ fn repo() -> PathBuf {
 
 struct Probe {
     image: String,
+    version: String,
     port: u16,
+}
+
+/// Lo que cada probe devuelve tiene que ser la version exacta que declara
+/// lines.json: una etiqueta movida o una imagen equivocada no prueba la linea.
+fn check_version(engine_name: &str, probe: &Probe, conn: &Conn) {
+    let actual = exact_version(&conn.server_version()).to_string();
+    assert_eq!(
+        actual, probe.version,
+        "{engine_name}: {} en 127.0.0.1:{} informa {actual}, lines.json declara {}",
+        probe.image, probe.port, probe.version
+    );
 }
 
 struct Line {
@@ -54,6 +66,7 @@ fn registry() -> Vec<(String, Vec<Line>)> {
                         .iter()
                         .map(|probe| Probe {
                             image: probe["image"].as_str().unwrap().to_string(),
+                            version: probe["version"].as_str().unwrap().to_string(),
                             port: probe["port"].as_u64().unwrap() as u16,
                         })
                         .collect(),
@@ -85,7 +98,7 @@ fn label(entry: &str) -> String {
 /// `-- since: 11.8`: lo que cambia dentro de la linea, desde esa version
 /// (SQL_ENGINE.md §5.1). Antes de ella, la linea se comporta como la anterior.
 fn since(line: &str) -> Option<Vec<u32>> {
-    line.strip_prefix("-- since:").map(numbers)
+    line.strip_prefix("-- since:").map(version_numbers)
 }
 
 fn entry_since(entry: &str) -> Option<Vec<u32>> {
@@ -93,16 +106,6 @@ fn entry_since(entry: &str) -> Option<Vec<u32>> {
         .lines()
         .take_while(|line| line.starts_with("--"))
         .find_map(since)
-}
-
-/// Los numeros de la primera version que aparece: "MariaDB 11.7.2" -> [11, 7, 2].
-fn numbers(text: &str) -> Vec<u32> {
-    text.split(|c: char| !c.is_ascii_digit() && c != '.')
-        .find(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
-        .unwrap_or("")
-        .split('.')
-        .filter_map(|part| part.parse().ok())
-        .collect()
 }
 
 struct Server {
@@ -147,6 +150,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             line.name, probe.image, probe.port
                         )
                     });
+                check_version(&engine_name, probe, &conn);
                 for statement in &setup {
                     let _ = conn.raw(statement).await;
                 }
@@ -201,7 +205,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                     if let Some(from) = &from {
                         let below = servers[index]
                             .iter()
-                            .filter(|s| numbers(&s.version) < *from)
+                            .filter(|s| version_numbers(&s.version) < *from)
                             .count();
                         if below == 0 || below == servers[index].len() {
                             failures.push(format!(
@@ -216,7 +220,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             let changed = in_line
                                 && from
                                     .as_ref()
-                                    .is_none_or(|from| numbers(&server.version) >= *from);
+                                    .is_none_or(|from| version_numbers(&server.version) >= *from);
                             let should_pass = changed == new_in_line;
                             let outcome = server.accepts(sql).await;
                             if outcome.is_ok() != should_pass {
@@ -294,6 +298,7 @@ async fn every_column_type_a_line_returns_is_read() {
                 let conn = Conn::open_line(engine, probe.port).await.unwrap_or_else(|error| {
                     panic!("{engine_name} {} ({}): {error}\nlevantalo con tools/test-dbs/lines.sh up {engine_name}", line.name, probe.image)
                 });
+                check_version(&engine_name, probe, &conn);
                 let version = conn.server_version();
                 // Cada test prepara lo suyo (SQL_ENGINE.md §10.2).
                 for statement in &fixture(
@@ -305,7 +310,7 @@ async fn every_column_type_a_line_returns_is_read() {
                     let _ = conn.raw(statement).await;
                 }
                 for sql in &reads {
-                    if entry_since(sql).is_some_and(|from| numbers(&version) < from) {
+                    if entry_since(sql).is_some_and(|from| version_numbers(&version) < from) {
                         continue;
                     }
                     checked += 1;

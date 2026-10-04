@@ -2,19 +2,19 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 123,
-    "tests": 1396,
-    "ignored": 42,
+    "files": 124,
+    "tests": 1384,
+    "ignored": 26,
     "byDecision": {
-      "keep": 64,
+      "keep": 67,
       "move": 53,
-      "rewrite": 6,
+      "rewrite": 4,
       "remove": 0
     },
     "byGate": {
-      "pr": 118,
-      "engine-pr": 1,
-      "manual": 4,
+      "pr": 120,
+      "engine-pr": 4,
+      "manual": 0,
       "release": 0
     },
     "sqlEngineRowsWithoutTest": [
@@ -2417,30 +2417,16 @@
       "path": "crates/drivers/mysql/src/lib.rs",
       "domain": "drivers",
       "owner": "crates/drivers/mysql/src/lib.rs",
-      "property": "Conector MySQL/MariaDB: ejecucion, tipos, introspeccion contra servidor (KHIPU_TEST_MYSQL_*)",
-      "risk": "P1",
-      "gate": "manual",
-      "decision": "rewrite",
-      "target": "crates/server-tests/tests/contract.rs",
-      "reason": "Segunda via a un servidor real (SQL_ENGINE §9 P3): pasa al harness de tools/test-dbs por version exacta (M1)",
-      "sqlEngineRows": [
-        "D1",
-        "D3"
-      ],
+      "property": "Lectura de VECTOR de MySQL 9 como texto",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
       "kind": "rust",
       "crate": "crates/drivers/mysql",
-      "tests": 14,
-      "ignored": 13,
-      "environment": "real-server",
-      "env": [
-        "KHIPU_TEST_MYSQL_CA_CERT",
-        "KHIPU_TEST_MYSQL_DATABASE",
-        "KHIPU_TEST_MYSQL_EXPECT_TLS",
-        "KHIPU_TEST_MYSQL_HOST",
-        "KHIPU_TEST_MYSQL_PASSWORD",
-        "KHIPU_TEST_MYSQL_PORT",
-        "KHIPU_TEST_MYSQL_USER"
-      ],
+      "tests": 1,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
       "durationMs": 0
     },
     {
@@ -2499,38 +2485,6 @@
       "ignored": 0,
       "environment": "none",
       "env": [],
-      "durationMs": 0
-    },
-    {
-      "path": "crates/drivers/postgres/src/lib.rs",
-      "domain": "drivers",
-      "owner": "crates/drivers/postgres/src/lib.rs",
-      "property": "Conector PostgreSQL contra servidor (KHIPU_TEST_POSTGRES_*)",
-      "risk": "P1",
-      "gate": "manual",
-      "decision": "rewrite",
-      "target": "crates/server-tests/tests/contract.rs",
-      "reason": "Segunda via a un servidor real (SQL_ENGINE §9 P3): pasa al harness por version exacta (M1)",
-      "sqlEngineRows": [
-        "D1",
-        "D3",
-        "D5"
-      ],
-      "kind": "rust",
-      "crate": "crates/drivers/postgres",
-      "tests": 14,
-      "ignored": 14,
-      "environment": "real-server",
-      "env": [
-        "KHIPU_TEST_POSTGRES_CA_CERT",
-        "KHIPU_TEST_POSTGRES_DATABASE",
-        "KHIPU_TEST_POSTGRES_EXPECT_TLS",
-        "KHIPU_TEST_POSTGRES_HOST",
-        "KHIPU_TEST_POSTGRES_PASSWORD",
-        "KHIPU_TEST_POSTGRES_PORT",
-        "KHIPU_TEST_POSTGRES_TIME_ZONE",
-        "KHIPU_TEST_POSTGRES_USER"
-      ],
       "durationMs": 0
     },
     {
@@ -2755,15 +2709,55 @@
       "durationMs": 40
     },
     {
+      "path": "crates/server-tests/src/lib.rs",
+      "domain": "sql-engine",
+      "owner": "crates/server-tests",
+      "property": "Harness: capacidad por linea desde tests/sql (N/A verificable), version exacta y filtro de motores",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "none",
+      "env": [
+        "ROWLY_ENGINES",
+        "ROWLY_EVIDENCE"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "crates/server-tests/tests/contract.rs",
+      "domain": "drivers",
+      "owner": "crates/server-tests",
+      "property": "Contrato de los drivers por la API publica: resultados, truncado, DDL, errores, sesion, introspeccion y TLS en cada version verificada",
+      "risk": "P1",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "D1",
+        "D3",
+        "D5"
+      ],
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 11,
+      "ignored": 11,
+      "environment": "real-server",
+      "env": [],
+      "durationMs": null
+    },
+    {
       "path": "crates/server-tests/tests/real_server.rs",
       "domain": "sql-engine",
       "owner": "crates/server-tests",
       "property": "Guard, divisor, analizador, CALL generado y escritura contra servidores reales",
       "risk": "P0",
-      "gate": "manual",
+      "gate": "engine-pr",
       "decision": "rewrite",
       "target": "crates/server-tests/tests/{safety,generated,editing}.rs",
-      "reason": "Una version por motor y etiqueta flotante; replica la clasificacion de SqlEditor (§9); falta reporte por version exacta (M1)",
+      "reason": "Corre en CI por version exacta (sql-engine.yml); falta repartirla en safety/generated/editing y quitar la copia de la clasificacion de SqlEditor (§9)",
       "sqlEngineRows": [
         "S2",
         "S3",
@@ -2793,10 +2787,10 @@
       "owner": "crates/server-tests",
       "property": "Cada linea se distingue de la anterior en sus extremos; tipos leidos por linea",
       "risk": "P1",
-      "gate": "manual",
+      "gate": "engine-pr",
       "decision": "move",
       "target": "crates/server-tests/tests/contract.rs",
-      "reason": "Imagenes sin digest (§9 P3); entra a CI por (motor, version) en M1",
+      "reason": "Corre en CI por motor sobre imagenes fijadas por digest (sql-engine.yml); se une al contrato del harness",
       "sqlEngineRows": [
         "D7",
         "D8"
