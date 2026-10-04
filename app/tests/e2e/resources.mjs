@@ -2,6 +2,10 @@
 // que dejar memoria, editores ni estilos detras.
 //
 //   node tests/e2e/resources.mjs --app <binario>
+//   node tests/e2e/resources.mjs --app <binario> --measure <archivo.json>
+//
+// Con --measure no corren los ciclos sino las mediciones de tecla a pintado
+// y de cuadros del grid (tools/bench/README.md), que no son compuerta.
 //
 // A diferencia de run.mjs, no usa WebDriver: abre la app con el inspector
 // remoto de WebKit (inspector.mjs), que es lo unico que puede recolectar y
@@ -18,8 +22,8 @@
 // (con 1500 reconexiones, hacia la 600-700; con JIT y sin el).
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { connectInspector, liveHeap } from "./inspector.mjs";
 
@@ -461,10 +465,152 @@ async function stop(app) {
   group("SIGKILL");
 }
 
+// --- Mediciones (no son compuerta) -----------------------------------------
+// Con --measure <archivo.json> corren estas en vez de los ciclos y escriben
+// sus percentiles. Bajo Xvfb sin GPU los tiempos dependen de la maquina y de
+// su carga: son un benchmark de release que se compara con una referencia
+// del mismo equipo (tools/bench/README.md), nunca un umbral de CI.
+
+const MEASURE = option("--measure");
+const KEYSTROKES = Number(process.env.E2E_KEYSTROKES ?? 200);
+const SCROLL_FRAMES = Number(process.env.E2E_SCROLL_FRAMES ?? 300);
+const measures = [];
+const measure = (name, body) => measures.push({ name, body });
+const measured = {};
+
+function percentiles(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  const round = (value) => Math.round(value * 100) / 100;
+  return { n: sorted.length, p50: round(at(0.5)), p95: round(at(0.95)), p99: round(at(0.99)), max: round(sorted[sorted.length - 1]) };
+}
+
+// Corre una funcion asincrona en la pagina y trae su resultado: el
+// Runtime.evaluate de WebKit no espera promesas, asi que se deja en window.
+async function evaluateAsync(page, what, body, timeout = 300000) {
+  await page.evaluate(`(window.__measure = null, (${body})().then(
+    (value) => (window.__measure = { value }),
+    (error) => (window.__measure = { error: String(error) }),
+  ), true)`);
+  await waitFor(page, what, "window.__measure !== null", timeout);
+  const outcome = await page.evaluate("window.__measure");
+  if (outcome.error) throw new Error(`${what}: ${outcome.error}`);
+  return outcome.value;
+}
+
+// El EditorView de CodeMirror a partir de su DOM (lo que hace findFromDOM).
+const editorView = `(() => {
+  const content = document.querySelector(".cm-content");
+  return (content?.cmTile ?? content?.cmView)?.root?.view ?? content?.cmView?.rootView?.view ?? null;
+})()`;
+
+// Cada tecla entra como la escribe el navegador (insertText sobre el
+// contenido editable, que CodeMirror lee del DOM) y se cuenta hasta que
+// termina el cuadro siguiente: el requestAnimationFrame y despues un
+// mensaje, que corre cuando ese cuadro ya se pinto.
+async function keyToPaint(page, lines) {
+  // El documento se arma y se pega dentro de la pagina: un mensaje tan
+  // grande por el inspector remoto no llega.
+  await page.evaluate(`(() => {
+    const view = ${editorView};
+    view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+    const content = document.querySelector(".cm-content");
+    content.focus();
+    const data = new DataTransfer();
+    data.setData("text/plain", Array.from({ length: ${lines} }, (_, i) => "SELECT id, name FROM victim WHERE id = " + i + ";").join("\\n"));
+    content.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    return true;
+  })()`);
+  await waitFor(page, `el documento de ${lines} lineas`, `${editorView}?.state.doc.lines === ${lines}`);
+  await sleep(2000);
+  const times = await evaluateAsync(page, "las teclas", `async () => {
+    const view = ${editorView};
+    const content = document.querySelector(".cm-content");
+    content.focus();
+    view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true });
+    const painted = () => new Promise((resolve) => requestAnimationFrame(() => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = () => resolve(performance.now());
+      channel.port2.postMessage(0);
+    }));
+    await painted();
+    await painted();
+    const times = [];
+    for (let i = 0; i < ${KEYSTROKES}; i += 1) {
+      const before = view.state.doc.length;
+      const start = performance.now();
+      const typed = document.execCommand("insertText", false, i % 8 === 7 ? " " : "x");
+      const end = await painted();
+      if (!typed || view.state.doc.length !== before + 1) throw new Error("la tecla " + i + " no llego al documento");
+      times.push(end - start);
+      // Alguien que escribe rapido: unas 12 teclas por segundo.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+    return times;
+  }`);
+  return percentiles(times);
+}
+
+measure("tecla -> pintado con 20 y con 10 000 lineas", async (page) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  measured.keyToPaintMs = { lines20: await keyToPaint(page, 20), lines10000: await keyToPaint(page, 10_000) };
+  console.log(`      tecla -> pintado (ms): ${JSON.stringify(measured.keyToPaintMs)}`);
+});
+
+measure("cuadros del grid con 2000 x 120 al desplazarse", async (page) => {
+  await page.evaluate(`localStorage.setItem("khipu:result-page-size:v1", "2000"), true`);
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  const digits = "(SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
+  const columns = Array.from({ length: 120 }, (_, i) =>
+    i % 3 === 0 ? `r.n + ${i} AS c${i + 1}` : i % 3 === 1 ? `CONCAT('texto ', r.n, ' ', ${i}) AS c${i + 1}` : `r.n * ${i} / 7 AS c${i + 1}`,
+  ).join(", ");
+  await writeSql(
+    page,
+    `SELECT ${columns} FROM (SELECT a.n * 200 + b.n * 20 + c.n * 2 + d.n AS n FROM ${digits} a, ${digits} b, ${digits} c, (SELECT 0 AS n UNION ALL SELECT 1) d) r ORDER BY r.n`,
+  );
+  await press(page, { key: "Enter", code: "Enter", ctrl: true }, ".cm-content");
+  await waitFor(page, "el grid de 2000 filas", `(document.querySelector(".grid-viewport")?.scrollHeight ?? 0) > 2000 * 15`, 60000);
+  await sleep(2000);
+  // Un desplazamiento por cuadro, hacia abajo y despues a la derecha, como
+  // la rueda: se guarda cuanto tardo cada cuadro y cuantas celdas habia.
+  const result = await evaluateAsync(page, "el desplazamiento", `async () => {
+    const viewport = document.querySelector(".grid-viewport");
+    const frames = [];
+    let cells = 0;
+    let last = null;
+    await new Promise((resolve) => {
+      let index = 0;
+      const step = (now) => {
+        if (last !== null) frames.push(now - last);
+        last = now;
+        cells = Math.max(cells, viewport.querySelectorAll("td").length);
+        if (index >= ${SCROLL_FRAMES}) return resolve();
+        if (index < ${SCROLL_FRAMES} * 0.7) viewport.scrollTop += 90;
+        else viewport.scrollLeft += 160;
+        index += 1;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    return { frames, cells, bottom: viewport.scrollTop, right: viewport.scrollLeft };
+  }`);
+  if (result.bottom < 1000 || result.right < 1000) throw new Error(`el grid no se desplazo: ${JSON.stringify({ bottom: result.bottom, right: result.right })}`);
+  measured.gridFrameMs = {
+    ...percentiles(result.frames),
+    over25: result.frames.filter((ms) => ms > 25).length,
+    over50: result.frames.filter((ms) => ms > 50).length,
+    maxCells: result.cells,
+  };
+  console.log(`      cuadros del grid (ms): ${JSON.stringify(measured.gridFrameMs)}`);
+});
+
 const only = process.env.E2E_ONLY;
 let failures = 0;
 let port = 9333;
-for (const { name, body } of cycles.filter((candidate) => !only || candidate.name.includes(only))) {
+const selected = MEASURE ? measures : cycles;
+for (const { name, body } of selected.filter((candidate) => !only || candidate.name.includes(only))) {
   port += 1;
   sql(
     "DROP DATABASE IF EXISTS rowly_e2e; CREATE DATABASE rowly_e2e; " +
@@ -500,5 +646,12 @@ for (const { name, body } of cycles.filter((candidate) => !only || candidate.nam
     if (app) await stop(app);
     rmSync(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
+}
+if (MEASURE && failures === 0) {
+  writeFileSync(
+    MEASURE,
+    JSON.stringify({ label: process.env.E2E_LABEL ?? null, date: new Date().toISOString(), host: hostname(), ...measured }, null, 2) + "\n",
+  );
+  console.log(`      escrito ${MEASURE}`);
 }
 process.exit(failures === 0 ? 0 : 1);

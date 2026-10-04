@@ -41,6 +41,9 @@ cd app && BENCH_OUT=<dir>/node-editor.json npx vitest run --config ../tools/benc
 tools/test-dbs/up.sh
 cargo run --release -p rowly-server-tests --example catalog_bench -- <dir>/catalog.json
 
+# Tecla a pintado y cuadros del grid en la app real (ver abajo)
+cd app && xvfb-run --auto-servernum node tests/e2e/resources.mjs --app <binario> --measure <dir>/linux-rowly-latency.json
+
 # Comparar con la referencia
 python3 tools/bench/compare.py tools/bench/baseline/v0.3.0 <dir>
 ```
@@ -58,6 +61,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | `baseline/v0.3.0` | El binario publicado (`rowly-db-bin 0.3.0-1`), con Beekeeper Studio y el banco de motores | Omarchy, kernel 7.2.5, perfil `performance` |
 | `baseline/v0.3.0-cachyos` | `v0.3.0` compilado desde su etiqueta (`npx tauri build --no-bundle`), igual que la rama con la que se compara | CachyOS, kernel 7.1.8, perfil `balanced` (misma CPU) |
 | `baseline/c5-cachyos` | El cierre de la consolidación, medido alternado con `v0.3.0-cachyos` en la misma sesión; `node-editor.json` es la mediana de 5 corridas | CachyOS, kernel 7.1.8, perfil `balanced` |
+| `baseline/hardening-cachyos` | Tecla a pintado y cuadros del grid (`linux-rowly-latency.json`), la primera vez que se midieron: mediana de 3 corridas del binario release bajo Xvfb, cada corrida guardada en `runs` | CachyOS, kernel 7.1.8, perfil `balanced` |
 
 `node-editor.json` no guarda su dispersión, así que una corrida suelta contra otra puede marcar como regresión el ruido de microsegundos. Antes de llamarlo regresión, repite los dos lados (cinco corridas alternadas) y compara las medianas.
 
@@ -77,6 +81,15 @@ El PSS del WebKitWebProcess se informa, pero no es compuerta: sube con la memori
 
 En local: `xvfb-run node app/tests/e2e/resources.mjs --app <binario>`, con las bases de `run.mjs` y PostgreSQL en `E2E_PG_PORT`/`E2E_PG_USER`. `E2E_ONLY` elige un ciclo; `E2E_RECONNECTIONS`, `E2E_CONSOLE_CYCLES` y `E2E_IDLE_SECONDS` cambian su largo.
 
-## Qué todavía no se mide
+## Tecla a pintado y cuadros del grid
 
-Latencia de tecla a pintado y duración de frames del grid: necesitan instrumentar la app (`performance.mark` e `Instant` de Rust alrededor de cada operación). Windows/WebView2 y macOS/WKWebView se miden en esas máquinas. Un escenario que falta se informa como faltante, nunca como aprobado.
+`resources.mjs --measure <archivo>` corre dos mediciones en lugar de los ciclos, con la misma app, perfil e inspector, y escribe sus percentiles. Son un **benchmark de release** que se compara con una referencia del mismo equipo, no una compuerta de CI: bajo Xvfb sin GPU la cola se mueve demasiado entre corridas (el p95 de las teclas con 10 000 líneas fue de 159 a 249 ms en tres corridas), y un runner compartido solo sumaría ruido.
+
+| Medición | Cómo | `hardening-cachyos` (mediana de 3) |
+|---|---|---|
+| Tecla a pintado, 20 y 10 000 líneas | 200 teclas al final del documento, una cada 80 ms, escritas con `execCommand("insertText")` (CodeMirror las lee del DOM como al escribir de verdad). Cada una cuenta hasta que el cuadro siguiente se pintó: el `requestAnimationFrame` siguiente y después un mensaje. Incluye la espera del cuadro, así que el piso es de un cuadro más o menos. | 20 líneas: p50 21, p95 25, p99 28 ms. 10 000 líneas: p50 27, p95 205, p99 373 ms |
+| Cuadros del grid, 2000 × 120 | Un resultado de 2000 filas y 120 columnas (página de 2000) desplazado una vez por cuadro: 210 cuadros hacia abajo y 90 a la derecha. Se guarda cada intervalo entre cuadros y el máximo de `<td>` montados a la vez. | p50 17, p95 27, p99 41 ms; 23 de 300 cuadros pasan de 25 ms, ninguno de 50 ms; como mucho 17 920 celdas montadas |
+
+Lo que dicen estos números: con texto normal, lo escrito se pinta en el cuadro siguiente; desplazar el grid no pierde más de un cuadro seguido, y su DOM queda acotado por lo visible. Con 10 000 líneas, la mediana es la misma pero algunas teclas tardan 200–400 ms. Nada lo medía antes, así que no se sabe si es una regresión. Encontrar la causa necesita un perfil de esas teclas, y eso queda pendiente.
+
+Windows/WebView2 y macOS/WKWebView se miden en esas máquinas. Un escenario que falta se informa como faltante, nunca como aprobado.
