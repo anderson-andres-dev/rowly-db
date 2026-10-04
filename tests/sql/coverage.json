@@ -1032,6 +1032,41 @@
         }
       ],
       "gap": "Todavia no hay revision de paquete: los paquetes por linea llegan con M4/M5"
+    },
+    "D10": {
+      "status": "covered",
+      "tests": [
+        {
+          "file": "app/src-tauri/src/support.rs",
+          "name": "h_an_interrupted_or_failed_install_keeps_the_previous_package",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/tests/lines.rs",
+          "name": "a_package_is_a_line_validated_like_the_included_ones",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src/lib/engines/contract.test.ts",
+          "name": "una reservada que trae un paquete de soporte se cita en esa conexion",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        }
+      ]
     }
   }
 }
