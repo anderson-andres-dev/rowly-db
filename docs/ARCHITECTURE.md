@@ -85,6 +85,17 @@ Whatever repeats leaves nothing behind: 300 reconnections alternating engines, 3
 
 `Dialect` in `crates/engine/src/lib.rs` enumerates SQL engines. Adding one requires reviewing all exhaustive engine and frontend decisions even when `sqlparser` knows its syntax. Sharing a parser or protocol does not authorize sharing guard rules, quoting, introspection or capabilities without tests. [SQL_ENGINE.md](../SQL_ENGINE.md) defines the matrix, versions and gates that prove integration.
 
+Each rule has a single owner:
+
+| Rule | Where it lives |
+| :--- | :--- |
+| Protocol, TLS, column types and catalog queries | The driver for its protocol (`crates/drivers/<protocol>`). Two engines may share one without sharing SQL rules. |
+| An engine's lexer, parser, quoting, generated SQL and its own guard rules | Its `EngineDefinition` (`crates/engine/src/dialects/<engine>.rs`), registered in `Dialect::definition()`. The shared splitter, analysis and guard are the rest of `crates/engine/src` and never compare engine names. |
+| Capabilities, reserved words and removed syntax of each line | Data in `support/<engine>.json` ([SQL_ENGINE.md](../SQL_ENGINE.md), §5.4), the same data support packs carry (§11). It applies on top of an already registered engine: it never carries code or creates a dialect. |
+| Editor profile | `app/src/lib/engines/<engine>.ts`; `tests/engines/contract.json` pins parity with Rust. |
+| Test servers and verified releases | `tools/test-dbs/lines.json`, with the corpus in `tests/sql/<engine>/`. |
+| Vendor support dates | `tools/support/vendor-support.json`. Display only: they change neither the guard nor capabilities. |
+
 Every driver is compiled into the app. There are no Cargo features to leave one out.
 
 ## Where to go next

@@ -313,7 +313,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 
 ### 10.1 Layout
 
-Target tree shared by Rust and TypeScript tests:
+Tree shared by Rust and TypeScript tests:
 
 ```text
 tests/sql/
@@ -340,7 +340,7 @@ The whole corpus lives here. In `common/` (at any level): `no-diagnostics.sql`, 
 
 `coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test, an `N/A` without a reason, or a real-server test that proves no row fails `tools/inventory/coverage.mjs`. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
 
-To migrate an old corpus or test: record the property it protects, add its replacement to the target tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia. The locations in the §6 tables and the §7 commands continue to show **what exists today** until each migration PR updates them.
+To migrate an old corpus or test: record the property it protects, add its replacement to this tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia.
 
 ### 10.2 Rules
 
@@ -410,7 +410,7 @@ These operations are distinct: **engine** = SQL and catalog rules; **driver** = 
 
 1. Pin that release's image or library by digest in the test registry, read its actual version and check that it matches. Do not infer support from the image name.
 2. Run every applicable §6 row and retain the §10 evidence. If behavior differs, return to 12.2; otherwise keep the line and add the release to the verified set.
-3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to a pack's `tested` evidence.
+3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to the verified releases in `tools/test-dbs/lines.json`.
 
 SQLite has no server process: for these gates "real server" means the SQLite library linked by the driver, with its version and dataset pinned. Having fewer server objects does not lower the bar for the splitter, guard, typing, quoting or safety.
 

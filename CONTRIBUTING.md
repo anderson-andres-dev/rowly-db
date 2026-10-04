@@ -110,5 +110,6 @@ The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `s
 ## Style
 
 - Short commit messages in the imperative, in English or Spanish.
+- Only published releases of dependencies: no forks, no unpublished branches or commits, no patches of our own. What upstream lacks stays as a documented gap in SQL_ENGINE.md, §9.
 - No abstractions ahead of need. If an engine needs something `DbConnector` does not cover, raise it in an issue first.
 - Public docs are written in English with a Spanish copy in `*.es.md`. Keep both in sync. Temporary design notes are in Spanish.
