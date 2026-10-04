@@ -13,8 +13,8 @@
 //! Posiciones: linea y columna 1-based, en caracteres, relativas a la
 //! sentencia; el fin es exclusivo. El frontend las pasa a su offset.
 
-use crate::Dialect;
 use crate::catalog::CatalogTable;
+use crate::{Dialect, RoutineBodies};
 use serde::Serialize;
 use sqlparser::ast::{
     Expr, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr, Ident, JoinConstraint,
@@ -125,11 +125,11 @@ pub fn analyze_statement(
     if has_unparsed_syntax(sql, dialect) {
         return Vec::new();
     }
-    // Los cuerpos de PostgreSQL pueden ser cadenas con otro lenguaje.
-    if postgres_opaque_definition(sql, dialect) {
+    // Cuerpos entre comillas: pueden ser cadenas con otro lenguaje.
+    if quoted_routine_definition(sql, dialect) {
         return Vec::new();
     }
-    if matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+    if dialect.definition().select_into_variable_lists {
         if let Some(found) = mysql_select_into_errors(sql, dialect, catalog) {
             return found;
         }
@@ -194,9 +194,10 @@ pub fn analyze_statement(
     found
 }
 
-/// Lee una rutina MySQL completa. Cada fragmento conserva su offset original.
+/// Lee una rutina con cuerpo en bloque (MySQL, MariaDB) completa. Cada
+/// fragmento conserva su offset original.
 fn mysql_routine_errors(sql: &str, dialect: Dialect) -> Option<Vec<Diagnostic>> {
-    if !matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+    if dialect.definition().routine_bodies != RoutineBodies::Block {
         return None;
     }
     let all = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
@@ -849,8 +850,10 @@ fn routine_incomplete(token: &TokenWithSpan) -> Diagnostic {
     )
 }
 
-fn postgres_opaque_definition(sql: &str, dialect: Dialect) -> bool {
-    if dialect != Dialect::Postgres {
+/// Un CREATE de rutina, trigger o regla cuyo cuerpo es un texto en otro
+/// lenguaje (Postgres): opaco para el analizador.
+fn quoted_routine_definition(sql: &str, dialect: Dialect) -> bool {
+    if dialect.definition().routine_bodies != RoutineBodies::Quoted {
         return false;
     }
     if !sql
@@ -877,9 +880,8 @@ fn postgres_opaque_definition(sql: &str, dialect: Dialect) -> bool {
     }
     for word in words.iter().skip(1).take(32).map(String::as_str) {
         match word {
-            "PROCEDURE" | "FUNCTION" | "TRIGGER" => return true,
+            "PROCEDURE" | "FUNCTION" | "TRIGGER" | "RULE" => return true,
             "EVENT" => return false,
-            "RULE" => return dialect == Dialect::Postgres,
             "TABLE" | "VIEW" | "INDEX" | "DATABASE" | "SCHEMA" | "TYPE" | "DOMAIN" | "SEQUENCE"
             | "EXTENSION" | "POLICY" => return false,
             _ => {}
