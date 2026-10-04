@@ -1,7 +1,8 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
-  import { Code2, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Sun, X } from "@lucide/svelte";
+  import { Code2, Database, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Sun, X } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
+  import EnginesSection from "$lib/components/EnginesSection.svelte";
   import Select from "$lib/components/Select.svelte";
   import NumberStepper from "$lib/components/NumberStepper.svelte";
   import { newerRelease } from "$lib/stores/updates";
@@ -31,7 +32,7 @@
   // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
   // (styles/controls.css). Cada fila es un texto corto y su control; nada de
   // subtitulos ni tarjetas sueltas.
-  type Section = "appearance" | "editor" | "shortcuts" | "updates";
+  type Section = "appearance" | "editor" | "shortcuts" | "engines" | "updates";
 
   let { onclose, initialSection = "appearance" }: { onclose: () => void; initialSection?: Section } = $props();
 
@@ -42,6 +43,7 @@
     { id: "appearance", icon: Palette },
     { id: "editor", icon: Code2 },
     { id: "shortcuts", icon: Keyboard },
+    { id: "engines", icon: Database },
     { id: "updates", icon: RefreshCw },
   ] as const satisfies { id: Section; icon: typeof Palette }[];
 
@@ -547,6 +549,8 @@
               </div>
             </div>
           {/if}
+        {:else if activeSection === "engines"}
+          <EnginesSection />
         {:else}
           <UpdatesSection />
         {/if}

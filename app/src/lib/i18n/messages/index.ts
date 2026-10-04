@@ -2,6 +2,7 @@ import backend from "./backend";
 import common from "./common";
 import connections from "./connections";
 import editor from "./editor";
+import engines from "./engines";
 import explorer from "./explorer";
 import grid from "./grid";
 import history from "./history";
@@ -18,6 +19,7 @@ export const messages = {
   common,
   connections,
   editor,
+  engines,
   explorer,
   grid,
   history,

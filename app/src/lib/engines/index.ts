@@ -18,21 +18,34 @@ export function engineFor(driver: ConnectionDriver): EngineProfile {
   return ENGINES[driver];
 }
 
-// Con NO_BACKSLASH_ESCAPES en la sesion, la barra invertida es un caracter
-// mas: para partir sentencias y para escribir literales. Un perfil por motor,
-// armado una vez, para que su identidad siga sirviendo de clave (las caches
-// del analisis, la reconfiguracion del editor).
-const WITHOUT_BACKSLASH_ESCAPES = new Map<ConnectionDriver, EngineProfile>();
-
 // El perfil de la conexion: el motor y el modo que dice el backend
-// (ConnectionEngineContext), no los del perfil guardado.
+// (ConnectionEngineContext), no los del perfil guardado, y las reservadas de
+// las lineas de esa conexion: un paquete de soporte puede traer una que la
+// app no conoce (G6). Un perfil por combinacion, armado una vez, para que su
+// identidad siga sirviendo de clave (las caches del analisis, la
+// reconfiguracion del editor).
+const ADJUSTED = new Map<string, EngineProfile>();
+
 export function engineForContext(context: ConnectionEngineContext): EngineProfile {
-  const profile = ENGINES[context.engineId];
-  if (!context.sessionMode.noBackslashEscapes || !profile.lexical.backslashEscapes) return profile;
-  let adjusted = WITHOUT_BACKSLASH_ESCAPES.get(context.engineId);
+  const base = ENGINES[context.engineId];
+  const plainBackslash = context.sessionMode.noBackslashEscapes && base.lexical.backslashEscapes;
+  // Solo las que el perfil todavia no cita.
+  const extra = (context.reservedWords ?? []).filter((word) => base.identifier(word) !== base.quoteIdentifier(word)).sort();
+  if (!plainBackslash && extra.length === 0) return base;
+  const key = `${context.engineId}|${plainBackslash}|${extra.join(",")}`;
+  let adjusted = ADJUSTED.get(key);
   if (!adjusted) {
-    adjusted = { ...profile, lexical: { ...profile.lexical, backslashEscapes: false }, quoteString: ansiString };
-    WITHOUT_BACKSLASH_ESCAPES.set(context.engineId, adjusted);
+    adjusted = { ...base };
+    if (plainBackslash) {
+      adjusted.lexical = { ...base.lexical, backslashEscapes: false };
+      adjusted.quoteString = ansiString;
+    }
+    if (extra.length > 0) {
+      const reserved = new Set(extra);
+      adjusted.identifier = (name) => (reserved.has(name.toLowerCase()) ? base.quoteIdentifier(name) : base.identifier(name));
+      adjusted.reservedWords = new Set([...base.reservedWords, ...extra]);
+    }
+    ADJUSTED.set(key, adjusted);
   }
   return adjusted;
 }
