@@ -370,13 +370,14 @@ async fn the_analyzer_marks_nothing_in_sql_the_real_servers_accept() {
             checked += 1;
             // Con la linea del servidor, como en la app: lo que una linea
             // elimino (A9) tampoco puede marcar lo que este servidor acepta.
-            let line = engine.dialect().lines().effective(&conn.version());
+            let lines = engine.dialect().lines();
+            let line = lines.effective(&conn.version());
             let found = khipu_engine::diagnostics::analyze_statement_with(
                 &sql,
                 engine.dialect(),
                 None,
                 false,
-                Some(line),
+                Some((&lines, line)),
             );
             if !found.is_empty() {
                 false_positives.push(format!(
@@ -610,13 +611,14 @@ async fn common_valid_ddl_and_dml_is_never_objected_to() {
             }
             // Con la linea del servidor, como en la app: lo que una linea
             // elimino (A9) tampoco puede marcar lo que este servidor acepta.
-            let line = engine.dialect().lines().effective(&conn.version());
+            let lines = engine.dialect().lines();
+            let line = lines.effective(&conn.version());
             let found = khipu_engine::diagnostics::analyze_statement_with(
                 &sql,
                 engine.dialect(),
                 None,
                 false,
-                Some(line),
+                Some((&lines, line)),
             );
             if !found.is_empty() {
                 failures.push(format!(
