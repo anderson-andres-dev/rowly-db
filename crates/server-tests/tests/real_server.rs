@@ -1455,7 +1455,7 @@ fn everyday_queries(engine: Engine) -> Vec<&'static str> {
     queries
 }
 
-/// Lo que app/src/lib/SqlEditor.svelte cuenta como "sin terminar".
+/// Lo que app/src/lib/editor/analysisSession.ts cuenta como "sin terminar".
 const UNFINISHED_KEYS: [&str; 7] = [
     "diagnostic.incomplete",
     "diagnostic.unclosedParen",

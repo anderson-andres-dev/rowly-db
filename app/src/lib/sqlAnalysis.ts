@@ -31,7 +31,7 @@ export interface AnalysisRunnerOptions<Raw> {
   delayMs?: number;
 }
 
-interface Region {
+export interface Region {
   from: number;
   to: number;
 }

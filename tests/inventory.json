@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 119,
-    "tests": 1376,
+    "files": 123,
+    "tests": 1396,
     "ignored": 42,
     "byDecision": {
-      "keep": 60,
+      "keep": 64,
       "move": 53,
       "rewrite": 6,
       "remove": 0
     },
     "byGate": {
-      "pr": 114,
+      "pr": 118,
       "engine-pr": 1,
       "manual": 4,
       "release": 0
@@ -414,6 +414,115 @@
         "vitest"
       ],
       "durationMs": 4
+    },
+    {
+      "path": "app/src/lib/editor/analysisSession.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/analysisSession.ts",
+      "property": "Analisis mientras se escribe: posiciones, nombres que no existen, lo que solo falta terminar, mensajes vagos y cache compartida por contexto",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A4"
+      ],
+      "kind": "ts",
+      "tests": 6,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "analysisSession",
+        "engines"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/commands.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/commands.ts",
+      "property": "Comandos del editor: rango que se actua, cursor tras formatear, que se ejecuta (sentencia, script o nada) y portapapeles con el filtro de pegar",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "commands",
+        "engines",
+        "sqlExecutionMarker",
+        "sqlStatementIndex"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/configuration.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/configuration.ts",
+      "property": "Cada ajuste del editor se reconfigura en su Compartment: mismo editor, texto, seleccion e historial de deshacer",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "configuration",
+        "engines",
+        "sqlCallHints",
+        "sqlCatalogCompletions",
+        "sqlSchema",
+        "sqlStatementIndex",
+        "stores/editorSettings",
+        "theming/theme"
+      ],
+      "external": [
+        "@codemirror/commands",
+        "@codemirror/state",
+        "@codemirror/view",
+        "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/diagnosticPresentation.dom.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/diagnosticPresentation.ts",
+      "property": "Errores del servidor en su sentencia con la ayuda del motor; detalle por teclado y primera correccion del diagnostico de la linea",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "sqlEngineRows": [
+        "A7"
+      ],
+      "kind": "ts",
+      "tests": 5,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "diagnosticPresentation",
+        "engines",
+        "sqlDiagnostics",
+        "types"
+      ],
+      "external": [
+        "@codemirror/state",
+        "@codemirror/view",
+        "svelte",
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/editorSearchPanel.dom.test.ts",

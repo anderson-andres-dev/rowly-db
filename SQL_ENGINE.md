@@ -274,7 +274,7 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | The integrated confirmation test (S7) covers only the console and result editing on one MySQL release, and no complete typed per-connection context and invalidation test exists (D9) | P2 | Add the other engines and releases, reconnect and mode changes. The E2E walks run on Linux only; Windows (WebView2) and macOS (WKWebView) remain a manual release smoke test. The UI does not yet distinguish verified from unverified exact releases. |
 | The analyzer has one dialect per engine: it cannot report syntax a line removed (A9), and reserved words are one list per engine (G6) | P2 | Comes with the per-line declaration below. |
 | Capabilities are declared in three places (§6.5), in code, and not per line | P2 | One declaration per line, as data. It is also what version support packs carry (§11). |
-| The incomplete / unresolved / generic classification lives in the frontend (key lists in `SqlEditor.svelte`), and `real` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
+| The incomplete / unresolved / generic classification lives in the frontend (key lists in `app/src/lib/editor/analysisSession.ts`), and `real` mirrors it to simulate typing | P2 | The analyzer should emit a category with each diagnostic. That removes the copy (principle 5). |
 | Introspected content is not checked directly against the server (D4) | P2 | Example found while writing this: MariaDB 11.8 accepts `DEFAULT` on procedure parameters, but its introspection always reports `has_default: false`. |
 | Other generated SQL (G7) is not run on a server | P2 | |
 | PostgreSQL routine bodies are not analyzed (A5) | P2 | |
