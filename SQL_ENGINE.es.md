@@ -313,7 +313,7 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 
 ### 10.1 Estructura
 
-Árbol destino compartido por las pruebas de Rust y TypeScript:
+Árbol compartido por las pruebas de Rust y TypeScript:
 
 ```text
 tests/sql/
@@ -340,7 +340,7 @@ Todo el corpus vive aquí. En `common/` (de cualquier nivel): `no-diagnostics.sq
 
 `coverage.json` asigna cada fila S/A/G/D de §6 a una prueba, su fixture, los motores y versiones donde aplica y la compuerta que la ejecuta. Una fila sin prueba, un `N/A` sin motivo o una prueba real que no prueba ninguna fila hacen fallar `tools/inventory/coverage.mjs`. El harness de `crates/server-tests` prepara un esquema efímero por motor, versión y caso, restaura el modo de sesión, recoge la versión exacta y emite un reporte reproducible con commit, fila, SQL mínimo, semilla y resultado. Los tests unitarios siguen junto al código.
 
-Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en el árbol destino, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia. Las ubicaciones de las tablas de §6 y los comandos de §7 siguen indicando **lo que existe hoy** hasta que se actualicen con cada PR de migración.
+Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en este árbol, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia.
 
 ### 10.2 Reglas
 
@@ -410,7 +410,7 @@ Estas operaciones son distintas: **motor** = reglas SQL y catálogo; **driver** 
 
 1. Fijar la imagen o biblioteca de esa versión por digest en el registro de pruebas, leer su versión real y comprobar que coincide. No inferir soporte del número en el nombre de la imagen.
 2. Ejecutar todas las filas aplicables de §6 y guardar la evidencia de §10. Si aparece una diferencia de comportamiento, volver a 12.2; si no, conservar la línea y añadir la versión al conjunto verificado.
-3. Una versión aún no probada puede conectar con la línea conservadora de §5.2, pero no se muestra como «verificada» ni se añade a `tested` de un paquete.
+3. Una versión aún no probada puede conectar con la línea conservadora de §5.2, pero no se muestra como «verificada» ni se añade a las versiones verificadas de `tools/test-dbs/lines.json`.
 
 SQLite no tiene proceso servidor: en estas compuertas «servidor real» significa la biblioteca SQLite enlazada por el driver, con versión y dataset fijados. Tener menos objetos no reduce el listón del divisor, guard, escritura, citas ni seguridad.
 

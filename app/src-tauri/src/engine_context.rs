@@ -1,5 +1,5 @@
-//! El contexto de motor de una conexion (docs/specs/contrato-motores-y-versiones.md
-//! §2): lo que el backend sabe del servidor, armado una vez al conectar. El
+//! El contexto de motor de una conexion (SQL_ENGINE.md, D9): lo que el
+//! backend sabe del servidor, armado una vez al conectar. El
 //! frontend lo recibe de solo lectura y no deduce motor ni version de la
 //! etiqueta visible.
 //!

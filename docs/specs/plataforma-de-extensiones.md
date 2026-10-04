@@ -2,7 +2,7 @@
 
 ## Estado y decisión de producto
 
-**Diseño futuro, sin implementación** (2026-10-02). La prioridad actual es
+**Diseño futuro, sin implementación** (2026-10-02). Proyecto aparte, fuera de la consolidación y de motores/versiones, que se cerraron sin él. La prioridad actual es
 consolidar y medir el núcleo (hecho: [arquitectura](../ARCHITECTURE.es.md), [mediciones](../../tools/bench/README.es.md)). Esta spec
 define dónde podrán conectarse las extensiones para que esa consolidación no
 cierre la puerta a Vim, Better Comments u otras funciones de nicho. No se
@@ -28,6 +28,12 @@ el contrato de motores de [SQL_ENGINE](../../SQL_ENGINE.es.md).
   necesita código y pruebas de servidor dentro de la app.
 - Va a extensión si cambia un flujo por preferencia o nicho sin alterar el
   significado ni la seguridad del SQL: Vim y Better Comments son ejemplos.
+- Una extensión nunca declara motores ni líneas de versión, no modifica un
+  `EngineDefinition` ni los datos de `support/` y no tiene una ruta que evite
+  el guard del host. Un motor nuevo solo llega con una release de la app
+  (`SQL_ENGINE` §12); una línea, en la app o en un paquete de soporte firmado
+  (`SQL_ENGINE` §11). El campo `engines` del manifiesto solo dice en qué
+  motores ya registrados funciona la extensión.
 - Si una función opcional todavía no cabe en una API aislada con el
   presupuesto de rendimiento, queda pendiente. No se agrega al arranque de
   vanilla como atajo para poder publicarla.
@@ -37,7 +43,7 @@ el contrato de motores de [SQL_ENGINE](../../SQL_ENGINE.es.md).
 | Tipo | Ejemplo | Distribución | Autoridad |
 |---|---|---|---|
 | Mecanismo del núcleo | Driver, parser, guard, editor CodeMirror, IPC | App firmada | Puede acceder a la base según los comandos del host. Se prueba en cada release. |
-| Paquete de soporte de línea | Reglas declarativas de MySQL 8.4 o PostgreSQL 18 | Formato y firma de [motores y versiones](contrato-motores-y-versiones.md) | Aporta datos a mecanismos existentes; nunca código ni permisos de UI. |
+| Paquete de soporte de línea | Reglas declarativas de MySQL 8.4 o PostgreSQL 18 | Formato y firma de [SQL_ENGINE](../../SQL_ENGINE.es.md) §11 | Aporta datos a mecanismos existentes; nunca código ni permisos de UI. |
 | Extensión de usuario | Better Comments, Vim, exportador opcional | Futura tienda; instalación explícita | Solo las contribuciones y datos concedidos por el host. No agrega gestores de base de datos en la primera plataforma. |
 
 Los **plugins de Tauri** son bibliotecas integradas en la app y sus
@@ -215,7 +221,7 @@ versiones con las del servidor SQL.
 Una extensión desactivada se comprueba con contadores de workers, listeners,
 red y memoria: todos vuelven a la línea base. Los fixtures de la plataforma
 no duplican los corpus de `SQL_ENGINE`; consumen las identidades y casos de
-motor/versiones publicados por la [spec de motores](contrato-motores-y-versiones.md).
+motor/versiones de [SQL_ENGINE](../../SQL_ENGINE.es.md).
 Una extensión que altere interpretación o seguridad SQL queda fuera de la API
 del editor y exige revisión del núcleo y sus compuertas.
 

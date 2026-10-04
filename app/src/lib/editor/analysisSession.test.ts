@@ -111,7 +111,7 @@ function fakeView(doc: string) {
 }
 
 describe("createAnalysisSession", () => {
-  // R5 (docs/specs/mapa-c0.md): lo que se pidio con una conexion no se aplica
+  // D9 (SQL_ENGINE.es.md): lo que se pidio con una conexion no se aplica
   // despues de reconectar, aunque la respuesta llegue tarde.
   it("an answer asked for with the previous connection is not applied after reconnecting", async () => {
     vi.useFakeTimers();

@@ -85,6 +85,17 @@ Lo que se repite no deja nada detrás: 300 reconexiones alternando motores, 300 
 
 `Dialect` en `crates/engine/src/lib.rs` enumera los motores SQL. Agregar uno exige revisar todas las decisiones exhaustivas del motor y del frontend, incluso cuando `sqlparser` conoce su sintaxis. Compartir parser o protocolo no autoriza compartir el guard, las citas, la introspección ni las capacidades sin pruebas. [SQL_ENGINE.es.md](../SQL_ENGINE.es.md) define la matriz, las versiones y las compuertas que demuestran la integración.
 
+Cada regla tiene un solo dueño:
+
+| Regla | Dónde vive |
+| :--- | :--- |
+| Protocolo, TLS, tipos de columna y consultas de catálogo | El driver de su protocolo (`crates/drivers/<protocolo>`). Dos motores pueden compartirlo sin compartir reglas SQL. |
+| Léxico, parser, citas, SQL generado y reglas propias del guard de un motor | Su `EngineDefinition` (`crates/engine/src/dialects/<motor>.rs`), registrado en `Dialect::definition()`. El divisor, el análisis y el guard comunes son el resto de `crates/engine/src` y no comparan nombres de motor. |
+| Capacidades, reservadas y sintaxis eliminada de cada línea | Datos en `support/<motor>.json` ([SQL_ENGINE.es.md](../SQL_ENGINE.es.md), §5.4), los mismos que viajan en los paquetes de soporte (§11). Se aplican sobre un motor ya registrado: nunca traen código ni crean un dialecto. |
+| Perfil del editor | `app/src/lib/engines/<motor>.ts`; `tests/engines/contract.json` fija la paridad con Rust. |
+| Servidores de prueba y versiones verificadas | `tools/test-dbs/lines.json`, con el corpus en `tests/sql/<motor>/`. |
+| Fechas de soporte del fabricante | `tools/support/vendor-support.json`. Solo se muestran: no cambian el guard ni las capacidades. |
+
 Todos los drivers se compilan dentro de la app. No hay features de Cargo para dejar alguno fuera.
 
 ## Para seguir
