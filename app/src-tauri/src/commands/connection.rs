@@ -37,6 +37,9 @@ pub async fn connect(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<usize, ConnectFailure> {
+    // Las lineas activas no cambian mientras se conecta: las capacidades que
+    // fija el driver y la linea del contexto salen de la misma revision.
+    let activation = crate::support::ACTIVATION.read().await;
     let connected = drivers::connect(kind, &config).await?;
     let table_count = connected.default_objects.tables.len();
     let mut schemas = BTreeMap::new();
@@ -50,6 +53,7 @@ pub async fn connect(
     let generation = state.generations.fetch_add(1, Ordering::Relaxed) + 1;
     let context =
         ConnectionEngineContext::new(generation, kind.dialect(), connected.server, session_mode);
+    drop(activation);
 
     state
         .connections

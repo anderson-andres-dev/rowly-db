@@ -2505,16 +2505,19 @@ dependencies = [
 name = "khipu-desktop"
 version = "0.3.0"
 dependencies = [
+ "base64 0.22.1",
  "keyring",
  "khipu-driver-core",
  "khipu-driver-mysql",
  "khipu-driver-postgres",
  "khipu-engine",
+ "minisign-verify",
  "reqwest",
  "rustls",
  "semver",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",

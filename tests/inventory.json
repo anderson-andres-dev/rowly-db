@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 134,
-    "tests": 1422,
+    "files": 135,
+    "tests": 1438,
     "ignored": 29,
     "byDecision": {
-      "keep": 134,
+      "keep": 135,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 128,
+      "pr": 129,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -269,6 +269,24 @@
       "ignored": 0,
       "environment": "none",
       "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/support.rs",
+      "domain": "sql-engine",
+      "owner": "app/src-tauri/src/support.rs",
+      "property": "Un paquete de soporte solo se instala firmado, integro, con formato conocido y compatible; la instalacion es atomica, quitarlo vuelve a la incluida, sin red valen las incluidas y la verificacion no sale del paquete",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 15,
+      "ignored": 0,
+      "environment": "none",
+      "env": [
+        "ROWLY_SUPPORT_URL"
+      ],
       "durationMs": null
     },
     {
@@ -2794,7 +2812,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 8,
+      "tests": 9,
       "ignored": 0,
       "environment": "none",
       "env": [],

@@ -14,7 +14,7 @@
 //! sentencia; el fin es exclusivo. El frontend las pasa a su offset.
 
 use crate::catalog::CatalogTable;
-use crate::lines::Line;
+use crate::lines::{EngineLines, Line};
 use crate::{Dialect, RoutineBodies};
 use serde::Serialize;
 use sqlparser::ast::{
@@ -114,17 +114,18 @@ const MAX_REPAIRS: usize = 10;
 /// corte las cadenas donde las corta el servidor; las posiciones siguen
 /// siendo las del texto original, porque la longitud no cambia.
 ///
-/// Con la linea del servidor (`line`, de `dialect`), tambien la sintaxis que
-/// esa linea o una anterior elimino (A9). Sin linea (sin conexion, o un
-/// servidor de otro motor que el del perfil), nada de eso.
+/// Con la linea del servidor (`line`: las lineas de `dialect` que la conexion
+/// tomo al conectar, y la suya), tambien la sintaxis que esa linea o una
+/// anterior elimino (A9). Sin linea (sin conexion, o un servidor de otro
+/// motor que el del perfil), nada de eso.
 pub fn analyze_statement_with(
     sql: &str,
     dialect: Dialect,
     catalog: Option<&CatalogView>,
     no_backslash_escapes: bool,
-    line: Option<&Line>,
+    line: Option<(&EngineLines, &Line)>,
 ) -> Vec<Diagnostic> {
-    if let Some(found) = line.and_then(|line| removed_syntax(sql, dialect, line)) {
+    if let Some(found) = line.and_then(|(lines, line)| removed_syntax(sql, dialect, lines, line)) {
         return vec![found];
     }
     if !no_backslash_escapes || !dialect.backslash_escapes() || !sql.contains('\\') {
@@ -1072,8 +1073,13 @@ fn has_unparsed_syntax(sql: &str, dialect: Dialect) -> bool {
 /// La sintaxis que `line` o una linea anterior elimino, marcada donde esta,
 /// con la linea que la elimino y lo que se usa en su lugar
 /// (`support/<motor>.json`, `removedSyntax`).
-fn removed_syntax(sql: &str, dialect: Dialect, line: &Line) -> Option<Diagnostic> {
-    let mut removed = dialect.lines().removed_until(line).peekable();
+fn removed_syntax(
+    sql: &str,
+    dialect: Dialect,
+    lines: &EngineLines,
+    line: &Line,
+) -> Option<Diagnostic> {
+    let mut removed = lines.removed_until(line).peekable();
     removed.peek()?;
     let mut tokens: Vec<TokenWithSpan> = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
         .tokenize_with_location()

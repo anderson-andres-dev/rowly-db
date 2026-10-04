@@ -42,6 +42,7 @@ The engine depends on no driver, not even `driver-core`. Drivers do read the eng
 | `lib.rs` | Builds the app and registers the commands. Nothing else. |
 | `state.rs` | `AppState`: one `ActiveConnection` per window, with its connector, its shared catalog (`Arc<SchemaCatalog>`, rebuilt only when the schemas change) and the queries that can be cancelled. |
 | `engine_context.rs` | Each connection's engine context, built once on connect: generation, engine, detected server, session mode, effective line and its revision (from `support/<engine>.json`), `schemaEpoch`, vendor support and verification. The frontend gets it read-only. |
+| `support.rs` | Version support packs (SQL_ENGINE §11): signed index and packs, atomic install, removing and disabling, and each engine's active lines. Network only when the user asks; without it, the included lines. |
 | `commands/` | One file per domain (`query`, `catalog`, `connection`, `files`, `results`). Each command adapts its arguments and calls what already exists; it never repeats the guard, the catalog or the pools. |
 | `services/` | What the commands do, without Tauri: the engine catalog, console texts, `.sql` files, exporting and editing results. |
 
@@ -66,6 +67,7 @@ Everything that runs SQL goes through the guard, with the session mode, before i
 | :--- | :--- | :--- |
 | Connection | `ActiveConnection` in the backend; `stores/connection.ts` in the frontend | On going back to the list (`disconnect`) or closing the window |
 | Engine, release and mode | `ConnectionEngineContext` | Never changes: reconnecting creates a new generation |
+| Active lines and support packs | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` only shows them | On install, removal or disabling; each connection keeps the ones it took on connect |
 | Catalog | `ActiveConnection.catalog`; `catalogTables` and `databaseExplorer` in the frontend | Every schema change bumps `schemaEpoch` |
 | Analysis cache | `editor/analysisSession.ts`, one at a time | Another generation, `schemaEpoch`, engine or set of tables the document creates; `analyze_sql` rejects requests made under another context |
 | Consoles and their text | `stores/queryConsoles.ts` | When the console is closed |

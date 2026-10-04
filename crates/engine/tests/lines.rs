@@ -32,12 +32,18 @@ fn fixture(engine: &str, line: &str, file: &str) -> Vec<String> {
 }
 
 fn removed_in(sql: &str, dialect: Dialect, line: &Line) -> Option<Diagnostic> {
-    analyze_statement_with(sql, dialect, None, false, Some(line))
-        .into_iter()
-        .find(|diagnostic| {
-            matches!(&diagnostic.message, DiagnosticMessage::Key { key, .. }
+    analyze_statement_with(
+        sql,
+        dialect,
+        None,
+        false,
+        Some((dialect.bundled_lines(), line)),
+    )
+    .into_iter()
+    .find(|diagnostic| {
+        matches!(&diagnostic.message, DiagnosticMessage::Key { key, .. }
                 if key.starts_with("diagnostic.removedInLine"))
-        })
+    })
 }
 
 #[test]
@@ -45,7 +51,7 @@ fn every_registered_engine_declares_its_own_lines_and_the_test_servers_use_them(
     let registry = registry();
     for dialect in Dialect::ALL {
         let id = dialect.id();
-        let lines = dialect.lines();
+        let lines = dialect.bundled_lines();
         assert_eq!(
             lines.engine, id,
             "{id} registra las lineas de {}: le falta support/{id}.json",
@@ -67,8 +73,13 @@ fn every_registered_engine_declares_its_own_lines_and_the_test_servers_use_them(
 
 #[test]
 fn a_version_selects_the_closest_line_below_it() {
-    let line =
-        |dialect: Dialect, version: &str| dialect.lines().effective(&numbers(version)).line.clone();
+    let line = |dialect: Dialect, version: &str| {
+        dialect
+            .bundled_lines()
+            .effective(&numbers(version))
+            .line
+            .clone()
+    };
     // Los dos lados de cada frontera.
     assert_eq!(line(Dialect::MySql, "8.3.0"), "8.0");
     assert_eq!(line(Dialect::MySql, "8.4.0"), "8.4");
@@ -105,7 +116,7 @@ fn every_test_server_and_every_verified_version_selects_the_line_it_proves() {
         }
         for (version, line) in &probes {
             assert_eq!(
-                dialect.lines().effective(&numbers(version)).line,
+                dialect.bundled_lines().effective(&numbers(version)).line,
                 *line,
                 "{id} {version}"
             );
@@ -126,7 +137,7 @@ fn every_test_server_and_every_verified_version_selects_the_line_it_proves() {
 fn every_reserved_word_of_a_line_is_one_its_fixtures_prove() {
     for dialect in Dialect::ALL {
         let id = dialect.id();
-        for line in &dialect.lines().lines {
+        for line in &dialect.bundled_lines().lines {
             let rejects = fixture(id, &line.line, "rejects.sql");
             for word in &line.reserved_words {
                 let alias = format!(" as {word}");
@@ -151,7 +162,7 @@ fn removed_syntax_is_marked_from_its_line_on_and_never_before() {
     let mut marked = 0;
     for dialect in Dialect::ALL {
         let id = dialect.id();
-        let lines = &dialect.lines().lines;
+        let lines = &dialect.bundled_lines().lines;
         let last = lines.last().unwrap();
         for (index, line) in lines.iter().enumerate() {
             let rejects = fixture(id, &line.line, "rejects.sql");
@@ -196,7 +207,7 @@ fn removed_syntax_is_marked_from_its_line_on_and_never_before() {
 
 #[test]
 fn removed_syntax_says_where_it_is_and_what_replaces_it() {
-    let lines = Dialect::MySql.lines();
+    let lines = Dialect::MySql.bundled_lines();
     let found = removed_in(
         "show slave status;",
         Dialect::MySql,
@@ -221,7 +232,7 @@ fn removed_syntax_says_where_it_is_and_what_replaces_it() {
         None
     );
     // Un CTE que se llama oids no es WITH OIDS; un != tampoco es un postfijo.
-    let eighteen = Dialect::Postgres.lines().get("18").unwrap();
+    let eighteen = Dialect::Postgres.bundled_lines().get("18").unwrap();
     assert_eq!(
         removed_in(
             "WITH oids AS (SELECT 1) SELECT * FROM oids",
@@ -306,9 +317,73 @@ fn no_known_consumer_declares_versioned_behavior_by_itself_again() {
         }
     }
     let context = read("app/src-tauri/src/engine_context.rs");
-    assert!(context.contains(".lines().effective("));
+    assert!(context.contains("map(Dialect::lines)") && context.contains("lines.effective("));
     assert!(
         !context.contains("engines:"),
         "engine_context.rs: la linea efectiva sale de support/, no de los probes de tools/test-dbs/lines.json"
     );
+}
+
+/// Un paquete de soporte es una linea con su motor y la app minima: se valida
+/// como las lineas incluidas, y se combina con ellas sin bajar ninguna
+/// revision ni mezclar motores (SQL_ENGINE.md §11).
+#[test]
+fn a_package_is_a_line_validated_like_the_included_ones() {
+    use khipu_engine::lines::{Origin, Package};
+    let package = |body: &str| {
+        format!(r#"{{"format":1,"engine":"mysql","requiresApp":"0.3.0","line":{body}}}"#)
+    };
+    let parsed = Package::parse(&package(
+        r#"{"line":"8.4","revision":2,"reservedWords":["qualify"]}"#,
+    ))
+    .unwrap();
+    assert!(
+        parsed.compatible_with("0.3.0")
+            && parsed.compatible_with("1.0")
+            && !parsed.compatible_with("0.2.9")
+    );
+    for broken in [
+        package(r#"{"line":"8.4","revision":0}"#),
+        package(r#"{"line":"8.4","revision":2,"guard":{}}"#),
+        package(r#"{"line":"8.x","revision":2}"#),
+        package(r#"{"line":"8.4","revision":2}"#).replace(r#""format":1"#, r#""format":2"#),
+        package(r#"{"line":"8.4","revision":2}"#).replace("0.3.0", "pronto"),
+        format!(
+            "{}{}",
+            package(r#"{"line":"8.4","revision":2,"reservedWords":["#),
+            "\"a\",".repeat(40_000) + "\"a\"]}}"
+        ),
+    ] {
+        assert!(
+            Package::parse(&broken).is_err(),
+            "{}",
+            &broken[..broken.len().min(120)]
+        );
+    }
+
+    let bundled = Dialect::MySql.bundled_lines();
+    let merged = bundled
+        .with_packages(std::slice::from_ref(&parsed), &[])
+        .unwrap();
+    let line = merged.get("8.4").unwrap();
+    assert_eq!((line.revision, line.origin), (2, Origin::Downloaded));
+    // Una revision igual o mas vieja que la incluida no la reemplaza.
+    let stale = Package::parse(&package(
+        r#"{"line":"8.4","revision":1,"reservedWords":["x"]}"#,
+    ))
+    .unwrap();
+    let kept = bundled.with_packages(&[stale], &[]).unwrap();
+    assert_eq!(kept.get("8.4").unwrap().origin, Origin::Included);
+    // Otro motor, o una capacidad que ya declara otra linea: no se combina.
+    let postgres = Dialect::Postgres.bundled_lines();
+    assert!(
+        postgres
+            .with_packages(std::slice::from_ref(&parsed), &[])
+            .is_err()
+    );
+    let twice = Package::parse(&package(
+        r#"{"line":"8.4","revision":2,"capabilities":{"checkConstraints":"8.4"}}"#,
+    ))
+    .unwrap();
+    assert!(bundled.with_packages(&[twice], &[]).is_err());
 }

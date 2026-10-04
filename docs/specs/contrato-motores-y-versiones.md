@@ -2,7 +2,7 @@
 
 ## Estado y fuentes de verdad
 
-**Propuesta de integración, sin implementación** (2026-10-02). La matriz de
+**Implementada hasta M5** (2026-10-04): el contexto por conexión (M3), los datos por línea (M4, `SQL_ENGINE` §5.4) y la distribución de paquetes (M5, `SQL_ENGINE` §11) ya están en los contratos permanentes. Quedan aquí, sin migrar, el árbol destino de §3, los casos indispensables de §6 por grupo y la regla de que una extensión de la tienda no declara motores ni líneas (fases E). Originalmente: **propuesta de integración** (2026-10-02). La matriz de
 comportamiento, las líneas admitidas y las compuertas siguen siendo las de
 [SQL_ENGINE.es.md](../../SQL_ENGINE.es.md). Esta spec reúne el contrato del
 contexto por conexión y el diseño futuro de paquetes de soporte por línea.
@@ -314,7 +314,7 @@ por presupuesto de tiempo.
 | M2. Límite de motor | Extraer núcleo común y decisiones por dialecto según §3; registrar IDs exhaustivamente y crear la plantilla de motor. Añadir un motor de prueba de punta a punta en una rama temporal para comprobar la guía. | Agregar un motor tiene pasos finitos y errores claros; MySQL/MariaDB mantienen identidades distintas. |
 | M3. Contexto tipado y cachés | Añadir `ConnectionEngineContext` desde backend, adaptar lectores uno por uno y propagar generación, modo y `schemaEpoch`; limitar cachés. | Frontend deja de parsear etiquetas visibles; 300 reconexiones no crecen en memoria ni mezclan líneas. |
 | M4. Datos por línea | Implementar §5 primero con datos incluidos y líneas demostradas. Migrar una capacidad por PR, con paridad antes/después en todas las versiones exactas declaradas. | Una sola declaración de cada capacidad; matriz completa verde. **Hecho**: un archivo por motor (`support/<motor>.json`, no uno por línea), el id de la línea es su versión inicial y solo entran datos con fixture; formato en `SQL_ENGINE` §5.4. `why`, `support`, `tested`, `requiresApp`, `unparsedSyntax`, `destructiveKeywords` y `errorHelp` quedan para M5 o siguen en el motor. |
-| M5. Distribución | Tras M4: pantalla, índice, firma, descarga, desactivar/quitar y publicación descritos en §5. | Offline y rollback probados; ningún paquete puede saltar el guard ni afirmar verificación sin reporte. |
+| M5. Distribución | Tras M4: pantalla, índice, firma, descarga, desactivar/quitar y publicación descritos en §5. | Offline y rollback probados; ningún paquete puede saltar el guard ni afirmar verificación sin reporte. **Hecho**: un paquete por línea y un índice (formato 1), firmados con la clave del updater; desactivar deja la línea activa de abajo; `tested` no viaja en el paquete (la verificación sale de lo compilado) y `check-eol.sh` no existe (las fechas se revisan con `vendor-support.py`). |
 
 M0–M3 pertenecen a la consolidación del núcleo. M4–M5 son trabajo de soporte
 de versiones futuro; no se mezclan con el runtime ni con la tienda de

@@ -186,9 +186,13 @@ export interface ConnectionEngineContext {
   // El servidor como lo detecto el driver; `label` es solo para mostrar.
   server: { engine: ConnectionDriver; version: number[]; label: string };
   sessionMode: { noBackslashEscapes: boolean };
-  // La linea de comportamiento efectiva y la revision de sus datos
-  // (support/<motor>.json), elegida por el backend.
-  line: { id: string; revision: number } | null;
+  // La linea de comportamiento efectiva, la revision de sus datos y de donde
+  // salen (la app o un paquete de soporte descargado), elegida por el
+  // backend al conectar.
+  line: { id: string; revision: number; origin: "included" | "downloaded" } | null;
+  // Las reservadas de todas las lineas del motor en esa misma revision: el
+  // SQL que escribe el editor las cita (G6).
+  reservedWords: string[];
   // Sube cuando cambian los schemas cargados.
   schemaEpoch: number;
   // Ciclo de vida del fabricante: solo para mostrar.
