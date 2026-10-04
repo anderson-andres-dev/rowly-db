@@ -1,0 +1,357 @@
+{
+  "format": 1,
+  "label": "v0.3.0",
+  "date": "2026-10-02",
+  "machine": {
+    "os": "Omarchy",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "cores": 16,
+    "memory_gb": 15.3,
+    "governor": "powersave",
+    "platform_profile": "performance",
+    "power_supply": {
+      "ADP0": "1",
+      "ucsi-source-psy-USBC000:001": "0",
+      "BAT0": "Not charging"
+    },
+    "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)",
+    "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+    "compositor": "Hyprland v0.56.2",
+    "session": "wayland",
+    "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+    "workspace": "special:rowlybench (silent, fuera de pantalla)",
+    "binary": "/usr/bin/rowly-db"
+  },
+  "comparison": {
+    "Beekeeper Studio": "6.1.2 (beekeeper-studio-bin, Electron)",
+    "TablePlus": "no medido: no instalado en esta maquina"
+  },
+  "desktop": {
+    "rowly.startup.warm": {
+      "window_ms": {
+        "median": 129.0,
+        "p95": 132,
+        "dispersion_pct": 1.6
+      },
+      "settle_ms": {
+        "median": 694.5,
+        "p95": 903,
+        "dispersion_pct": 41.9
+      },
+      "pss_mb": {
+        "median": 243.7,
+        "p95": 245.5,
+        "dispersion_pct": 1.9
+      },
+      "remotes": [
+        "140.82.112.6:443",
+        "140.82.114.5:443"
+      ]
+    },
+    "rowly.startup.cold": {
+      "window_ms": {
+        "median": 312.0,
+        "p95": 363,
+        "dispersion_pct": 7.2
+      },
+      "settle_ms": {
+        "median": 983.0,
+        "p95": 1152,
+        "dispersion_pct": 29.5
+      },
+      "pss_mb": {
+        "median": 244.6,
+        "p95": 246.2,
+        "dispersion_pct": 1.3
+      },
+      "remotes": [
+        "140.82.113.6:443",
+        "140.82.114.6:443"
+      ]
+    },
+    "rowly.idle.300s": {
+      "cpu_seconds": 0.08,
+      "cpu_pct_of_one_core": 0.03,
+      "pss_slope_mb_per_min": -0.012,
+      "pss_first_last_mb": [
+        241.0,
+        240.7
+      ],
+      "remotes": []
+    },
+    "beekeeper.startup.warm": {
+      "window_ms": {
+        "median": 1945.0,
+        "p95": 1967,
+        "dispersion_pct": 2.2
+      },
+      "settle_ms": {
+        "median": 2441.5,
+        "p95": 2886,
+        "dispersion_pct": 6.7
+      },
+      "pss_mb": {
+        "median": 856.5,
+        "p95": 858.6,
+        "dispersion_pct": 0.2
+      },
+      "remotes": [
+        "169.254.169.254:80",
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2607:f8b0:400c:c1a::65]:443",
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2607:f8b0:400c:c1a::71]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    "beekeeper.startup.cold": {
+      "window_ms": {
+        "median": 2254.0,
+        "p95": 2401,
+        "dispersion_pct": 4.0
+      },
+      "settle_ms": {
+        "median": 2808.0,
+        "p95": 3126,
+        "dispersion_pct": 6.5
+      },
+      "pss_mb": {
+        "median": 855.2,
+        "p95": 857.9,
+        "dispersion_pct": 0.6
+      },
+      "remotes": [
+        "169.254.169.254:80",
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2607:f8b0:400c:c1a::65]:443",
+        "[2607:f8b0:400c:c1a::66]:443",
+        "[2607:f8b0:400c:c1a::71]:443",
+        "[2607:f8b0:400c:c1a::8a]:443",
+        "[2607:f8b0:400c:c1a::8b]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    },
+    "beekeeper.idle.300s": {
+      "cpu_seconds": 1.43,
+      "cpu_pct_of_one_core": 0.48,
+      "pss_slope_mb_per_min": -20.592,
+      "pss_first_last_mb": [
+        856.7,
+        747.0
+      ],
+      "remotes": [
+        "[2607:f8b0:400c:c1a::64]:443",
+        "[2803:2540:1:15::f]:443"
+      ]
+    }
+  },
+  "bundle": {
+    "format": 1,
+    "scenario": "bundle",
+    "label": "v0.3.0",
+    "initialJs": {
+      "files": 10,
+      "kb": 1424.0,
+      "gzip_kb": 436.1
+    },
+    "allJs": {
+      "files": 13,
+      "kb": 1682.1,
+      "gzip_kb": 508.7
+    },
+    "allCss": {
+      "files": 2,
+      "kb": 45.7,
+      "gzip_kb": 7.2
+    }
+  },
+  "binary": {
+    "/usr/bin/rowly-db (rowly-db-bin 0.3.0-1)": {
+      "kb": 15220.7
+    }
+  },
+  "installers_kb": {
+    "deb": 6751.5,
+    "rpm": 6752.0,
+    "AppImage": 82830.5,
+    "pkg.tar.zst": 6374.9,
+    "x64-setup.exe": 4373.2,
+    "msi": 6016.0,
+    "x64.dmg": 5783.9,
+    "aarch64.dmg": 5304.7
+  },
+  "editorNode": {
+    "10k-lines": {
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 0.8821,
+        "p95": 1.1512,
+        "p99": 1.4376,
+        "max": 3.2795
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0071,
+        "p95": 0.0105,
+        "p99": 0.0286,
+        "max": 0.3214
+      },
+      "indexBuildMs": 1.7
+    },
+    "1M-lines": {
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 0.9424,
+        "p95": 1.0851,
+        "p99": 1.1823,
+        "max": 1.5846
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0094,
+        "p95": 0.0123,
+        "p99": 0.0187,
+        "max": 0.1539
+      },
+      "indexBuildMs": 413.4
+    }
+  },
+  "catalog": {
+    "mariadb": {
+      "analysisPerStatementMs": {
+        "max": 0.102,
+        "n": 340,
+        "p50": 0.011,
+        "p95": 0.031
+      },
+      "connectMs": {
+        "max": 2.062,
+        "n": 5,
+        "p50": 1.179,
+        "p95": 2.062
+      },
+      "corpusStatements": 68,
+      "guardPerStatementMs": {
+        "max": 0.109,
+        "n": 340,
+        "p50": 0.009,
+        "p95": 0.037
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 85.399,
+          "n": 5,
+          "p50": 79.29,
+          "p95": 85.399
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 4.389,
+          "n": 5,
+          "p50": 3.762,
+          "p95": 4.389
+        },
+        "schema": "sakila",
+        "tables": 23
+      },
+      "serverVersion": "MariaDB 11.8.9"
+    },
+    "mysql": {
+      "analysisPerStatementMs": {
+        "max": 0.376,
+        "n": 340,
+        "p50": 0.012,
+        "p95": 0.043
+      },
+      "connectMs": {
+        "max": 9.125,
+        "n": 5,
+        "p50": 5.775,
+        "p95": 9.125
+      },
+      "corpusStatements": 68,
+      "guardPerStatementMs": {
+        "max": 0.136,
+        "n": 340,
+        "p50": 0.009,
+        "p95": 0.043
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 26.321,
+          "n": 5,
+          "p50": 23.043,
+          "p95": 26.321
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 8.908,
+          "n": 5,
+          "p50": 2.315,
+          "p95": 8.908
+        },
+        "schema": "sakila",
+        "tables": 23
+      },
+      "serverVersion": "MySQL 8.4.11"
+    },
+    "postgres": {
+      "analysisPerStatementMs": {
+        "max": 0.081,
+        "n": 325,
+        "p50": 0.009,
+        "p95": 0.036
+      },
+      "connectMs": {
+        "max": 10.988,
+        "n": 5,
+        "p50": 8.957,
+        "p95": 10.988
+      },
+      "corpusStatements": 65,
+      "guardPerStatementMs": {
+        "max": 0.106,
+        "n": 325,
+        "p50": 0.013,
+        "p95": 0.043
+      },
+      "introspectLarge": {
+        "ms": {
+          "max": 74.362,
+          "n": 5,
+          "p50": 69.171,
+          "p95": 74.362
+        },
+        "tables": 500
+      },
+      "introspectSmall": {
+        "ms": {
+          "max": 10.699,
+          "n": 5,
+          "p50": 4.989,
+          "p95": 10.699
+        },
+        "schema": "public",
+        "tables": 24
+      },
+      "serverVersion": "PostgreSQL 18.6"
+    }
+  },
+  "thresholds": {
+    "default": "mediana +5 % (compare.py); si la diferencia cae dentro de dispersion_pct de la referencia, repetir antes de decidir",
+    "rowly.settle_ms": "dispersion 29-42 %: no sirve como compuerta del 5 %; se usa window_ms y PSS hasta que la app instrumentada mida la primera interaccion"
+  },
+  "notMeasured": [
+    "Windows/WebView2 y macOS/WKWebView: no hay esas maquinas en este entorno",
+    "Latencia tecla->pintado, frames del grid 2 000x120, 300 ciclos de abrir/cerrar consola y tema, documento de 30 MB en la WebView: necesitan la app instrumentada (performance.mark) y entrada automatizada; no existen aun",
+    "Reposo con una conexion abierta: necesita conectar sin enviar teclas a la app; llega con el harness E2E",
+    "Arranque frio verdadero: fadvise no expulsa bibliotecas que otros procesos tienen mapeadas",
+    "TablePlus: no instalado",
+    "Medicion en workspace especial de Hyprland, fuera de pantalla: el compositor no pide frames a la ventana; igual para todas las apps y builds comparadas"
+  ]
+}

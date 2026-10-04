@@ -1,0 +1,283 @@
+{
+  "format": 1,
+  "scenario": "idle",
+  "app": "Beekeeper Studio",
+  "label": "Beekeeper Studio 6.1.2",
+  "date": "2026-10-02T15:49:46-0500",
+  "environment": {
+    "os": "Omarchy",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "cores": 16,
+    "memory_gb": 15.3,
+    "governor": "powersave",
+    "platform_profile": "performance",
+    "power_supply": {
+      "ADP0": "1",
+      "ucsi-source-psy-USBC000:001": "0",
+      "BAT0": "Not charging"
+    },
+    "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)",
+    "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+    "compositor": "Hyprland v0.56.2",
+    "session": "wayland",
+    "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+    "workspace": "special:rowlybench (silent, fuera de pantalla)",
+    "binary": "/usr/bin/beekeeper-studio"
+  },
+  "seconds": 300,
+  "connection": "ninguna (perfil vacio)",
+  "cpu_seconds": 1.43,
+  "cpu_pct_of_one_core": 0.48,
+  "pss_slope_mb_per_min": -20.592,
+  "pss_first_last_mb": [
+    856.7,
+    747.0
+  ],
+  "remotes": [
+    "[2607:f8b0:400c:c1a::64]:443",
+    "[2803:2540:1:15::f]:443"
+  ],
+  "samples": [
+    {
+      "t_s": 0.0,
+      "cpu_ticks": 0,
+      "pss_mb": 856.7,
+      "rss_mb": 1308.3,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 10.0,
+      "cpu_ticks": 3,
+      "pss_mb": 856.6,
+      "rss_mb": 1308.4,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 20.0,
+      "cpu_ticks": 21,
+      "pss_mb": 818.9,
+      "rss_mb": 1270.7,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 30.1,
+      "cpu_ticks": 24,
+      "pss_mb": 818.9,
+      "rss_mb": 1270.7,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 40.1,
+      "cpu_ticks": 27,
+      "pss_mb": 817.9,
+      "rss_mb": 1269.7,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 50.1,
+      "cpu_ticks": 32,
+      "pss_mb": 815.8,
+      "rss_mb": 1267.8,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 60.1,
+      "cpu_ticks": 35,
+      "pss_mb": 815.9,
+      "rss_mb": 1267.8,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 70.2,
+      "cpu_ticks": 38,
+      "pss_mb": 815.9,
+      "rss_mb": 1267.8,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 80.2,
+      "cpu_ticks": 43,
+      "pss_mb": 812.6,
+      "rss_mb": 1264.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 90.2,
+      "cpu_ticks": 58,
+      "pss_mb": 748.2,
+      "rss_mb": 1200.2,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 100.2,
+      "cpu_ticks": 61,
+      "pss_mb": 748.2,
+      "rss_mb": 1200.2,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 110.2,
+      "cpu_ticks": 64,
+      "pss_mb": 748.0,
+      "rss_mb": 1200.4,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 120.3,
+      "cpu_ticks": 68,
+      "pss_mb": 748.0,
+      "rss_mb": 1200.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 130.3,
+      "cpu_ticks": 73,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 140.3,
+      "cpu_ticks": 76,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 150.3,
+      "cpu_ticks": 80,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 160.3,
+      "cpu_ticks": 83,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 170.4,
+      "cpu_ticks": 87,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 180.4,
+      "cpu_ticks": 91,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 190.4,
+      "cpu_ticks": 95,
+      "pss_mb": 748.1,
+      "rss_mb": 1200.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 200.4,
+      "cpu_ticks": 109,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.4,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 210.5,
+      "cpu_ticks": 113,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.4,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 220.5,
+      "cpu_ticks": 116,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.4,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 230.5,
+      "cpu_ticks": 119,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 240.5,
+      "cpu_ticks": 123,
+      "pss_mb": 746.9,
+      "rss_mb": 1199.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 250.5,
+      "cpu_ticks": 128,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 260.6,
+      "cpu_ticks": 131,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 270.6,
+      "cpu_ticks": 136,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.5,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 280.6,
+      "cpu_ticks": 139,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.6,
+      "processes": 7,
+      "threads": 112
+    },
+    {
+      "t_s": 290.6,
+      "cpu_ticks": 143,
+      "pss_mb": 747.0,
+      "rss_mb": 1199.6,
+      "processes": 7,
+      "threads": 112
+    }
+  ]
+}
