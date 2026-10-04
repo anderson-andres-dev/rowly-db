@@ -12,7 +12,7 @@ common/                valid in every line of every engine: no-diagnostics.sql, 
   <line>/
     accepts.sql        new in this line: accepted on both ends of the line, rejected on both ends of the previous one
     rejects.sql        removed in this line: rejected on both ends of the line, accepted on both ends of the previous one
-    reads.sql          results the driver must read on every server of the line; `-- expect:` gives the first cell
+    reads.sql          results the driver must read on every server of the line; `-- expect:` gives the first cell; `-- gap: <error>` marks a known driver gap (SQL_ENGINE §9) that must fail with that error until it is fixed
 ```
 
 Lines and the servers at each end are in `tools/test-dbs/lines.json`. Entries are separated by a line `-- ---`; each one is a single statement, with a comment saying what it proves. Objects go in the scratch database or schema `rowly_lines`, which `setup.sql` recreates.
