@@ -142,7 +142,9 @@ describe("indice de sentencias", () => {
     }
     expect(statementIndexComplete(state)).toBe(true);
     expect(indexed(state)).toEqual(split(state.doc.toString()));
-  });
+    // Sin umbral de tiempo: compara 40 veces contra el divisor completo de
+    // 40 000 lineas, y en un runner compartido pasa de los 5 s por defecto.
+  }, 60_000);
 
   it("elige la misma sentencia que statementAt", () => {
     const text = ["SELECT * FROM a;", "", "", "SELECT * FROM b;", "", "SELECT 3", "  FROM c;   SELECT 4;", ""].join(

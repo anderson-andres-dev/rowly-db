@@ -92,7 +92,8 @@ pub async fn list_dir(path: String) -> Result<Vec<SqlDirEntry>, Message> {
             continue;
         };
         let is_dir = metadata.is_dir();
-        if !is_dir && !(metadata.is_file() && is_sql_file_name(&name)) {
+        // Carpetas y archivos .sql; lo demas no se lista.
+        if !(is_dir || metadata.is_file() && is_sql_file_name(&name)) {
             continue;
         }
         entries.push(SqlDirEntry {

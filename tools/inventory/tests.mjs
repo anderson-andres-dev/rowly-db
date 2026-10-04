@@ -106,6 +106,10 @@ function cargoBinary(crate, path) {
 }
 
 const tsFiles = walk(join(ROOT, "app/src"), (p) => p.endsWith(".test.ts"));
+// Recorridos E2E: cada flow("...") de app/tests/e2e es un test de la app real.
+const e2eFiles = existsSync(join(ROOT, "app/tests/e2e"))
+  ? walk(join(ROOT, "app/tests/e2e"), (p) => p.endsWith(".mjs") && /\bflow\("/.test(readFileSync(p, "utf8")))
+  : [];
 const rustFiles = [
   ...walk(join(ROOT, "crates"), (p) => p.endsWith(".rs")),
   ...walk(join(ROOT, "app/src-tauri/src"), (p) => p.endsWith(".rs")),
@@ -122,8 +126,13 @@ const matrix = sqlEngine.slice(sqlEngine.indexOf("## 6."), sqlEngine.indexOf("##
 const ROWS = new Set([...matrix.matchAll(/^\| ([SAGD]\d+) \|/gm)].map((m) => m[1]));
 
 const problems = [];
-const tests = [...tsFiles, ...rustFiles].sort().map((path) => {
-  const mechanical = path.endsWith(".ts") ? tsEntry(path) : rustEntry(path);
+function e2eEntry(path) {
+  const src = readFileSync(join(ROOT, path), "utf8");
+  return { kind: "e2e", tests: (src.match(/^flow\("/gm) ?? []).length, ignored: 0, environment: "app+webdriver+mysql" };
+}
+
+const tests = [...tsFiles, ...rustFiles, ...e2eFiles].sort().map((path) => {
+  const mechanical = path.endsWith(".ts") ? tsEntry(path) : path.endsWith(".mjs") ? e2eEntry(path) : rustEntry(path);
   const old = byPath.get(path) ?? {};
   let durationMs = old.durationMs ?? null;
   // El conteo estatico no ve it.each ni bucles: con un reporte de vitest se

@@ -135,11 +135,11 @@ Rutas: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 |---|---|---|
 | S1 | Un `;` dentro de un texto, comentario, identificador o dollar quote del motor no corta | `front/engines/contract.test.ts` (*un ; dentro de sus comillas…*), `front/sqlStatements.test.ts` |
 | S2 | Un texto que el guard acepta corre como una sola sentencia en el servidor real, medido **sin** la barrera de preparación del driver (§8) | `real` `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server`, `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement` |
-| S3 | Todo lo que daña datos pide confirmación | `real` `what_damages_data_never_passes_as_not_destructive`, tests unitarios del `guard` (`*_requires_confirmation`) |
+| S3 | Todo lo que daña datos pide confirmación | `real` `what_damages_data_never_passes_as_not_destructive`, tests unitarios del `guard` (`*_requires_confirmation`); en la app real, `app/tests/e2e/run.mjs` (*DELETE sin WHERE: Escape cancela…*) |
 | S4 | Los comentarios ejecutables y con versión se clasifican como código | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
 | S5 | Las reglas de los textos siguen el modo del servidor (`NO_BACKSLASH_ESCAPES`) | `real` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
 | S6 | La sintaxis que el parser no lee se juzga por su estructura, nunca se deja pasar sin más | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
-| S7 | En producción cada escritura requiere confirmación explícita; el backend vuelve a clasificar antes de ejecutar y teclas repetidas o modificadas no la suplen | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; falta una prueba integrada (§9) |
+| S7 | En producción cada escritura requiere confirmación explícita; el backend vuelve a clasificar antes de ejecutar y teclas repetidas o modificadas no la suplen | `app/src-tauri/src/lib.rs` `in_production_every_write_needs_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; en la app real, `app/tests/e2e/run.mjs` (*produccion: una escritura pide confirmacion…*) cubre la consola en MySQL; el resto del recorrido es un hueco (§9) |
 
 ### 6.2 Análisis y diagnósticos
 
@@ -206,7 +206,7 @@ Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`
 
 | Compuerta | Cuándo | Qué corre | Automática |
 |---|---|---|---|
-| **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build` | En parte: CI todavía omite `npm test` y `-D warnings` (§9) |
+| **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, comprobación del inventario de tests y los recorridos E2E en la app real (Linux, WebKitGTK) | Sí: `.github/workflows/quality.yml` y `e2e.yml` |
 | **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | No: la suite real aún es manual (§9) |
 | **Versión exacta o paquete** | Antes de anunciar una versión verificada o publicar su paquete de línea (§11) | Matriz completa en esa versión y en las demás versiones verificadas de la línea afectada; D7 frente a línea anterior si cambia el comportamiento | No |
 | **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | No |
@@ -216,9 +216,11 @@ Comandos, hoy:
 ```bash
 # Compuerta de PR
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cd app && npm run check && npm test && npm run build
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cd app && npm run check && npm test && npm run build && cd ..
+node tools/inventory/tests.mjs --check
+# Recorridos E2E: solo en CI (.github/workflows/e2e.yml); necesitan WebKitWebDriver, tauri-driver, Xvfb y xdotool
 
 # Suite contra servidor real (levanta MySQL, MariaDB y PostgreSQL en Docker)
 tools/test-dbs/up.sh
@@ -267,10 +269,9 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 
 | Hueco | Severidad | Nota |
 |---|---|---|
-| El CI no corre `npm test`, y corre clippy sin `-D warnings` | P1 | Más de mil tests del frontend no se comprueban en los pull requests, y un aviso de clippy no hace fallar el build. Cada cosa es una línea en `.github/workflows/quality.yml`. |
 | Las líneas están demostradas, pero el resto de la suite (escritura, `CALL` generado, fuzz del guard, destructividad) corre con una versión por motor (MySQL 8.4, MariaDB 11.8, PostgreSQL 18), no hay reporte completo por versión exacta y los mínimos del código (`MIN_MYSQL` 5.7, `MIN_MARIADB` 10.3, `MIN_MAJOR` 10) no siguen §5.2 | P1 | Completar el mapa de §10, fijar y ejecutar cada versión declarada, automatizar §7 y ajustar la ventana de soporte. |
 | La suite contra servidor real no corre en el CI | P2 | Necesita Docker en el CI; mientras tanto, es la compuerta manual de PR de motor. |
-| No hay prueba integrada de confirmación entre teclado, UI y ejecución en el backend (S7), ni contexto tipado e invalidación completos por conexión (D9) | P2 | Añadir casos por motor y versión, incluida reconexión y cambio de modo; los unitarios actuales solo cubren partes del recorrido. La UI aún no distingue versión exacta verificada de no verificada. |
+| La prueba integrada de confirmación (S7) solo cubre la consola en una versión de MySQL, y no hay contexto tipado e invalidación completos por conexión (D9) | P2 | Añadir la edición de resultados, los demás motores y versiones, reconexión y cambio de modo. Los recorridos E2E corren solo en Linux; Windows (WebView2) y macOS (WKWebView) siguen siendo humo manual de release. La UI aún no distingue versión exacta verificada de no verificada. |
 | El analizador tiene un solo dialecto por motor: no puede marcar la sintaxis que una línea eliminó (A9), y las palabras reservadas son una lista por motor (G6) | P2 | Llega con la declaración por línea de abajo. |
 | Las capacidades se declaran en tres lugares (§6.5), en código y no por línea | P2 | Una sola declaración por línea, como datos. Es también lo que llevan los paquetes de soporte de versión (§11). |
 | La clasificación de incompleto / no encontrado / genérico vive en el frontend (listas de claves en `SqlEditor.svelte`), y `real` la replica para simular la escritura | P2 | El analizador debería emitir una categoría con cada diagnóstico. Eso elimina la copia (principio 5). |

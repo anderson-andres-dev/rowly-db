@@ -37,7 +37,12 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cd app && npm run check && npm test && npm run build
+cd .. && node tools/inventory/tests.mjs --check
 ```
+
+CI runs the same gate with Rust 1.90 (`.github/workflows/quality.yml`); a newer local clippy can miss a lint that 1.90 reports, so `cargo +1.90 clippy --workspace --all-targets -- -D warnings` reproduces it exactly. Every test file needs an entry in `tests/inventory.json` with its owner, the property it protects, its risk, its gate and a decision; the `--check` fails until it has one.
+
+The **E2E** workflow builds the app and drives it on Linux/WebKitGTK through `tauri-driver` with a disposable MySQL (`app/tests/e2e/run.mjs`): connecting, running with Ctrl+Enter, confirming and cancelling a destructive statement, the production confirmation and the console text surviving a restart. It needs `WebKitWebDriver` and `tauri-driver`, so it normally runs in CI only. Windows/WebView2 and macOS/WKWebView stay a manual smoke test before a release.
 
 ## Tests against a real database
 
