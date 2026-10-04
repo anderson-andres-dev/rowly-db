@@ -8,9 +8,17 @@
 //! Si la conexion queda inservible (se perdio, o quedaron filas sin leer), se
 //! cierra y la siguiente sentencia abre otra, sin el estado de la anterior.
 //! Nunca se repite en silencio una sentencia. `epoch` cuenta esas aperturas y
-//! cierres: quien la usa sabe asi que la sesion cambio.
+//! cierres: quien la usa sabe asi que la sesion cambio (`session_lost`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Si entre dos lecturas de `epoch` se cerro una sesion que existia. La
+/// consola empieza cerrada en 0 y cada apertura o cierre suma uno: par es
+/// cerrada, impar abierta. Abrir la primera (0 -> 1) no pierde nada; cada
+/// cierre, si.
+pub fn session_lost(known_epoch: u64, epoch: u64) -> bool {
+    epoch / 2 > known_epoch / 2
+}
 
 pub struct ConsoleConnection<C> {
     slot: tokio::sync::Mutex<Option<C>>,
@@ -90,6 +98,26 @@ mod tests {
         assert_eq!(console.epoch(), 2);
         assert_eq!(*console.lock(&mut open).await.unwrap().connection(), 2);
         assert_eq!(console.epoch(), 3);
+    }
+
+    #[tokio::test]
+    async fn opening_the_first_connection_loses_no_session_and_closing_one_does() {
+        let console = ConsoleConnection::<u32>::default();
+        let open = async || Ok::<_, ()>(1);
+        let known = console.epoch();
+        console.lock(open).await.unwrap();
+        assert!(!session_lost(known, console.epoch()));
+
+        let known = console.epoch();
+        console.lock(open).await.unwrap().discard();
+        assert!(session_lost(known, console.epoch()));
+        console.lock(open).await.unwrap();
+        assert!(session_lost(known, console.epoch()));
+
+        // Abierta y perdida dentro de la primera sentencia: esa sesion existio.
+        let fresh = ConsoleConnection::<u32>::default();
+        fresh.lock(open).await.unwrap().discard();
+        assert!(session_lost(0, fresh.epoch()));
     }
 
     #[tokio::test]

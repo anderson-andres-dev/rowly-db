@@ -153,7 +153,7 @@ fn record_console(
     mode: Option<SessionMode>,
     generations: &AtomicU64,
 ) -> ConsoleChange {
-    let reset = epoch != *known_epoch;
+    let reset = khipu_driver_core::session_lost(*known_epoch, epoch);
     *known_epoch = epoch;
     let context = match mode {
         Some(mode) if mode != context.session_mode => {
@@ -208,7 +208,19 @@ mod tests {
     fn a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset() {
         let generations = AtomicU64::new(1);
         let mut context = context();
-        let mut known_epoch = 1;
+        // Al conectar sin leer el modo (PostgreSQL), la consola aun no existe.
+        let mut known_epoch = 0;
+
+        // La primera sentencia la abre: no se perdio ninguna sesion.
+        let change = record_console(
+            &mut context,
+            &mut known_epoch,
+            1,
+            Some(SessionMode::default()),
+            &generations,
+        );
+        assert!(change.context.is_none() && !change.reset);
+        assert_eq!(known_epoch, 1);
         let no_backslash = SessionMode {
             no_backslash_escapes: true,
         };
