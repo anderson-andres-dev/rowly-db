@@ -110,5 +110,6 @@ La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés 
 ## Estilo
 
 - Commits cortos en imperativo, en español o inglés.
+- Solo versiones publicadas de las dependencias: ni forks, ni ramas o commits sin publicar, ni parches propios. Lo que falta upstream queda como hueco documentado en SQL_ENGINE.es.md, §9.
 - Nada de abstracciones antes de necesitarlas. Si un motor necesita algo que `DbConnector` no cubre, plantéalo antes en un issue.
 - La documentación pública se escribe en inglés con una copia en español en `*.es.md`. Mantén las dos al día. Las notas temporales de diseño están en español.

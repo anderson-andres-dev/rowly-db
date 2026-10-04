@@ -106,14 +106,14 @@ Vendor support and Rowly DB verification are separate facts. **Every exact serve
 
 ### 5.3 Lines today
 
-Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine. Every release in **Tested on** is declared `verified` in `tools/test-dbs/lines.json`, pinned by image digest, and passes the complete matrix of §6 in CI on every engine PR (§7); what a line lacks is reported as N/A with its proof (§10.1).
+Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine. Every release in **Tested on** is declared `verified` in `tools/test-dbs/lines.json`, pinned by image digest, and passes the complete matrix of §6 in CI on every engine PR (§7); what a line lacks is reported as N/A with its proof (§10.1). **Status** is vendor support, not Rowly DB coverage: a supported line can still have open gaps in §9.
 
-| Engine | Line | Differences from the previous line | Status | Tested on |
+| Engine | Line | Differences from the previous line | Vendor status (§5.2) | Tested on |
 |---|---|---|---|---|
 | MySQL | 5.7 | Base: no CTE or window functions, `CHECK` parsed and ignored | Unsupported (EOL 2023-10) | — |
 | | 8.0–8.3 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-21 | 8.0.46 |
 | | 8.4 | `SHOW SLAVE STATUS` and `SHOW MASTER STATUS` removed. `mysql_native_password` not loaded by default | Supported until 2032 | 8.4.11 |
-| | 9 | `VECTOR` type and vector functions | Supported (9.7 LTS until 2034) | 9.7.2 |
+| | 9 | `VECTOR` type and vector functions (Rowly DB does not read `VECTOR` columns yet: P2 gap, §9) | Supported (9.7 LTS until 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode | Unsupported (EOL 2025-06) | — |
 | | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Supported (10.6 in grace until 2027-07-06; 10.11 and 11.4 LTS) | 10.6.28 |
 | | 11.7+ | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8. Optimizer hints `/*+ … */` from 12.0 | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
@@ -302,18 +302,22 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | Unicode beyond `SELECT INTO`: names, offsets, UTF-8 ↔ UTF-16 between Rust and the editor (A8) | P2 | |
 | `VerifyCa` with the CA that signed the server's certificate still fails when the certificate does not name the host (D5): sqlx 0.8.6 only skips rustls's old name error, and rustls 0.23.45 reports `NotValidForNameContext` | P2 | It fails closed: nothing unverified gets through, and a certificate that names the host connects. Rowly DB does not patch sqlx (only published releases); `tls_verification_uses_the_configured_ca` reports when a release fixes it. |
 | `VerifyIdentity` accepting a certificate that names the host is not tested (D5): no test server serves one, MariaDB 11.8 generates its certificate in memory, and the PostgreSQL and MariaDB 10.6 images offer no TLS | P2 | Needs certificates of our own served by the test images, which changes what each image offers (`tls` in `lines.json`). |
+| If an export fails midway (a server or file error, or unread rows), the console connection is discarded and the lost-session notice arrives only with the next statement's response, which already ran in the new session | P2 | Example: `BEGIN; UPDATE …`, the export fails, the next `UPDATE` autocommits and the notice shows afterwards. Nothing runs without the guard and the transaction is not committed: the server rolls it back when the connection closes. `stream_query` (`crates/drivers/*/src/lib.rs`) calls `console.discard()`, and `export_query_to_file` (`app/src-tauri/src/commands/results.rs`) does not return `sessionReset`. |
+| An old but signed pack index can lower a line's downloaded revision, and a signed pack can drop a capability the included line declared. Drivers read their capabilities from `Dialect::lines()`, so that changes their catalog queries | P2 | It never goes below the included revision (`with_packages` in `crates/engine/src/lines.rs` only replaces it with a newer one), never touches the guard or the parser, and only accepts what the app's key signed. `Store::install` (`app/src-tauri/src/support.rs`) does not compare with the installed revision, and validation does not require a revision to keep the included line's capabilities. |
+| `sql_mode` race between tabs of one window: the guard takes the session mode before waiting for the console connection, and another tab can run a `SET sql_mode` (for example `NO_BACKSLASH_ESCAPES`) between classification and execution | P2 | `execute_query` in `app/src-tauri/src/commands/query.rs` reads the guard options before the `ConsoleConnection` mutex. It needs two statements in flight at once in different tabs, one of them changing the mode; on the normal path, the driver's prepare barrier (§8) still rejects multiple statements. |
 | The guard fuzz on PostgreSQL 13 generates 37 dangerous cases out of 4000, and the test needs more than 30 to measure anything (S2) | P3 | Not a regression: the fuzz is deterministic (a fixed seed per engine) and its skeletons are filtered by release. PostgreSQL 13 has no SQL-standard function bodies, so it draws from three skeletons fewer and gets another sequence; 37 is constant for 13.23 with this corpus. The minimum is what keeps the fuzz from going toothless, so a corpus or mutator change that drops it below 30 must fail. |
 | A `SET GLOBAL sql_mode` run after connecting reaches the pool's new connections, while result editing keeps writing literals with the mode read on connect | P3 | Reconnecting reads it again. |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | |
 | The evidence `publish.mjs` requires does not say which commit it comes from: `evidence.mjs` checks release, digest and results, but not that the artifacts come from the same commit as the packs | P2 | Publishing from the matrix job, with its artifacts, guarantees it in practice; recording the commit in the evidence would make it checkable. |
 | §5.3 is written by hand: it does not come from `support/` like the pack index (§11) | P3 | Its differences are prose for people; generating the table means moving that text into the source. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
+| Not tested against a server: `USE` persisting in the console end to end, a physical loss of the console connection (not retried, reported) and closing a console with an open transaction rolling it back | P3 | The code does not retry (§8) and the server rolls back when the connection closes; it still needs proof with `KILL`/`pg_terminate_backend` and by disconnecting with an open transaction. |
 
 ## 10. Tests, fixtures and simulations
 
 ### 10.1 Layout
 
-Target tree shared by Rust and TypeScript tests:
+Tree shared by Rust and TypeScript tests:
 
 ```text
 tests/sql/
@@ -340,7 +344,7 @@ The whole corpus lives here. In `common/` (at any level): `no-diagnostics.sql`, 
 
 `coverage.json` maps each S/A/G/D row in §6 to a test, its fixture, the engines and releases where it applies, and the gate that runs it. A row without a test, an `N/A` without a reason, or a real-server test that proves no row fails `tools/inventory/coverage.mjs`. The `crates/server-tests` harness prepares an ephemeral schema per engine, release and case, restores session mode, records the exact server version and emits a reproducible report with commit, row, minimal SQL, seed and result. Unit tests stay next to the code.
 
-To migrate an old corpus or test: record the property it protects, add its replacement to the target tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia. The locations in the §6 tables and the §7 commands continue to show **what exists today** until each migration PR updates them.
+To migrate an old corpus or test: record the property it protects, add its replacement to this tree, show that it catches the known failure and run it in CI; only then remove the old one. Do not retain a duplicate, obsolete test or a test that copies the algorithm by inertia.
 
 ### 10.2 Rules
 
@@ -410,7 +414,7 @@ These operations are distinct: **engine** = SQL and catalog rules; **driver** = 
 
 1. Pin that release's image or library by digest in the test registry, read its actual version and check that it matches. Do not infer support from the image name.
 2. Run every applicable §6 row and retain the §10 evidence. If behavior differs, return to 12.2; otherwise keep the line and add the release to the verified set.
-3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to a pack's `tested` evidence.
+3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to the verified releases in `tools/test-dbs/lines.json`.
 
 SQLite has no server process: for these gates "real server" means the SQLite library linked by the driver, with its version and dataset pinned. Having fewer server objects does not lower the bar for the splitter, guard, typing, quoting or safety.
 

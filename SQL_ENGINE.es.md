@@ -106,14 +106,14 @@ El soporte del fabricante y la verificación de Rowly DB son datos distintos. **
 
 ### 5.3 Las líneas hoy
 
-Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra servidores reales en sus dos extremos (`version_lines`, D7): lo nuevo de ella pasa ahí y falla en los dos extremos de la línea anterior, y lo que eliminó, al revés. Una línea que ningún fixture separa se uniría a la anterior; el test lo informa. Cada línea soportada se prueba con el último parche de su versión LTS soportada más antigua, la que protege el mínimo. La compuerta de release también prueba la versión más nueva de cada motor. Cada versión de **Probada en** está declarada `verified` en `tools/test-dbs/lines.json`, fijada por digest de imagen, y pasa la matriz completa de §6 en CI en cada PR de motor (§7); lo que una línea no tiene se informa como N/A con su prueba (§10.1).
+Estado al 2026-10-02. **Cada línea de esta tabla está demostrada** contra servidores reales en sus dos extremos (`version_lines`, D7): lo nuevo de ella pasa ahí y falla en los dos extremos de la línea anterior, y lo que eliminó, al revés. Una línea que ningún fixture separa se uniría a la anterior; el test lo informa. Cada línea soportada se prueba con el último parche de su versión LTS soportada más antigua, la que protege el mínimo. La compuerta de release también prueba la versión más nueva de cada motor. Cada versión de **Probada en** está declarada `verified` en `tools/test-dbs/lines.json`, fijada por digest de imagen, y pasa la matriz completa de §6 en CI en cada PR de motor (§7); lo que una línea no tiene se informa como N/A con su prueba (§10.1). **Estado** es el soporte del fabricante, no la cobertura de Rowly DB: una línea soportada puede tener huecos abiertos en §9.
 
-| Motor | Línea | Diferencias con la línea anterior | Estado | Probada en |
+| Motor | Línea | Diferencias con la línea anterior | Estado del fabricante (§5.2) | Probada en |
 |---|---|---|---|---|
 | MySQL | 5.7 | Base: sin CTE ni funciones de ventana, `CHECK` se lee y se ignora | Sin soporte (EOL 2023-10) | — |
 | | 8.0–8.3 | CTE, funciones de ventana y `LATERAL`. `rank` pasa a ser reservada. Se eliminan `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` y `SQL_CACHE`. `CHECK` real desde 8.0.16 | Soportada, en gracia hasta 2027-04-21 | 8.0.46 |
 | | 8.4 | Se eliminan `SHOW SLAVE STATUS` y `SHOW MASTER STATUS`. `mysql_native_password` no se carga por defecto | Soportada hasta 2032 | 8.4.11 |
-| | 9 | Tipo `VECTOR` y funciones vectoriales | Soportada (9.7 LTS hasta 2034) | 9.7.2 |
+| | 9 | Tipo `VECTOR` y funciones vectoriales (Rowly DB aún no lee columnas `VECTOR`: hueco P2, §9) | Soportada (9.7 LTS hasta 2034) | 9.7.2 |
 | MariaDB | 10.3–10.5 | Base: secuencias, `INTERSECT`/`EXCEPT`, tablas versionadas, modo Oracle | Sin soporte (EOL 2025-06) | — |
 | | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Soportada (10.6 en gracia hasta 2027-07-06; 10.11 y 11.4 LTS) | 10.6.28 |
 | | 11.7+ | Tipo `VECTOR`. `DEFAULT` en parámetros de procedures desde 11.8. Pistas del optimizador `/*+ … */` desde 12.0 | Soportada (11.8 y 12.3 LTS, 13.0 rolling) | 11.8.9 |
@@ -302,18 +302,22 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | Unicode más allá de `SELECT INTO`: nombres, posiciones, UTF-8 ↔ UTF-16 entre Rust y el editor (A8) | P2 | |
 | `VerifyCa` con la CA que firmó el certificado del servidor sigue fallando cuando el certificado no nombra al host (D5): sqlx 0.8.6 solo ignora el error de nombre antiguo de rustls, y rustls 0.23.45 informa `NotValidForNameContext` | P2 | Falla cerrado: nada sin verificar pasa, y un certificado que nombra al host conecta. Rowly DB no parchea sqlx (solo versiones publicadas); `tls_verification_uses_the_configured_ca` avisa cuando una versión lo corrija. |
 | No se prueba que `VerifyIdentity` acepte un certificado que nombra al host (D5): ningún servidor de prueba sirve uno, MariaDB 11.8 genera su certificado en memoria, y las imágenes de PostgreSQL y MariaDB 10.6 no ofrecen TLS | P2 | Hacen falta certificados propios servidos por las imágenes de prueba, lo que cambia lo que ofrece cada imagen (`tls` en `lines.json`). |
+| Si una exportación falla a mitad (error del servidor o del archivo, o filas sin leer), la conexión de la consola se descarta y el aviso de sesión perdida llega recién con la respuesta de la sentencia siguiente, que ya corrió en la sesión nueva | P2 | Ejemplo: `BEGIN; UPDATE …`, la exportación falla, el `UPDATE` siguiente se confirma solo y el aviso aparece después. Nada se ejecuta sin el guard ni se confirma la transacción: el servidor la deshace al cerrarse la conexión. `stream_query` (`crates/drivers/*/src/lib.rs`) llama a `console.discard()`, y `export_query_to_file` (`app/src-tauri/src/commands/results.rs`) no devuelve `sessionReset`. |
+| Un índice de paquetes viejo pero firmado puede bajar la revisión descargada de una línea, y un paquete firmado puede quitar una capacidad que declaraba la línea incluida. Los drivers leen sus capacidades de `Dialect::lines()`, así que eso cambia sus consultas de catálogo | P2 | Nunca baja de la revisión incluida (`with_packages` en `crates/engine/src/lines.rs` solo la reemplaza con una más nueva), nunca toca el guard ni el parser y solo acepta lo firmado con la clave de la app. `Store::install` (`app/src-tauri/src/support.rs`) no compara con la revisión ya instalada, y la validación no exige que una revisión conserve las capacidades de la incluida. |
+| Carrera de `sql_mode` entre pestañas de una ventana: el guard toma el modo de la sesión antes de esperar la conexión de la consola, y otra pestaña puede ejecutar un `SET sql_mode` (por ejemplo `NO_BACKSLASH_ESCAPES`) entre la clasificación y la ejecución | P2 | `execute_query` en `app/src-tauri/src/commands/query.rs` lee las opciones del guard antes del mutex de `ConsoleConnection`. Exige dos sentencias en curso a la vez en pestañas distintas, una de ellas cambiando el modo; por la ruta normal, la barrera de preparación del driver (§8) sigue rechazando varias sentencias. |
 | El fuzz del guard en PostgreSQL 13 genera 37 casos peligrosos de 4000, y la prueba exige más de 30 para medir algo (S2) | P3 | No es una regresión: el fuzz es determinista (semilla fija por motor) y sus esqueletos se filtran por versión. PostgreSQL 13 no tiene cuerpos de función del estándar SQL, así que sortea entre tres esqueletos menos y obtiene otra secuencia; 37 es constante para 13.23 con este corpus. El mínimo es lo que impide que el fuzz deje de medir, así que un cambio del corpus o del mutador que lo baje de 30 tiene que fallar. |
 | Un `SET GLOBAL sql_mode` ejecutado después de conectar llega a las conexiones nuevas del pool, mientras la edición de resultados sigue escribiendo literales con el modo leído al conectar | P3 | Reconectar lo vuelve a leer. |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | |
 | La evidencia que exige `publish.mjs` no dice de qué commit es: `evidence.mjs` comprueba versión, digest y resultados, pero no que los artefactos salgan del mismo commit que los paquetes | P2 | Publicar desde el job de la matriz, con sus artefactos, lo garantiza en la práctica; registrar el commit en la evidencia lo haría comprobable. |
 | §5.3 se escribe a mano: no sale de `support/` como el índice de paquetes (§11) | P3 | Sus diferencias son prosa para personas; generar la tabla pide llevar ese texto a la fuente. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
+| Sin prueba contra un servidor: que `USE` se conserve en la consola de punta a punta, la pérdida física de la conexión de la consola (no se reintenta y se avisa) y que cerrar una consola con una transacción abierta la deshaga | P3 | El código no reintenta (§8) y el rollback lo hace el servidor al cerrarse la conexión; falta demostrarlo con `KILL`/`pg_terminate_backend` y desconectando con una transacción abierta. |
 
 ## 10. Tests, fixtures y simulaciones
 
 ### 10.1 Estructura
 
-Árbol destino compartido por las pruebas de Rust y TypeScript:
+Árbol compartido por las pruebas de Rust y TypeScript:
 
 ```text
 tests/sql/
@@ -340,7 +344,7 @@ Todo el corpus vive aquí. En `common/` (de cualquier nivel): `no-diagnostics.sq
 
 `coverage.json` asigna cada fila S/A/G/D de §6 a una prueba, su fixture, los motores y versiones donde aplica y la compuerta que la ejecuta. Una fila sin prueba, un `N/A` sin motivo o una prueba real que no prueba ninguna fila hacen fallar `tools/inventory/coverage.mjs`. El harness de `crates/server-tests` prepara un esquema efímero por motor, versión y caso, restaura el modo de sesión, recoge la versión exacta y emite un reporte reproducible con commit, fila, SQL mínimo, semilla y resultado. Los tests unitarios siguen junto al código.
 
-Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en el árbol destino, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia. Las ubicaciones de las tablas de §6 y los comandos de §7 siguen indicando **lo que existe hoy** hasta que se actualicen con cada PR de migración.
+Para migrar un corpus o test antiguo: registrar qué propiedad protege, añadir su sustituto en este árbol, comprobar que este detecta el fallo conocido y ejecutarlo en CI; solo entonces borrar el anterior. Un test duplicado, obsoleto o que copia el algoritmo no se conserva por inercia.
 
 ### 10.2 Reglas
 
@@ -410,7 +414,7 @@ Estas operaciones son distintas: **motor** = reglas SQL y catálogo; **driver** 
 
 1. Fijar la imagen o biblioteca de esa versión por digest en el registro de pruebas, leer su versión real y comprobar que coincide. No inferir soporte del número en el nombre de la imagen.
 2. Ejecutar todas las filas aplicables de §6 y guardar la evidencia de §10. Si aparece una diferencia de comportamiento, volver a 12.2; si no, conservar la línea y añadir la versión al conjunto verificado.
-3. Una versión aún no probada puede conectar con la línea conservadora de §5.2, pero no se muestra como «verificada» ni se añade a `tested` de un paquete.
+3. Una versión aún no probada puede conectar con la línea conservadora de §5.2, pero no se muestra como «verificada» ni se añade a las versiones verificadas de `tools/test-dbs/lines.json`.
 
 SQLite no tiene proceso servidor: en estas compuertas «servidor real» significa la biblioteca SQLite enlazada por el driver, con versión y dataset fijados. Tener menos objetos no reduce el listón del divisor, guard, escritura, citas ni seguridad.
 
