@@ -58,3 +58,11 @@ it("publica juntos el explorador y las tablas si ambos pedidos terminan", async 
   expect(get(catalogTables)).toBe(newTables);
   expect(get(explorerLoading)).toBe(false);
 });
+
+it("going back to the connection list releases the backend's connection", async () => {
+  invoke.mockReset();
+  reset();
+  await Promise.resolve();
+  expect(invoke).toHaveBeenCalledWith("disconnect");
+  expect(get(connection).connected).toBe(false);
+});
