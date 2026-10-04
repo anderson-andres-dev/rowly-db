@@ -37,6 +37,17 @@ python3 tools/bench/compare.py tools/bench/baseline/v0.3.0 <dir>
 
 No midas mientras compilas o corres tests: otra carga en la máquina cambia los resultados.
 
+## Referencias
+
+Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
+
+| Referencia | Qué se midió | Dónde |
+|---|---|---|
+| `baseline/v0.3.0` | El binario publicado (`rowly-db-bin 0.3.0-1`), con Beekeeper Studio y el banco de motores | Omarchy, kernel 7.2.5, perfil `performance` |
+| `baseline/v0.3.0-cachyos` | `v0.3.0` compilado desde su etiqueta (`npx tauri build --no-bundle`), igual que la rama con la que se compara | CachyOS, kernel 7.1.8, perfil `balanced` (misma CPU) |
+
+`node-editor.json` no guarda su dispersión, así que una corrida suelta contra otra puede marcar como regresión el ruido de microsegundos. Antes de llamarlo regresión, repite los dos lados (cinco corridas alternadas) y compara las medianas.
+
 ## Qué todavía no se mide
 
 Estos escenarios necesitan instrumentar la app (`performance.mark` e `Instant` de Rust alrededor de cada operación) o enviarle entrada, y todavía no existe ninguna de las dos cosas: latencia de tecla a pintado, duración de frames del grid, los 300 ciclos de abrir/cerrar y el reposo con una conexión abierta. Windows/WebView2 y macOS/WKWebView se miden en esas máquinas. Un escenario que falta se informa como faltante, nunca como aprobado.

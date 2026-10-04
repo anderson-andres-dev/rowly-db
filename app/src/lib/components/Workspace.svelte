@@ -17,21 +17,18 @@
   import type { CatalogTableRef } from "$lib/sqlDefinitionLink";
   import type { ContextMenuItem } from "$lib/contextMenu";
   import { catalogTables, connection, isProduction, refreshCatalog } from "$lib/stores/connection";
-  import { formatPreviewSql } from "$lib/sqlPreviewFormat";
   import { connectionProfiles } from "$lib/stores/connectionProfiles";
   import { shortcuts } from "$lib/stores/shortcuts";
 
   import { extractFromContext } from "$lib/sqlSchema";
-  import { sqlTokens } from "$lib/sqlContext";
-  import { classifyStatements, countQueryRows, type PageRequest } from "$lib/queryExecution";
-  import { queryHistory, recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
-  import { splitStatements, STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
+  import { queryHistory } from "$lib/stores/queryHistory";
+  import { STANDARD_LEXICAL, type SqlLexical } from "$lib/sqlStatements";
   import { findParameters, parameterNames, substituteParameters } from "$lib/sqlParameters";
   import { parameterColumns, type ParameterColumn } from "$lib/sqlParameterTypes";
   import { engineFor } from "$lib/engines";
   import QueryHistory from "$lib/components/QueryHistory.svelte";
   import { defaultPageSize } from "$lib/stores/resultPaging";
-  import { appendLog, executionLog, forgetLog } from "$lib/stores/executionLog";
+  import { appendLog, executionLog } from "$lib/stores/executionLog";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import ParametersDialog from "$lib/components/ParametersDialog.svelte";
   import ChangesPreview from "$lib/components/results/ChangesPreview.svelte";
@@ -40,85 +37,59 @@
   import { copySettings } from "$lib/stores/copyFormat";
   import { numberFormat, t } from "$lib/i18n";
   import {
-    addPinnedTab,
     addResultTab,
     consoleOfKey,
-    forgetPinnedResults,
     pinnedResults,
-    removePinnedTab,
     resultKey,
     setResultPinned,
-    unpinnedTabs,
   } from "$lib/stores/pinnedResults";
   import {
     EMPTY_EDITS,
-    applyChanges,
-    buildChanges,
-    fetchEditInfo,
     pendingCount,
-    previewChanges,
-    type ChangeError,
-    type EditTarget,
-    type ResultChanges,
   } from "$lib/resultEditing";
   import {
     editStateFor,
-    forgetResultEdits,
-    resetResultEdits,
     resultEdits,
-    setResultEditInfo,
-    clearResultPendingEdits,
     commitResultEdits,
     undoResultEdit,
-    moveResultEdits,
   } from "$lib/stores/resultEdits";
   import type {
     CatalogColumn,
     CatalogTable,
     ColumnCatalogInfo,
-    DestructiveStatement,
-    ExecuteQueryResponse,
     QueryExecutionResult,
   } from "$lib/types";
   import {
     consoleDisplayTitle,
     activateQueryConsole,
-    beginQueryExecution,
-    cancelQueryConfirmation,
-    closeQueryConsole,
     createQueryConsole,
-    currentQueryConsole,
     ensureQueryConsole,
     executionForConsole,
-    finishQueryExecution,
     isQueryConsoleDirty,
     queryConsoles,
-    renameQueryConsole,
     reorderQueryConsoles,
     setTableFilters,
     type QueryConsole,
     type TableTab,
-    requireQueryConfirmation,
-    setQueryCounting,
-    setQuerySort,
-    clearQueryResult,
-    forgetExecutionState,
-    moveExecutionState,
-    stopQueryExecution,
-    setQueryTotalRows,
-    takeQueryConfirmation,
     updateQueryConsoleSql,
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
-  import { openSqlFileWithDialog, renameConsoleFile, saveConsole, saveConsoleAs } from "$lib/sqlFiles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
-  import { nextSort } from "$lib/gridSort";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
-  import { invalidCells } from "$lib/cellTypes";
-  import { OUTPUT_TAB, firstFromTable, orderTabs, replaceTabKey, visibleTab } from "$lib/workspace/resultTabs";
+  import {
+    OUTPUT_TAB,
+    createResultTabActions,
+    firstFromTable,
+    orderTabs,
+    pinnedIdOf,
+    replaceTabKey,
+    visibleTab,
+  } from "$lib/workspace/resultTabs";
   import { filterColumns, oneQueryAtATime, tableSql } from "$lib/workspace/tableQueries";
-  import { createExecutionSession } from "$lib/workspace/executionSession";
+  import { createExecutionFlow, formatMs as formatDuration } from "$lib/workspace/executionSession";
+  import { createResultChanges } from "$lib/workspace/resultChanges";
+  import { createConsoleFiles } from "$lib/workspace/consoleFiles";
 
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
@@ -215,6 +186,19 @@
     resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
   }
 
+  // Fijar, desfijar, cerrar y olvidar (workspace/resultTabs.ts).
+  const tabActions = createResultTabActions({
+    selectTab,
+    keepPosition: keepTabPosition,
+    confirmDiscard: (key) => confirmDiscardPending(key),
+  });
+  const pinCurrentResult = tabActions.pin;
+  const unpinTab = tabActions.unpin;
+  const replaceableKeys = tabActions.replaceableKeys;
+  const dropUnpinnedResults = tabActions.dropUnpinned;
+  const forgetConsoleResults = tabActions.forgetConsole;
+  const closeResultTab = tabActions.close;
+
   function reorderResultTabs(from: number, to: number) {
     if (!activeConsole) return;
     const keys = moveItem(
@@ -278,10 +262,6 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
   let renameInput = $state<HTMLInputElement>();
-  let pendingCloseId = $state<string | null>(null);
-  // Titulo congelado al abrir: si la consola se cierra (Descartar) mientras
-  // el modal se desvanece, el titulo no debe cambiar a mitad de animacion.
-  let closeDialogTitle = $state("");
 
   function shortcutKeys(id: string): string {
     return $shortcuts.find((shortcut) => shortcut.id === id)?.keys ?? "";
@@ -306,12 +286,12 @@
               label: $t("common.save"),
               shortcut: shortcutKeys("save-query-console"),
               separatorBefore: true,
-              action: () => void runFileAction(() => saveConsole(item)),
+              action: () => void files.save(item),
             },
             {
               label: $t("workspace.saveAs"),
               shortcut: shortcutKeys("save-query-console-as"),
-              action: () => void runFileAction(() => saveConsoleAs(item)),
+              action: () => void files.saveAs(item),
             },
           ]),
       {
@@ -331,26 +311,21 @@
       {
         label: $t("workspace.menu.openFile"),
         shortcut: shortcutKeys("open-sql-file"),
-        action: () => void runFileAction(() => openSqlFileWithDialog(profileId)),
+        action: () => void files.open(),
       },
     ];
   });
 
-  // Las acciones de archivo (dialogos + disco) son asincronas y pueden
-  // fallar por permisos, disco lleno, etc.: el error se muestra como aviso
-  // en vez de perderse en la consola del navegador.
-  async function runFileAction(action: () => Promise<boolean | void>): Promise<boolean> {
-    try {
-      return (await action()) !== false;
-    } catch (error) {
-      notifyError(error);
-      return false;
-    }
-  }
-
-  function currentConsole(id: string) {
-    return $queryConsoles.consoles.find((item) => item.id === id);
-  }
+  // --- Archivos y cierre de consolas (workspace/consoleFiles.ts) ----------
+  const files = createConsoleFiles({
+    profileId: () => profileId,
+    displayTitle: (title) => consoleDisplayTitle(title, $t),
+    fallbackTitle: () => $t("workspace.consoleFallback"),
+    confirmDiscard: (key) => confirmDiscardPending(key),
+    forgetResults: forgetConsoleResults,
+    notifyError,
+  });
+  const pendingClose = files.pendingClose;
 
   $effect(() => {
     ensureQueryConsole(profileId);
@@ -412,7 +387,7 @@
 
   function closeConsole(event: Event, id: string) {
     event.stopPropagation();
-    void requestClose(id);
+    requestClose(id);
   }
 
   function openTabMenu(event: MouseEvent, id: string) {
@@ -434,72 +409,18 @@
   function finishRename(save: boolean) {
     const id = renamingId;
     renamingId = null;
-    if (!save || !id) return;
-    // Confirmar sin cambios el nombre por defecto traducido no debe guardarlo
-    // traducido: se perdería el "consola_N" del que depende la numeración.
-    const original = currentConsole(id)?.title;
-    if (original !== undefined && renameValue === consoleDisplayTitle(original, $t)) return;
-    // En un archivo, cambiar el nombre renombra el archivo en disco.
-    if (currentConsole(id)?.filePath) {
-      void runFileAction(() => renameConsoleFile(id, renameValue));
-    } else {
-      renameQueryConsole(id, renameValue);
-    }
+    if (save && id) files.rename(id, renameValue);
   }
 
-  async function requestClose(id: string) {
+  function requestClose(id: string) {
     tabMenu = null;
-    if (!(await confirmDiscardPending(id))) return;
-    // Con el texto del editor al dia (lo manda con un retraso).
-    const item = currentQueryConsole(id);
-    // Solo se pregunta cuando cerrar perderia algo.
-    if (item && !isQueryConsoleDirty(item)) {
-      closeQueryConsole(profileId, id);
-      forgetResultEdits(id);
-      forgetLog(id);
-      forgetConsoleResults(id);
-      return;
-    }
-    closeDialogTitle = item ? consoleDisplayTitle(item.title, $t) : $t("workspace.consoleFallback");
-    pendingCloseId = id;
-  }
-
-  // Las tres respuestas llegan cuando el aviso (ConfirmDialog) termino de
-  // cerrarse.
-  function cancelClose() {
-    pendingCloseId = null;
-  }
-
-  function discardAndClose() {
-    const id = pendingCloseId;
-    pendingCloseId = null;
-    if (!id) return;
-    closeQueryConsole(profileId, id);
-    forgetResultEdits(id);
-    forgetLog(id);
-    forgetConsoleResults(id);
-  }
-
-  // Guarda (con el dialogo de "Guardar como" si es una consola) y recien
-  // despues cierra; si el usuario cancela el dialogo o falla el disco, la
-  // pestaña queda abierta.
-  async function saveAndClose() {
-    const id = pendingCloseId;
-    pendingCloseId = null;
-    const item = id ? currentConsole(id) : undefined;
-    if (!id || !item) return;
-    if (await runFileAction(() => saveConsole(item))) {
-      closeQueryConsole(profileId, id);
-      forgetResultEdits(id);
-      forgetLog(id);
-      forgetConsoleResults(id);
-    }
+    void files.requestClose(id);
   }
 
   // Comandos de las pestañas (lib/commands.ts); la tecla la pone
   // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
   $effect(() => {
-    const whenIdle = (run: () => boolean | void) => () => pendingCloseId === null && run() !== false;
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
     return registerCommands("global", {
       "new-query-console": whenIdle(() => {
         tabMenu = null;
@@ -514,17 +435,17 @@
       "save-query-console-as": whenIdle(() => {
         const item = activeConsole;
         if (!item || item.table) return false;
-        void runFileAction(() => saveConsoleAs(item));
+        void files.saveAs(item);
       }),
       "save-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item || item.table) return false;
-        void runFileAction(() => saveConsole(item));
+        void files.save(item);
       }),
       "next-result-page": whenIdle(() => stepPage(1)),
       "previous-result-page": whenIdle(() => stepPage(-1)),
       "open-sql-file": whenIdle(() => {
-        void runFileAction(() => openSqlFileWithDialog(profileId));
+        void files.open();
       }),
       "cancel-query": whenIdle(() => !!activeConsole && cancelExecution(activeConsole.id)),
       "query-history": whenIdle(() => {
@@ -535,7 +456,7 @@
       "close-query-console": whenIdle(() => {
         const item = activeConsole;
         if (!item) return false;
-        void requestClose(item.id);
+        requestClose(item.id);
       }),
     });
   });
@@ -553,45 +474,15 @@
     return activeProfile ? quoteSqlIdentifier(name, activeProfile.driver) : name;
   }
 
-  // Un filtro con error no borra lo que se estaba viendo: el error queda al
-  // lado de los filtros y en la Salida.
-  // Los filtros se ejecutan mientras se arman: una sola consulta a la vez
-  // por pestaña (oneQueryAtATime); la vuelta extra lee los filtros del store.
+  // Una sola consulta a la vez por pestaña (oneQueryAtATime); la vuelta
+  // extra lee los filtros del store. La ejecucion es la del flujo.
   const runTableQuery = oneQueryAtATime(runTableQueryOnce);
 
   async function runTableQueryOnce(consoleId: string) {
     const item = get(queryConsoles).consoles.find((candidate) => candidate.id === consoleId);
     if (!item?.table) return;
-    if (!(await confirmDiscardPending(replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) return;
-    setQuerySort(consoleId, []);
-    const sql = tableSql(item.table, quoteIdentifier);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const { response, cancelled } = await executeCancellable(consoleId, sql, null, firstPage(consoleId));
-    if (response.type !== "completed") {
-      applyExecuteQueryResponse(consoleId, sql, response);
-      return;
-    }
-    appendLog(consoleId, { kind: "query", schema: logSchema, text: sql, at: startedAt });
-    appendLog(consoleId, {
-      kind: response.result.type === "error" && !cancelled ? "error" : "info",
-      text: cancelled
-        ? $t("workspace.output.cancelled")
-        : describeOutcome(response.result, response.page?.offset ?? 0, performance.now() - started),
-    });
-    const hadRows = executionForConsole($queryConsoles, consoleId).result?.type === "resultSet";
-    if (response.result.type === "error") {
-      tableFilterError = { ...tableFilterError, [consoleId]: describeOutcome(response.result, 0, 0) };
-      if (hadRows) {
-        stopQueryExecution(consoleId);
-        return;
-      }
-    } else {
-      tableFilterError = { ...tableFilterError, [consoleId]: null };
-    }
-    applyExecuteQueryResponse(consoleId, sql, response);
-    selectTab(consoleId, response.result.type === "resultSet" ? consoleId : OUTPUT_TAB);
-    dropUnpinnedResults(consoleId);
+    const error = await executions.table(consoleId, tableSql(item.table, quoteIdentifier));
+    if (error !== undefined) tableFilterError = { ...tableFilterError, [consoleId]: error };
   }
 
   function applyTableFilters(consoleId: string, filters: Pick<TableTab, "where" | "conditions">) {
@@ -654,31 +545,7 @@
   // --- Salida -----------------------------------------------------------
   const logSchema = $derived(activeProfile ? activeProfile.database || activeProfile.name : "");
 
-  // Duracion para la Salida: "1.234 ms", con los separadores del idioma.
-  function formatMs(elapsedMs: number): string {
-    return `${$numberFormat.format(Math.round(elapsedMs))} ms`;
-  }
-
-  function describeOutcome(result: QueryExecutionResult, offset: number, elapsedMs: number): string {
-    const ms = formatMs(elapsedMs);
-    if (result.type === "resultSet") {
-      const count = result.rows.length;
-      if (count === 0) return $t("workspace.output.noRows", { ms });
-      return $t(count === 1 ? "workspace.output.fetchedOne" : "workspace.output.fetchedOther", {
-        count: $numberFormat.format(count),
-        from: $numberFormat.format(offset + 1),
-        ms,
-      });
-    }
-    if (result.type === "command") {
-      if (result.affectedRows === 0) return $t("workspace.output.completed", { ms });
-      return $t(result.affectedRows === 1 ? "workspace.output.affectedOne" : "workspace.output.affectedOther", {
-        count: $numberFormat.format(result.affectedRows),
-        ms,
-      });
-    }
-    return result.code ? `[${result.code}] ${result.message}` : result.message;
-  }
+  const formatMs = (elapsedMs: number) => formatDuration(elapsedMs, (value) => $numberFormat.format(value));
 
   // --- Historial (Ctrl+E) ---------------------------------------------------
   // Capa flotante sobre el editor; al cerrarla, el foco vuelve al editor en
@@ -702,258 +569,63 @@
     if (consoleId) void requestExecution(consoleId, sql);
   }
 
-  // --- Cancelar ---------------------------------------------------------
-  // Cada ejecucion lleva un id; mientras corre, cancelExecution() le pide
-  // al servidor que la interrumpa (cancel_query). Termina con el error del
-  // servidor (o, en MySQL, a veces con un resultado parcial): en la Salida
-  // queda como "cancelada", no como error.
-  const executions = createExecutionSession();
+  // --- Cambios del grid -------------------------------------------------
+  // Borrador, vista previa y aplicacion (workspace/resultChanges.ts).
+  const resultChanges = createResultChanges({
+    text: (key, params) => $t(key, params),
+    number: (value) => $numberFormat.format(value),
+    schema: () => logSchema,
+    production: () => $isProduction,
+    notifyError,
+    reload: (key) => void reloadResult(key),
+  });
+  const preview = resultChanges.preview;
+  const applyingChanges = resultChanges.applying;
+  const applyError = resultChanges.error;
+  const discardPrompt = resultChanges.discardPrompt;
+  const prepareResultEditing = resultChanges.prepare;
+  const pendingEditsCount = resultChanges.pendingCount;
+  const confirmDiscardPending = resultChanges.confirmDiscard;
+  const openChangesPreview = resultChanges.openPreview;
+  const submitChanges = resultChanges.submit;
+
+  // --- Ejecucion --------------------------------------------------------
+  // Pedir, confirmar, ejecutar, paginar, ordenar, recargar y scripts, con su
+  // registro en la Salida (workspace/executionSession.ts). Cada ejecucion
+  // lleva un id: mientras corre, cancelExecution() le pide al servidor que
+  // la interrumpa; termina como "cancelada", no como error.
+  const executions = createExecutionFlow({
+    profileId: () => profileId,
+    schema: () => logSchema,
+    lexical: () => (activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL),
+    text: (key, params) => $t(key, params),
+    number: (value) => $numberFormat.format(value),
+    defaultPageSize: () => $defaultPageSize,
+    showTab: selectTab,
+    resultReady: prepareResultEditing,
+    confirmDiscard: confirmDiscardPending,
+    replaceableKeys,
+    dropUnpinned: dropUnpinnedResults,
+    newScriptTab: (consoleId) => resultKey(consoleId, addResultTab(consoleId, false)),
+    fillParameters,
+    markStatement: (consoleId, index, outcome) => {
+      if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
+    },
+    refreshCatalog,
+    notifyError,
+  });
   const cancelling = executions.cancelling;
-  const executeCancellable = executions.run;
   const cancelExecution = executions.cancel;
-
-  const CATALOG_DDL = new Set(["create", "drop", "alter", "rename", "comment"]);
-
-  async function refreshAfterDdl(sql: string, result: QueryExecutionResult, cancelled: boolean) {
-    if (cancelled || result.type === "error") return;
-    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    const first = sqlTokens(sql, lexical).find((token) => token.kind === "word");
-    if (!first || !CATALOG_DDL.has(first.text)) return;
-    try {
-      await refreshCatalog();
-    } catch (error) {
-      notifyError(error);
-    }
-  }
-
-  // Unico camino de toda ejecucion (Ctrl+Enter, confirmacion, pagina,
-  // recarga): ejecuta, deja constancia en la Salida y aplica el resultado.
-  // Si el backend pide confirmacion, no se ejecuto nada y no se registra.
-  //
-  // `key` es la pestaña de resultado que recibe el resultado (la normal de
-  // la consola o una fijada); la Salida es siempre la de su consola. Con
-  // filas, se muestra esa pestaña; con error o sin filas, la Salida.
-  async function runQuery(
-    key: string,
-    sql: string,
-    confirmed: DestructiveStatement | null,
-    page: PageRequest,
-    paging = false,
-    // Ejecucion nueva desde el editor: queda en el historial (Ctrl+E).
-    record = false,
-  ) {
-    const consoleId = consoleOfKey(key);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const { response, cancelled } = await executeCancellable(consoleId, sql, confirmed, page);
-    if (response.type === "completed") {
-      const elapsed = performance.now() - started;
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: sql.trim(), at: startedAt });
-      appendLog(consoleId, {
-        kind: response.result.type === "error" && !cancelled ? "error" : "info",
-        text: cancelled
-          ? $t("workspace.output.cancelled")
-          : describeOutcome(response.result, response.page?.offset ?? 0, elapsed),
-      });
-      if (record) {
-        recordQuery(profileId, {
-          sql,
-          at: startedAt,
-          durationMs: elapsed,
-          outcome: cancelled ? "cancelled" : response.result.type === "error" ? "error" : "ok",
-        });
-      }
-    }
-    applyExecuteQueryResponse(key, sql, response, paging);
-    if (response.type === "completed") {
-      selectTab(consoleId, response.result.type === "resultSet" ? key : OUTPUT_TAB);
-      await refreshAfterDdl(sql, response.result, cancelled);
-    }
-  }
-
-  function applyExecuteQueryResponse(key: string, sql: string, response: ExecuteQueryResponse, paging = false) {
-    if (response.type === "confirmationRequired") {
-      requireQueryConfirmation(key, { sql, statement: response.statement });
-      return;
-    }
-    // Una pestaña fijada que falla al recargar o paginar conserva lo que
-    // mostraba: el error queda en la Salida.
-    if (key !== consoleOfKey(key) && response.result.type !== "resultSet") {
-      stopQueryExecution(key);
-      return;
-    }
-    finishQueryExecution(key, sql, response.result, response.page ?? null, paging);
-    prepareResultEditing(key, sql, response.result);
-  }
+  const requestExecution = executions.request;
+  const confirmPendingExecution = executions.confirmPending;
+  const cancelPendingExecution = executions.cancelPending;
+  const reloadResult = executions.reload;
+  const navigatePage = executions.navigate;
+  const sortResult = executions.sort;
+  const countTotalRows = executions.count;
 
   // --- Edicion del resultado -------------------------------------------
   const editState = $derived(activeConsole ? editStateFor($resultEdits, viewKey) : null);
-
-  // Cada resultado nuevo arranca sin cambios pendientes; si es otra
-  // consulta, se pregunta al backend si (y como) se puede editar. Es un
-  // analisis local (AST + catalogo en memoria), no va a la base.
-  function prepareResultEditing(consoleId: string, sql: string, result: QueryExecutionResult) {
-    if (result.type !== "resultSet") {
-      forgetResultEdits(consoleId);
-      return;
-    }
-    if (resetResultEdits(consoleId, sql)) return;
-    fetchEditInfo(
-      sql,
-      result.columns.map((column) => column.name),
-    )
-      .then((info) => setResultEditInfo(consoleId, sql, info, null))
-      .catch((reason) => setResultEditInfo(consoleId, sql, null, String(reason)));
-  }
-
-  function pendingEditsCount(consoleId: string): number {
-    return pendingCount(editStateFor($resultEdits, consoleId).edits);
-  }
-
-  // Cambiar de pagina, re-ejecutar o cerrar con cambios sin aplicar pide
-  // confirmacion: los cambios son sobre las filas visibles y se perderian.
-  let discardPrompt = $state<{ resolve: (discard: boolean) => void } | null>(null);
-
-  // Acepta varias claves: una ejecucion nueva reemplaza la pestaña normal y
-  // las desfijadas, y se pregunta UNA vez por todas.
-  function confirmDiscardPending(keys: string | string[]): Promise<boolean> {
-    const list = (Array.isArray(keys) ? keys : [keys]).filter((key) => pendingEditsCount(key) > 0);
-    if (list.length === 0) return Promise.resolve(true);
-    return new Promise((resolve) => {
-      discardPrompt = {
-        resolve: (discard) => {
-          discardPrompt = null;
-          if (discard) for (const key of list) clearResultPendingEdits(key);
-          resolve(discard);
-        },
-      };
-    });
-  }
-
-  let preview = $state<{
-    consoleId: string;
-    target: EditTarget;
-    changes: ResultChanges;
-    statements: string[];
-    dismiss: boolean;
-  } | null>(null);
-  let applyingChanges = $state(false);
-  let applyError = $state<ChangeError | null>(null);
-
-  // Antes de aplicar (o de ver el SQL): si algun valor no encaja en su
-  // columna (cellTypes.ts), no se manda nada; las celdas ya estan en rojo.
-  function blockedByInvalidValues(consoleId: string): boolean {
-    const state = editStateFor($resultEdits, consoleId);
-    const result = executionForConsole($queryConsoles, consoleId).result;
-    if (!state.info || result?.type !== "resultSet") return false;
-    const invalid = invalidCells(state.edits, state.info, result.rows);
-    if (invalid.length === 0) return false;
-    notifyError(
-      $t(invalid.length === 1 ? "results.invalidValuesOne" : "results.invalidValuesOther", {
-        count: $numberFormat.format(invalid.length),
-      }),
-    );
-    return true;
-  }
-
-  function currentChanges(consoleId: string): { target: EditTarget; changes: ResultChanges } | null {
-    const state = editStateFor($resultEdits, consoleId);
-    const result = executionForConsole($queryConsoles, consoleId).result;
-    if (!state.info || result?.type !== "resultSet") return null;
-    return { target: state.info.target, changes: buildChanges(state.edits, state.info, result.rows) };
-  }
-
-  // El SQL se pide ANTES de abrir: el modal aparece ya completo, sin un
-  // instante vacio ni contenido que salta al llegar.
-  // Ancho de la vista previa (ver sqlPreviewFormat.ts): una clausula por
-  // linea, sin lineas kilometricas ni un valor por linea.
-  const PREVIEW_LINE_WIDTH = 78;
-
-  async function openChangesPreview(consoleId: string, error: ChangeError | null = null) {
-    if (!error && blockedByInvalidValues(consoleId)) return;
-    const current = currentChanges(consoleId);
-    if (!current) return;
-    try {
-      const statements = (await previewChanges(current.target, current.changes)).map((statement) =>
-        formatPreviewSql(statement, PREVIEW_LINE_WIDTH),
-      );
-      applyError = error;
-      preview = { consoleId, ...current, statements, dismiss: false };
-    } catch (cause) {
-      notifyError(cause);
-    }
-  }
-
-  function asChangeError(error: unknown): ChangeError {
-    if (error && typeof error === "object" && "message" in error) {
-      const value = error as Partial<ChangeError>;
-      return { statementIndex: value.statementIndex ?? null, message: String(value.message), code: value.code ?? null };
-    }
-    return { statementIndex: null, message: String(error), code: null };
-  }
-
-  // Aplica todo en una transaccion. Si falla no queda nada aplicado: los
-  // cambios siguen pendientes y el error se muestra en la vista previa.
-  // En produccion nada se aplica sin ver antes el SQL: el atajo o el boton
-  // del grid abren la vista previa, y aplicar desde ella confirma.
-  async function submitChanges(key: string, confirmed = false) {
-    if (blockedByInvalidValues(consoleOfKey(key))) return;
-    if ($isProduction && !confirmed) {
-      void openChangesPreview(key);
-      return;
-    }
-    const consoleId = consoleOfKey(key);
-    const current = currentChanges(key);
-    if (!current || applyingChanges) return;
-    applyingChanges = true;
-    // El error anterior sigue a la vista mientras se reintenta: si vuelve a
-    // fallar, la vista previa lo "golpea" en vez de borrarlo y redibujarlo.
-    // Las mismas sentencias que muestra la vista previa, para la Salida.
-    const statements = await previewChanges(current.target, current.changes).catch(() => [] as string[]);
-    const startedAt = Date.now();
-    const started = performance.now();
-    const logStatements = () => {
-      for (const statement of statements) {
-        appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: startedAt });
-      }
-    };
-    try {
-      const affected = await applyChanges(current.target, current.changes, confirmed);
-      logStatements();
-      appendLog(consoleId, {
-        kind: "info",
-        text: $t(affected === 1 ? "workspace.output.appliedOne" : "workspace.output.appliedOther", {
-          count: $numberFormat.format(affected),
-          ms: formatMs(performance.now() - started),
-        }),
-      });
-      applyError = null;
-      clearResultPendingEdits(key);
-      // El modal (si estaba abierto) se cierra animado; lo quita su onclose.
-      if (preview) preview = { ...preview, dismiss: true };
-      // Recarga: trae ids generados, defaults y lo que haya cambiado un
-      // trigger.
-      void reloadResult(key);
-    } catch (error) {
-      applyingChanges = false;
-      const changeError = asChangeError(error);
-      logStatements();
-      appendLog(consoleId, {
-        kind: "error",
-        text:
-          changeError.statementIndex !== null
-            ? $t("workspace.output.applyFailedAt", {
-                index: changeError.statementIndex + 1,
-                message: changeError.message,
-              })
-            : $t("workspace.output.applyFailed", { message: changeError.message }),
-      });
-      if (preview) applyError = changeError;
-      else void openChangesPreview(key, changeError);
-      return;
-    }
-    applyingChanges = false;
-  }
 
   // --- Exportar datos ---------------------------------------------------
   // Clave de la pestaña que se exporta.
@@ -970,68 +642,6 @@
       tableName: exportTableName(exportFor),
     };
   });
-
-  // Fijar: la pestaña normal pasa a ser una fijada CON TODO su estado
-  // (pagina, total, cambios pendientes, historial): sigue funcionando igual,
-  // solo que la proxima ejecucion ya no la reemplaza.
-  function pinCurrentResult(consoleId: string) {
-    if (executionForConsole($queryConsoles, consoleId).result?.type !== "resultSet") return;
-    const id = addPinnedTab(consoleId);
-    const key = resultKey(consoleId, id);
-    keepTabPosition(consoleId, consoleId, key);
-    moveExecutionState(consoleId, key);
-    moveResultEdits(consoleId, key);
-    selectTab(consoleId, key);
-  }
-
-  // Desfijar NO cierra ni reemplaza nada: la pestaña sigue abierta tal
-  // cual y la proxima ejecucion es la que la reemplaza. Si no hay una
-  // pestaña normal abierta, pasa directamente a serlo, en su mismo lugar.
-  function unpinTab(key: string) {
-    const consoleId = consoleOfKey(key);
-    const id = pinnedIdOf(key);
-    if (id === null) return;
-    if (executionForConsole($queryConsoles, consoleId).result?.type === "resultSet") {
-      setResultPinned(consoleId, id, false);
-      return;
-    }
-    keepTabPosition(consoleId, key, consoleId);
-    moveExecutionState(key, consoleId);
-    moveResultEdits(key, consoleId);
-    removePinnedTab(consoleId, id);
-    selectTab(consoleId, consoleId);
-  }
-
-  function pinnedIdOf(key: string): number | null {
-    const match = /#pin(\d+)$/.exec(key);
-    return match ? Number(match[1]) : null;
-  }
-
-  function forgetResultTab(key: string) {
-    forgetExecutionState(key);
-    forgetResultEdits(key);
-    const id = pinnedIdOf(key);
-    if (id !== null) removePinnedTab(consoleOfKey(key), id);
-  }
-
-  // Una ejecucion nueva reemplaza la pestaña normal y las desfijadas.
-  function replaceableKeys(consoleId: string): string[] {
-    return [consoleId, ...unpinnedTabs($pinnedResults, consoleId).map((item) => resultKey(consoleId, item.id))];
-  }
-
-  function dropUnpinnedResults(consoleId: string) {
-    for (const item of unpinnedTabs($pinnedResults, consoleId)) forgetResultTab(resultKey(consoleId, item.id));
-  }
-
-  // Al cerrar la consola, sus pestañas fijadas (y su estado) se van con ella.
-  function forgetConsoleResults(consoleId: string) {
-    for (const item of $pinnedResults[consoleId] ?? []) {
-      const key = resultKey(consoleId, item.id);
-      forgetExecutionState(key);
-      forgetResultEdits(key);
-    }
-    forgetPinnedResults(consoleId);
-  }
 
   function exportTableName(key: string): string {
     const info = editStateFor($resultEdits, key).info;
@@ -1051,85 +661,6 @@
     notifySuccess($t(one ? "workspace.notify.exportedOne" : "workspace.notify.exportedOther", params));
   }
 
-  // × de una pestaña de resultado: la quita (con cambios pendientes
-  // pregunta antes). La normal queda vacia; una fijada desaparece.
-  async function closeResultTab(key: string) {
-    if (!(await confirmDiscardPending(key))) return;
-    if (key === consoleOfKey(key)) {
-      clearQueryResult(key);
-      forgetResultEdits(key);
-    } else {
-      forgetResultTab(key);
-    }
-  }
-
-  // Vuelve a ejecutar la consulta del resultado en la misma pagina, como una
-  // ejecucion nueva (el total se vuelve a calcular). Con cambios pendientes
-  // pregunta antes de descartarlos.
-  async function reloadResult(key: string) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    const page = current.page ?? firstPage(key);
-    await runQuery(key, sql, null, { offset: page.offset, pageSize: page.pageSize, sort: current.sort });
-  }
-
-  // Una ejecucion nueva arranca en la primera pagina, con el tamaño que la
-  // consola venia usando (o el predeterminado).
-  function firstPage(key: string): PageRequest {
-    const current = executionForConsole($queryConsoles, key).page;
-    return { offset: 0, pageSize: current?.pageSize ?? $defaultPageSize };
-  }
-
-  // Otra pagina de la consulta que produjo el resultado vigente (resultSql,
-  // no el texto actual del editor, que puede haber cambiado).
-  // Paginar conserva el orden elegido en los encabezados: cada pagina es
-  // consulta + orden + LIMIT/OFFSET (el backend ordena ANTES de paginar).
-  async function navigatePage(key: string, offset: number, pageSize: number) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    await runQuery(key, sql, null, { offset, pageSize, sort: current.sort }, true);
-  }
-
-  // Clic en un encabezado: nuevo orden, de vuelta a la primera pagina (mismo
-  // tamaño). Es la misma consulta, asi que el total contado se conserva.
-  async function sortResult(key: string, column: number, additive: boolean) {
-    const current = executionForConsole($queryConsoles, key);
-    const sql = current.resultSql;
-    if (!sql || !current.page?.sortable) return;
-    if (!(await confirmDiscardPending(key)) || !beginQueryExecution(key)) return;
-    const sort = nextSort(current.sort, column, additive);
-    setQuerySort(key, sort);
-    await runQuery(key, sql, null, { offset: 0, pageSize: current.page.pageSize, sort }, true);
-  }
-
-  async function countTotalRows(key: string): Promise<number | null> {
-    const consoleId = consoleOfKey(key);
-    const sql = executionForConsole($queryConsoles, key).resultSql;
-    if (!sql) return null;
-    setQueryCounting(key, true);
-    const started = performance.now();
-    appendLog(consoleId, { kind: "query", schema: logSchema, text: `SELECT COUNT(*) FROM (${sql.trim()})` });
-    try {
-      const total = await countQueryRows(sql);
-      setQueryTotalRows(key, sql, total);
-      appendLog(consoleId, {
-        kind: "info",
-        text: $t(total === 1 ? "workspace.output.totalOne" : "workspace.output.totalOther", {
-          count: $numberFormat.format(total),
-          ms: formatMs(performance.now() - started),
-        }),
-      });
-      return total;
-    } catch (error) {
-      setQueryCounting(key, false);
-      appendLog(consoleId, { kind: "error", text: String(error) });
-      notifyError(error);
-      return null;
-    }
-  }
-
   // Ctrl+Alt+Abajo / Ctrl+Alt+Arriba.
   function stepPage(direction: 1 | -1): boolean {
     if (!activeConsole || execution.isExecuting) return false;
@@ -1140,35 +671,6 @@
     const offset = Math.max(0, page.offset + direction * page.pageSize);
     void navigatePage(viewKey, offset, page.pageSize);
     return true;
-  }
-
-  // Solicita una ejecucion nueva (Ctrl+Enter o el boton "Ejecutar"). No hace
-  // nada si esa consola ya esta ejecutando. Con una confirmacion pendiente,
-  // la ejecucion nueva la reemplaza: confirmar ejecuta siempre lo ultimo que
-  // se pidio, nunca un bloque anterior (y su modal se abre de nuevo, ver el
-  // {#key} de ExecutionGuard). Nada se confirma por si solo.
-  async function requestExecution(consoleId: string, requested: string) {
-    if (!(await confirmDiscardPending(replaceableKeys(consoleId)))) return;
-    cancelQueryConfirmation(consoleId);
-    // Con las reglas del motor: las mismas con que el editor marca cada
-    // sentencia del script.
-    const lexical = activeProfile ? engineFor(activeProfile.driver).lexical : STANDARD_LEXICAL;
-    // Los parametros se reemplazan antes de dividir el script.
-    const sql = await fillParameters(requested, lexical);
-    if (sql === null || !beginQueryExecution(consoleId)) return;
-    // Consulta nueva: arranca sin el orden de los encabezados.
-    setQuerySort(consoleId, []);
-    const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
-    if (statements.length === 0) {
-      stopQueryExecution(consoleId);
-      return;
-    }
-    if (statements.length > 1) {
-      await startScript(consoleId, sql, statements);
-      return;
-    }
-    await runQuery(consoleId, statements[0], null, firstPage(consoleId), false, true);
-    dropUnpinnedResults(consoleId);
   }
 
   // Parametros con nombre (:nombre, sqlParameters.ts): se piden antes de
@@ -1195,133 +697,6 @@
         },
       };
     });
-  }
-
-  // --- Scripts -------------------------------------------------------------
-  // Varias sentencias (una seleccion o "Ejecutar todo"): antes de ejecutar
-  // nada se analizan todas; si alguna no se puede analizar, no se ejecuta
-  // ninguna, y si alguna pide confirmacion, se confirma una sola vez el
-  // script entero (el guard muestra cuantas se ejecutaran). Despues corren
-  // en orden, cada una con autocommit, y el script se detiene si falla o al
-  // cancelar. Cada SELECT abre su pestaña (desfijada: la proxima ejecucion
-  // la reemplaza); la ultima sentencia que corre queda en la pestaña normal.
-  const MAX_SCRIPT_RESULT_TABS = 10;
-
-  async function startScript(consoleId: string, sql: string, statements: string[]) {
-    const checks = await classifyStatements(statements);
-    const invalid = checks.findIndex((check) => check.error !== undefined);
-    if (invalid !== -1) {
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: statements[invalid].trim(), at: Date.now() });
-      const message = $t("workspace.output.scriptInvalid", { index: invalid + 1, error: checks[invalid].error ?? "" });
-      appendLog(consoleId, { kind: "error", text: message });
-      finishQueryExecution(consoleId, sql, { type: "error", message });
-      selectTab(consoleId, OUTPUT_TAB);
-      return;
-    }
-    const confirmations = checks.map((check) => check.confirmation ?? null);
-    const first = confirmations.find((item) => item !== null);
-    if (first) {
-      requireQueryConfirmation(consoleId, { sql, statement: first, script: { statements, confirmations } });
-      return;
-    }
-    await runScript(consoleId, sql, statements, confirmations);
-  }
-
-  async function runScript(
-    consoleId: string,
-    sql: string,
-    statements: string[],
-    confirmations: (DestructiveStatement | null)[],
-  ) {
-    // Lo de la ejecucion anterior se va de entrada: los resultados nuevos
-    // aparecen a medida que llegan.
-    dropUnpinnedResults(consoleId);
-    clearQueryResult(consoleId);
-    forgetResultEdits(consoleId);
-    const startedAt = Date.now();
-    const started = performance.now();
-    let outcome: HistoryOutcome = "ok";
-    let lastResultTab: string | null = null;
-    let resultTabs = 0;
-
-    for (let index = 0; index < statements.length; index += 1) {
-      const statement = statements[index].trim();
-      const statementStarted = performance.now();
-      // Cada sentencia con su marca en el editor (si sigue a la vista).
-      const markStatement = (outcome: "running" | QueryExecutionResult) => {
-        if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
-      };
-      markStatement("running");
-      appendLog(consoleId, { kind: "query", schema: logSchema, text: statement, at: Date.now() });
-      const { response, cancelled } = await executeCancellable(
-        consoleId,
-        statement,
-        confirmations[index],
-        firstPage(consoleId),
-      );
-      // execute_query vuelve a clasificar cada sentencia: si ahora pide una
-      // confirmacion distinta, no se ejecuto y el script se detiene.
-      const result: QueryExecutionResult =
-        response.type === "completed"
-          ? response.result
-          : { type: "error", message: $t(`workspace.guard.${response.statement}`) };
-      const page = response.type === "completed" ? (response.page ?? null) : null;
-      markStatement(result);
-      appendLog(consoleId, {
-        kind: result.type === "error" && !cancelled ? "error" : "info",
-        text: cancelled
-          ? $t("workspace.output.cancelled")
-          : describeOutcome(result, page?.offset ?? 0, performance.now() - statementStarted),
-      });
-      await refreshAfterDdl(statement, result, cancelled);
-
-      const stopped = result.type === "error" || cancelled;
-      if (stopped || index === statements.length - 1) {
-        finishQueryExecution(consoleId, statement, result, page);
-        prepareResultEditing(consoleId, statement, result);
-        if (result.type === "resultSet") lastResultTab = consoleId;
-        if (stopped) {
-          outcome = cancelled ? "cancelled" : "error";
-          const remaining = statements.length - index - 1;
-          if (remaining > 0) {
-            appendLog(consoleId, {
-              kind: "info",
-              text: $t("workspace.output.scriptStopped", { count: $numberFormat.format(remaining) }),
-            });
-          }
-        }
-        break;
-      }
-      if (result.type === "resultSet" && resultTabs < MAX_SCRIPT_RESULT_TABS) {
-        const key = resultKey(consoleId, addResultTab(consoleId, false));
-        finishQueryExecution(key, statement, result, page);
-        prepareResultEditing(key, statement, result);
-        lastResultTab = key;
-        resultTabs += 1;
-      }
-    }
-
-    recordQuery(profileId, { sql, at: startedAt, durationMs: performance.now() - started, outcome });
-    selectTab(consoleId, outcome === "error" || !lastResultTab ? OUTPUT_TAB : lastResultTab);
-  }
-
-  // La confirmacion del guard llama aqui. takeQueryConfirmation() retira el
-  // pendiente de forma atomica antes del await: un doble click no confirma
-  // dos veces.
-  async function confirmPendingExecution(consoleId: string) {
-    const pending = takeQueryConfirmation(consoleId);
-    if (!pending || !beginQueryExecution(consoleId)) return;
-    setQuerySort(consoleId, []);
-    if (pending.script) {
-      await runScript(consoleId, pending.sql, pending.script.statements, pending.script.confirmations);
-      return;
-    }
-    await runQuery(consoleId, pending.sql, pending.statement, firstPage(consoleId), false, true);
-    dropUnpinnedResults(consoleId);
-  }
-
-  function cancelPendingExecution(consoleId: string) {
-    cancelQueryConfirmation(consoleId);
   }
 
   function startResize(event: PointerEvent) {
@@ -1457,7 +832,7 @@
           <span>{$t("workspace.newConsole")}</span>
           <kbd>{shortcutKeys("new-query-console")}</kbd>
         </button>
-        <button type="button" onclick={() => void runFileAction(() => openSqlFileWithDialog(profileId))}>
+        <button type="button" onclick={() => void files.open()}>
           <span>{$t("workspace.openFile")}</span>
           <kbd>{shortcutKeys("open-sql-file")}</kbd>
         </button>
@@ -1627,8 +1002,8 @@
   />
 {/if}
 
-{#if discardPrompt}
-  {@const prompt = discardPrompt}
+{#if $discardPrompt}
+  {@const prompt = $discardPrompt}
   <ConfirmDialog
     title={$t("workspace.discard.title")}
     message={$t("workspace.discard.message")}
@@ -1660,20 +1035,17 @@
   />
 {/if}
 
-{#if preview}
-  {@const current = preview}
+{#if $preview}
+  {@const current = $preview}
   <ChangesPreview
     statements={current.statements}
     changes={current.changes}
-    applying={applyingChanges}
-    error={applyError}
+    applying={$applyingChanges}
+    error={$applyError}
     dismiss={current.dismiss}
     production={$isProduction}
     onapply={() => void submitChanges(current.consoleId, true)}
-    onclose={() => {
-      preview = null;
-      applyError = null;
-    }}
+    onclose={resultChanges.closePreview}
   />
 {/if}
 
@@ -1692,16 +1064,16 @@
   </div>
 {/if}
 
-{#if pendingCloseId}
+{#if $pendingClose}
   <ConfirmDialog
     tone="warning"
-    title={$t("workspace.close.title", { title: closeDialogTitle })}
+    title={$t("workspace.close.title", { title: $pendingClose.title })}
     message={$t("workspace.close.message")}
     confirmLabel={$t("common.save")}
     alternateLabel={$t("common.discard")}
-    onconfirm={() => void saveAndClose()}
-    onalternate={discardAndClose}
-    oncancel={cancelClose}
+    onconfirm={() => void files.saveAndClose()}
+    onalternate={files.discardAndClose}
+    oncancel={files.cancelClose}
   />
 {/if}
 
