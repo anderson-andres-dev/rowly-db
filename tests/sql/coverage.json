@@ -443,9 +443,32 @@
       "gap": "Unicode mas alla de SELECT INTO (§9)"
     },
     "A9": {
-      "status": "gap",
-      "tests": [],
-      "gap": "El analizador tiene un solo dialecto por motor (§9)"
+      "status": "partial",
+      "tests": [
+        {
+          "file": "crates/engine/tests/lines.rs",
+          "name": "removed_syntax_is_marked_from_its_line_on_and_never_before",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/version_lines.rs",
+          "name": "every_version_line_is_told_apart_from_the_previous_one",
+          "scope": "lines",
+          "engines": [
+            "mysql",
+            "postgres"
+          ]
+        }
+      ],
+      "na": {
+        "mariadb": "Ninguna linea de MariaDB elimina sintaxis demostrada: no hay tests/sql/mariadb/<linea>/rejects.sql"
+      },
+      "gap": "Lo que MySQL 8.0 elimino (GROUP BY ... DESC, PASSWORD(), ENCODE(), SQL_CACHE) no se marca: una secuencia de palabras no lo distingue de SQL valido (una columna o funcion con ese nombre) (§9)"
     },
     "G1": {
       "status": "covered",
@@ -553,11 +576,21 @@
       ]
     },
     "G6": {
-      "status": "partial",
+      "status": "covered",
       "tests": [
         {
           "file": "app/src/lib/engines/contract.test.ts",
-          "name": "reservedWords",
+          "name": "cada motor cita las palabras que reserva cualquiera de sus lineas",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/tests/lines.rs",
+          "name": "every_reserved_word_of_a_line_is_one_its_fixtures_prove",
           "scope": "unit",
           "engines": [
             "mysql",
@@ -565,8 +598,7 @@
             "postgres"
           ]
         }
-      ],
-      "gap": "Las palabras reservadas son una lista por motor, no por linea (§9)"
+      ]
     },
     "G7": {
       "status": "partial",
@@ -781,7 +813,7 @@
       "gap": "VerifyCa con la CA correcta falla si el certificado no nombra al host (sqlx 0.8.6 con rustls 0.23.45, falla cerrado) y no se prueba VerifyIdentity aceptando un certificado que nombra al host: ningun servidor de prueba sirve uno. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, y MariaDB 11.8 genera su certificado en memoria"
     },
     "D6": {
-      "status": "partial",
+      "status": "covered",
       "tests": [
         {
           "file": "crates/drivers/mysql/src/version.rs",
@@ -799,9 +831,28 @@
           "engines": [
             "postgres"
           ]
+        },
+        {
+          "file": "crates/engine/tests/lines.rs",
+          "name": "every_test_server_and_every_verified_version_selects_the_line_it_proves",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/version_lines.rs",
+          "name": "every_version_line_is_told_apart_from_the_previous_one",
+          "scope": "lines",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
         }
-      ],
-      "gap": "La asignacion de una version a su linea (§9)"
+      ]
     },
     "D7": {
       "status": "covered",
