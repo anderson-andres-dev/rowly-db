@@ -918,7 +918,7 @@
       }
     };
     try {
-      const affected = await applyChanges(current.target, current.changes);
+      const affected = await applyChanges(current.target, current.changes, confirmed);
       logStatements();
       appendLog(consoleId, {
         kind: "info",
