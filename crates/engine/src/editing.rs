@@ -249,8 +249,11 @@ impl ResultChanges {
 /// `DELETE` (liberan claves unicas), despues los `UPDATE` y al final los
 /// `INSERT`, como DataGrip. Cada una termina en `;` y ocupa varias lineas
 /// para leerse bien en la vista previa.
+/// `backslash_escapes`: la regla de la sesion para los literales (ver
+/// `Dialect::string_literal_with`).
 pub fn build_change_statements(
     dialect: Dialect,
+    backslash_escapes: bool,
     schema: Option<&str>,
     table: &str,
     changes: &ResultChanges,
@@ -268,7 +271,7 @@ pub fn build_change_statements(
     for key in &changes.deletes {
         statements.push(format!(
             "DELETE\nFROM {target}\nWHERE {};",
-            where_clause(dialect, key)
+            where_clause(dialect, backslash_escapes, key)
         ));
     }
 
@@ -283,14 +286,14 @@ pub fn build_change_statements(
                 format!(
                     "{} = {}",
                     quote_ident(dialect, &item.column),
-                    literal(dialect, item)
+                    literal(dialect, backslash_escapes, item)
                 )
             })
             .collect::<Vec<_>>()
             .join(", ");
         statements.push(format!(
             "UPDATE {target}\nSET {set}\nWHERE {};",
-            where_clause(dialect, &update.key)
+            where_clause(dialect, backslash_escapes, &update.key)
         ));
     }
 
@@ -312,7 +315,7 @@ pub fn build_change_statements(
             .join(", ");
         let literals = explicit
             .iter()
-            .map(|item| literal(dialect, item))
+            .map(|item| literal(dialect, backslash_escapes, item))
             .collect::<Vec<_>>()
             .join(", ");
         statements.push(format!(
@@ -323,28 +326,28 @@ pub fn build_change_statements(
     statements
 }
 
-fn where_clause(dialect: Dialect, key: &[ColumnValue]) -> String {
+fn where_clause(dialect: Dialect, backslash_escapes: bool, key: &[ColumnValue]) -> String {
     key.iter()
         .map(|item| match item.value {
             CellValue::Null => format!("{} IS NULL", quote_ident(dialect, &item.column)),
             _ => format!(
                 "{} = {}",
                 quote_ident(dialect, &item.column),
-                literal(dialect, item)
+                literal(dialect, backslash_escapes, item)
             ),
         })
         .collect::<Vec<_>>()
         .join(" AND ")
 }
 
-fn literal(dialect: Dialect, item: &ColumnValue) -> String {
+fn literal(dialect: Dialect, backslash_escapes: bool, item: &ColumnValue) -> String {
     match &item.value {
         CellValue::Null => "NULL".to_string(),
         CellValue::Default => "DEFAULT".to_string(),
         CellValue::Text(text) if is_numeric_type(&item.data_type) && is_plain_number(text) => {
             text.clone()
         }
-        CellValue::Text(text) => dialect.string_literal(text),
+        CellValue::Text(text) => dialect.string_literal_with(text, backslash_escapes),
     }
 }
 
@@ -589,7 +592,7 @@ mod tests {
             ]],
         };
         assert_eq!(
-            build_change_statements(MYSQL, Some("core"), "incidents", &changes),
+            build_change_statements(MYSQL, true, Some("core"), "incidents", &changes),
             vec![
                 "DELETE\nFROM core.incidents\nWHERE pinc_codi = 7;".to_string(),
                 "UPDATE core.incidents\nSET pinc_seve = 'error'\nWHERE pinc_codi = 24;".to_string(),
@@ -602,14 +605,19 @@ mod tests {
     #[test]
     fn escapa_valores_e_identificadores_por_dialecto() {
         let item = value("a", "text", CellValue::Text("c:\\tmp".into()));
-        assert_eq!(literal(MYSQL, &item), "'c:\\\\tmp'");
-        assert_eq!(literal(Dialect::Postgres, &item), "'c:\\tmp'");
+        assert_eq!(literal(MYSQL, true, &item), "'c:\\\\tmp'");
+        assert_eq!(literal(Dialect::Postgres, false, &item), "'c:\\tmp'");
+        // Con la regla de la sesion: MySQL con NO_BACKSLASH_ESCAPES guarda la
+        // barra tal cual, y PostgreSQL con standard_conforming_strings = off
+        // necesita escaparla.
+        assert_eq!(literal(MYSQL, false, &item), "'c:\\tmp'");
+        assert_eq!(literal(Dialect::Postgres, true, &item), "'c:\\\\tmp'");
         assert_eq!(quote_ident(MYSQL, "order"), "`order`");
         assert_eq!(quote_ident(Dialect::Postgres, "UserId"), "\"UserId\"");
         assert_eq!(quote_ident(MYSQL, "pinc_codi"), "pinc_codi");
         // Un "numero" que no es solo digitos va como string.
         let tricky = value("n", "int", CellValue::Text("1 OR 1=1".into()));
-        assert_eq!(literal(MYSQL, &tricky), "'1 OR 1=1'");
+        assert_eq!(literal(MYSQL, true, &tricky), "'1 OR 1=1'");
     }
 
     #[test]
@@ -619,7 +627,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            build_change_statements(Dialect::Postgres, None, "t", &changes),
+            build_change_statements(Dialect::Postgres, false, None, "t", &changes),
             vec!["INSERT INTO t DEFAULT VALUES;".to_string()]
         );
     }

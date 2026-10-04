@@ -1,7 +1,8 @@
 //! Ejecutar SQL: paginar y ordenar, clasificar con el guard antes de
 //! ejecutar, analizar mientras se escribe, cancelar y contar filas.
 
-use crate::state::{AppState, RunningQuery, with_active_connection};
+use crate::engine_context::ConnectionEngineContext;
+use crate::state::{AppState, RunningQuery, follow_console, with_active_connection};
 use khipu_driver_core::{Message, QueryCancel, QueryExecutionOptions, QueryExecutionResult};
 use khipu_engine::Dialect;
 use khipu_engine::execution_guard::{
@@ -56,7 +57,26 @@ pub(crate) enum ExecuteQueryResponse {
         result: QueryExecutionResult,
         #[serde(skip_serializing_if = "Option::is_none")]
         page: Option<PageInfo>,
+        /// La sentencia cambio el modo de la sesion: el contexto nuevo, con
+        /// otra generacion (state::follow_console).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<Box<ConnectionEngineContext>>,
+        /// La sesion de la consola se perdio y la que sigue empieza limpia.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        session_reset: bool,
     },
+}
+
+impl ExecuteQueryResponse {
+    /// Un resultado sin pagina ni cambios en la sesion.
+    fn completed(result: QueryExecutionResult) -> Self {
+        Self::Completed {
+            result,
+            page: None,
+            context: None,
+            session_reset: false,
+        }
+    }
 }
 
 #[tauri::command]
@@ -70,14 +90,13 @@ pub async fn execute_query(
 ) -> Result<ExecuteQueryResponse, Message> {
     let sql = sql.trim();
     if sql.is_empty() {
-        return Ok(ExecuteQueryResponse::Completed {
-            page: None,
-            result: QueryExecutionResult::Error {
+        return Ok(ExecuteQueryResponse::completed(
+            QueryExecutionResult::Error {
                 message: Message::key("query.empty"),
                 code: None,
                 position: None,
             },
-        });
+        ));
     }
 
     let (connector, dialect, production, guard_options) = {
@@ -93,14 +112,13 @@ pub async fn execute_query(
                 active.guard_options(),
             ),
             None => {
-                return Ok(ExecuteQueryResponse::Completed {
-                    page: None,
-                    result: QueryExecutionResult::Error {
+                return Ok(ExecuteQueryResponse::completed(
+                    QueryExecutionResult::Error {
                         message: Message::key("noActiveConnection"),
                         code: None,
                         position: None,
                     },
-                });
+                ));
             }
         }
     };
@@ -108,14 +126,13 @@ pub async fn execute_query(
     let classification = match classify_sql_with(sql, dialect, production, guard_options) {
         Ok(classification) => classification,
         Err(error) => {
-            return Ok(ExecuteQueryResponse::Completed {
-                page: None,
-                result: QueryExecutionResult::Error {
+            return Ok(ExecuteQueryResponse::completed(
+                QueryExecutionResult::Error {
                     message: error.to_string().into(),
                     code: None,
                     position: None,
                 },
-            });
+            ));
         }
     };
 
@@ -127,14 +144,13 @@ pub async fn execute_query(
             return Ok(ExecuteQueryResponse::ConfirmationRequired { statement });
         }
         (DestructiveClassification::NotDestructive, Some(_)) => {
-            return Ok(ExecuteQueryResponse::Completed {
-                page: None,
-                result: QueryExecutionResult::Error {
+            return Ok(ExecuteQueryResponse::completed(
+                QueryExecutionResult::Error {
                     message: Message::key("query.staleConfirmation"),
                     code: None,
                     position: None,
                 },
-            });
+            ));
         }
     }
 
@@ -205,7 +221,13 @@ pub async fn execute_query(
         pageable,
         sortable,
     });
-    Ok(ExecuteQueryResponse::Completed { result, page })
+    let change = follow_console(window.label(), &state, &connector, dialect, sql).await;
+    Ok(ExecuteQueryResponse::Completed {
+        result,
+        page,
+        context: change.context.map(Box::new),
+        session_reset: change.reset,
+    })
 }
 
 /// Lo que se vuelve a leer del servidor sin que el usuario lo ejecute de nuevo
@@ -303,7 +325,7 @@ pub fn analyze_sql(
 ) -> Result<Vec<Vec<khipu_engine::diagnostics::Diagnostic>>, Message> {
     // Solo lo necesario bajo el candado (el catalogo es compartido: no se
     // copia); el analisis corre despues, sin bloquear execute_query.
-    let (catalog, dialect, default_schema, loaded_schemas) =
+    let (catalog, dialect, no_backslash_escapes, default_schema, loaded_schemas) =
         with_active_connection(&window, &state, |active| {
             if !active.context.is_current(generation, schema_epoch) {
                 return Err(Message::key("analysisOutdated"));
@@ -311,6 +333,7 @@ pub fn analyze_sql(
             Ok((
                 Arc::clone(&active.catalog),
                 active.dialect,
+                active.context.session_mode.no_backslash_escapes,
                 active.default_schema.clone(),
                 active.schemas.keys().cloned().collect::<Vec<_>>(),
             ))
@@ -324,7 +347,12 @@ pub fn analyze_sql(
     Ok(statements
         .iter()
         .map(|statement| {
-            khipu_engine::diagnostics::analyze_statement(statement, dialect, Some(&view))
+            khipu_engine::diagnostics::analyze_statement_with(
+                statement,
+                dialect,
+                Some(&view),
+                no_backslash_escapes,
+            )
         })
         .collect())
 }
@@ -510,6 +538,8 @@ mod tests {
                 pageable: true,
                 sortable: false,
             }),
+            context: None,
+            session_reset: true,
         };
         let value = serde_json::to_value(&completed).unwrap();
         assert_eq!(value["type"], "completed");
@@ -517,19 +547,15 @@ mod tests {
             value["page"],
             serde_json::json!({ "offset": 0, "pageSize": 500, "pageable": true, "sortable": false })
         );
-        let without_page = ExecuteQueryResponse::Completed {
-            result: QueryExecutionResult::Command {
-                affected_rows: 0,
-                execution_time_ms: 0,
-            },
-            page: None,
-        };
-        assert!(
-            serde_json::to_value(&without_page)
-                .unwrap()
-                .get("page")
-                .is_none()
-        );
+        assert_eq!(value["sessionReset"], true);
+        let without_page = ExecuteQueryResponse::completed(QueryExecutionResult::Command {
+            affected_rows: 0,
+            execution_time_ms: 0,
+        });
+        let value = serde_json::to_value(&without_page).unwrap();
+        assert!(value.get("page").is_none());
+        assert!(value.get("context").is_none());
+        assert!(value.get("sessionReset").is_none());
         let check = check_statement(
             "DELETE FROM t",
             Dialect::MySql,

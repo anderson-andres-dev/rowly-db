@@ -1,5 +1,6 @@
 pub mod assembly;
 mod connection_error;
+mod console;
 mod message;
 mod query_cancel;
 
@@ -9,6 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
+pub use console::{ConsoleConnection, ConsoleGuard};
 pub use message::Message;
 pub use query_cancel::QueryCancel;
 
@@ -457,6 +459,13 @@ pub trait DbConnector: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
         let _ = cancel;
         self.execute_query(sql, options)
+    }
+
+    /// Rises each time the console connection (`ConsoleConnection`) opens or
+    /// closes: `execute_query`, `stream_query` and what they leave in the
+    /// session run on it. A driver without one stays at 0.
+    fn console_epoch(&self) -> u64 {
+        0
     }
 
     /// Asks the server to interrupt the query `cancel` tracks, from another

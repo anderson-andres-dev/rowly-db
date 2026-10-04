@@ -18,7 +18,7 @@ El motor analiza SQL, mantiene el catálogo del esquema y arma las sugerencias s
 | :--- | :--- |
 | `crates/engine` | Valida el SQL con la gramática de cada dialecto, entiende qué hay bajo el cursor y ordena las sugerencias a partir del catálogo. |
 | `crates/engine-lsp` | Expone el motor como servidor LSP para que cualquier editor lo use. |
-| `crates/driver-core` | El contrato `DbConnector` que implementa cada base de datos: conectar, listar esquemas, leer un esquema completo y ejecutar consultas. |
+| `crates/driver-core` | El contrato `DbConnector` que implementa cada base de datos: conectar, listar esquemas, leer un esquema completo y ejecutar consultas. Las consultas corren en una sola conexión de consola por ventana (`ConsoleConnection`), así que lo que una sentencia deja en la sesión vale para la siguiente; el catálogo y cancelar usan el pool. |
 | `crates/drivers/*` | Conectores de protocolo sobre `sqlx`; MySQL y MariaDB comparten conector, pero mantienen dialectos y perfiles distintos. |
 | `app/src-tauri` | La app de escritorio. Llama al motor y a los drivers directamente, sin pasar por LSP, para que la latencia sea mínima. |
 | `app/src` | Frontend en Svelte con el editor CodeMirror 6. |

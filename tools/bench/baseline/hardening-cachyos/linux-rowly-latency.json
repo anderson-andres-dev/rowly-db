@@ -1,0 +1,118 @@
+{
+  "label": "hardening-cachyos",
+  "date": "2026-10-04",
+  "how": "mediana de 3 corridas de `node app/tests/e2e/resources.mjs --measure` con el binario release, bajo xvfb-run (sin GPU), MySQL 8.4.11 de tools/test-dbs",
+  "machine": "CachyOS, kernel 7.1.8, perfil balanced (la misma CPU que c5-cachyos)",
+  "keyToPaintMs": {
+    "lines20": {
+      "n": 200,
+      "p50": 21,
+      "p95": 25,
+      "p99": 28,
+      "max": 32
+    },
+    "lines10000": {
+      "n": 200,
+      "p50": 27,
+      "p95": 205,
+      "p99": 373,
+      "max": 404
+    }
+  },
+  "gridFrameMs": {
+    "n": 300,
+    "p50": 17,
+    "p95": 27,
+    "p99": 41,
+    "max": 47,
+    "over25": 23,
+    "over50": 0,
+    "maxCells": 17920
+  },
+  "runs": [
+    {
+      "keyToPaintMs": {
+        "lines20": {
+          "n": 200,
+          "p50": 21,
+          "p95": 25,
+          "p99": 28,
+          "max": 32
+        },
+        "lines10000": {
+          "n": 200,
+          "p50": 28,
+          "p95": 249,
+          "p99": 373,
+          "max": 404
+        }
+      },
+      "gridFrameMs": {
+        "n": 300,
+        "p50": 17,
+        "p95": 26,
+        "p99": 41,
+        "max": 49,
+        "over25": 15,
+        "over50": 0,
+        "maxCells": 17920
+      }
+    },
+    {
+      "keyToPaintMs": {
+        "lines20": {
+          "n": 200,
+          "p50": 20,
+          "p95": 25,
+          "p99": 26,
+          "max": 27
+        },
+        "lines10000": {
+          "n": 200,
+          "p50": 27,
+          "p95": 159,
+          "p99": 280,
+          "max": 300
+        }
+      },
+      "gridFrameMs": {
+        "n": 300,
+        "p50": 17,
+        "p95": 27,
+        "p99": 39,
+        "max": 46,
+        "over25": 23,
+        "over50": 0,
+        "maxCells": 17920
+      }
+    },
+    {
+      "keyToPaintMs": {
+        "lines20": {
+          "n": 200,
+          "p50": 21,
+          "p95": 26,
+          "p99": 28,
+          "max": 35
+        },
+        "lines10000": {
+          "n": 200,
+          "p50": 27,
+          "p95": 205,
+          "p99": 406,
+          "max": 434
+        }
+      },
+      "gridFrameMs": {
+        "n": 300,
+        "p50": 17,
+        "p95": 33,
+        "p99": 46,
+        "max": 47,
+        "over25": 28,
+        "over50": 0,
+        "maxCells": 17920
+      }
+    }
+  ]
+}

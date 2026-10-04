@@ -5,21 +5,24 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
-    QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
-    SchemaObjects, ServerIdentity, TlsMode, TlsStatus, TransactionError, TransactionStatement,
-    probe_tcp,
+    ConnectionConfig, ConnectionErrorKind, ConsoleConnection, DbConnector, DriverError, Message,
+    QueryCancel, QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue,
+    RowSink, SchemaObjects, ServerIdentity, TlsMode, TlsStatus, TransactionError,
+    TransactionStatement, probe_tcp,
 };
 use sqlx::mysql::{
     MySqlConnectOptions, MySqlConnection, MySqlDatabaseError, MySqlPoolOptions, MySqlRow,
 };
-use sqlx::{Column, Executor, MySqlPool, Row, TypeInfo};
+use sqlx::{Column, Connection, Executor, MySqlPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 pub struct MySqlConnector {
     pool: MySqlPool,
+    /// Where the console runs (see `ConsoleConnection`): a connection taken
+    /// out of the pool, so it opens with the same options and session.
+    console: ConsoleConnection<MySqlConnection>,
     version: version::ServerVersion,
     tls: TlsStatus,
 }
@@ -218,6 +221,7 @@ impl DbConnector for MySqlConnector {
         let tls = tls::read_status(&pool, fell_back).await;
         Ok(Self {
             pool,
+            console: ConsoleConnection::default(),
             version: version::ServerVersion::parse(&raw_version),
             tls,
         })
@@ -309,7 +313,8 @@ impl DbConnector for MySqlConnector {
                 QueryExecutionResult::Error { message, .. } => message,
                 _ => Message::key("export.readFailed"),
             };
-            let mut conn = self.pool.acquire().await.map_err(message)?;
+            let mut console = self.open_console().await.map_err(message)?;
+            let conn = console.connection();
             let describe = conn.describe(sql).await.map_err(message)?;
             if describe.columns().is_empty() {
                 return Err(Message::key("export.noRows"));
@@ -344,9 +349,9 @@ impl DbConnector for MySqlConnector {
             }
             .await;
             if !finished {
-                // Quedaron filas sin leer: devolver la conexion al pool
-                // haria que sqlx las drene todas. Se cierra.
-                drop(conn.detach());
+                // Quedaron filas sin leer: leerlas todas para seguir usando
+                // la conexion podria tardar sin limite. Se cierra.
+                console.discard();
             }
             outcome?;
             sink.finish()?;
@@ -415,6 +420,10 @@ impl DbConnector for MySqlConnector {
             .map(|_| ())
             .map_err(|error| DriverError::Query(error.to_string()))
     }
+
+    fn console_epoch(&self) -> u64 {
+        self.console.epoch()
+    }
 }
 
 impl MySqlConnector {
@@ -424,10 +433,11 @@ impl MySqlConnector {
         options: QueryExecutionOptions,
         cancel: Option<&QueryCancel>,
     ) -> QueryExecutionResult {
-        let mut conn = match self.pool.acquire().await {
-            Ok(conn) => conn,
+        let mut console = match self.open_console().await {
+            Ok(console) => console,
             Err(error) => return mysql_error_to_result(error),
         };
+        let conn = console.connection();
 
         // Id de la conexion en el servidor: cancelar la interrumpe desde otra
         // (ver QueryCancel). Si ya se cancelo mientras se esperaba una
@@ -439,22 +449,37 @@ impl MySqlConnector {
             {
                 Ok(id) if !cancel.begin(id) => return cancelled_before_start(),
                 Ok(_) => {}
-                Err(error) => return mysql_error_to_result(error),
+                Err(error) => {
+                    if conn.ping().await.is_err() {
+                        console.discard();
+                    }
+                    return mysql_error_to_result(error);
+                }
             }
         }
 
-        let outcome = execute_on_connection(&mut conn, sql, options).await;
+        let outcome = execute_on_connection(conn, sql, options).await;
         if let Some(cancel) = cancel {
             cancel.end();
         }
-        if !outcome.connection_reusable {
-            // Devolverla al pool haria que sqlx la "limpie" leyendo (y
-            // tirando) todo lo que el servidor todavia tenga para mandar
-            // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
-            // en seco; el pool abre otra conexion cuando haga falta.
-            drop(conn.detach());
+        // Seguir usandola obligaria a leer (y tirar) todo lo que el servidor
+        // todavia tenga para mandar — ver MAX_ROWS_TO_DRAIN — o ya no
+        // responde. Cerrar el socket corta el envio en seco; la siguiente
+        // sentencia abre otra sesion.
+        let lost = matches!(outcome.result, QueryExecutionResult::Error { .. })
+            && conn.ping().await.is_err();
+        if !outcome.connection_reusable || lost {
+            console.discard();
         }
         outcome.result
+    }
+
+    async fn open_console(
+        &self,
+    ) -> Result<khipu_driver_core::ConsoleGuard<'_, MySqlConnection>, sqlx::Error> {
+        self.console
+            .lock(async || Ok(self.pool.acquire().await?.detach()))
+            .await
     }
 }
 
@@ -466,21 +491,21 @@ fn cancelled_before_start() -> QueryExecutionResult {
     }
 }
 
-/// Rows past `max_rows` that are still read (and discarded) so the
-/// connection can go back to the pool clean. MySQL can't stop sending a
-/// result set midway: whatever isn't read here, sqlx reads on release
-/// (`ping` -> `wait_until_ready`) before reusing the connection. Without a
+/// Rows past `max_rows` that are still read (and discarded) so the console
+/// connection can run the next statement. MySQL can't stop sending a
+/// result set midway: whatever isn't read here, the next
+/// statement would have to read first. Without a
 /// bound, a `SELECT * FROM big_table` that shows 500 rows downloads the
 /// whole table in the background, and a few of those in a row starve the
-/// pool — every later query, even `SELECT 1`, waits up to `acquire_timeout`.
-/// Past this bound the connection is discarded instead (see
+/// console — every later query, even `SELECT 1`, waits behind it. Past this
+/// bound the connection is closed instead, and the session with it (see
 /// `ExecutionOutcome::connection_reusable`).
 const MAX_ROWS_TO_DRAIN: usize = 1000;
 
 struct ExecutionOutcome {
     result: QueryExecutionResult,
     /// `false` when the connection still has unread rows pending (or its
-    /// session state couldn't be restored) and must not go back to the pool.
+    /// session state couldn't be restored) and must be closed.
     connection_reusable: bool,
 }
 
@@ -533,9 +558,8 @@ async fn execute_on_connection(
 
     let mut outcome = read_result_set(conn, sql, &describe, options, start).await;
 
-    // La conexion vuelve al pool y la usa despues el catalogo (information_
-    // schema), que no puede quedar limitado a 501 filas. Si no se pudo
-    // restaurar, no se reutiliza.
+    // La sesion sigue: la sentencia siguiente no puede quedar limitada a
+    // estas filas. Si no se pudo restaurar, no se reutiliza.
     if select_limit_set && outcome.connection_reusable {
         let restored = Executor::execute(
             &mut *conn,

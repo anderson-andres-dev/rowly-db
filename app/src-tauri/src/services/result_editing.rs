@@ -170,8 +170,11 @@ pub fn edit_info(
 
 /// Valida los cambios contra el catalogo y devuelve las sentencias a
 /// ejecutar (las mismas que muestra la vista previa).
+/// `backslash_escapes`: la regla de la sesion que aplica los cambios para
+/// la barra invertida en los literales (ver `Dialect::string_literal_with`).
 pub fn statements(
     dialect: Dialect,
+    backslash_escapes: bool,
     schemas: &BTreeMap<String, SchemaObjects>,
     target: &EditTarget,
     changes: &ResultChanges,
@@ -259,7 +262,13 @@ pub fn statements(
             .collect::<Result<_, _>>()?,
     };
 
-    let sql = build_change_statements(dialect, Some(&table.schema), &table.name, &validated);
+    let sql = build_change_statements(
+        dialect,
+        backslash_escapes,
+        Some(&table.schema),
+        &table.name,
+        &validated,
+    );
     // build_change_statements emite DELETE, UPDATE (salteando los vacios) e
     // INSERT en ese orden: los primeros deletes + updates no vacios tocan
     // una fila exacta cada uno.
@@ -357,7 +366,7 @@ mod tests {
             inserts: vec![vec![text("seve", "error")]],
             ..Default::default()
         };
-        let statements = statements(Dialect::MySql, &schemas(), &target, &changes).unwrap();
+        let statements = statements(Dialect::MySql, true, &schemas(), &target, &changes).unwrap();
         assert_eq!(
             statements[0].sql,
             "UPDATE core.incidents\nSET total = 10.50\nWHERE id = 24;"
@@ -370,11 +379,11 @@ mod tests {
             inserts: vec![vec![text("id", "5")]],
             ..Default::default()
         };
-        assert!(super::statements(Dialect::MySql, &schemas(), &target, &bad).is_err());
+        assert!(super::statements(Dialect::MySql, true, &schemas(), &target, &bad).is_err());
         let unknown = ResultChanges {
             inserts: vec![vec![text("nope", "5")]],
             ..Default::default()
         };
-        assert!(super::statements(Dialect::MySql, &schemas(), &target, &unknown).is_err());
+        assert!(super::statements(Dialect::MySql, true, &schemas(), &target, &unknown).is_err());
     }
 }
