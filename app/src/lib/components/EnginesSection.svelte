@@ -134,6 +134,10 @@
     flex-direction: column;
   }
 
+  .set-caption {
+    margin-top: var(--space-6);
+  }
+
   .summary-actions,
   .line-actions {
     display: flex;
