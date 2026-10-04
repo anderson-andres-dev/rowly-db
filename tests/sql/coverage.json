@@ -1029,6 +1029,26 @@
             "mariadb",
             "postgres"
           ]
+        },
+        {
+          "file": "crates/driver-core/src/console.rs",
+          "name": "opening_the_first_connection_loses_no_session_and_closing_one_does",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "the_first_statement_after_connecting_loses_no_session",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
         }
       ],
       "gap": "Todavia no hay revision de paquete: los paquetes por linea llegan con M4/M5"

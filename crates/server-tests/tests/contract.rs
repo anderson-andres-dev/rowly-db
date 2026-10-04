@@ -839,3 +839,27 @@ async fn tls_verification_uses_the_configured_ca() {
         }
     }
 }
+
+/// Abrir la consola por primera vez no es perder una sesion: la primera
+/// sentencia tras conectar no avisa de una sesion perdida. MySQL y MariaDB
+/// la abren al conectar (la app lee el `sql_mode` en ella); PostgreSQL no
+/// tiene modo que leer y la abre con la primera sentencia.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn the_first_statement_after_connecting_loses_no_session() {
+    for engine in selected(Engine::ALL) {
+        let connector = connector(engine).await;
+        // Lo que hace `connect` de la app antes de anotar el epoch conocido.
+        if let Some(query) = engine.dialect().definition().sql_mode_query {
+            ok(engine, connector.as_ref(), query).await;
+        }
+        let known = connector.console_epoch();
+        ok(engine, connector.as_ref(), "SELECT 1").await;
+        assert!(
+            !khipu_driver_core::session_lost(known, connector.console_epoch()),
+            "{engine:?}: la primera sentencia aviso una sesion perdida ({known} -> {})",
+            connector.console_epoch()
+        );
+        assert_eq!(connector.console_epoch(), 1, "{engine:?}");
+    }
+}

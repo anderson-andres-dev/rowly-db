@@ -10,7 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
-pub use console::{ConsoleConnection, ConsoleGuard};
+pub use console::{ConsoleConnection, ConsoleGuard, session_lost};
 pub use message::Message;
 pub use query_cancel::QueryCancel;
 
