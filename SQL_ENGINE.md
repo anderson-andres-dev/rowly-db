@@ -179,7 +179,7 @@ Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine
 | D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | version parsing: `crates/drivers/*/src/version.rs` unit tests; mapping to lines is a **gap** (§9) |
 | D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
 | D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`) |
-| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `front/connectionIdentity.test.ts` covers part of identity; complete context and invalidation remain a **gap** (§9) |
+| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `app/src-tauri/src/drivers.rs` `cada_motor_del_frontend_llega_como_el_suyo` (each frontend engine ID reaches its own `Dialect`) and `front/stores/connectionCatalog.test.ts` (a catalog refresh from a previous connection is discarded) cover part of it; complete context and invalidation remain a **gap** (§9) |
 
 ### 6.5 Capabilities
 
