@@ -94,7 +94,10 @@ fn every_test_server_and_every_verified_version_selects_the_line_it_proves() {
     for dialect in Dialect::ALL {
         let id = dialect.id();
         let mut probes = Vec::new();
-        for line in registry["engines"][id].as_array().unwrap() {
+        let lines = registry["engines"][id]
+            .as_array()
+            .unwrap_or_else(|| panic!("{id}: sin lineas en tools/test-dbs/lines.json"));
+        for line in lines {
             for probe in line["probes"].as_array().unwrap() {
                 let version = probe["version"].as_str().unwrap();
                 probes.push((version, line["line"].as_str().unwrap()));
