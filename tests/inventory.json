@@ -3,8 +3,8 @@
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
     "files": 133,
-    "tests": 1412,
-    "ignored": 28,
+    "tests": 1413,
+    "ignored": 29,
     "byDecision": {
       "keep": 133,
       "move": 0,
@@ -2837,8 +2837,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 13,
-      "ignored": 13,
+      "tests": 14,
+      "ignored": 14,
       "environment": "real-server",
       "env": [],
       "durationMs": null

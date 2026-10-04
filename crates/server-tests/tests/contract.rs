@@ -758,3 +758,84 @@ async fn tls_verify_ca_rejects_self_signed_certificates() {
         }
     }
 }
+
+/// La CA que el servidor de prueba genero para su propio certificado (MySQL
+/// la deja en su datadir). `None` si el servidor no la guarda en un archivo.
+fn server_ca(engine: Engine) -> Option<std::path::PathBuf> {
+    if engine != Engine::MySql {
+        return None;
+    }
+    let output = std::process::Command::new("docker")
+        .args(["exec", engine.container(), "cat", "/var/lib/mysql/ca.pem"])
+        .output()
+        .expect("docker exec");
+    assert!(
+        output.status.success(),
+        "{engine:?}: sin ca.pem en el datadir"
+    );
+    let path = std::env::temp_dir().join(format!("rowly-{}-ca.pem", engine.name()));
+    std::fs::write(&path, output.stdout).expect("ca.pem temporal");
+    Some(path)
+}
+
+/// Con otra CA, VerifyCa rechaza el certificado del servidor; con la suya,
+/// VerifyIdentity lo rechaza porque no nombra al host. VerifyCa con la CA del
+/// servidor deberia conectar, pero sqlx 0.8.6 tambien le comprueba el nombre
+/// (SQL_ENGINE §9): es un hueco conocido, que falla cerrado, y la prueba
+/// avisa cuando deje de fallar. Solo en MySQL: MariaDB 11.8 genera su
+/// certificado en memoria, y PostgreSQL y MariaDB 10.6 no ofrecen TLS (N/A).
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn tls_verification_uses_the_configured_ca() {
+    let unrelated = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tools/test-dbs/tls/unrelated-ca.pem");
+    let not_valid_for_name = |detail: &str| detail.contains("not valid for name");
+    for engine in selected(Engine::ALL) {
+        let _ = connector(engine).await;
+        if declared_tls(engine) != "encrypted" {
+            continue;
+        }
+        let Some(ca) = server_ca(engine) else {
+            continue;
+        };
+        let with_ca = |mode, path: &std::path::Path| {
+            let mut config = engine.config_with_tls(mode);
+            config.ca_certificate_path = Some(path.to_string_lossy().into_owned());
+            config
+        };
+        let rejected = async |mode, path: &std::path::Path, what: &str| match engine
+            .connector(&with_ca(mode, path))
+            .await
+        {
+            Err(DriverError::Connection { kind, detail }) => {
+                assert_eq!(
+                    kind,
+                    ConnectionErrorKind::TlsCertificate,
+                    "{engine:?} {what}: {detail}"
+                );
+                detail
+            }
+            Ok(_) => panic!("{engine:?}: {what} conecto"),
+            Err(other) => panic!("{engine:?} {what}: error inesperado: {other}"),
+        };
+
+        let detail = rejected(TlsMode::VerifyCa, &unrelated, "VerifyCa con otra CA").await;
+        assert!(!not_valid_for_name(&detail), "{engine:?}: {detail}");
+        let detail = rejected(
+            TlsMode::VerifyIdentity,
+            &ca,
+            "VerifyIdentity con un certificado que no nombra al host",
+        )
+        .await;
+        assert!(not_valid_for_name(&detail), "{engine:?}: {detail}");
+
+        match engine.connector(&with_ca(TlsMode::VerifyCa, &ca)).await {
+            Err(DriverError::Connection { kind, detail })
+                if kind == ConnectionErrorKind::TlsCertificate && not_valid_for_name(&detail) => {}
+            Ok(_) => panic!(
+                "{engine:?}: VerifyCa con la CA del servidor ya conecta: quitar el hueco de SQL_ENGINE §9 y exigir que conecte cifrado"
+            ),
+            Err(other) => panic!("{engine:?}: VerifyCa con su CA fallo por otra causa: {other}"),
+        }
+    }
+}

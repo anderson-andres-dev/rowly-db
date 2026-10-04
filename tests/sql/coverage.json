@@ -761,6 +761,14 @@
           ]
         },
         {
+          "file": "crates/server-tests/tests/contract.rs",
+          "name": "tls_verification_uses_the_configured_ca",
+          "scope": "real",
+          "engines": [
+            "mysql"
+          ]
+        },
+        {
           "file": "crates/drivers/mysql/src/tls.rs",
           "name": "tls_errors_get_their_own_cause",
           "scope": "unit",
@@ -770,7 +778,7 @@
           ]
         }
       ],
-      "gap": "VerifyCa y VerifyIdentity aceptando una CA configurada: ningun servidor de prueba usa un certificado firmado por una CA propia. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, asi que en ellas solo se prueba el camino sin TLS"
+      "gap": "VerifyCa con la CA correcta falla si el certificado no nombra al host (sqlx 0.8.6 con rustls 0.23.45, falla cerrado) y no se prueba VerifyIdentity aceptando un certificado que nombra al host: ningun servidor de prueba sirve uno. Las imagenes de PostgreSQL y de MariaDB 10.6 no ofrecen TLS, y MariaDB 11.8 genera su certificado en memoria"
     },
     "D6": {
       "status": "partial",
