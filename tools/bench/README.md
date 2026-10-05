@@ -62,6 +62,7 @@ Compare only against a reference taken on the same machine and system:
 | `baseline/v0.3.0-cachyos` | `v0.3.0` built from its tag (`npx tauri build --no-bundle`), the same way as the branch it is compared with | CachyOS, kernel 7.1.8, profile `balanced` (same CPU) |
 | `baseline/c5-cachyos` | The end of the consolidation, measured alternating with `v0.3.0-cachyos` in the same session; `node-editor.json` is the median of 5 runs | CachyOS, kernel 7.1.8, `balanced` profile |
 | `baseline/hardening-cachyos` | Keystroke-to-paint and grid frames (`linux-rowly-latency.json`), the first time they were measured: median of 3 runs of the release binary under Xvfb, each run kept in `runs` | CachyOS, kernel 7.1.8, `balanced` profile |
+| `baseline/terminal-pre` | `develop` at `af33348` (v0.4.0) before the integrated terminal: bundle, warm startup, idle, `resources.mjs` cycles and the first byte of the login shell outside the app; binary and package sizes in `summary.json` | Omarchy, kernel 7.2.5, `performance` profile |
 
 `node-editor.json` has no dispersion field, so a single run against another single run can flag noise at the microsecond scale. Before calling it a regression, repeat both sides (five alternating runs) and compare medians.
 
