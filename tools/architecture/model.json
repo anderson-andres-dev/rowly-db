@@ -1,0 +1,523 @@
+{
+  "about": "Lo semantico de la arquitectura, lo que no se deduce del codigo: dominios, su tipo, que dependencias se permiten y el flujo del SQL con anclas en el codigo. Las aristas de dependencias NO se escriben aqui: tools/architecture/graph.mjs las saca del codigo y falla si una no esta permitida. Ver docs/ARCHITECTURE.md.",
+  "kinds": {
+    "common": "Codigo comun: no nombra motores concretos",
+    "engine": "Codigo de un motor concreto (registro, definicion, driver, perfil)",
+    "data": "Datos versionados: la fuente de verdad que el codigo lee",
+    "infra": "Pruebas, herramientas e integracion continua"
+  },
+  "domains": [
+    {
+      "id": "frontend",
+      "label": "Frontend (Svelte)",
+      "kind": "common",
+      "paths": [
+        "app/src/"
+      ],
+      "except": [
+        "app/src/lib/engines/",
+        "app/src/lib/connections.ts"
+      ],
+      "layer": "Frontend"
+    },
+    {
+      "id": "profiles",
+      "label": "Engine profiles (app/src/lib/engines)",
+      "kind": "engine",
+      "paths": [
+        "app/src/lib/engines/",
+        "app/src/lib/connections.ts"
+      ],
+      "layer": "Frontend"
+    },
+    {
+      "id": "backend",
+      "label": "Tauri backend (app/src-tauri)",
+      "kind": "common",
+      "paths": [
+        "app/src-tauri/src/"
+      ],
+      "except": [
+        "app/src-tauri/src/drivers.rs"
+      ],
+      "layer": "Backend"
+    },
+    {
+      "id": "registry",
+      "label": "Driver registry (drivers.rs)",
+      "kind": "engine",
+      "paths": [
+        "app/src-tauri/src/drivers.rs"
+      ],
+      "layer": "Backend"
+    },
+    {
+      "id": "engine",
+      "label": "Engine core (khipu-engine)",
+      "kind": "common",
+      "paths": [
+        "crates/engine/src/"
+      ],
+      "except": [
+        "crates/engine/src/dialects/"
+      ],
+      "crate": "khipu_engine",
+      "layer": "Core"
+    },
+    {
+      "id": "definitions",
+      "label": "EngineDefinition per engine (dialects/)",
+      "kind": "engine",
+      "paths": [
+        "crates/engine/src/dialects/"
+      ],
+      "layer": "Core"
+    },
+    {
+      "id": "driver-core",
+      "label": "Driver contract (khipu-driver-core)",
+      "kind": "common",
+      "paths": [
+        "crates/driver-core/src/"
+      ],
+      "crate": "khipu_driver_core",
+      "layer": "Drivers"
+    },
+    {
+      "id": "driver-mysql",
+      "label": "MySQL protocol driver (MySQL, MariaDB)",
+      "kind": "engine",
+      "paths": [
+        "crates/drivers/mysql/src/"
+      ],
+      "crate": "khipu_driver_mysql",
+      "layer": "Drivers"
+    },
+    {
+      "id": "driver-postgres",
+      "label": "PostgreSQL protocol driver",
+      "kind": "engine",
+      "paths": [
+        "crates/drivers/postgres/src/"
+      ],
+      "crate": "khipu_driver_postgres",
+      "layer": "Drivers"
+    },
+    {
+      "id": "lsp",
+      "label": "khipu-lsp (stub)",
+      "kind": "common",
+      "paths": [
+        "crates/engine-lsp/src/"
+      ],
+      "layer": "Core"
+    },
+    {
+      "id": "line-data",
+      "label": "support/*.json (version lines)",
+      "kind": "data",
+      "paths": [
+        "support/"
+      ]
+    },
+    {
+      "id": "test-servers",
+      "label": "tools/test-dbs/lines.json (test servers, verified)",
+      "kind": "data",
+      "paths": [
+        "tools/test-dbs/lines.json"
+      ]
+    },
+    {
+      "id": "vendor",
+      "label": "tools/support/vendor-support.json (vendor dates)",
+      "kind": "data",
+      "paths": [
+        "tools/support/vendor-support.json"
+      ]
+    },
+    {
+      "id": "contract",
+      "label": "tests/engines/contract.json",
+      "kind": "data",
+      "paths": [
+        "tests/engines/contract.json"
+      ]
+    },
+    {
+      "id": "corpus",
+      "label": "tests/sql (corpus, coverage.json)",
+      "kind": "data",
+      "paths": [
+        "tests/sql/"
+      ]
+    },
+    {
+      "id": "server-tests",
+      "label": "Real-server harness (crates/server-tests)",
+      "kind": "infra",
+      "paths": [
+        "crates/server-tests/"
+      ]
+    },
+    {
+      "id": "tooling",
+      "label": "Matrix, evidence, packs, inventory (tools/)",
+      "kind": "infra",
+      "paths": [
+        "tools/"
+      ],
+      "except": [
+        "tools/test-dbs/lines.json",
+        "tools/support/vendor-support.json"
+      ]
+    },
+    {
+      "id": "ci",
+      "label": "CI (.github/workflows)",
+      "kind": "infra",
+      "paths": [
+        ".github/workflows/"
+      ]
+    }
+  ],
+  "allowed": {
+    "frontend": [
+      "profiles",
+      "backend"
+    ],
+    "profiles": [
+      "frontend",
+      "line-data"
+    ],
+    "backend": [
+      "engine",
+      "driver-core",
+      "registry",
+      "test-servers",
+      "vendor"
+    ],
+    "registry": [
+      "engine",
+      "driver-core",
+      "driver-mysql",
+      "driver-postgres"
+    ],
+    "engine": [
+      "definitions",
+      "line-data"
+    ],
+    "definitions": [
+      "line-data"
+    ],
+    "driver-core": [],
+    "driver-mysql": [
+      "driver-core",
+      "engine"
+    ],
+    "driver-postgres": [
+      "driver-core",
+      "engine"
+    ],
+    "lsp": [
+      "engine"
+    ],
+    "server-tests": [
+      "engine",
+      "driver-core",
+      "driver-mysql",
+      "driver-postgres",
+      "test-servers",
+      "corpus",
+      "line-data",
+      "tooling"
+    ],
+    "tooling": [
+      "frontend",
+      "line-data",
+      "test-servers",
+      "vendor",
+      "corpus",
+      "contract",
+      "server-tests"
+    ],
+    "ci": [
+      "tooling",
+      "server-tests",
+      "test-servers",
+      "line-data",
+      "corpus"
+    ]
+  },
+  "debt": [],
+  "notes": {
+    "backend->test-servers": "verification: an exact release is verified only if lines.json says so (compiled in)",
+    "backend->vendor": "display only: vendor support dates",
+    "driver-mysql->engine": "line data (capabilities), never guard rules",
+    "driver-postgres->engine": "line data (capabilities), never guard rules",
+    "engine->definitions": "only lib.rs (Dialect::definition) names them",
+    "frontend->backend": "Tauri IPC: one owner module per command",
+    "profiles->line-data": "reserved words per line",
+    "definitions->line-data": "include_str! of support/<engine>.json",
+    "profiles->frontend": "common types and the lexer; common code reaches a profile only through ENGINES",
+    "engine->line-data": "khipu_engine::lines parses what each definition embeds",
+    "tooling->frontend": "benchmarks measure the real editor code",
+    "server-tests->tooling": "tools/test-dbs starts the servers it tests"
+  },
+  "flow": {
+    "nodes": [
+      {
+        "id": "user",
+        "label": "SQL the user writes",
+        "kind": "common",
+        "anchor": "app/src/lib/workspace/executionSession.ts",
+        "path": "user"
+      },
+      {
+        "id": "split",
+        "label": "splitter (frontend)",
+        "kind": "common",
+        "anchor": "app/src/lib/sqlStatements.ts#splitStatements",
+        "path": "user"
+      },
+      {
+        "id": "analyze",
+        "label": "analyzer: diagnostics only, never a gate",
+        "kind": "common",
+        "anchor": "crates/engine/src/diagnostics.rs#analyze_statement_with",
+        "path": "user"
+      },
+      {
+        "id": "guard",
+        "label": "guard: classify_sql_with (session mode)",
+        "kind": "common",
+        "anchor": "crates/engine/src/execution_guard.rs#classify_sql_with",
+        "path": "user"
+      },
+      {
+        "id": "confirm",
+        "label": "user confirmation if destructive or production write",
+        "kind": "common",
+        "anchor": "app/src-tauri/src/commands/query.rs#ConfirmationRequired",
+        "path": "user"
+      },
+      {
+        "id": "rewrite",
+        "label": "rewrite to sort / page / count (sqlparser AST)",
+        "kind": "common",
+        "anchor": "crates/engine/src/pagination.rs#paginate_sql",
+        "path": "user"
+      },
+      {
+        "id": "guard2",
+        "label": "guard again on the rewritten text + same strings",
+        "kind": "common",
+        "anchor": "crates/engine/src/pagination.rs#fn guarded",
+        "path": "user"
+      },
+      {
+        "id": "console",
+        "label": "DbConnector on the window's ConsoleConnection",
+        "kind": "common",
+        "anchor": "crates/driver-core/src/console.rs#ConsoleConnection",
+        "path": "run"
+      },
+      {
+        "id": "prepare",
+        "label": "driver prepares before running (defense in depth)",
+        "kind": "engine",
+        "anchor": "crates/drivers/mysql/src/lib.rs#describe",
+        "path": "run"
+      },
+      {
+        "id": "server",
+        "label": "database server",
+        "kind": "infra"
+      },
+      {
+        "id": "grid",
+        "label": "grid changes (Rowly-generated, not user text)",
+        "kind": "common",
+        "anchor": "app/src-tauri/src/commands/results.rs#apply_result_changes",
+        "path": "generated"
+      },
+      {
+        "id": "generated",
+        "label": "editing::build_change_statements: table and full primary key from the catalog",
+        "kind": "common",
+        "anchor": "crates/engine/src/editing.rs#build_change_statements",
+        "path": "generated"
+      },
+      {
+        "id": "pool",
+        "label": "pool, one transaction (execute_in_transaction)",
+        "kind": "common",
+        "anchor": "crates/driver-core/src/lib.rs#execute_in_transaction",
+        "path": "generated"
+      },
+      {
+        "id": "constant",
+        "label": "fixed SQL of a definition or driver (sql_mode, cancel, session defaults)",
+        "kind": "engine",
+        "anchor": "crates/engine/src/dialects/mod.rs#sql_mode_query",
+        "path": "fixed"
+      },
+      {
+        "id": "introspect",
+        "label": "introspection queries (driver, per protocol)",
+        "kind": "engine",
+        "anchor": "crates/drivers/postgres/src/introspect.rs#introspect_schema",
+        "path": "introspection"
+      },
+      {
+        "id": "model",
+        "label": "SchemaObjects (driver-core model)",
+        "kind": "common",
+        "anchor": "crates/driver-core/src/lib.rs#pub struct SchemaObjects",
+        "path": "introspection"
+      },
+      {
+        "id": "catalog",
+        "label": "SchemaCatalog (engine) and explorer",
+        "kind": "common",
+        "anchor": "app/src-tauri/src/services/catalog.rs",
+        "path": "introspection"
+      },
+      {
+        "id": "complete",
+        "label": "autocomplete: inserts text into the editor",
+        "kind": "common",
+        "anchor": "app/src/lib/editor/catalogCompletions.ts#buildCatalogCompletions",
+        "path": "introspection"
+      }
+    ],
+    "edges": [
+      [
+        "user",
+        "split",
+        "statements"
+      ],
+      [
+        "split",
+        "analyze",
+        "while typing",
+        "advisory"
+      ],
+      [
+        "split",
+        "guard",
+        "execute_query"
+      ],
+      [
+        "guard",
+        "confirm",
+        "RequiresConfirmation"
+      ],
+      [
+        "confirm",
+        "guard",
+        "confirmed: classified again"
+      ],
+      [
+        "guard",
+        "rewrite",
+        "NotDestructive"
+      ],
+      [
+        "rewrite",
+        "guard2",
+        "rewritten text"
+      ],
+      [
+        "guard2",
+        "console",
+        "accepted"
+      ],
+      [
+        "guard2",
+        "console",
+        "rejected: the original text",
+        "fallback"
+      ],
+      [
+        "guard",
+        "console",
+        "not pageable: the original text"
+      ],
+      [
+        "console",
+        "prepare",
+        ""
+      ],
+      [
+        "prepare",
+        "server",
+        ""
+      ],
+      [
+        "grid",
+        "generated",
+        "apply_result_changes"
+      ],
+      [
+        "catalog",
+        "generated",
+        "table and key must exist"
+      ],
+      [
+        "generated",
+        "pool",
+        "production: confirmed by the user"
+      ],
+      [
+        "pool",
+        "server",
+        ""
+      ],
+      [
+        "constant",
+        "server",
+        "no user text"
+      ],
+      [
+        "server",
+        "introspect",
+        ""
+      ],
+      [
+        "introspect",
+        "model",
+        ""
+      ],
+      [
+        "model",
+        "catalog",
+        "services/catalog.rs"
+      ],
+      [
+        "catalog",
+        "complete",
+        ""
+      ],
+      [
+        "catalog",
+        "analyze",
+        "names (A6)",
+        "advisory"
+      ],
+      [
+        "complete",
+        "user",
+        "becomes user SQL",
+        "advisory"
+      ]
+    ],
+    "paths": {
+      "user": "SQL the user writes",
+      "run": "Execution on the console connection",
+      "generated": "SQL Rowly DB generates from the catalog",
+      "fixed": "Fixed SQL of a definition or driver",
+      "introspection": "Introspection"
+    }
+  }
+}
