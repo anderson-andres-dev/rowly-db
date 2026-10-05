@@ -282,26 +282,52 @@ mod contract {
     }
 
     /// El nucleo pregunta a la definicion del motor; no compara motores. Un
-    /// `dialect == Dialect::Postgres` en un modulo trataria a un motor nuevo
-    /// como a otro sin que el compilador lo diga. Los tests si los nombran.
+    /// `dialect == Dialect::Postgres` o un `id == "postgres"` en un modulo
+    /// trataria a un motor nuevo como a otro sin que el compilador lo diga.
+    /// Solo este archivo (el registro) los nombra; los tests, tambien.
     #[test]
     fn ningun_modulo_del_nucleo_compara_motores() {
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    out.push(path);
+                }
+            }
+        }
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        let named: Vec<String> = Dialect::ALL
+            .iter()
+            .flat_map(|dialect| {
+                [
+                    format!("Dialect::{dialect:?}"),
+                    format!("\"{}\"", dialect.id()),
+                ]
+            })
+            .collect();
         let mut found = Vec::new();
-        for entry in std::fs::read_dir(&src).unwrap() {
-            let path = entry.unwrap().path();
-            let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if !name.ends_with(".rs") || name == "lib.rs" {
+        for path in files {
+            let relative = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            if relative == "lib.rs" {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap();
             let code = text.split("#[cfg(test)]").next().unwrap();
             for (number, line) in code.lines().enumerate() {
-                if ["Dialect::MySql", "Dialect::MariaDb", "Dialect::Postgres"]
-                    .iter()
-                    .any(|variant| line.contains(variant))
-                {
-                    found.push(format!("{name}:{}: {}", number + 1, line.trim()));
+                // El id de una definicion es su registro, no una comparacion.
+                if line.trim_start().starts_with("id:") || line.trim_start().starts_with("//") {
+                    continue;
+                }
+                if named.iter().any(|name| line.contains(name.as_str())) {
+                    found.push(format!("{relative}:{}: {}", number + 1, line.trim()));
                 }
             }
         }

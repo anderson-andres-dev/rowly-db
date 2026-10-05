@@ -5,7 +5,9 @@
   import { drawSelection, keymap } from "@codemirror/view";
   import { selectAll } from "@codemirror/commands";
   import { EditorState } from "@codemirror/state";
-  import { sql, MySQL } from "@codemirror/lang-sql";
+  import { sql } from "@codemirror/lang-sql";
+  import { activeEngine } from "$lib/stores/connection";
+  import { standardSql } from "$lib/engines";
   import { Check, Copy, X } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
   import { writeClipboardText } from "$lib/results/gridClipboard";
@@ -75,7 +77,7 @@
         EditorState.readOnly.of(true),
         drawSelection(),
         keymap.of([{ key: "Mod-a", run: selectAll }]),
-        sql({ dialect: MySQL }),
+        sql({ dialect: (get(activeEngine) ?? standardSql).editorDialect }),
         buildCmTheme(get(editorPalette), get(effectiveScheme)),
       ],
     });

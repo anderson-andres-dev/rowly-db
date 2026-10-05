@@ -1,7 +1,6 @@
 import { snippet, startCompletion, type Completion, type CompletionResult } from "@codemirror/autocomplete";
 import type { SchemaObjects } from "$lib/types";
 import type { SqlProfile } from "$lib/engines";
-import { ENGINES } from "$lib/engines";
 import { boostFor, recordUsage } from "$lib/usageStats";
 import { sqlTokens } from "$lib/editor/context";
 
@@ -10,8 +9,6 @@ import { sqlTokens } from "$lib/editor/context";
 export type CatalogPosition = "call" | "procedure" | "function" | "relation" | "expression" | "routine" | "unknown";
 
 const COMMON_FUNCTIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "LOWER", "UPPER", "LENGTH", "SUBSTRING", "TRIM", "ABS", "ROUND"];
-const MYSQL_FUNCTIONS = ["NOW", "CONCAT", "IFNULL", "IF", "DATE_FORMAT", "JSON_EXTRACT", "JSON_OBJECT", "JSON_ARRAY", "GROUP_CONCAT", "UUID", "CURDATE"];
-const POSTGRES_FUNCTIONS = ["NOW", "CONCAT", "GENERATE_SERIES", "STRING_AGG", "ARRAY_AGG", "TO_CHAR", "DATE_TRUNC", "JSONB_BUILD_OBJECT", "JSONB_AGG", "JSONB_ARRAY_ELEMENTS", "JSONB_EXTRACT_PATH", "PG_TYPEOF"];
 
 interface Entry {
   schema: string;
@@ -103,12 +100,10 @@ export function buildCatalogCompletions(schemas: readonly SchemaObjects[], engin
       noArgs: routine.parameters ? routine.parameters.filter((p) => engine.passedInCall(p.mode, routine.kind)).length === 0 : routine.arguments.trim() === "",
       params: routine.parameters?.filter((p) => engine.passedInCall(p.mode, routine.kind)).map((p, index) => p.name || `arg${index + 1}`),
     });
-    if (engine === ENGINES.postgres) {
-      for (const sequence of objects.sequences) entries.push({ schema: objects.schema, name: sequence.name, kind: "sequence", detail: sequence.dataType ?? undefined });
-    }
+    // Solo los motores con secuencias las traen en el catalogo.
+    for (const sequence of objects.sequences) entries.push({ schema: objects.schema, name: sequence.name, kind: "sequence", detail: sequence.dataType ?? undefined });
   }
-  const functions = engine === ENGINES.postgres ? POSTGRES_FUNCTIONS : engine === ENGINES.mysql || engine === ENGINES.mariadb ? MYSQL_FUNCTIONS : [];
-  const builtin = [...COMMON_FUNCTIONS, ...functions].map((name): Completion => ({
+  const builtin = [...COMMON_FUNCTIONS, ...engine.builtinFunctions].map((name): Completion => ({
     label: name,
     type: "function",
     boost: -2,

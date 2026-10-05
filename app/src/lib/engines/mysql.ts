@@ -107,6 +107,7 @@ export const mysql: EngineProfile = {
     "use",
     "call",
   ],
+  builtinFunctions: ["NOW", "CONCAT", "IFNULL", "IF", "DATE_FORMAT", "JSON_EXTRACT", "JSON_OBJECT", "JSON_ARRAY", "GROUP_CONCAT", "UUID", "CURDATE"],
   reservedWords: RESERVED,
   errorHelp: {
     "1146": "tableMissing",

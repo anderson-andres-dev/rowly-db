@@ -32,8 +32,15 @@ impl Engine {
         }
     }
 
+    /// MySQL y MariaDB: mismo protocolo, misma forma de preparar el servidor
+    /// de prueba. Un motor nuevo no compila aqui hasta decidir si es de esta
+    /// familia; si no lo es ni se parece a PostgreSQL, cada uso de esto pasa a
+    /// un `match` con su propio brazo, nunca cae en silencio en otro motor.
     pub fn is_mysql_family(self) -> bool {
-        self != Engine::Postgres
+        match self {
+            Engine::MySql | Engine::MariaDb => true,
+            Engine::Postgres => false,
+        }
     }
 
     /// Su nombre en ROWLY_ENGINES, lines.json y tests/sql.
@@ -77,7 +84,7 @@ impl Engine {
     ) -> Result<Box<dyn DbConnector>, DriverError> {
         Ok(match self {
             Engine::Postgres => Box::new(PostgresConnector::connect(config).await?),
-            _ => Box::new(MySqlConnector::connect(config).await?),
+            Engine::MySql | Engine::MariaDb => Box::new(MySqlConnector::connect(config).await?),
         })
     }
 
@@ -117,7 +124,7 @@ impl Conn {
     /// modo que no toca hace fallar en falso las pruebas de cadenas (S2).
     async fn open_in_mode(engine: Engine, no_backslash_escapes: bool) -> Conn {
         let conn = Conn::open_unchecked(engine).await;
-        if engine != Engine::Postgres {
+        if engine.is_mysql_family() {
             let mode = conn
                 .scalar("SELECT @@GLOBAL.sql_mode")
                 .await
@@ -165,7 +172,7 @@ impl Conn {
                     .await
                     .expect("postgres de prueba: corre tools/test-dbs/up.sh"),
             ),
-            _ => Conn::My(
+            Engine::MySql | Engine::MariaDb => Conn::My(
                 MySqlConnector::connect(&config)
                     .await
                     .expect("mysql/mariadb de prueba: corre tools/test-dbs/up.sh"),
@@ -178,7 +185,7 @@ impl Conn {
     pub async fn open_line(engine: Engine, port: u16) -> Result<Conn, String> {
         let (username, database) = match engine {
             Engine::Postgres => ("postgres", "postgres"),
-            _ => ("root", "mysql"),
+            Engine::MySql | Engine::MariaDb => ("root", "mysql"),
         };
         let config = ConnectionConfig {
             host: "127.0.0.1".into(),
@@ -191,7 +198,7 @@ impl Conn {
         };
         match engine {
             Engine::Postgres => PostgresConnector::connect(&config).await.map(Conn::Pg),
-            _ => MySqlConnector::connect(&config).await.map(Conn::My),
+            Engine::MySql | Engine::MariaDb => MySqlConnector::connect(&config).await.map(Conn::My),
         }
         .map_err(|error| error.to_string())
     }
@@ -284,7 +291,7 @@ impl Conn {
                     .expect("postgres de prueba");
                 let _ = sqlx::raw_sql(sql).execute(&mut conn).await;
             }
-            _ => {
+            Engine::MySql | Engine::MariaDb => {
                 let url = format!(
                     "mysql://rowly:rowly@127.0.0.1:{}/{}",
                     config.port, config.database
@@ -591,7 +598,10 @@ pub struct NoBackslashEscapes(Engine);
 
 impl NoBackslashEscapes {
     pub fn on(engine: Engine) -> NoBackslashEscapes {
-        assert!(engine != Engine::Postgres, "PostgreSQL no tiene sql_mode");
+        assert!(
+            engine.is_mysql_family(),
+            "solo MySQL y MariaDB tienen sql_mode"
+        );
         admin(engine, NO_BACKSLASH_ESCAPES_OFF);
         let guard = NoBackslashEscapes(engine);
         admin(engine, NO_BACKSLASH_ESCAPES_ON);
@@ -698,13 +708,53 @@ pub fn parse(entry: &str) -> Entry {
 pub fn routines_corpus(engine: Engine) -> &'static str {
     match engine {
         Engine::Postgres => include_str!("../../../tests/sql/postgres/common/routines.sql"),
-        _ => include_str!("../../../tests/sql/mysql/common/routines.sql"),
+        Engine::MySql | Engine::MariaDb => {
+            include_str!("../../../tests/sql/mysql/common/routines.sql")
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// tools/test-dbs/lines.json es la fuente unica de servidores de prueba:
+    /// el E2E levanta versiones verificadas, fijadas por el mismo digest.
+    #[test]
+    fn the_e2e_servers_are_verified_releases_of_lines_json() {
+        let lines = lines_json();
+        let registry = lines["registry"].as_str().unwrap();
+        let declared: Vec<String> = lines["verified"]
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|releases| releases.as_array().unwrap())
+            .map(|release| {
+                format!(
+                    "{registry}/{}@{}",
+                    release["image"].as_str().unwrap(),
+                    release["digest"].as_str().unwrap()
+                )
+            })
+            .collect();
+        let workflow = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.github/workflows/e2e.yml"),
+        )
+        .unwrap();
+        let images: Vec<&str> = workflow
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("image:"))
+            .map(str::trim)
+            .collect();
+        assert!(!images.is_empty(), "e2e.yml sin imagenes");
+        for image in images {
+            assert!(
+                declared.iter().any(|known| known == image),
+                "e2e.yml levanta {image}, que no es una version verificada de lines.json"
+            );
+        }
+    }
 
     /// El harness prueba cada motor del registro (Dialect::ALL), con su
     /// identidad: un motor nuevo no queda fuera de las pruebas reales.

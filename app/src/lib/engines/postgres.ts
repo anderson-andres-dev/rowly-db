@@ -97,6 +97,7 @@ export const postgres: EngineProfile = {
     "vacuum",
     "analyze",
   ],
+  builtinFunctions: ["NOW", "CONCAT", "GENERATE_SERIES", "STRING_AGG", "ARRAY_AGG", "TO_CHAR", "DATE_TRUNC", "JSONB_BUILD_OBJECT", "JSONB_AGG", "JSONB_ARRAY_ELEMENTS", "JSONB_EXTRACT_PATH", "PG_TYPEOF"],
   reservedWords: RESERVED,
   errorHelp: {
     "42P01": "tableMissing",
