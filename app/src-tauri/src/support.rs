@@ -97,8 +97,64 @@ pub(crate) enum Rejected {
     Conflict(String),
     NotFound,
     LastLine,
-    Network(String),
+    Network(Network),
     Storage(String),
+}
+
+/// Por que fallo la red, para decirlo en el idioma del usuario. El error de
+/// reqwest (en ingles, con la URL) va al registro, no a la pantalla.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Network {
+    /// No se resuelve el nombre o no hay ruta: lo normal sin red.
+    Offline,
+    /// El servidor no acepta la conexion.
+    Unreachable,
+    Timeout,
+    /// Respondio, pero con un estado de error.
+    Status(u16),
+    /// Cualquier otra cosa (TLS, la conexion se corto al leer...).
+    Failed,
+}
+
+impl Network {
+    fn of(error: &reqwest::Error) -> Self {
+        if error.is_timeout() {
+            return Network::Timeout;
+        }
+        if let Some(status) = error.status() {
+            return Network::Status(status.as_u16());
+        }
+        if !error.is_connect() {
+            return Network::Failed;
+        }
+        let mut source = std::error::Error::source(error);
+        while let Some(cause) = source {
+            if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+                use std::io::ErrorKind::*;
+                match io.kind() {
+                    NetworkUnreachable | NetworkDown => return Network::Offline,
+                    TimedOut => return Network::Timeout,
+                    _ => {}
+                }
+            }
+            // hyper-util envuelve el fallo del resolver como "dns error".
+            if cause.to_string().starts_with("dns error") {
+                return Network::Offline;
+            }
+            source = cause.source();
+        }
+        Network::Unreachable
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            Network::Offline => "support.network.offline",
+            Network::Unreachable => "support.network.unreachable",
+            Network::Timeout => "support.network.timeout",
+            Network::Status(_) => "support.network.status",
+            Network::Failed => "support.network.failed",
+        }
+    }
 }
 
 impl From<Rejected> for Message {
@@ -114,7 +170,10 @@ impl From<Rejected> for Message {
             Rejected::Conflict(detail) => Message::key("support.conflict").with("detail", detail),
             Rejected::NotFound => Message::key("support.notFound"),
             Rejected::LastLine => Message::key("support.lastLine"),
-            Rejected::Network(detail) => Message::key("support.network").with("detail", detail),
+            Rejected::Network(Network::Status(status)) => {
+                Message::key(Network::Status(status).key()).with("status", status)
+            }
+            Rejected::Network(network) => Message::key(network.key()),
             Rejected::Storage(detail) => Message::key("support.storage").with("detail", detail),
         }
     }
@@ -532,11 +591,22 @@ fn current_status<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<LineStatus>, Rej
 }
 
 async fn fetch(url: &str, limit: usize) -> Result<Vec<u8>, Rejected> {
-    let network = |error: reqwest::Error| Rejected::Network(error.to_string());
+    fetch_with(url, limit, std::time::Duration::from_secs(20)).await
+}
+
+async fn fetch_with(
+    url: &str,
+    limit: usize,
+    timeout: std::time::Duration,
+) -> Result<Vec<u8>, Rejected> {
+    let network = |error: reqwest::Error| {
+        eprintln!("paquetes de soporte: {error:?}");
+        Rejected::Network(Network::of(&error))
+    };
     let _ = rustls::crypto::ring::default_provider().install_default();
     let client = reqwest::Client::builder()
         .user_agent(concat!("Rowly-DB/", env!("CARGO_PKG_VERSION")))
-        .timeout(std::time::Duration::from_secs(20))
+        .timeout(timeout)
         .build()
         .map_err(network)?;
     let response = client
@@ -1228,5 +1298,87 @@ mod tests {
         let json = serde_json::to_value(&context).unwrap();
         assert_eq!(json["line"]["revision"], 2);
         assert_eq!(json["line"]["origin"], "downloaded");
+    }
+
+    /// Lo que llega a la interfaz cuando falla la red: una clave sin el
+    /// texto de reqwest.
+    async fn network_failure(url: &str, timeout_ms: u64) -> (Rejected, String) {
+        let rejected = fetch_with(url, 1024, std::time::Duration::from_millis(timeout_ms))
+            .await
+            .unwrap_err();
+        let message = match &rejected {
+            Rejected::Network(network) => Message::from(Rejected::Network(*network)),
+            other => panic!("no es un fallo de red: {other:?}"),
+        };
+        (rejected, serde_json::to_string(&message).unwrap())
+    }
+
+    fn assert_no_reqwest_text(json: &str) {
+        assert!(!json.contains("error sending request"), "{json}");
+        assert!(!json.contains("http://"), "{json}");
+    }
+
+    #[tokio::test]
+    async fn a_closed_port_says_the_server_does_not_respond_not_what_reqwest_says() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let (rejected, json) =
+            network_failure(&format!("http://127.0.0.1:{port}/index.json"), 5000).await;
+        assert_eq!(rejected, Rejected::Network(Network::Unreachable));
+        assert_eq!(json, r#"{"key":"support.network.unreachable"}"#);
+        assert_no_reqwest_text(&json);
+    }
+
+    #[tokio::test]
+    async fn an_unresolvable_host_says_there_is_no_network() {
+        // .invalid no se resuelve nunca (RFC 6761): lo mismo que ve el
+        // resolver sin red.
+        let (rejected, json) = network_failure("http://rowly.invalid/index.json", 5000).await;
+        assert_eq!(rejected, Rejected::Network(Network::Offline));
+        assert_eq!(json, r#"{"key":"support.network.offline"}"#);
+        assert_no_reqwest_text(&json);
+    }
+
+    #[tokio::test]
+    async fn a_server_that_never_answers_is_a_timeout() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let _accepted = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            drop(socket);
+        });
+        let (rejected, json) =
+            network_failure(&format!("http://127.0.0.1:{port}/index.json"), 300).await;
+        assert_eq!(rejected, Rejected::Network(Network::Timeout));
+        assert_eq!(json, r#"{"key":"support.network.timeout"}"#);
+    }
+
+    #[tokio::test]
+    async fn an_http_error_says_its_status() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 1024];
+            let _ = socket.read(&mut request).await;
+            socket
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+        let (rejected, json) =
+            network_failure(&format!("http://127.0.0.1:{port}/index.json"), 5000).await;
+        assert_eq!(rejected, Rejected::Network(Network::Status(404)));
+        assert_eq!(
+            json,
+            r#"{"key":"support.network.status","params":{"status":"404"}}"#
+        );
     }
 }

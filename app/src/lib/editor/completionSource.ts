@@ -1,11 +1,6 @@
 import { commentAwareWrap } from "$lib/editor/commentHighlight";
 import type { Completion, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
-import {
-  keywordCompletionSource,
-  schemaCompletionSource,
-  type SQLDialect,
-  type SQLNamespace,
-} from "@codemirror/lang-sql";
+import { keywordCompletionSource, schemaCompletionSource, SQLDialect, type SQLNamespace } from "@codemirror/lang-sql";
 import { foldNodeProp } from "@codemirror/language";
 import type { CatalogTable, ForeignKey, RelationKind, SchemaObjects } from "$lib/types";
 import { boostFor, recordUsage } from "$lib/usageStats";
@@ -31,12 +26,19 @@ const NO_STATEMENT_FOLD = foldNodeProp.add({ Statement: () => null });
 const dialectCache = new WeakMap<SqlProfile, SQLDialect>();
 
 // El dialecto del editor para el SQL de un motor (o el estandar), con lo de
-// la app encima: los comentarios como los lee el motor (editor/commentHighlight.ts).
+// la app encima: los comentarios como los lee el motor (editor/commentHighlight.ts)
+// y la barra invertida como su `lexical`, que sigue el modo de la sesion
+// (engineForContext): lang-sql no la lee como escape en MySQL/MariaDB.
 export function dialectFor(engine: SqlProfile): SQLDialect {
   const cached = dialectCache.get(engine);
   if (cached) return cached;
-  const wrap = commentAwareWrap(engine.lexical, engine.editorDialect.language.parser);
-  const configured = engine.editorDialect.configureLanguage({ props: [NO_STATEMENT_FOLD], ...(wrap ? { wrap } : {}) });
+  const { spec } = engine.editorDialect;
+  const base =
+    !!spec.backslashEscapes === engine.lexical.backslashEscapes
+      ? engine.editorDialect
+      : SQLDialect.define({ ...spec, backslashEscapes: engine.lexical.backslashEscapes });
+  const wrap = commentAwareWrap(engine.lexical, base.language.parser);
+  const configured = base.configureLanguage({ props: [NO_STATEMENT_FOLD], ...(wrap ? { wrap } : {}) });
   dialectCache.set(engine, configured);
   return configured;
 }
