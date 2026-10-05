@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 135,
-    "tests": 1438,
-    "ignored": 29,
+    "files": 136,
+    "tests": 1457,
+    "ignored": 31,
     "byDecision": {
-      "keep": 135,
+      "keep": 136,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 129,
+      "pr": 130,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -121,7 +121,7 @@
       ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 1,
+      "tests": 2,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -279,9 +279,12 @@
       "risk": "P1",
       "gate": "pr",
       "decision": "keep",
+      "sqlEngineRows": [
+        "D10"
+      ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 15,
+      "tests": 19,
       "ignored": 0,
       "environment": "none",
       "env": [
@@ -537,6 +540,31 @@
       "external": [
         "@codemirror/state",
         "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/backslashHighlight.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/completionSource.ts",
+      "property": "El resaltado lee la barra invertida con el modo de la sesion, como el analisis (#63)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "connections",
+        "editor/completionSource",
+        "editor/context",
+        "engines",
+        "types"
+      ],
+      "external": [
+        "@lezer/highlight",
         "vitest"
       ],
       "durationMs": null
@@ -2426,7 +2454,7 @@
       ],
       "kind": "rust",
       "crate": "crates/driver-core",
-      "tests": 2,
+      "tests": 3,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2551,7 +2579,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/mysql",
-      "tests": 7,
+      "tests": 8,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2609,7 +2637,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/postgres",
-      "tests": 5,
+      "tests": 6,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2672,7 +2700,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 7,
+      "tests": 8,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2751,7 +2779,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 7,
+      "tests": 10,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2828,7 +2856,7 @@
       "decision": "keep",
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 5,
+      "tests": 6,
       "ignored": 0,
       "environment": "none",
       "env": [
@@ -2874,8 +2902,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 14,
-      "ignored": 14,
+      "tests": 15,
+      "ignored": 15,
       "environment": "real-server",
       "env": [],
       "durationMs": null
@@ -2918,8 +2946,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 4,
-      "ignored": 4,
+      "tests": 5,
+      "ignored": 5,
       "environment": "real-server",
       "env": [
         "ROWLY_FUZZ_CASES",
