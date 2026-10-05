@@ -19,7 +19,7 @@ npm run tauri dev
 
 Necesitas Rust 1.85+ y Node.js 20.19+. En [ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) está cómo se organiza el código y dónde va cada tipo de cambio.
 
-Si tocas un motor, un driver, SQL generado, análisis o ejecución, lee primero [SQL_ENGINE.es.md](SQL_ENGINE.es.md). Es el contrato permanente de calidad: matriz S/A/G/D, versiones, pruebas reales, compuertas y huecos conocidos. Las notas de diseño son planes de trabajo y no sustituyen ese contrato.
+Si tocas un motor, un driver, SQL generado, análisis o ejecución, lee primero [SQL_ENGINE.es.md](SQL_ENGINE.es.md). Es el contrato permanente de calidad: matriz S/A/G/D, versiones, pruebas reales, compuertas y huecos conocidos. Añadir o cambiar un motor de base de datos, una línea de versión o una versión verificada sigue [ENGINE_GUIDE.es.md](ENGINE_GUIDE.es.md). Las notas de diseño son planes de trabajo y no sustituyen a ninguno de los dos.
 
 ## Flujo de trabajo
 
@@ -38,13 +38,19 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cd app && npm run check && npm test && npm run build
 cd .. && node tools/inventory/tests.mjs --check
+node tools/inventory/coverage.mjs           # cada fila de SQL_ENGINE §6 respondida para cada motor
+node tools/inventory/dependencies.mjs       # solo versiones publicadas de las dependencias
+node tools/inventory/status.mjs             # el estado generado de README y SQL_ENGINE al día
+node tools/architecture/graph.mjs --check   # dependencias permitidas y grafo de arquitectura al día
 ```
+
+Los bloques entre marcadores `<!-- generated: … -->` los escriben esas herramientas; nunca los edites a mano. `status.mjs --write` y `graph.mjs --write` los regeneran. `graphify-out/` es el grafo de símbolos para explorar; actualízalo con `graphify update .` cuando cambies código, si tienes [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` en PyPI) instalado.
 
 El CI corre la misma compuerta con Rust 1.90 (`.github/workflows/quality.yml`); un clippy local más nuevo puede no ver un aviso que la 1.90 sí marca, así que `cargo +1.90 clippy --workspace --all-targets -- -D warnings` lo reproduce tal cual. Cada archivo de test necesita una entrada en `tests/inventory.json` con su dueño, la propiedad que protege, su riesgo, su compuerta y una decisión; el `--check` falla hasta que la tenga.
 
 El workflow **E2E** compila la app y la maneja en Linux/WebKitGTK contra un MySQL y un PostgreSQL desechables. `app/tests/e2e/run.mjs` usa el teclado con `tauri-driver`: conectar, ejecutar con Ctrl+Enter, confirmar y cancelar una sentencia destructiva, la confirmación de producción en la consola y en el grid, contar el total y el texto de la consola tras reiniciar. Necesita `WebKitWebDriver`, así que normalmente solo corre en el CI. `app/tests/e2e/resources.mjs` abre la app con el inspector de WebKit y comprueba que reconectar, abrir y cerrar consolas y el reposo no dejan memoria, editores ni trabajo detrás; corre también en local con `xvfb-run` ([tools/bench/README.es.md](tools/bench/README.es.md#ciclos-de-recursos)). Windows/WebView2 y macOS/WKWebView siguen siendo humo manual antes de una release.
 
-El código nuevo va en la carpeta de su dominio ([docs/ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md#la-app-por-dentro)): `workspace/`, `editor/`, `results/` o `connections/` en el frontend; `commands/` adapta y `services/` hace en el backend. Su test va junto al código. Un comando nuevo del backend se registra en `lib.rs` y entra con su único módulo dueño en `app/src/lib/backend.test.ts`.
+El código nuevo va en la carpeta de su dominio ([docs/ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md#reglas-de-la-app)): `workspace/`, `editor/`, `results/` o `connections/` en el frontend; `commands/` adapta y `services/` hace en el backend. Su test va junto al código. Un comando nuevo del backend se registra en `lib.rs` y entra con su único módulo dueño en `app/src/lib/backend.test.ts`.
 
 ## Pruebas contra una base real
 
@@ -61,26 +67,19 @@ cargo test -p rowly-server-tests -- --ignored --test-threads=1
 
 Los paquetes de soporte de versión (SQL_ENGINE.es.md, §11) salen de `support/` con `node tools/support/publish.mjs --out <dir> --evidence <artefactos real-* de sql-engine.yml>`, con la clave de firma de las actualizaciones en `TAURI_SIGNING_PRIVATE_KEY`; la herramienta se niega sin evidencia completa. Los fixtures de prueba se regeneran con `node tests/support/fixtures.mjs` y están firmados con `tests/support/test-key`, una clave solo de prueba.
 
-Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `tools/support/vendor-support.json` y actualiza la tabla de [SQL_ENGINE.es.md, §5](SQL_ENGINE.es.md#5-líneas-de-versión) con la misma evidencia.
+Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `tools/support/vendor-support.json` y corre `node tools/inventory/status.mjs --write`, que regenera SQL_ENGINE §5.3 a partir de él.
+
+La ventana de soporte avanza con el calendario: cuando una versión verificada sale de ella, `tools/test-dbs/window.mjs` falla en Quality sin ningún cambio de código. Entonces saca esa versión de `verified` en `tools/test-dbs/lines.json` (su línea se queda y sigue conectando), como dice SQL_ENGINE §5.2, y regenera el estado.
 
 ## Agregar un motor de base de datos
 
-Sigue [SQL_ENGINE.es.md, §12](SQL_ENGINE.es.md#12-agregar-un-motor-paso-a-paso) para separar **motor**, **driver**, **línea** y **versión exacta**. Empieza por la plantilla y deja que el compilador y los tests te lleven por el resto: cada paso pendiente falla nombrando el archivo que necesita.
+Sigue [ENGINE_GUIDE.es.md](ENGINE_GUIDE.es.md). Empieza por la plantilla, que registra el motor, y desde ahí el compilador y los tests nombran cada paso pendiente:
 
 ```bash
 node tools/engine/new.mjs <id> --like <mysql|mariadb|postgres>
 ```
 
-Crea el `EngineDefinition` del motor en `crates/engine/src/dialects/<id>.rs` (con los valores del motor parecido, bajo un bloque `PENDIENTE`), lo suma al registro (`Dialect`, `ALL` y `definition()` en `crates/engine/src/lib.rs`), agrega su entrada a `tests/engines/contract.json` con `"pending": true` y crea `tests/sql/<id>/`. Después, en orden:
-
-1. **`cargo build`**: la respuesta del motor en cada caso por motor de los tests (`PerEngine` de `diagnostics.rs`) y su lugar en la lista del contrato de `lib.rs`.
-2. **La definición.** Escribe cada campo de `EngineDefinition` con la respuesta propia del motor, probada contra su servidor, y quita el bloque `PENDIENTE`. Un valor heredado que nadie probó es un motor que sigue en silencio las reglas de otro. La sintaxis válida que su parser no lee va en `unparsed_syntax`.
-3. **`cargo test`** nombra el resto del lado Rust: `DatabaseKind` y su driver en `app/src-tauri/src/drivers.rs` (un protocolo nuevo es un crate en `crates/drivers/<protocolo>` que implementa `DbConnector`), `Engine` en `crates/server-tests` y el contrato compartido.
-4. **Frontend.** `ConnectionDriver` en `app/src/lib/connections.ts` (nombre, logo, puerto por defecto), su perfil en `app/src/lib/engines/<id>.ts`, `ENGINES` y los `FIXTURES` de `contract.test.ts`. La comilla de identificadores, la regla de la barra invertida y los comentarios ejecutables tienen que coincidir con `tests/engines/contract.json`; después quita `"pending"`.
-5. **Líneas, servidores y soporte.** Sus líneas de versión como datos en `support/<id>.json` (y `lines` en su definición; hasta entonces hereda las del motor parecido y `crates/engine/tests/lines.rs` falla), las mismas líneas con sus probes y versiones verificadas fijadas por digest en `tools/test-dbs/lines.json` (y su contenedor), fechas del fabricante en `tools/support/vendor-support.json`.
-6. **La matriz.** `node tools/inventory/coverage.mjs` enumera cada fila de `SQL_ENGINE.es.md` sin respuesta para el motor: una prueba que lo incluya, un `N/A` con motivo o un hueco declarado (`gapEngines`).
-
-Después corre la compuerta de motor en cada versión exacta que quieras anunciar y comprueba que los motores existentes siguen verdes. Una integración sin matriz completa queda como experimental, no como soporte verificado.
+Una integración sin la matriz completa queda como experimental, no como soporte verificado (SQL_ENGINE §4).
 
 ## Publicar una versión
 
@@ -110,6 +109,6 @@ La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés 
 ## Estilo
 
 - Commits cortos en imperativo, en español o inglés.
-- Solo versiones publicadas de las dependencias: ni forks, ni ramas o commits sin publicar, ni parches propios. Lo que falta upstream queda como hueco documentado en SQL_ENGINE.es.md, §9.
+- Solo versiones publicadas de las dependencias: ni forks, ni ramas o commits sin publicar, ni parches propios (`tools/inventory/dependencies.mjs` falla con ellos). Lo que falta upstream queda como hueco documentado en SQL_ENGINE.es.md, §9.
 - Nada de abstracciones antes de necesitarlas. Si un motor necesita algo que `DbConnector` no cubre, plantéalo antes en un issue.
 - La documentación pública se escribe en inglés con una copia en español en `*.es.md`. Mantén las dos al día. Las notas temporales de diseño están en español.

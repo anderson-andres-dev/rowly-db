@@ -115,9 +115,10 @@ writeFileSync(
 
 console.log(`Motor ${id} empezado (a partir de ${like}). Lo que falta, en orden:
 
-  1. cargo build: cada match exhaustivo sin ${variant} (DatabaseKind y el
-     driver en app/src-tauri/src/drivers.rs, Engine en crates/server-tests).
-     Un driver nuevo es un crate en crates/drivers/<protocolo> (DbConnector).
+  1. cargo test: los tests nombran lo que falta (DatabaseKind y el driver en
+     app/src-tauri/src/drivers.rs, Engine en crates/server-tests, PerEngine
+     en diagnostics.rs). Un driver nuevo es un crate en
+     crates/drivers/<protocolo> (DbConnector).
   2. crates/engine/src/dialects/${id}.rs: cada valor de EngineDefinition,
      probado; quitar el bloque PENDIENTE.
   3. Frontend: "${id}" en ConnectionDriver (app/src/lib/connections.ts), su
@@ -132,5 +133,9 @@ console.log(`Motor ${id} empezado (a partir de ${like}). Lo que falta, en orden:
      digest), docker-compose y up.sh; tools/support/vendor-support.json.
   6. tests/sql/coverage.json: una respuesta para ${id} en cada fila
      (node tools/inventory/coverage.mjs dice cuales faltan).
-  7. SQL_ENGINE (EN + ES): §5.3, §6.5 y lo que cambie en §9; CONTRIBUTING.
+  7. Documentacion: node tools/inventory/status.mjs --write (README, §5.3 y
+     §14.2 salen de los datos), su motivo por linea en §5.3, §6.5, §8.2, §9
+     y su nivel en §14.1 (SQL_ENGINE, EN + ES).
+
+La guia completa, con los campos que cambian el guard: ENGINE_GUIDE.md.
 `);

@@ -290,7 +290,7 @@ Whatever repeats leaves nothing behind: 300 reconnections alternating engines, 3
 ## The graphs in this repository
 
 - **The architecture graph above** is the canonical one: generated from the code, checked in CI, with the semantic part (domains, allowed arrows, SQL flow anchors) in `tools/architecture/model.json`. Change the model when the design changes; never edit the generated blocks.
-- **`graphify-out/`** is a fine-grained symbol graph (thousands of nodes) for exploring the code: `graphify query "<question>"`, `graphify path "A" "B"`. It is regenerated with `graphify update .` (AST, no LLM for code) and is not CI evidence: the tool is not part of the build, its call edges are resolved by name and can cross domains that never call each other, it does not see data files or runtime flow, and its freshness is the commit it records (`built_at_commit`). Use it to find code; use this document and its generated graph to know the rules.
+- **`graphify-out/`** is a fine-grained symbol graph (thousands of nodes) for exploring the code: `graphify query "<question>"`, `graphify path "A" "B"`. It is regenerated with `graphify update .` (AST, no LLM for code) and is not CI evidence: the tool is not part of the build, its call edges are resolved by name, so they point you to code but do not prove a dependency (a graph built before this refactor showed `driver-postgres → driver-mysql`, which no code does), it does not see data files or runtime flow, and its freshness is the commit it records (`built_at_commit`). Use it to find code; use this document and its generated graph to know the rules.
 
 ## Known limits
 

@@ -15,7 +15,9 @@ Read it before:
 
 When this document and the code disagree, one of them is wrong. Fix whichever it is in the same pull request.
 
-**Contributor path:** find the S/A/G/D property in §6, check the known gaps in §9, add or adjust a fixture from §10, run the gate in §7 and record the engine, line and exact server release in the PR. §12 gives the extra steps for a new engine or release. Paths and commands marked "today" describe the current repository; writing a quality requirement here does not mean it has already been met.
+**How it is organized.** Sections 1–8, 10, 11 and 13 are the **contract**: they hold for every engine, today's and tomorrow's. §5.3, §6.5, §9 and §14 are the **current state** of MySQL, MariaDB and PostgreSQL; where that state is data, it is generated from its source (`node tools/inventory/status.mjs`) and never copied by hand. How to add or change an engine is in [ENGINE_GUIDE.md](ENGINE_GUIDE.md); §12 only points there. Section numbers are stable: code, tests and messages cite them.
+
+**Contributor path:** find the S/A/G/D property in §6, check the known gaps in §9, add or adjust a fixture from §10, run the gate in §7 and record the engine, line and exact server release in the PR. [ENGINE_GUIDE.md](ENGINE_GUIDE.md) gives the extra steps for a new engine, line or exact release. Paths and commands marked "today" describe the current repository; writing a quality requirement here does not mean it has already been met.
 
 ---
 
@@ -63,7 +65,18 @@ Testing links in isolation is necessary but not enough. The chain also has to be
 | **Stable** | Integrable, plus: released in several versions without a P0/P1 regression, and its gates (§7) run in CI. |
 | **Mature** | Stable, plus real-world use over several releases, where new bugs are edge cases rather than design flaws. Maturity takes history, not one green run. |
 
-Today MySQL, MariaDB and PostgreSQL are Integrable: P0 = 0 and P1 = 0, and every applicable §6 row passes on every verified exact release, with the real-server suite in CI (`sql-engine.yml`, §7), or its gap is in §9 as P2 or lower. Stable still needs history: being released across several versions with no P0/P1 regressions. The exact-release and release gates (§7) are still run by hand.
+What each level requires, concretely:
+
+| Level | Gates (§7) | Rows of §6 | Against real servers |
+|---|---|---|---|
+| **Experimental** | None. It is neither released as supported nor advertised | Any | Not required |
+| **Integrable** | PR and engine PR gates green on every exact release it advertises, with complete evidence (`tools/test-dbs/evidence.mjs`); `tools/inventory/coverage.mjs` green | Every applicable row: a test that includes the engine, an `N/A` with its reason, or a gap declared in §9 at P2 or lower | The `real` suites (`safety`, `analysis`, `generated`, `contract`) on every verified release, and `lines` (D7, D8) on every probe |
+| **Stable** | Integrable, plus the exact-release and app-release gates automated in CI, and several published releases without a P0/P1 regression | Same | Same |
+| **Mature** | Stable, plus real-world use over several releases | Same | Same |
+
+"Several" is the maintainers' judgement; a change of level is recorded in §14.1 with the evidence for it.
+
+**Working is not verified.** An exact release is *verified* only if it is in `verified` of `tools/test-dbs/lines.json`, pinned by digest, and the engine PR gate produced its complete evidence. A release that connects and runs SQL without that is unverified, and the app says so (§5.2). The level of each engine today is in §14.1.
 
 ## 5. Version lines
 
@@ -91,7 +104,7 @@ Recalculate the window before each release using official lifecycle dates from [
 
 Three facts are kept apart, each with its own source:
 
-- **Compatibility floor** (`COMPATIBILITY_FLOOR_*` in each driver's `version.rs`: MySQL 5.7, MariaDB 10.3, PostgreSQL 10): the oldest release whose catalog the driver is written to read. It never refuses a connection: an older server connects with its line, loads what its catalog has, and the explorer says some objects may be missing. It says nothing about support.
+- **Compatibility floor** (`COMPATIBILITY_FLOOR_*` in each driver's `version.rs`, equal to the start of the engine's first line in §5.3): the oldest release whose catalog the driver is written to read. It never refuses a connection: an older server connects with its line, loads what its catalog has, and the explorer says some objects may be missing. It says nothing about support.
 - **Support window** (this section; vendor dates in `tools/support/vendor-support.json`): decides the tag the editor shows and which lines the engine PR gate covers. `tools/test-dbs/window.mjs`, in the PR gate, fails when `verified` and the window disagree: every line with a supported or grace release has a verified release, and no verified release is outside the window.
 - **Verification** (`verified` in `tools/test-dbs/lines.json`): the exact releases that pass the complete matrix with evidence (§7).
 
@@ -106,26 +119,49 @@ Vendor support and Rowly DB verification are separate facts. **Every exact serve
 
 ### 5.3 Lines today
 
-Status as of 2026-10-02. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum. The release gate also tests the newest release of each engine. Every release in **Tested on** is declared `verified` in `tools/test-dbs/lines.json`, pinned by image digest, and passes the complete matrix of §6 in CI on every engine PR (§7); what a line lacks is reported as N/A with its proof (§10.1). **Status** is vendor support, not Rowly DB coverage: a supported line can still have open gaps in §9.
+**Current state, generated** from `support/<engine>.json`, `tools/test-dbs/lines.json` and `tools/support/vendor-support.json`. **Every line below is proven** against real servers at both of its ends (`version_lines`, D7): what is new in it passes there and fails on both ends of the previous line, and what it removed does the opposite. A line no fixture separates would merge with the previous one; the test reports it. Each supported line is tested on the latest patch of its oldest supported LTS release, the one that guards the minimum, and the release gate also tests the newest release of each engine. Every release in **Verified** is pinned by image digest and passes the complete matrix of §6 in CI on every engine PR (§7); what a line lacks is reported as N/A with its proof (§10.1). Vendor dates decide the support status by the rule of §5.2; they are not Rowly DB coverage, and a supported line can still have open gaps in §9.
 
-| Engine | Line | Differences from the previous line | Vendor status (§5.2) | Tested on |
-|---|---|---|---|---|
-| MySQL | 5.7 | Base: no CTE or window functions, `CHECK` parsed and ignored | Unsupported (EOL 2023-10) | — |
-| | 8.0–8.3 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 | Supported, in grace until 2027-04-21 | 8.0.46 |
-| | 8.4 | `SHOW SLAVE STATUS` and `SHOW MASTER STATUS` removed. `mysql_native_password` not loaded by default | Supported until 2032 | 8.4.11 |
-| | 9 | `VECTOR` type and vector functions (Rowly DB does not read `VECTOR` columns yet: P2 gap, §9) | Supported (9.7 LTS until 2034) | 9.7.2 |
-| MariaDB | 10.3–10.5 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode | Unsupported (EOL 2025-06) | — |
-| | 10.6–11.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` | Supported (10.6 in grace until 2027-07-06; 10.11 and 11.4 LTS) | 10.6.28 |
-| | 11.7+ | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8. Optimizer hints `/*+ … */` from 12.0 | Supported (11.8 and 12.3 LTS, 13.0 rolling) | 11.8.9 |
-| PostgreSQL | 10 | Base: identity columns, declarative partitioning, `xlog` → `wal` functions | Unsupported (EOL 2022-11) | — |
-| | 11 | Procedures and `CALL` | Unsupported (EOL 2023-11) | — |
-| | 12–13 | Generated columns, `WITH OIDS` removed. 13 changes nothing Rowly DB depends on | Supported, 13 in grace until 2026-11-13 | 13.23 |
-| | 14 | OUT parameters in procedures, SQL-standard function bodies (`BEGIN ATOMIC`, `RETURN`), postfix operators removed | Supported until 2026-11-12 | 14.24 |
-| | 15 | `MERGE`, no default `CREATE` on schema `public` | Supported until 2027-11 | 15.19 |
-| | 16 | SQL/JSON constructors, `IS JSON` | Supported until 2028-11 | 16.15 |
-| | 17 | `JSON_TABLE`, `MERGE … RETURNING` | Supported until 2029-11 | 17.11 |
-| | 18 | Virtual generated columns, `OLD`/`NEW` in `RETURNING` | Supported until 2030-11 | 18.6 |
-| SQLite | — | Lines defined when the engine is added (§12) | — | — |
+<!-- generated: lines (tools/inventory/status.mjs) -->
+| Engine | Line | Revision | Declared by the line (§5.4) | Vendor releases (EOL of LTS) | Verified |
+|---|---|---|---|---|---|
+| MySQL | 5.7 | 1 | — | 5.7; 1 short-term | — |
+|  | 8.0 | 1 | `checkConstraints` since 8.0.16<br>reserved `rank` | 8.0–8.3; 8.0 (2026-04-21); 3 short-term | 8.0.46 |
+|  | 8.4 | 1 | removed `SHOW SLAVE STATUS …`<br>removed `SHOW MASTER STATUS …` | 8.4; 8.4 (2032-04-30) | 8.4.11 |
+|  | 9 | 1 | — | 9.0–9.7; 9.7 (2034-04-30); 7 short-term | 9.7.2 |
+| MariaDB | 10.3 | 1 | `checkConstraints` since 10.2.1<br>`sequences` since 10.3 | 10.3–10.5; 10.4 (2024-06-18); 10.5 (2025-06-24); 1 short-term | — |
+|  | 10.6 | 1 | — | 10.6–11.6; 10.6 (2026-07-06); 10.11 (2028-02-16); 11.4 (2029-05-29); 10 short-term | 10.6.28 |
+|  | 11.7 | 1 | — | 11.7–13.0; 11.8 (2028-06-04); 12.3 (2029-06-12); 5 short-term | 11.8.9 |
+| PostgreSQL | 10 | 1 | `catalogV10` since 10 | 10; 10 (2022-11-10) | — |
+|  | 11 | 1 | `procedures` since 11<br>`indexIncludeColumns` since 11 | 11; 11 (2023-11-09) | — |
+|  | 12 | 1 | removed `… WITH OIDS` | 12–13; 12 (2024-11-21); 13 (2025-11-13) | 13.23 |
+|  | 14 | 1 | removed `… !` | 14; 14 (2026-11-12) | 14.24 |
+|  | 15 | 1 | — | 15; 15 (2027-11-11) | 15.19 |
+|  | 16 | 1 | — | 16; 16 (2028-11-09) | 16.15 |
+|  | 17 | 1 | — | 17; 17 (2029-11-08) | 17.11 |
+|  | 18 | 1 | — | 18; 18 (2030-11-14) | 18.6 |
+<!-- /generated: lines -->
+
+Why each line exists, in words. `tools/inventory/status.mjs` checks that this table has exactly the lines of `support/`:
+
+<!-- checked: line-reasons -->
+| Engine | Line | Differences from the previous line |
+|---|---|---|
+| MySQL | 5.7 | Base: no CTE or window functions, `CHECK` parsed and ignored |
+| | 8.0 | CTE, window functions and `LATERAL`. `rank` becomes reserved. `GROUP BY … DESC`, `PASSWORD()`, `ENCODE()` and `SQL_CACHE` removed. `CHECK` enforced from 8.0.16 |
+| | 8.4 | `SHOW SLAVE STATUS` and `SHOW MASTER STATUS` removed. `mysql_native_password` not loaded by default |
+| | 9 | `VECTOR` type and vector functions (Rowly DB does not read `VECTOR` columns yet: P2 gap, §9) |
+| MariaDB | 10.3 | Base: sequences, `INTERSECT`/`EXCEPT`, system-versioned tables, Oracle mode |
+| | 10.6 | `JSON_TABLE`, `OFFSET … FETCH`, `SKIP LOCKED` |
+| | 11.7 | `VECTOR` type. `DEFAULT` on procedure parameters from 11.8. Optimizer hints `/*+ … */` from 12.0 |
+| PostgreSQL | 10 | Base: identity columns, declarative partitioning, `xlog` → `wal` functions |
+| | 11 | Procedures and `CALL` |
+| | 12 | Generated columns, `WITH OIDS` removed. 13 changes nothing Rowly DB depends on |
+| | 14 | OUT parameters in procedures, SQL-standard function bodies (`BEGIN ATOMIC`, `RETURN`), postfix operators removed |
+| | 15 | `MERGE`, no default `CREATE` on schema `public` |
+| | 16 | SQL/JSON constructors, `IS JSON` |
+| | 17 | `JSON_TABLE`, `MERGE … RETURNING` |
+| | 18 | Virtual generated columns, `OLD`/`NEW` in `RETURNING` |
+<!-- /checked: line-reasons -->
 
 Datasets: Sakila on MySQL and MariaDB, Pagila on PostgreSQL, pinned in `lines.json` (Sakila by SHA-256, Pagila by commit). The containers are in `tools/test-dbs/`.
 
@@ -145,81 +181,79 @@ The loader rejects an unknown format or field, unordered or repeated lines, revi
 
 ## 6. The matrix
 
-Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. **Proven by** names the test available today; its presence does not mean it already runs on all those releases. A row with no test is a gap, not a pass.
-
-Paths: `guard` = `crates/engine/src/execution_guard.rs`, `diag` = `crates/engine/src/diagnostics.rs`, `safety`, `analysis`, `generated` = `crates/server-tests/tests/{safety,analysis,generated}.rs`, `contract` = `crates/server-tests/tests/contract.rs`, `front/` = `app/src/lib/`. These are today's locations; §10 describes the layout they move to.
+Each row is a property the engine must have **on every supported line and every exact release advertised as verified** where it applies. A row with no test is a gap, not a pass. Which tests prove each row today, for which engines, and what is still missing, is generated from `tests/sql/coverage.json` in §14.2; `tools/inventory/coverage.mjs` fails if a row has no answer for an engine or a real-server test proves no row.
 
 ### 6.1 Safety
 
-| # | Property | Proven by |
-|---|---|---|
-| S1 | A `;` inside a string, comment, identifier or dollar quote of the engine does not split | `front/engines/contract.test.ts` (*un ; dentro de sus comillas…*), `front/sqlStatements.test.ts` |
-| S2 | Text the guard accepts runs as exactly one statement on the real server, measured **without** the driver's prepare barrier (§8). The same holds for the text the app actually sends when it rewrites that statement to sort, page or count it: the rewrite must read back with the same strings and pass the guard again, or the original text runs | `safety` `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server`, `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement`, `what_the_app_rewrites_runs_as_one_statement_and_reads_the_same`; `crates/engine/src/pagination.rs` `lo_que_se_ejecuta_es_una_lectura_con_las_mismas_cadenas` |
-| S3 | Whatever damages data asks for confirmation | `safety` `what_damages_data_never_passes_as_not_destructive`, `guard` unit tests (`*_requires_confirmation`); in the real app, `app/tests/e2e/run.mjs` (*DELETE sin WHERE: Escape cancela…*) |
-| S4 | Executable and versioned comments are classified as code | `guard` `executable_comments_are_classified_as_code`, `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` |
-| S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) | `safety` `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` |
-| S6 | Syntax the parser cannot read is judged by structure, never waved through | `guard` `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure`, `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` |
-| S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent | `app/src-tauri/src/commands/query.rs` `in_production_every_write_needs_confirmation`, `commands/results.rs` `grid_changes_in_production_need_the_users_confirmation`, `guard` `production_writes_require_confirmation`, `front/dialogKeys.test.ts`; in the real app, `app/tests/e2e/run.mjs` (*produccion: una escritura pide confirmacion…*, *produccion: editar el grid…*) covers the console and result editing on MySQL; the rest of the flow is a gap (§9) |
+| # | Property |
+|---|---|
+| S1 | A `;` inside a string, comment, identifier or dollar quote of the engine does not split |
+| S2 | Text the guard accepts runs as exactly one statement on the real server, measured **without** the driver's prepare barrier (§8). The same holds for the text the app actually sends when it rewrites that statement to sort, page or count it: the rewrite must read back with the same strings and pass the guard again, or the original text runs |
+| S3 | Whatever damages data asks for confirmation |
+| S4 | Executable and versioned comments are classified as code |
+| S5 | String rules follow the server mode (`NO_BACKSLASH_ESCAPES`) |
+| S6 | Syntax the parser cannot read is judged by structure, never waved through |
+| S7 | Every production write requires explicit confirmation; the backend classifies again before execution, and repeated or modified keys cannot stand in for consent |
 
 ### 6.2 Analysis and diagnostics
 
-| # | Property | Proven by |
-|---|---|---|
-| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles | `analysis` `the_analyzer_marks_nothing_in_sql_the_real_servers_accept`, `common_valid_ddl_and_dml_is_never_objected_to`, `the_mixed_console_corpus_runs_through_guard_and_server`, `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted`, `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server`; `crates/engine/tests/corpus.rs` |
-| A2 | Real errors are reported where they are | `diag` `mod contract` (`la_sintaxis_en_cada_motor`, `el_catalogo_en_cada_motor`), `corpus.rs` `errores_ordinarios_siguen_detectandose` |
-| A3 | **No prefix of any corpus SQL panics**, typed one character at a time | `analysis` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `diag` `no_prefix_of_a_routine_panics` |
-| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined | `analysis` `typing_real_sql_shows_nothing_that_is_only_unfinished`, `front/editor/diagnostics.dom.test.ts` |
-| A5 | Routine bodies are checked inside | MySQL/MariaDB: `diag` `valid_routine_structures_are_not_objected_to`, `a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is`. PostgreSQL: **gap** (§9) |
-| A6 | Names are checked against the catalog with the engine's case rules | `diag` `postgres_distingue_mayusculas_como_el_servidor`, `mysql_no_distingue_mayusculas` |
-| A7 | Server errors are placed where they happen, from real server messages | `front/engines/contract.test.ts` (`FIXTURES`), `front/editor/diagnostics.test.ts` |
-| A8 | Positions stay right with multibyte text | `diag` `select_into_keeps_positions_with_multibyte_characters`; broader Unicode coverage is a **gap** (§9) |
-| A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines | `crates/engine/tests/lines.rs` `removed_syntax_is_marked_from_its_line_on_and_never_before`: every `removedSyntax` of §5.4 marks an entry of its `rejects.sql`, from its line on and never on the previous one; `version_lines` `every_version_line_is_told_apart_from_the_previous_one`: nothing the analyzer marks as removed with a real server's line is accepted by that server; `analysis` analyzes with the server's line. What MySQL 8.0 removed is a **gap** (§9) |
+| # | Property |
+|---|---|
+| A1 | Nothing a real server accepts is flagged: corpus, every Sakila/Pagila definition, mixed consoles |
+| A2 | Real errors are reported where they are |
+| A3 | **No prefix of any corpus SQL panics**, typed one character at a time |
+| A4 | While typing, only real errors show: not what is unfinished, not the last word, not a name that may still be defined |
+| A5 | Routine bodies are checked inside |
+| A6 | Names are checked against the catalog with the engine's case rules |
+| A7 | Server errors are placed where they happen, from real server messages |
+| A8 | Positions stay right with multibyte text |
+| A9 | Syntax a line removed is reported on that line, with its replacement, and not on older lines |
 
 ### 6.3 Generated SQL and autocomplete
 
-| # | Property | Proven by |
-|---|---|---|
-| G1 | Identifiers and literals written by the app read back as the same value, including an internal quote character | `crates/engine/src/lib.rs` `mod contract`, `front/engines/contract.test.ts` |
-| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) | `generated` `completion_calls_run_on_the_real_servers` (calls the TypeScript code through `front/editor/catalogCompletions.server.test.ts`) |
-| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments | `front/editor/catalogCompletions.test.ts` |
-| G4 | Inserting a suggestion counts as typing for diagnostics | `front/editor/catalogCompletions.test.ts` (`input.complete` assertion) |
-| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON | `front/engines/contract.test.ts`, `front/editor/catalogCompletions.test.ts` |
-| G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine | `front/engines/contract.test.ts` (*cada motor cita las palabras que reserva cualquiera de sus lineas*): the `reservedWords` of every line (§5.4), plus the engine's base list; `crates/engine/tests/lines.rs` `every_reserved_word_of_a_line_is_one_its_fixtures_prove`: each has its `AS <word>` in its line's `rejects.sql` |
-| G7 | Other generated SQL runs on the server: the INSERT/UPDATE from result editing, exports, filters | `contract` `grid_literals_follow_the_session_mode`: the result-editing `UPDATE` stores a text with backslashes and quotes as written, with and without `NO_BACKSLASH_ESCAPES` (MySQL, MariaDB). The rest is a **gap** (§9); covered by unit tests only |
+| # | Property |
+|---|---|
+| G1 | Identifiers and literals written by the app read back as the same value, including an internal quote character |
+| G2 | Each `CALL` written by the real autocomplete runs on the server with the right arguments (IN, OUT, INOUT, DEFAULT, VARIADIC, unnamed, quoted names) |
+| G3 | With no reliable parameter list, the app writes the parentheses with the cursor inside rather than invent arguments |
+| G4 | Inserting a suggestion counts as typing for diagnostics |
+| G5 | Autocomplete end to end with the engine's dialect: FROM, JOIN, aliases, ON |
+| G6 | Automatic aliases and generated names are quoted when they are reserved on **any** line of the engine |
+| G7 | Other generated SQL runs on the server: the INSERT/UPDATE from result editing, exports, filters |
 
 ### 6.4 Drivers and introspection
 
-| # | Property | Proven by |
-|---|---|---|
-| D1 | Result sets, NULLs, types, truncation and DDL commands behave correctly | `contract` `connects_and_lists_schemas_and_tables`, `a_result_set_keeps_values_and_nulls`, `truncating_leaves_the_next_queries_complete`, `ddl_returns_a_command`, `a_server_error_keeps_its_code_and_position`, `the_session_keeps_the_server_defaults` |
-| D2 | `CALL` and `SHOW CREATE` return their rows | `analysis` `call_and_show_create_return_their_rows` |
-| D3 | Introspection classifies every object kind | `contract` `introspection_classifies_every_object_kind` |
-| D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes | partly, through G2; a direct check is a **gap** (§9) |
-| D5 | TLS modes negotiate or fail with an actionable message | `contract` `tls_*`, against what each image offers (`tls` in `lines.json`). With a configured CA (`tls_verification_uses_the_configured_ca`, MySQL, which keeps the CA of its own certificate in its datadir): `VerifyCa` rejects a certificate from another CA, and `VerifyIdentity` rejects one that does not name the host. `VerifyCa` accepting the right CA, and `VerifyIdentity` accepting a certificate that names the host, are a **gap** (§9) |
-| D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` | parsing: `crates/drivers/*/src/version.rs` unit tests; mapping: `crates/engine/tests/lines.rs` (boundaries, a future release, below the floor, every probe and every verified release on its line) and, on every real server, `version_lines` `every_version_line_is_told_apart_from_the_previous_one` |
-| D7 | Each line of §5.3 is told apart from the previous one, on both of its ends | `crates/server-tests/tests/version_lines.rs` `every_version_line_is_told_apart_from_the_previous_one` |
-| D8 | Every column type a supported line can return is read by the driver | `version_lines` `every_column_type_a_line_returns_is_read` (`tests/sql/<engine>/<line>/reads.sql`). Gap: MySQL 9 `VECTOR` (§9); its reads carry `-- gap:` and must fail with the known error |
-| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend; reconnecting or changing mode invalidates caches and never applies another engine's rules | `app/src-tauri/src/engine_context.rs`: the context the backend builds on connect (effective line, verification of the exact release, vendor support), and anything asked for with another generation or `schemaEpoch` no longer counts. `front/editor/analysisSession.test.ts`: an answer asked for with the previous connection is not applied after reconnecting. `front/stores/connectionCatalog.test.ts`: the active engine is the one the backend reports, with its mode. E2E (`app/tests/e2e/resources.mjs`): 300 reconnections alternating MySQL and PostgreSQL, each with its own server and catalog, with no growth in the live JavaScript heap, the backend or what is mounted in the DOM. The effective line, its revision and its origin (included or downloaded pack, §11) come from the active lines on connect and travel in the context, along with that revision's reserved words; analysis only uses the line when it belongs to the profile's engine (`engine_context.rs` `the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine`), and the frontend never derives it from the version or the label (`front/engines/contract.test.ts`). Changing the mode within the console session: `app/src-tauri/src/state.rs` reads it again after a statement that can change it, and a different mode is a new generation (`a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset`); `contract` `the_console_keeps_its_session_between_statements`: what one statement leaves in the session (`SET`, a variable, a temporary table, a transaction, the `sql_mode`) holds for the next; `front/stores/connectionCatalog.test.ts`: the editor moves to the new mode and a late answer never moves it back |
-| D10 | A support pack only changes line data: it installs signed, intact, in a known format and compatible, atomically and reversibly back to the included one; offline the included lines apply; it neither relaxes the guard nor declares verification (§11) | `app/src-tauri/src/support.rs` (valid and invalid signature, tampered content and index, wrong hash, truncated download, unknown format and field, `requiresApp`, mismatched engine or line, interrupted install, update, back to the included one, offline, future release, disabling, support and verification, same revision as the frontend); `crates/engine/tests/lines.rs` `a_package_is_a_line_validated_like_the_included_ones`; `front/engines/contract.test.ts` (*una reservada que trae un paquete de soporte se cita en esa conexion*) |
+| # | Property |
+|---|---|
+| D1 | Result sets, NULLs, types, truncation and DDL commands behave correctly |
+| D2 | `CALL` and `SHOW CREATE` return their rows |
+| D3 | Introspection classifies every object kind |
+| D4 | Introspected **content** matches the server: columns, types, keys, routine parameters and their modes |
+| D5 | TLS modes negotiate or fail with an actionable message |
+| D6 | The server's version is read and mapped to its line, including forms like `5.5.5-10.11.6-MariaDB` |
+| D7 | Each line of §5.3 is told apart from the previous one, on both of its ends |
+| D8 | Every column type a supported line can return is read by the driver |
+| D9 | Engine, exact release, SQL mode, line and revision agree across backend and frontend, and the frontend never derives the line from the version or the label; reconnecting or changing mode invalidates caches and never applies another engine's rules |
+| D10 | A support pack only changes line data: it installs signed, intact, in a known format and compatible, atomically and reversibly back to the included one; offline the included lines apply; it neither relaxes the guard nor declares verification (§11) |
 
-### 6.5 Capabilities
+### 6.5 Capabilities (current state)
 
-What each engine has. N/A is correct where the engine really lacks the feature; it is not a failure. What the engine claims to support must work. A version in a cell is where the capability starts.
+What each engine has. N/A is correct where the engine really lacks the feature; it is not a failure. What the engine claims to support must work. A version in a cell is where the capability starts; ¹ marks a catalog capability whose first release is line data (`support/<engine>.json`), shown in §5.3 and never repeated here.
 
-| Capability | MySQL | MariaDB | PostgreSQL | SQLite (expected) |
-|---|---|---|---|---|
-| Schemas | as databases | as databases | yes | attached databases |
-| Views / materialized views | yes / N/A | yes / N/A | yes / yes | yes / N/A |
-| Procedures | yes | yes | 11+ | N/A |
-| Functions | yes | yes | yes | N/A (app-defined only) |
-| OUT/INOUT arguments in `CALL` | yes, as variables | yes, as variables | INOUT 11+, OUT 14+ | N/A |
-| DEFAULT parameters | N/A | 11.8+ | yes | N/A |
-| VARIADIC parameters | N/A | N/A | yes | N/A |
-| Triggers / events | yes / yes | yes / yes | yes / N/A | yes / N/A |
-| Sequences | N/A | 10.3+ | yes | N/A |
-| `CHECK` constraints in the catalog | 8.0.16+ | 10.2.1+ | yes | yes |
-| Backslash escapes in strings | yes (unless `NO_BACKSLASH_ESCAPES`) | yes (same) | `E'…'` only | no |
-| `#` comments / dollar quotes / `DELIMITER` | yes / no / client-side | yes / no / client-side | no / yes / no | no / no / no |
+| Capability | MySQL | MariaDB | PostgreSQL |
+|---|---|---|---|
+| Schemas | as databases | as databases | yes |
+| Views / materialized views | yes / N/A | yes / N/A | yes / yes |
+| Procedures | yes | yes | yes¹ |
+| Functions | yes | yes | yes |
+| OUT/INOUT arguments in `CALL` | yes, as variables | yes, as variables | INOUT 11+, OUT 14+ |
+| DEFAULT parameters | N/A | 11.8+ | yes |
+| VARIADIC parameters | N/A | N/A | yes |
+| Triggers / events | yes / yes | yes / yes | yes / N/A |
+| Sequences | N/A | yes¹ | yes |
+| `CHECK` constraints in the catalog | yes¹ | yes¹ | yes |
+| Backslash escapes in strings | yes (unless `NO_BACKSLASH_ESCAPES`) | yes (same) | `E'…'` only |
+| `#` comments / dollar quotes / `DELIMITER` | yes / no / client-side | yes / no / client-side | no / yes / no |
 
 Where it is declared today: lexical and call rules in each `SqlProfile` (`app/src/lib/engines/*.ts`); language rules in each engine's `EngineDefinition` (`crates/engine/src/dialects/`, registered by `Dialect::definition`); since which release each catalog capability exists, once, in the line data (`support/<engine>.json`, §5.4). How each engine reads it stays in its driver's `version.rs` (`Capabilities`), which asks that data; a test keeps version comparisons from coming back there (`crates/engine/tests/lines.rs` `no_known_consumer_declares_versioned_behavior_by_itself_again`).
 
@@ -270,21 +304,28 @@ Every PR that touches an engine states, in its description, which gates ran, on 
 
 Where Rowly DB departs from the server on purpose. Changing one of these is a product decision, not a bug fix.
 
+### 8.1 For every engine
+
 | Decision | Why |
 |---|---|
 | The driver prepares every statement before running it, which already rejects several statements on the normal path. The guard still has to stop them by itself, and it is measured without that barrier (raw text protocol). | Defense in depth: the guard must not depend on a driver detail that could change. |
-| PostgreSQL `DO` blocks that mention `DELETE`, `UPDATE`, `TRUNCATE`, `DROP` or `EXECUTE` are rejected. | Their effect cannot be classified statically. |
 | `REPLACE` and `MERGE` are treated as upserts and do not ask for confirmation, `MERGE … WHEN MATCHED THEN DELETE` included. | They only touch rows matched by their key or `ON` condition, like a `DELETE` or `UPDATE` with `WHERE`, which does not ask either. What asks is a statement with no condition at all. |
 | Creating a routine whose body contains destructive SQL does not ask for confirmation, and neither does `CREATE OR REPLACE` over an existing one. | Defining code is not running it: calling it is a separate statement. Replacing a routine's code loses no data. |
 | While typing a statement, the editor hides what is only unfinished, the last word written, names that are not found yet, and generic parser messages when typing at the end. They appear when the cursor leaves the statement or the editor loses focus. | The parser rejects every prefix. Showing that is noise, and its generic messages often point at the wrong token. |
 | Valid syntax that `sqlparser` cannot read (MariaDB `NEXT VALUE FOR`, `FOR SYSTEM_TIME`…) gets no syntax diagnostic (`Dialect::unparsed_syntax`). | A missing parser feature is not the user's error. |
-| PostgreSQL routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
 | The console runs on one connection per window (`ConsoleConnection` in `driver-core`): running, counting and exporting use it in order, so what a statement leaves in the session (`SET`, variables, temporary tables, `USE`, `BEGIN`) holds for the next. The catalog, introspection and cancelling use the pool. | Each statement used to take any connection of the pool, so a `SET` or a `BEGIN` landed on one connection and the next statement could run on another. |
 | Result editing applies its changes on the pool, in a transaction of its own, and writes its literals with the mode the pool's connections have (read on connect), not the console's. | Applying them on the console would run sqlx's `BEGIN`/`COMMIT` inside a transaction the user may have open, and whether one is open is not known (§9). |
 | If the console connection is lost, or a result that cannot be paginated leaves more than 1000 rows pending, the connection is closed and the next statement opens another. The app says so; nothing is retried. | Reading every pending row to keep the session could take without limit. A statement that failed on a lost connection may or may not have run. |
 | A server older than the supported window still connects, and its line is never removed. | Rowly DB never refuses a server. It marks it as having no official support and does what its line allows. |
 
-## 9. Known gaps
+### 8.2 For one engine (current state)
+
+| Engine | Decision | Why |
+|---|---|---|
+| PostgreSQL | `DO` blocks that mention `DELETE`, `UPDATE`, `TRUNCATE`, `DROP` or `EXECUTE` are rejected. | Their effect cannot be classified statically. |
+| PostgreSQL | Routine bodies are not analyzed. | They are strings in a language the analyzer does not parse. Tracked as a gap (§9). |
+
+## 9. Known gaps (current state)
 
 Ordered by priority. Each one becomes a row of §6 when it is closed.
 
@@ -309,7 +350,6 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | A `SET GLOBAL sql_mode` run after connecting reaches the pool's new connections, while result editing keeps writing literals with the mode read on connect | P3 | Reconnecting reads it again. |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | |
 | The evidence `publish.mjs` requires does not say which commit it comes from: `evidence.mjs` checks release, digest and results, but not that the artifacts come from the same commit as the packs | P2 | Publishing from the matrix job, with its artifacts, guarantees it in practice; recording the commit in the evidence would make it checkable. |
-| §5.3 is written by hand: it does not come from `support/` like the pack index (§11) | P3 | Its differences are prose for people; generating the table means moving that text into the source. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 | Not tested against a server: `USE` persisting in the console end to end, a physical loss of the console connection (not retried, reported) and closing a console with an open transaction rolling it back | P3 | The code does not retry (§8) and the server rolls back when the connection closes; it still needs proof with `KILL`/`pg_terminate_backend` and by disconnecting with an open transaction. |
 
@@ -393,30 +433,23 @@ Rules:
 
 D10 proves it. §5.3 is still written by hand; the index already comes from the same source as the app (§9).
 
-## 12. Adding an engine, step by step
+## 12. Adding an engine, a line or a release
 
-These operations are distinct: **engine** = SQL and catalog rules; **driver** = protocol and transport; **line** = proven behavior range; **exact release** = tested server binary. MariaDB and MySQL share a driver, but not an identity or dialect. Vendor status (§5.2) is not Rowly DB verification either.
+How to do it, step by step, is in [ENGINE_GUIDE.md](ENGINE_GUIDE.md). This contract only fixes what each one must prove:
 
 ### 12.1 New engine
 
-1. **Choose identity and protocol.** Start with `node tools/engine/new.mjs <id> --like <engine>`: it gives it a stable ID in the registry (`Dialect::definition`), marks it pending in `tests/engines/contract.json`, and from then on the compiler and the tests name every place still missing it (`DatabaseKind`, `ConnectionDriver`, the test harness, lines and vendor dates). Reuse a driver only when the protocol and tests for types, TLS and introspection allow it. The [development guide](CONTRIBUTING.md#adding-a-database-engine) lists current paths.
-2. **Implement engine decisions.** Every field of its `EngineDefinition` (`crates/engine/src/dialects/<id>.rs`) is resolved explicitly: parser and unread syntax, quoting, backslash rule, executable comments, routine bodies, generated SQL and guard; the template's inherited values fail tests until they are decided. The core never compares engines: a mechanism one engine needs is a new field or variant of the definition, with a test for every existing engine. Use a "nearby" parser only after proving it neither hides destructive SQL nor flags valid syntax as an error. No case silently falls back to another engine.
-3. **Register tests.** Add its capability column in §6.5, common and per-line fixtures in §10, and a response to every S/A/G/D row. Existing `PerEngine` and `FIXTURES` help but do not replace the real-server matrix. `N/A` needs a documented reason.
-4. **Validate and announce.** Run §7 on every exact release to be advertised, rerun shared contracts for existing engines, and report P0/P1/P2. Only with P0 = 0, P1 = 0 and every applicable row covered does it reach Integrable (§4).
+Every applicable row of §6 on every exact release it will advertise (§7), with P0 = 0 and P1 = 0, before it is Integrable (§4). It shares nothing with another engine (parser, driver, guard rules, quoting) without the tests that prove it ([ENGINE_GUIDE.md](ENGINE_GUIDE.md#1-identity-engine-dialect-driver)).
+
+An engine without a server process (SQLite) is held to the same bar: for these gates, "real server" means the library the driver links, with its version and dataset pinned. Having fewer server objects does not lower the bar for the splitter, guard, typing, quoting or safety. How Rowly DB connects to and pins such an engine is not decided yet ([ENGINE_GUIDE.md](ENGINE_GUIDE.md#embedded-engines)).
 
 ### 12.2 New line of an existing engine
 
-1. Add a corpus case that passes on the new line and fails on the previous one, or vice versa. Without an observable Rowly DB difference, both releases share a line (§5.1).
-2. Declare the line in `support/<engine>.json` (§5.4: capabilities, reserved words and removed syntax, each with its fixture) and add its probes at its endpoints and both sides of each `since` in `tools/test-dbs/lines.json`. If a new parser, protocol, type or catalog query is required, first release the app that implements it (§11).
-3. Run D7 and the entire applicable matrix on every exact release to be advertised as verified. Update §5.3 and the §10 report; vendor status is calculated separately.
+A fixture that tells it apart from the previous line (§5.1), its data in `support/<engine>.json` with evidence for each datum (§5.4), and D7 plus the applicable matrix on every release to be advertised as verified ([ENGINE_GUIDE.md](ENGINE_GUIDE.md#a-new-line-of-an-existing-engine)).
 
 ### 12.3 New exact release within a line
 
-1. Pin that release's image or library by digest in the test registry, read its actual version and check that it matches. Do not infer support from the image name.
-2. Run every applicable §6 row and retain the §10 evidence. If behavior differs, return to 12.2; otherwise keep the line and add the release to the verified set.
-3. An untested release may connect with the conservative line from §5.2, but is neither shown as "verified" nor added to the verified releases in `tools/test-dbs/lines.json`.
-
-SQLite has no server process: for these gates "real server" means the SQLite library linked by the driver, with its version and dataset pinned. Having fewer server objects does not lower the bar for the splitter, guard, typing, quoting or safety.
+Its image pinned by digest and its reported version checked, every applicable row of §6 and the evidence of §10; without that it is not advertised as verified ([ENGINE_GUIDE.md](ENGINE_GUIDE.md#a-new-exact-release)).
 
 ## 13. Working on an engine (people and AI)
 
@@ -425,3 +458,51 @@ Don't ask for "as many simulations as possible": that gives uneven coverage. Ask
 > Apply SQL_ENGINE.md to `<engine>` `<line>` `<exact release>`: run the `<PR | engine PR | exact release | app release>` gate, report every P0/P1 with a minimal SQL reproduction, turn each new bug into a permanent test, and update §5, §6, §9 and §10.
 
 Exploratory testing is welcome, and it found real bugs here: a panic on a half-typed `DECLARE`, and quoting in generated `CALL` arguments. But what it finds becomes a fixture. It never replaces the matrix.
+
+## 14. Current state
+
+### 14.1 Support level of each engine
+
+MySQL, MariaDB and PostgreSQL are **Integrable** (§4): P0 = 0 and P1 = 0, and every applicable §6 row passes on every verified exact release, with the real-server suite in CI (`sql-engine.yml`, §7), or its gap is in §9 as P2 or lower. Stable still needs history: being released across several versions with no P0/P1 regressions, and the exact-release and app-release gates (§7) are still run by hand.
+
+### 14.2 Coverage of each row
+
+Generated from `tests/sql/coverage.json`. *Covered*: every applicable engine has a test. *Partial*: something is missing, said in §9 (the engines listed have the gap). *Gap*: no test proves it yet.
+
+<!-- generated: coverage (tools/inventory/status.mjs) -->
+| Row | Status | Gap on | Proven by |
+|---|---|---|---|
+| S1 | covered | — | unit: `un ; dentro de sus comillas o comentarios no corta` (contract.test.ts)<br>unit: `splitStatements` (sqlStatements.test.ts) |
+| S2 | covered | — | real: `no_text_the_guard_accepts_runs_more_than_one_statement_on_the_server` (safety.rs)<br>real: `fuzzing_the_guard_against_the_real_servers_finds_no_second_statement` (safety.rs)<br>real: `what_the_app_rewrites_runs_as_one_statement_and_reads_the_same` (safety.rs)<br>unit: `lo_que_se_ejecuta_es_una_lectura_con_las_mismas_cadenas` (pagination.rs) |
+| S3 | covered | — | real: `what_damages_data_never_passes_as_not_destructive` (safety.rs)<br>unit: `delete_without_where_requires_confirmation` (execution_guard.rs)<br>e2e: `DELETE sin WHERE: Escape cancela sin tocar datos y Enter confirma` (run.mjs) |
+| S4 | covered | — | unit: `executable_comments_are_classified_as_code` (execution_guard.rs)<br>unit: `a_versioned_comment_is_read_both_ways_and_the_stricter_wins` (execution_guard.rs) |
+| S5 | covered | — | real: `the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode` (safety.rs) |
+| S6 | covered | — | unit: `valid_statements_sqlparser_cannot_read_are_judged_by_their_structure` (execution_guard.rs)<br>unit: `destructive_statements_sqlparser_cannot_read_still_ask_for_confirmation` (execution_guard.rs) |
+| S7 | partial | — | unit: `in_production_every_write_needs_confirmation` (query.rs)<br>unit: `production_writes_require_confirmation` (execution_guard.rs)<br>unit: `Enter confirma un modal de confirmacion` (dialogKeys.test.ts)<br>e2e: `produccion: una escritura pide confirmacion en la app real` (run.mjs) |
+| A1 | covered | — | real: `the_analyzer_marks_nothing_in_sql_the_real_servers_accept` (analysis.rs)<br>real: `common_valid_ddl_and_dml_is_never_objected_to` (analysis.rs)<br>real: `the_mixed_console_corpus_runs_through_guard_and_server` (analysis.rs)<br>unit: `corpus` (corpus.rs)<br>real: `the_definitions_the_server_returns_for_sakila_and_pagila_are_accepted` (analysis.rs)<br>real: `the_routines_corpus_is_accepted_by_the_guard_and_created_by_every_server` (analysis.rs) |
+| A2 | covered | — | unit: `la_sintaxis_en_cada_motor` (diagnostics.rs)<br>unit: `el_catalogo_en_cada_motor` (diagnostics.rs)<br>unit: `errores_ordinarios_siguen_detectandose` (corpus.rs) |
+| A3 | covered | — | real: `typing_real_sql_shows_nothing_that_is_only_unfinished` (analysis.rs)<br>unit: `no_prefix_of_a_routine_panics` (diagnostics.rs) |
+| A4 | covered | — | real: `typing_real_sql_shows_nothing_that_is_only_unfinished` (analysis.rs)<br>unit: `errores en el editor` (diagnostics.dom.test.ts) |
+| A5 | partial | postgres | unit: `valid_routine_structures_are_not_objected_to` (diagnostics.rs)<br>unit: `a_misspelled_verb_or_a_wrong_end_inside_a_routine_is_reported_where_it_is` (diagnostics.rs) |
+| A6 | covered | — | unit: `postgres_distingue_mayusculas_como_el_servidor` (diagnostics.rs)<br>unit: `mysql_no_distingue_mayusculas` (diagnostics.rs) |
+| A7 | covered | — | unit: `FIXTURES` (contract.test.ts)<br>unit: `ubicar un error de ejecucion` (diagnostics.test.ts) |
+| A8 | partial | — | unit: `select_into_keeps_positions_with_multibyte_characters` (diagnostics.rs) |
+| A9 | partial | — | unit: `removed_syntax_is_marked_from_its_line_on_and_never_before` (lines.rs)<br>lines: `every_version_line_is_told_apart_from_the_previous_one` (version_lines.rs) |
+| G1 | covered | — | unit: `mod contract` (lib.rs)<br>unit: `perfil` (contract.test.ts) |
+| G2 | covered | — | real: `completion_calls_run_on_the_real_servers` (generated.rs)<br>real: `CALL escrito por el autocompletado` (catalogCompletions.server.test.ts) |
+| G3 | covered | — | unit: `catalogo SQL` (catalogCompletions.test.ts) |
+| G4 | covered | — | unit: `input.complete` (catalogCompletions.test.ts) |
+| G5 | covered | — | unit: `motor` (contract.test.ts)<br>unit: `catalogo SQL` (catalogCompletions.test.ts) |
+| G6 | covered | — | unit: `cada motor cita las palabras que reserva cualquiera de sus lineas` (contract.test.ts)<br>unit: `every_reserved_word_of_a_line_is_one_its_fixtures_prove` (lines.rs) |
+| G7 | partial | postgres | unit: `fn ` (editing.rs)<br>unit: `fn ` (export.rs)<br>real: `grid_literals_follow_the_session_mode` (contract.rs) |
+| D1 | covered | — | real: `connects_and_lists_schemas_and_tables` (contract.rs)<br>real: `a_result_set_keeps_values_and_nulls` (contract.rs)<br>real: `truncating_leaves_the_next_queries_complete` (contract.rs)<br>real: `ddl_returns_a_command` (contract.rs)<br>real: `a_server_error_keeps_its_code_and_position` (contract.rs)<br>real: `the_session_keeps_the_server_defaults` (contract.rs) |
+| D2 | covered | — | real: `call_and_show_create_return_their_rows` (analysis.rs) |
+| D3 | covered | — | real: `introspection_classifies_every_object_kind` (contract.rs) |
+| D4 | gap | — | real: `completion_calls_run_on_the_real_servers` (generated.rs) |
+| D5 | partial | — | real: `tls_auto_always_connects_and_reports_what_it_negotiated` (contract.rs)<br>real: `tls_required_encrypts_or_fails_with_an_actionable_message` (contract.rs)<br>real: `tls_disabled_connects_unencrypted` (contract.rs)<br>real: `tls_verify_ca_rejects_self_signed_certificates` (contract.rs)<br>real: `tls_verification_uses_the_configured_ca` (contract.rs)<br>unit: `tls_errors_get_their_own_cause` (tls.rs) |
+| D6 | covered | — | unit: `#[test]` (version.rs)<br>unit: `#[test]` (version.rs)<br>unit: `every_test_server_and_every_verified_version_selects_the_line_it_proves` (lines.rs)<br>lines: `every_version_line_is_told_apart_from_the_previous_one` (version_lines.rs) |
+| D7 | covered | — | lines: `every_version_line_is_told_apart_from_the_previous_one` (version_lines.rs) |
+| D8 | partial | mysql | lines: `every_column_type_a_line_returns_is_read` (version_lines.rs) |
+| D9 | covered | — | unit: `the_context_keeps_its_shape` (engine_context.rs)<br>unit: `the_line_is_the_closest_one_below_and_the_floor_below_the_first` (engine_context.rs)<br>unit: `only_the_exact_versions_of_lines_json_are_verified` (engine_context.rs)<br>unit: `a_request_from_another_generation_or_epoch_is_no_longer_current` (engine_context.rs)<br>unit: `the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine` (engine_context.rs)<br>unit: `p_the_frontend_sees_the_revision_the_analysis_uses` (support.rs)<br>unit: `cada_motor_del_frontend_llega_como_el_suyo` (drivers.rs)<br>unit: `an answer asked for with the previous connection is not applied after reconnecting` (analysisSession.test.ts)<br>unit: `the active engine is the one the backend reports, with its session mode` (connectionCatalog.test.ts)<br>unit: `descarta los resultados si cambia la conexion durante el refresh` (connectionCatalog.test.ts)<br>e2e: `reconexiones alternando MySQL y PostgreSQL: cada una con su servidor y su catalogo, sin crecer en memoria` (resources.mjs)<br>unit: `a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset` (state.rs)<br>unit: `only_statements_that_can_change_the_mode_read_it_again` (state.rs)<br>unit: `the_same_connection_serves_every_statement_until_it_is_discarded` (console.rs)<br>unit: `a SET sql_mode in the console moves the editor to the new session mode, never back` (connectionCatalog.test.ts)<br>real: `the_console_keeps_its_session_between_statements` (contract.rs)<br>unit: `opening_the_first_connection_loses_no_session_and_closing_one_does` (console.rs)<br>real: `the_first_statement_after_connecting_loses_no_session` (contract.rs) |
+| D10 | covered | — | unit: `h_an_interrupted_or_failed_install_keeps_the_previous_package` (support.rs)<br>unit: `a_package_is_a_line_validated_like_the_included_ones` (lines.rs)<br>unit: `una reservada que trae un paquete de soporte se cita en esa conexion` (contract.test.ts) |
+<!-- /generated: coverage -->
