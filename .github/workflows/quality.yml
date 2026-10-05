@@ -73,5 +73,8 @@ jobs:
       - name: Solo versiones publicadas de las dependencias (sin forks, git ni parches)
         run: node tools/inventory/dependencies.mjs
 
+      - name: El grafo de arquitectura coincide con el codigo (docs/ARCHITECTURE.md)
+        run: node tools/architecture/graph.mjs --check
+
       - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
         run: node tools/test-dbs/window.mjs
