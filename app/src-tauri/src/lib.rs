@@ -1,5 +1,6 @@
 mod commands;
 mod credentials;
+mod desktop_portal;
 mod drivers;
 mod engine_context;
 mod services;
@@ -15,6 +16,7 @@ use tauri_plugin_window_state::StateFlags;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let started = std::time::Instant::now();
     webkit_env::apply();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -33,7 +35,9 @@ pub fn run() {
         .manage(AppState::default())
         // Las lineas activas con los paquetes de soporte instalados; sin
         // ellos, o si alguno no es valido, las incluidas.
-        .setup(|app| {
+        .setup(move |app| {
+            // GTK ya registro la aplicacion: si el portal la hizo esperar, se dice.
+            desktop_portal::report_slow_start(started.elapsed());
             support::activate_installed(app.handle());
             Ok(())
         })

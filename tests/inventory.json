@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 137,
-    "tests": 1459,
+    "files": 138,
+    "tests": 1460,
     "ignored": 31,
     "byDecision": {
-      "keep": 137,
+      "keep": 138,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 131,
+      "pr": 132,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -103,6 +103,22 @@
       "kind": "rust",
       "crate": "app/src-tauri",
       "tests": 2,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/desktop_portal.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/desktop_portal.rs",
+      "property": "Un arranque de mas de 10 s en Linux deja un aviso en stderr que apunta al portal de escritorio; uno normal no (#75)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 1,
       "ignored": 0,
       "environment": "none",
       "env": [],
