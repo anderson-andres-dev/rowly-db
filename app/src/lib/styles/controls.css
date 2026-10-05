@@ -45,6 +45,22 @@
   background: var(--surface-elevated);
 }
 
+/* En oscuro, filas sobre el fondo del panel separadas por una linea fina:
+   las cajas mas claras sacaban la vista de lo oscuro. En claro siguen
+   agrupadas en su superficie. */
+:root[data-scheme="dark"] .set-group {
+  gap: 0;
+}
+
+:root[data-scheme="dark"] .set-row {
+  padding-inline: var(--space-1);
+  background: transparent;
+}
+
+:root[data-scheme="dark"] .set-group > .set-row + .set-row {
+  border-top: 1px solid var(--border);
+}
+
 .set-text {
   display: flex;
   min-width: 0;

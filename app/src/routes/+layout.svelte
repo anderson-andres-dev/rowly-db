@@ -61,7 +61,7 @@
   let cleanupThemeEffects: (() => void) | undefined;
   let cleanupLocaleEffects: (() => void) | undefined;
   let settingsOpen = $state(false);
-  let settingsSection = $state<"appearance" | "shortcuts">("appearance");
+  let settingsSection = $state<"general" | "shortcuts">("general");
 
   // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
   let sheetOpen = $state(false);
@@ -403,7 +403,7 @@
       aria-expanded={settingsOpen}
       aria-pressed={settingsOpen}
       onclick={() => {
-        settingsSection = "appearance";
+        settingsSection = "general";
         settingsOpen = !settingsOpen;
       }}
     >

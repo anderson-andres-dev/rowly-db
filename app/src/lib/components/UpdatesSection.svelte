@@ -412,6 +412,12 @@
     background: color-mix(in srgb, var(--surface-elevated) 92%, var(--accent));
   }
 
+  :global(:root[data-scheme="dark"]) .release.current {
+    padding-inline: var(--space-3);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+  }
+
   .release-main {
     display: flex;
     min-width: 0;

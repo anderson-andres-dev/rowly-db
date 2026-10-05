@@ -378,8 +378,10 @@ cycle(`${CONSOLE_CYCLES} ciclos de consola: abrir, ejecutar, cambiar de tema y c
     await waitFor(page, `el resultado del ciclo ${index}`, `${gridText}.includes("tres") && ${gridText}.includes("${index}")`);
     // Cambiar de tema: otra paleta, desde Ajustes.
     await page.evaluate(`${settingsButton}.click(), true`);
-    await waitFor(page, "las paletas", `document.querySelectorAll(".palette-grid .palette-option").length > 1`);
-    await page.evaluate(`document.querySelectorAll(".palette-grid .palette-option")[${index % 2}].click(), true`);
+    await waitFor(page, "Ajustes abierto", `!!document.querySelector('[data-section="appearance"]')`);
+    await page.evaluate(`document.querySelector('[data-section="appearance"]').click(), true`);
+    await waitFor(page, "los temas", `document.querySelectorAll(".theme-list .theme-row").length > 1`);
+    await page.evaluate(`document.querySelectorAll(".theme-list .theme-row")[${index % 2}].click(), true`);
     await page.evaluate(`${settingsButton}.click(), true`);
     await waitFor(page, "Ajustes cerrado", `${settingsButton}.getAttribute("aria-expanded") === "false"`);
     // Cerrar: si pregunta por el texto, se descarta.
