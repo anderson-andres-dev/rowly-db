@@ -10,11 +10,19 @@ export interface TerminalCallbacks {
   exit: (code: number | null) => void;
 }
 
+// Para la cabecera del panel: el nombre del shell y la carpeta en que
+// arrancó, con ~ por HOME.
+export interface TerminalInfo {
+  id: number;
+  shell: string;
+  cwd: string;
+}
+
 // `cwd`: la carpeta SQL del perfil; sin ella (o si ya no existe), HOME.
-export function createTerminal(cols: number, rows: number, cwd: string | null, callbacks: TerminalCallbacks): Promise<number> {
+export function createTerminal(cols: number, rows: number, cwd: string | null, callbacks: TerminalCallbacks): Promise<TerminalInfo> {
   const output = new Channel<ArrayBuffer>((bytes) => callbacks.output(new Uint8Array(bytes)));
   const exit = new Channel<number | null>((code) => callbacks.exit(code));
-  return invoke<number>("create_terminal", { cols, rows, cwd, output, exit });
+  return invoke<TerminalInfo>("create_terminal", { cols, rows, cwd, output, exit });
 }
 
 // Lo que produce xterm, tal cual. `binary`: lo de `onBinary`, un byte por

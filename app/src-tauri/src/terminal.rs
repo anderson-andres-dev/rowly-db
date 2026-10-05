@@ -61,30 +61,49 @@ fn windows_shell(path: Option<&OsStr>) -> Option<PathBuf> {
     })
 }
 
+/// Lo que muestra la cabecera del panel: el nombre del shell y la carpeta
+/// en que arrancó, con `~` por HOME.
+#[derive(serde::Serialize)]
+pub struct TerminalInfo {
+    id: u32,
+    shell: String,
+    cwd: String,
+}
+
 /// El shell del usuario. Linux y macOS: `$SHELL` si es ejecutable, si no el
 /// de passwd, si no `/bin/sh`, como shell de login (lo resuelve
-/// portable-pty). Windows: PowerShell sin logo, o ComSpec.
-fn shell_command(cwd: Option<String>) -> CommandBuilder {
+/// portable-pty). Windows: PowerShell sin logo, o ComSpec. Devuelve también
+/// el nombre del shell y la carpeta para la cabecera.
+fn shell_command(cwd: Option<String>) -> (CommandBuilder, String, String) {
     #[cfg(windows)]
-    let mut command = match windows_shell(std::env::var_os("PATH").as_deref()) {
+    let (mut command, shell) = match windows_shell(std::env::var_os("PATH").as_deref()) {
         Some(powershell) => {
-            let mut command = CommandBuilder::new(powershell);
+            let mut command = CommandBuilder::new(&powershell);
             command.arg("-NoLogo");
-            command
+            (command, powershell.to_string_lossy().into_owned())
         }
-        None => CommandBuilder::new_default_prog(),
+        None => {
+            let command = CommandBuilder::new_default_prog();
+            let shell = command.get_shell();
+            (command, shell)
+        }
     };
     #[cfg(not(windows))]
-    let mut command = CommandBuilder::new_default_prog();
+    let (mut command, shell) = {
+        let command = CommandBuilder::new_default_prog();
+        let shell = command.get_shell();
+        (command, shell)
+    };
 
-    // La carpeta SQL del perfil; si no hay o ya no existe, HOME (en Linux y
-    // macOS lo hace portable-pty).
-    let cwd = cwd.filter(|dir| Path::new(dir).is_dir());
-    #[cfg(windows)]
-    let cwd = cwd
-        .map(Into::into)
-        .or_else(|| std::env::var_os("USERPROFILE"));
-    if let Some(dir) = cwd {
+    // La carpeta SQL del perfil; si no hay o ya no existe, HOME.
+    let home = command
+        .get_env(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(PathBuf::from);
+    let dir = cwd
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_dir())
+        .or_else(|| home.clone());
+    if let Some(dir) = &dir {
         command.cwd(dir);
     }
     // El entorno es el de la app. Solo se agrega lo que xterm necesita y se
@@ -94,7 +113,22 @@ fn shell_command(cwd: Option<String>) -> CommandBuilder {
     if crate::webkit_env::dmabuf_set_by_rowly() {
         command.env_remove(crate::webkit_env::DMABUF_VAR);
     }
-    command
+    let name = Path::new(&shell)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or(shell);
+    (command, name, shown_dir(dir.as_deref(), home.as_deref()))
+}
+
+fn shown_dir(dir: Option<&Path>, home: Option<&Path>) -> String {
+    let Some(dir) = dir else {
+        return "~".to_string();
+    };
+    match home.map(|home| dir.strip_prefix(home)) {
+        Some(Ok(rest)) if rest.as_os_str().is_empty() => "~".to_string(),
+        Some(Ok(rest)) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
+        _ => dir.display().to_string(),
+    }
 }
 
 fn size(cols: u16, rows: u16) -> PtySize {
@@ -265,13 +299,14 @@ pub async fn create_terminal(
     cwd: Option<String>,
     output: Channel<InvokeResponseBody>,
     exit: Channel<Option<u32>>,
-) -> Result<u32, Message> {
-    open(
+) -> Result<TerminalInfo, Message> {
+    let (command, shell, cwd) = shell_command(cwd);
+    let id = open(
         &state.terminals,
         window.label(),
         cols,
         rows,
-        shell_command(cwd),
+        command,
         // Si la ventana ya no está, no hay a quién mandarle nada.
         move |bytes| {
             let _ = output.send(InvokeResponseBody::Raw(bytes));
@@ -279,7 +314,8 @@ pub async fn create_terminal(
         move |code| {
             let _ = exit.send(code);
         },
-    )
+    )?;
+    Ok(TerminalInfo { id, shell, cwd })
 }
 
 /// `binary`: lo que xterm entrega por `onBinary` (reportes de ratón
@@ -442,7 +478,7 @@ mod tests {
     #[test]
     fn el_shell_del_usuario_abre_responde_y_al_cerrar_no_queda() {
         let registry = Registry::default();
-        let mut terminal = start(&registry, "main", shell_command(None));
+        let mut terminal = start(&registry, "main", shell_command(None).0);
         write(&registry, "main", terminal.id, b"echo PID=$$\r").unwrap();
         let pid = terminal.pid("PID=");
         close(&registry, "main", terminal.id).unwrap();
@@ -552,8 +588,26 @@ mod tests {
 
 #[cfg(test)]
 mod shell_tests {
-    use super::windows_shell;
+    use super::{shown_dir, windows_shell};
     use std::fs;
+    use std::path::{MAIN_SEPARATOR, Path};
+
+    #[test]
+    fn la_cabecera_muestra_la_carpeta_con_virgulilla_por_home() {
+        let home = std::env::temp_dir();
+        let inside = home.join("sql").join("ventas");
+        assert_eq!(shown_dir(Some(&home), Some(&home)), "~");
+        assert_eq!(
+            shown_dir(Some(&inside), Some(&home)),
+            format!("~{MAIN_SEPARATOR}sql{MAIN_SEPARATOR}ventas")
+        );
+        let outside = Path::new("/srv");
+        assert_eq!(
+            shown_dir(Some(outside), Some(&home)),
+            outside.display().to_string()
+        );
+        assert_eq!(shown_dir(None, Some(&home)), "~");
+    }
 
     #[test]
     fn en_windows_powershell_7_antes_que_windows_powershell_y_si_no_comspec() {

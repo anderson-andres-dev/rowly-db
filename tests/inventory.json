@@ -3,7 +3,7 @@
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
     "files": 140,
-    "tests": 1475,
+    "tests": 1476,
     "ignored": 31,
     "byDecision": {
       "keep": 140,
@@ -334,7 +334,7 @@
       "decision": "keep",
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 8,
+      "tests": 9,
       "ignored": 0,
       "environment": "none",
       "env": [],
