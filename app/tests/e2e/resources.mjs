@@ -208,7 +208,10 @@ function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) 
           `      lo que mas crecio: ${classGrowth(first, last)}`,
       );
   };
-  grew("el heap vivo sin codigo compilado (MB)", appHeapMb(first.heap), appHeapMb(last.heap), Math.max(2, appHeapMb(first.heap) * 0.1));
+  // Sin el codigo compilado el heap de la app ronda los 4 MB y en CI no sube
+  // mas de 0,2 MB en 300 ciclos ni en 1000 reconexiones: 0,5 MB deja margen y
+  // atrapa una fuga de unos 2 KB por ciclo.
+  grew("el heap vivo sin codigo compilado (MB)", appHeapMb(first.heap), appHeapMb(last.heap), Math.max(0.5, appHeapMb(first.heap) * 0.1));
   grew("los objetos vivos sin codigo compilado", appObjects(first.heap), appObjects(last.heap), appObjects(first.heap) * 0.05);
   // La memoria propia de la app (Anonymous: su heap y su pila), no su PSS:
   // el PSS reparte las bibliotecas compartidas entre quienes las usan, y
