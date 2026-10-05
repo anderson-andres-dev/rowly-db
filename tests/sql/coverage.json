@@ -55,6 +55,26 @@
             "mariadb",
             "postgres"
           ]
+        },
+        {
+          "file": "crates/server-tests/tests/safety.rs",
+          "name": "what_the_app_rewrites_runs_as_one_statement_and_reads_the_same",
+          "scope": "real",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "crates/engine/src/pagination.rs",
+          "name": "lo_que_se_ejecuta_es_una_lectura_con_las_mismas_cadenas",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
         }
       ]
     },

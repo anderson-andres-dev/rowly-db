@@ -170,16 +170,22 @@ pub async fn execute_query(
     let sortable = khipu_engine::pagination::sort_sql(
         sql,
         dialect,
+        guard_options,
         &[khipu_engine::pagination::SortKey {
             column: 0,
             descending: false,
         }],
     )
     .is_some();
-    let sorted_sql = khipu_engine::pagination::sort_sql(sql, dialect, &sort);
+    let sorted_sql = khipu_engine::pagination::sort_sql(sql, dialect, guard_options, &sort);
     let base_sql = sorted_sql.as_deref().unwrap_or(sql);
-    let paged_sql =
-        khipu_engine::pagination::paginate_sql(base_sql, dialect, offset, page_size as u64 + 1);
+    let paged_sql = khipu_engine::pagination::paginate_sql(
+        base_sql,
+        dialect,
+        guard_options,
+        offset,
+        page_size as u64 + 1,
+    );
     let pageable = paged_sql.is_some();
     let final_sql = paged_sql.as_deref().unwrap_or(base_sql);
     let options = QueryExecutionOptions {
@@ -417,8 +423,9 @@ pub async fn count_query_rows(
         )?
         .then_some(())
         .ok_or_else(|| Message::key("count.unsupported"))?;
-        let count_sql = khipu_engine::pagination::count_sql(sql, active.dialect)
-            .ok_or_else(|| Message::key("count.unsupported"))?;
+        let count_sql =
+            khipu_engine::pagination::count_sql(sql, active.dialect, active.guard_options())
+                .ok_or_else(|| Message::key("count.unsupported"))?;
         Ok((Arc::clone(&active.connector), count_sql))
     })?;
     match connector
@@ -465,6 +472,7 @@ mod tests {
             khipu_engine::pagination::sort_sql(
                 sql,
                 Dialect::MySql,
+                GuardOptions::default(),
                 &[khipu_engine::pagination::SortKey {
                     column: 0,
                     descending: false,
@@ -472,7 +480,16 @@ mod tests {
             )
             .is_none()
         );
-        assert!(khipu_engine::pagination::paginate_sql(sql, Dialect::MySql, 0, 501).is_none());
+        assert!(
+            khipu_engine::pagination::paginate_sql(
+                sql,
+                Dialect::MySql,
+                GuardOptions::default(),
+                0,
+                501
+            )
+            .is_none()
+        );
         let bad = "CREATE PROCEDURE p() BEGIN SELECT 1; END; DROP TABLE t";
         assert!(
             check_statement(bad, Dialect::MySql, false, GuardOptions::default())
