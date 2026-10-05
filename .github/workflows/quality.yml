@@ -5,6 +5,8 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  # La release la corre sobre su propio commit (release.yml).
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -81,3 +83,6 @@ jobs:
 
       - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
         run: node tools/test-dbs/window.mjs
+
+      - name: La release solo se publica con la evidencia de su commit
+        run: node --test tools/test-dbs/*.test.mjs

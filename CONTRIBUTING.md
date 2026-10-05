@@ -65,7 +65,7 @@ cargo test -p rowly-server-tests -- --ignored --test-threads=1
 
 `tools/test-dbs/lines.sh` checks version-line boundaries. CI runs all of this on every engine PR, for every verified exact release (`.github/workflows/sql-engine.yml`); the commands and rules are in [SQL_ENGINE.md, §7](SQL_ENGINE.md#7-gates). Do not advertise a release as verified without its complete evidence.
 
-Version support packs (SQL_ENGINE.md, §11) come from `support/` with `node tools/support/publish.mjs --out <dir> --evidence <sql-engine.yml real-* artifacts>`, with the update signing key in `TAURI_SIGNING_PRIVATE_KEY`; the tool refuses without complete evidence. Test fixtures are regenerated with `node tests/support/fixtures.mjs` and signed with `tests/support/test-key`, a test-only key.
+Version support packs (SQL_ENGINE.md, §11) come from `support/` with `node tools/support/publish.mjs --out <dir> --evidence <sql-engine.yml real-* and lines-* artifacts from the same commit>`, with the update signing key in `TAURI_SIGNING_PRIVATE_KEY`; the tool refuses without complete evidence. Test fixtures are regenerated with `node tests/support/fixtures.mjs` and signed with `tests/support/test-key`, a test-only key.
 
 When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `tools/support/vendor-support.json` and run `node tools/inventory/status.mjs --write`, which regenerates SQL_ENGINE §5.3 from it.
 
