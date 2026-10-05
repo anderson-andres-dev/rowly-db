@@ -432,6 +432,48 @@
     void files.requestClose(id);
   }
 
+  // --- Terminal ------------------------------------------------------------
+  // Una por ventana, debajo del editor y los resultados. Se monta la primera
+  // vez que se muestra; ocultarla deja el shell vivo; cerrarla (o `exit`)
+  // la desmonta y la proxima vez abre un shell nuevo.
+  let terminalMounted = $state(false);
+  let terminalVisible = $state(false);
+  // El panel y xterm se cargan la primera vez que se muestra: quien no la
+  // usa no los descarga.
+  let TerminalPanel = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
+  // Donde estaba el foco al mostrarla: ahi vuelve al ocultarla.
+  let terminalReturnFocus: HTMLElement | null = null;
+
+  function returnFromTerminal() {
+    const back = terminalReturnFocus;
+    terminalReturnFocus = null;
+    if (back?.isConnected) back.focus({ preventScroll: true });
+  }
+
+  function toggleTerminal() {
+    if (terminalVisible) {
+      hideTerminal();
+      return;
+    }
+    terminalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    terminalMounted = true;
+    terminalVisible = true;
+    if (!TerminalPanel) void import("$lib/components/Terminal.svelte").then((module) => (TerminalPanel = module.default));
+  }
+
+  function hideTerminal() {
+    terminalVisible = false;
+    returnFromTerminal();
+  }
+
+  function closeTerminalPanel() {
+    terminalMounted = false;
+    terminalVisible = false;
+    returnFromTerminal();
+  }
+
+  $effect(() => registerCommands("global", { "toggle-terminal": toggleTerminal }));
+
   // Comandos de las pestañas (lib/workspace/commands.ts); la tecla la pone
   // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
   $effect(() => {
@@ -838,6 +880,16 @@
     >
       <Plus size={14} aria-hidden="true" />
     </button>
+    <button
+      type="button"
+      class="new-console terminal-toggle"
+      aria-pressed={terminalVisible}
+      aria-label={$t("workspace.terminal.title")}
+      use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
+      onclick={toggleTerminal}
+    >
+      <SquareTerminal size={14} aria-hidden="true" />
+    </button>
   </div>
   {#if !activeConsole}
     <div class="workspace-empty" in:fade={{ duration: 150 }}>
@@ -986,6 +1038,15 @@
       {/snippet}
     </div>
   </section>
+  {/if}
+  {#if terminalMounted && TerminalPanel}
+    <TerminalPanel
+      visible={terminalVisible}
+      {profileId}
+      onhide={hideTerminal}
+      onclose={closeTerminalPanel}
+      onerror={notifyError}
+    />
   {/if}
 </div>
 
@@ -1306,6 +1367,10 @@
      pasan por debajo del desvanecido y el boton no se mueve. */
   .console-tabs > .new-console {
     flex-shrink: 0;
+  }
+
+  .terminal-toggle[aria-pressed="true"] {
+    color: var(--accent);
   }
 
   /* Sin pestañas abiertas: accesos directos centrados, al estilo de la

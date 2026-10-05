@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 140,
-    "tests": 1476,
+    "files": 141,
+    "tests": 1477,
     "ignored": 31,
     "byDecision": {
-      "keep": 140,
+      "keep": 141,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 134,
+      "pr": 135,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -2171,6 +2171,25 @@
         "vitest"
       ],
       "durationMs": 10
+    },
+    {
+      "path": "app/src/lib/terminal.test.ts",
+      "domain": "desktop",
+      "owner": "app/src/lib/terminal.ts",
+      "property": "La salida de la terminal llega a xterm en bytes: un caracter UTF-8 partido entre dos mensajes se muestra entero",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [],
+      "external": [
+        "@xterm/xterm",
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/theming/codemirrorTheme.test.ts",

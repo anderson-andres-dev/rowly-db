@@ -210,6 +210,8 @@ fn open(
     Ok(id)
 }
 
+/// Sin la terminal, o con su PTY ya cerrado: escribir o cambiar el tamaño
+/// solo falla porque el shell terminó.
 fn not_found() -> Message {
     Message::key("terminal.notFound")
 }
@@ -223,7 +225,7 @@ fn write(registry: &Registry, window: &str, id: u32, data: &[u8]) -> Result<(), 
     writer
         .write_all(data)
         .and_then(|()| writer.flush())
-        .map_err(|e| Message::key("terminal.ioFailed").with("error", e))
+        .map_err(|_| not_found())
 }
 
 fn resize(registry: &Registry, window: &str, id: u32, cols: u16, rows: u16) -> Result<(), Message> {
@@ -231,7 +233,7 @@ fn resize(registry: &Registry, window: &str, id: u32, cols: u16, rows: u16) -> R
         Some(session) if session.window == window => session
             .master
             .resize(size(cols, rows))
-            .map_err(|e| Message::key("terminal.ioFailed").with("error", e)),
+            .map_err(|_| not_found()),
         _ => Err(not_found()),
     }
 }
@@ -339,7 +341,7 @@ pub async fn write_terminal(
         }
     })
     .await
-    .map_err(|e| Message::key("terminal.ioFailed").with("error", e))?
+    .map_err(|_| not_found())?
 }
 
 #[tauri::command]
@@ -363,7 +365,7 @@ pub async fn close_terminal(
     let window = window.label().to_string();
     tauri::async_runtime::spawn_blocking(move || close(&terminals, &window, id))
         .await
-        .map_err(|e| Message::key("terminal.ioFailed").with("error", e))?
+        .map_err(|_| not_found())?
 }
 
 #[cfg(all(test, unix))]
