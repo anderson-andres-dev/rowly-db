@@ -421,8 +421,9 @@
     text-align: left;
   }
 
+  /* Con imagen, la imagen manda: la columna de texto es angosta. */
   .update-prompt.rich.with-visual {
-    width: min(50rem, calc(100vw - 2rem));
+    width: min(56rem, calc(100vw - 2rem));
   }
 
   /* La rejilla va adentro: un <dialog> modal en grid se estira a toda la
@@ -437,7 +438,7 @@
   }
 
   .with-visual .rich-layout {
-    grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 21rem) minmax(0, 1fr);
   }
 
   .story {
@@ -543,7 +544,7 @@
     min-height: 20rem;
     align-items: center;
     justify-content: center;
-    padding: var(--space-6);
+    padding: var(--space-5);
     border-left: 1px solid var(--border);
     background: color-mix(in srgb, var(--accent) 6%, var(--surface));
   }
