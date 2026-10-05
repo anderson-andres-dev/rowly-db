@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "about": "Fuente unica de servidores de prueba (SQL_ENGINE §10.1). `engines`: un probe por extremo de cada linea (D7). `verified`: las versiones exactas que Rowly DB declara verificadas; cada una corre la matriz completa (§6). Imagenes fijadas por digest; el harness compara la version que devuelve el servidor con `version`. `tls` (solo en `verified`): lo que el servidor ofrece en su imagen, `encrypted`, `fallback` o `none` (D5).",
+  "about": "Fuente unica de servidores de prueba (SQL_ENGINE §10.1). `engines`: un probe por extremo de cada linea (D7). `verified`: las versiones exactas que Rowly DB declara verificadas hoy; cada una corre la matriz completa (§6). `retired`: las que fueron verificadas y salieron de la ventana de soporte (§5.2): ya no se anuncian ni se corren, y guardan `until` (fin de su ventana) y `evidence` (commit y corrida de su ultima evidencia verde). Imagenes fijadas por digest; el harness compara la version que devuelve el servidor con `version`. `tls` (solo en `verified`): lo que el servidor ofrece en su imagen, `encrypted`, `fallback` o `none` (D5).",
   "registry": "public.ecr.aws/docker/library",
   "datasets": {
     "sakila": {
@@ -94,6 +94,7 @@
       }
     ]
   },
+  "retired": {},
   "engines": {
     "mysql": [
       {

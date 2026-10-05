@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // El estado actual que README y SQL_ENGINE muestran, generado desde sus
 // fuentes en vez de copiado a mano:
-//   - motores y versiones verificadas (README): tools/test-dbs/lines.json
+//   - motores, versiones verificadas hoy y las retiradas (README):
+//     tools/test-dbs/lines.json (`verified` y `retired`)
 //   - lineas, sus datos y fechas del fabricante (SQL_ENGINE §5.3):
 //     support/<engine>.json, lines.json, tools/support/vendor-support.json
 //   - cobertura de cada fila (SQL_ENGINE §14): tests/sql/coverage.json
@@ -40,7 +41,8 @@ const lineOf = (engine, version) =>
 
 const TEXT = {
   en: {
-    engines: ["Engine", "Verified releases", "Version lines"],
+    engines: ["Engine", "Verified releases", "Previously verified (out of support, not advertised)", "Version lines"],
+    until: (version, date, commit) => `${version} (until ${date}, evidence ${commit})`,
     lines: ["Engine", "Line", "Revision", "Declared by the line (§5.4)", "Vendor releases (EOL of LTS)", "Verified"],
     coverage: ["Row", "Status", "Gap on", "Proven by"],
     status: { covered: "covered", partial: "partial", gap: "gap" },
@@ -50,7 +52,8 @@ const TEXT = {
     shortTerm: (n) => `${n} short-term`,
   },
   es: {
-    engines: ["Motor", "Versiones verificadas", "Líneas de versión"],
+    engines: ["Motor", "Versiones verificadas", "Verificadas antes (fuera de soporte, no se anuncian)", "Líneas de versión"],
+    until: (version, date, commit) => `${version} (hasta ${date}, evidencia ${commit})`,
     lines: ["Motor", "Línea", "Revisión", "Lo que declara la línea (§5.4)", "Versiones del fabricante (EOL de las LTS)", "Verificadas"],
     coverage: ["Fila", "Estado", "Hueco en", "Lo prueba"],
     status: { covered: "cubierta", partial: "parcial", gap: "hueco" },
@@ -65,14 +68,16 @@ const table = (header, rows) =>
   [`| ${header.join(" | ")} |`, `|${header.map(() => "---").join("|")}|`, ...rows.map((row) => `| ${row.join(" | ")} |`)].join("\n");
 
 function enginesBlock(t) {
-  return table(
-    t.engines,
-    engines.map((engine) => [
-      engine.name,
-      lines.verified[engine.id].map((release) => release.version).join(", "),
-      engine.lines.map((line) => line.line).join(", "),
-    ]),
-  );
+  // Lo que fue verificado no se borra: queda, aparte, con la evidencia de su
+  // ultima vez. La columna aparece cuando hay algo retirado.
+  const retired = engines.some((engine) => lines.retired?.[engine.id]?.length);
+  const rows = engines.map((engine) => [
+    engine.name,
+    lines.verified[engine.id].map((release) => release.version).join(", "),
+    ...(retired ? [(lines.retired[engine.id] ?? []).map((r) => t.until(r.version, r.until, r.evidence.commit.slice(0, 12))).join(", ") || "—"] : []),
+    engine.lines.map((line) => line.line).join(", "),
+  ]);
+  return table(retired ? t.engines : t.engines.filter((_, i) => i !== 2), rows);
 }
 
 function linesBlock(t) {
