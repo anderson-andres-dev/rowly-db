@@ -212,7 +212,7 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | Exact release | The server, read by its driver (`ServerIdentity`) | `ConnectionEngineContext` | none |
 | Behavior line, revision, capabilities, reserved words, removed syntax | `support/<engine>.json`, parsed by `khipu_engine::lines` | drivers (capabilities), analyzer (removed syntax), generated SQL and frontend profiles (reserved words), context (line, revision) | Line ids in `lines.json` (`crates/engine/tests/lines.rs`); a downloaded pack replaces a line only with a higher revision |
 | Compatibility floor | `COMPATIBILITY_FLOOR_*` in each driver's `version.rs` | the explorer warning | Equal to the start of the first line (`the_floor_is_where_the_first_line_starts`) |
-| Vendor support status | `tools/support/vendor-support.json` | context, Settings → Engines | `tools/test-dbs/window.mjs` applies the same window rule in CI |
+| Vendor support status | `tools/support/vendor-support.json` | context | `tools/test-dbs/window.mjs` applies the same window rule in CI |
 | Verified releases | `verified` in `tools/test-dbs/lines.json`, pinned by digest | context ("verified"), the matrix (`sql-engine.yml`), evidence | `e2e.yml` and `docker-compose.yml` images are checked against it (`crates/server-tests`) |
 | Coverage of each S/A/G/D row | `tests/sql/coverage.json` | `tools/inventory/coverage.mjs` | Every real-server test must prove a row |
 | Dependencies | `Cargo.lock`, `app/package-lock.json` | builds | `tools/inventory/dependencies.mjs`: only crates.io and registry.npmjs.org |
@@ -271,7 +271,7 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | :--- | :--- | :--- |
 | Connection | `ActiveConnection` in the backend; `stores/connection.ts` in the frontend | On going back to the list (`disconnect`) or closing the window |
 | Engine, release and mode | `ConnectionEngineContext` | Never changes: reconnecting creates a new generation |
-| Active lines and support packs | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` only shows them | On install, removal or disabling; each connection keeps the ones it took on connect |
+| Active lines and support packs | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` calls them (no screen for now) | On install, removal or disabling; each connection keeps the ones it took on connect |
 | Catalog | `ActiveConnection.catalog`; `catalogTables` and `databaseExplorer` in the frontend | Every schema change bumps `schemaEpoch` |
 | Analysis cache | `editor/analysisSession.ts`, one at a time | Another generation, `schemaEpoch`, engine or set of tables the document creates; `analyze_sql` rejects requests made under another context |
 | Consoles and their text | `stores/queryConsoles.ts` | When the console is closed |

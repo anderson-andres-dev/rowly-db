@@ -1,8 +1,7 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
-  import { Check, Code2, Database, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, SlidersHorizontal, Sun, X } from "@lucide/svelte";
+  import { Check, Code2, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, SlidersHorizontal, Sun, X } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
-  import EnginesSection from "$lib/components/EnginesSection.svelte";
   import Select from "$lib/components/Select.svelte";
   import NumberStepper from "$lib/components/NumberStepper.svelte";
   import { newerRelease } from "$lib/stores/updates";
@@ -29,37 +28,24 @@
   import type { IndentSize, IndentStyle } from "$lib/sqlIndentationConfig";
   import { GRID_ROW_STYLES, gridSettings, setGridRowStyle } from "$lib/stores/gridSettings";
 
-  // Ajustes: la lista de secciones a la izquierda, agrupada, y a la derecha
+  // Ajustes: la lista de secciones a la izquierda y, a la derecha,
   // una cabecera fija (titulo y cerrar) sobre filas que se desplazan
   // (styles/controls.css). Cada fila es un texto corto y su control; nada de
   // subtitulos ni tarjetas sueltas.
-  type Section = "general" | "appearance" | "editor" | "shortcuts" | "engines" | "updates";
+  type Section = "general" | "appearance" | "editor" | "shortcuts" | "updates";
 
   let { onclose, initialSection = "general" }: { onclose: () => void; initialSection?: Section } = $props();
 
   // svelte-ignore state_referenced_locally
   let activeSection = $state<Section>(initialSection);
 
-  // Lo que el usuario ajusta a su gusto y lo que depende de la instalacion.
-  const navGroups = [
-    {
-      id: "preferences",
-      sections: [
-        { id: "general", icon: SlidersHorizontal },
-        { id: "appearance", icon: Palette },
-        { id: "editor", icon: Code2 },
-        { id: "shortcuts", icon: Keyboard },
-      ],
-    },
-    {
-      id: "system",
-      sections: [
-        { id: "engines", icon: Database },
-        { id: "updates", icon: RefreshCw },
-      ],
-    },
-  ] as const satisfies { id: string; sections: { id: Section; icon: typeof Palette }[] }[];
-  const sections: { id: Section; icon: typeof Palette }[] = navGroups.flatMap((group) => [...group.sections]);
+  const sections = [
+    { id: "general", icon: SlidersHorizontal },
+    { id: "appearance", icon: Palette },
+    { id: "editor", icon: Code2 },
+    { id: "shortcuts", icon: Keyboard },
+    { id: "updates", icon: RefreshCw },
+  ] as const satisfies { id: Section; icon: typeof Palette }[];
 
   // La linea bajo la cabecera aparece solo cuando hay contenido debajo.
   let scrolled = $state(false);
@@ -229,28 +215,25 @@
     <aside class="settings-nav">
       <h2 class="nav-title">{$t("settings.title")}</h2>
       <nav bind:this={navEl} aria-label={$t("settings.sections")}>
-        {#each navGroups as group (group.id)}
-          <h3 class="nav-group">{$t(`settings.navGroup.${group.id}`)}</h3>
-          {#each group.sections as section (section.id)}
-            {@const Icon = section.icon}
-            <button
-              class="nav-item"
-              class:active={activeSection === section.id}
-              type="button"
-              data-section={section.id}
-              aria-current={activeSection === section.id ? "page" : undefined}
-              tabindex={activeSection === section.id ? 0 : -1}
-              onclick={() => (activeSection = section.id)}
-            >
-              <Icon size={15} aria-hidden="true" />
-              {$t(`settings.nav.${section.id}`)}
-              {#if section.id === "updates" && $newerRelease}
-                <span class="nav-dot" use:tooltip={$t("settings.nav.updatesAvailable")}>
-                  <span class="visually-hidden">{$t("settings.nav.updatesAvailable")}</span>
-                </span>
-              {/if}
-            </button>
-          {/each}
+        {#each sections as section (section.id)}
+          {@const Icon = section.icon}
+          <button
+            class="nav-item"
+            class:active={activeSection === section.id}
+            type="button"
+            data-section={section.id}
+            aria-current={activeSection === section.id ? "page" : undefined}
+            tabindex={activeSection === section.id ? 0 : -1}
+            onclick={() => (activeSection = section.id)}
+          >
+            <Icon size={15} aria-hidden="true" />
+            {$t(`settings.nav.${section.id}`)}
+            {#if section.id === "updates" && $newerRelease}
+              <span class="nav-dot" use:tooltip={$t("settings.nav.updatesAvailable")}>
+                <span class="visually-hidden">{$t("settings.nav.updatesAvailable")}</span>
+              </span>
+            {/if}
+          </button>
         {/each}
       </nav>
     </aside>
@@ -552,8 +535,6 @@
                 </div>
               </div>
             {/if}
-          {:else if activeSection === "engines"}
-            <EnginesSection />
           {:else}
             <UpdatesSection />
           {/if}
@@ -609,10 +590,9 @@
     background: var(--surface-elevated);
   }
 
-  /* En oscuro, la barra en el mismo fondo, separada por una linea. */
+  /* En oscuro, la barra del mismo tono que las cajas, no mas clara. */
   :global(:root[data-scheme="dark"]) .settings-nav {
-    border-right: 1px solid var(--border);
-    background: transparent;
+    background: var(--set-row-background);
   }
 
   .nav-title {
@@ -628,16 +608,6 @@
     gap: 2px;
   }
 
-  .nav-group {
-    margin: var(--space-4) 0 var(--space-1) var(--space-2);
-    color: var(--text-secondary);
-    font-size: 0.6875rem;
-    font-weight: 500;
-  }
-
-  .nav-group:first-child {
-    margin-top: 0;
-  }
 
   /* Mismo resaltado que las pestañas: relleno tenue en la activa. */
   .nav-item {
@@ -863,11 +833,7 @@
   }
 
   .theme-row:hover {
-    background: color-mix(in srgb, var(--text-primary) 4%, var(--surface-elevated));
-  }
-
-  :global(:root[data-scheme="dark"]) .theme-row:hover {
-    background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 4%, var(--set-row-background, var(--surface-elevated)));
   }
 
   .theme-row:focus-visible {
