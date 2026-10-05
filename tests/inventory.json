@@ -2,24 +2,22 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 136,
-    "tests": 1451,
+    "files": 137,
+    "tests": 1459,
     "ignored": 31,
     "byDecision": {
-      "keep": 136,
+      "keep": 137,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 130,
+      "pr": 131,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
     },
-    "sqlEngineRowsWithoutTest": [
-      "D10"
-    ]
+    "sqlEngineRowsWithoutTest": []
   },
   "tests": [
     {
@@ -281,9 +279,12 @@
       "risk": "P1",
       "gate": "pr",
       "decision": "keep",
+      "sqlEngineRows": [
+        "D10"
+      ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 15,
+      "tests": 19,
       "ignored": 0,
       "environment": "none",
       "env": [
@@ -539,6 +540,31 @@
       "external": [
         "@codemirror/state",
         "@codemirror/view",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/editor/backslashHighlight.test.ts",
+      "domain": "editor",
+      "owner": "app/src/lib/editor/completionSource.ts",
+      "property": "El resaltado lee la barra invertida con el modo de la sesion, como el analisis (#63)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "connections",
+        "editor/completionSource",
+        "editor/context",
+        "engines",
+        "types"
+      ],
+      "external": [
+        "@lezer/highlight",
         "vitest"
       ],
       "durationMs": null
