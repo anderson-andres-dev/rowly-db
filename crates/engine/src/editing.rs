@@ -377,7 +377,9 @@ fn is_plain_number(text: &str) -> bool {
 // Palabras reservadas que obligan a citar un identificador en MySQL o
 // Postgres. No es la lista completa de keywords de sqlparser a proposito:
 // esa incluye cientos no reservadas (name, type, status...) y citar todas
-// llenaria la vista previa de comillas sin necesidad.
+// llenaria la vista previa de comillas sin necesidad. Las que una linea de
+// version vuelve reservadas (`rank` en MySQL 8.0) no van aqui: salen de sus
+// datos (support/<engine>.json, SQL_ENGINE §5.4), ver `reserved_on_some_line`.
 const RESERVED: &[&str] = &[
     "all",
     "alter",
@@ -443,7 +445,6 @@ const RESERVED: &[&str] = &[
     "outer",
     "primary",
     "range",
-    "rank",
     "read",
     "references",
     "release",
@@ -488,11 +489,25 @@ pub fn quote_ident(dialect: Dialect, ident: &str) -> String {
             && ident
                 .chars()
                 .any(|character| character.is_ascii_uppercase()))
-        && !RESERVED.contains(&ident.to_ascii_lowercase().as_str());
+        && !RESERVED.contains(&ident.to_ascii_lowercase().as_str())
+        && !reserved_on_some_line(&ident.to_ascii_lowercase());
     if simple {
         return ident.to_string();
     }
     dialect.quote_identifier(ident)
+}
+
+/// Reservada en alguna linea de algun motor, con los paquetes instalados
+/// (SQL_ENGINE §5.2: el SQL generado sigue la regla mas estricta). Como la
+/// lista de arriba, comun a todos: una comilla de mas no rompe nada; una de
+/// menos, si.
+fn reserved_on_some_line(word: &str) -> bool {
+    Dialect::ALL.iter().any(|dialect| {
+        dialect
+            .lines()
+            .reserved_words()
+            .any(|reserved| reserved == word)
+    })
 }
 
 #[cfg(test)]
@@ -613,6 +628,8 @@ mod tests {
         assert_eq!(literal(MYSQL, false, &item), "'c:\\tmp'");
         assert_eq!(literal(Dialect::Postgres, true, &item), "'c:\\\\tmp'");
         assert_eq!(quote_ident(MYSQL, "order"), "`order`");
+        // Reservada por una linea (MySQL 8.0), no por la lista comun.
+        assert_eq!(quote_ident(MYSQL, "rank"), "`rank`");
         assert_eq!(quote_ident(Dialect::Postgres, "UserId"), "\"UserId\"");
         assert_eq!(quote_ident(MYSQL, "pinc_codi"), "pinc_codi");
         // Un "numero" que no es solo digitos va como string.
@@ -630,5 +647,22 @@ mod tests {
             build_change_statements(Dialect::Postgres, false, None, "t", &changes),
             vec!["INSERT INTO t DEFAULT VALUES;".to_string()]
         );
+    }
+
+    /// Lo que cualquier linea de cualquier motor vuelve reservado se cita en
+    /// el SQL que escribe el grid (G6), con la comilla de cada motor.
+    #[test]
+    fn every_word_a_line_reserves_is_quoted_in_generated_sql() {
+        for owner in Dialect::ALL {
+            for word in owner.bundled_lines().reserved_words() {
+                for dialect in Dialect::ALL {
+                    assert_ne!(
+                        quote_ident(dialect, word),
+                        word,
+                        "{dialect:?} no cita «{word}», reservada por una linea de {owner:?}"
+                    );
+                }
+            }
+        }
     }
 }

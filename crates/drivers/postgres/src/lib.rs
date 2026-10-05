@@ -210,7 +210,7 @@ impl DbConnector for PostgresConnector {
                 0,
                 Message::key("introspect.belowCompatibilityFloor")
                     .with("version", self.version.display())
-                    .with("floor", "PostgreSQL 10"),
+                    .with("floor", self.version.compatibility_floor()),
             );
         }
         Ok(objects)

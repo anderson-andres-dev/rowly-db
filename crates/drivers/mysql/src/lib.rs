@@ -282,7 +282,7 @@ impl DbConnector for MySqlConnector {
                 0,
                 Message::key("introspect.belowCompatibilityFloor")
                     .with("version", self.version.display())
-                    .with("floor", "MySQL 5.7, MariaDB 10.3"),
+                    .with("floor", self.version.compatibility_floor()),
             );
         }
         Ok(objects)

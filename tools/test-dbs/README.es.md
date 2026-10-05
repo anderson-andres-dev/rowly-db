@@ -2,11 +2,13 @@
 
 MySQL, MariaDB y PostgreSQL en Docker, cargadas con la base clásica **Sakila** (MySQL y MariaDB) y su port a PostgreSQL, **Pagila**: el mismo videoclub en los tres motores, con tablas, vistas, procedimientos, funciones y triggers. Son el objetivo de las pruebas contra servidor de `crates/server-tests`.
 
-| Motor | Imagen | Puerto | Base |
-|---|---|---|---|
-| MySQL | `mysql:8.4` | 33306 | `sakila`, `rowly_test` |
-| MariaDB | `mariadb:11` | 33307 | `sakila`, `rowly_test` |
-| PostgreSQL | `pgvector/pgvector:pg18` | 55432 | `pagila` (schema `rowly_test`) |
+| Motor | Puerto | Base |
+|---|---|---|
+| MySQL | 33306 | `sakila`, `rowly_test` |
+| MariaDB | 33307 | `sakila`, `rowly_test` |
+| PostgreSQL | 55432 | `pagila` (schema `rowly_test`) |
+
+Cada imagen es una versión de `verified` en `lines.json`, fijada por digest. Sin argumentos `up.sh` levanta la de por defecto de `docker-compose.yml` (`crates/server-tests` la compara con `lines.json`); `up.sh postgres=13.23` levanta cualquier otra verificada.
 
 Usuario y clave: `rowly` / `rowly` (clave de root en MySQL y MariaDB: `rowly`). Los puertos solo escuchan en `127.0.0.1`.
 
