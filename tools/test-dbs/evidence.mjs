@@ -142,7 +142,8 @@ export function verify({ lines, dir, commit, gates = {}, expected = testCount(SU
     ...(na.length ? ["", "| Version | Fila | Capacidad | Desde | Prueba (D7) |", "|---|---|---|---|---|", ...na] : []),
     "",
   ].join("\n");
-  const verification = { format: 1, commit, date: new Date().toISOString(), gates, versions, lines: lineResults };
+  // Lo verificado antes y ya fuera de soporte (lines.json `retired`), con su evidencia: viaja con cada release.
+  const verification = { format: 1, commit, date: new Date().toISOString(), gates, versions, lines: lineResults, retired: lines.retired ?? {} };
   return { problems, summary, verification };
 }
 

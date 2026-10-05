@@ -69,7 +69,7 @@ Version support packs (SQL_ENGINE.md, §11) come from `support/` with `node tool
 
 When preparing a release, check support dates against each vendor's official notices, then run `python3 tools/support/vendor-support.py` from the repository root. The script uses `endoflife.date` as a release list and applies official exceptions where dates disagree. Review the diff of `tools/support/vendor-support.json` and run `node tools/inventory/status.mjs --write`, which regenerates SQL_ENGINE §5.3 from it.
 
-The support window moves with the calendar: when a verified release leaves it, `tools/test-dbs/window.mjs` fails in Quality with no code change. Then move that release out of `verified` in `tools/test-dbs/lines.json` (its line stays and keeps connecting), as SQL_ENGINE §5.2 says, and regenerate the state.
+The support window moves with the calendar: 90 days before a verified release leaves it, `tools/test-dbs/window.mjs` warns in Quality (without failing), and the app release is not published while it stays in `verified` after the date. Then move it from `verified` to `retired` in `tools/test-dbs/lines.json`, with `until` and `evidence` (commit and run of its last green `sql-engine.yml` evidence); its line stays and keeps connecting, as SQL_ENGINE §5.2 says. Regenerate the state with `node tools/inventory/status.mjs --write`.
 
 ## Adding a database engine
 

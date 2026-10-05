@@ -69,7 +69,7 @@ Los paquetes de soporte de versión (SQL_ENGINE.es.md, §11) salen de `support/`
 
 Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `tools/support/vendor-support.json` y corre `node tools/inventory/status.mjs --write`, que regenera SQL_ENGINE §5.3 a partir de él.
 
-La ventana de soporte avanza con el calendario: cuando una versión verificada sale de ella, `tools/test-dbs/window.mjs` falla en Quality sin ningún cambio de código. Entonces saca esa versión de `verified` en `tools/test-dbs/lines.json` (su línea se queda y sigue conectando), como dice SQL_ENGINE §5.2, y regenera el estado.
+La ventana de soporte avanza con el calendario: 90 días antes de que una versión verificada salga de ella, `tools/test-dbs/window.mjs` avisa en Quality (sin fallar), y la release no se publica mientras siga en `verified` pasada la fecha. Entonces pásala de `verified` a `retired` en `tools/test-dbs/lines.json`, con `until` y `evidence` (commit y corrida de su última evidencia verde de `sql-engine.yml`); su línea se queda y sigue conectando, como dice SQL_ENGINE §5.2. Regenera el estado con `node tools/inventory/status.mjs --write`.
 
 ## Agregar un motor de base de datos
 
