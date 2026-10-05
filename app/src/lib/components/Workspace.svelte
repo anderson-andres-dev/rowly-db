@@ -320,9 +320,26 @@
     displayTitle: (title) => consoleDisplayTitle(title, $t),
     fallbackTitle: () => $t("workspace.consoleFallback"),
     confirmDiscard: (key) => confirmDiscardPending(key),
-    forgetResults: forgetConsoleResults,
+    forgetResults: forgetConsole,
     notifyError,
   });
+
+  // Al cerrar una consola, tambien lo que esta vista guarda por su id. Un
+  // $state indexado por id crea una fuente por cada clave que se lee, aunque
+  // no exista, y la conserva mientras viva el objeto: reasignarlo sin la
+  // clave suelta esas fuentes (#74).
+  function forgetConsole(consoleId: string) {
+    forgetConsoleResults(consoleId);
+    selectedTabByConsole = withoutKey(selectedTabByConsole, consoleId);
+    resultTabOrder = withoutKey(resultTabOrder, consoleId);
+    tableFilterError = withoutKey(tableFilterError, consoleId);
+    tableLoadAttempted.delete(consoleId);
+  }
+
+  function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+    const { [key]: _forgotten, ...rest } = record;
+    return rest;
+  }
   const pendingClose = files.pendingClose;
 
   $effect(() => {
