@@ -10,7 +10,8 @@
 // A diferencia de run.mjs, no usa WebDriver: abre la app con el inspector
 // remoto de WebKit (inspector.mjs), que es lo unico que puede recolectar y
 // medir el heap de JavaScript vivo. La app se maneja con clics en el DOM; el
-// teclado y el foco son de run.mjs. Necesita un display X (xvfb-run).
+// teclado y el foco son de run.mjs. Necesita un display X (xvfb-run) y su
+// propio bus de sesion (dbus-run-session; ver e2e.yml).
 //
 // Usa las mismas bases que run.mjs: MySQL en E2E_MYSQL_PORT (root/rowly) con
 // la base `rowly_e2e`, y PostgreSQL en E2E_PG_PORT con E2E_PG_USER/rowly.
@@ -162,8 +163,22 @@ async function sample(page, app, index) {
   return { index, pss: memory, heap: await liveHeap(page), dom: await page.evaluate(DOM) };
 }
 
+// El codigo compilado de JavaScriptCore (CodeBlock y Executable, enlazados o
+// no) es una cache del motor, no estado de la app: entra y sale del heap vivo
+// segun el tiering y su edad. En 1000 ciclos de consola va y viene entre ~16 y
+// ~22 MB de heap sin crecer, igual antes de #70 y con el codigo del harness
+// constante; ni recolectar ni 30 s de reposo lo fijan. El criterio de heap lo
+// deja fuera y lo informa aparte; los objetos, closures, Structure, strings y
+// DOM de la app siguen dentro.
+const COMPILED = /(CodeBlock|Executable)$/;
+const codeBytes = (heap) =>
+  Object.entries(heap.classes).reduce((sum, [name, entry]) => sum + (COMPILED.test(name) ? entry.bytes : 0), 0);
+const appHeapMb = (heap) => heap.mb - codeBytes(heap) / 1048576;
+const appObjects = (heap) =>
+  heap.objects - Object.entries(heap.classes).reduce((sum, [name, entry]) => sum + (COMPILED.test(name) ? entry.count : 0), 0);
+
 const format = ({ index, heap, pss, dom }) =>
-  `${index}: heap vivo ${heap.mb.toFixed(1)} MB en ${heap.objects} objetos; backend propio ${(pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0).toFixed(1)} MB; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
+  `${index}: heap vivo ${heap.mb.toFixed(1)} MB (${appHeapMb(heap).toFixed(1)} sin codigo compilado) en ${heap.objects} objetos; backend propio ${(pss.anonymousByName[basename(APP).slice(0, 15)] ?? 0).toFixed(1)} MB; PSS ${pss.total.toFixed(1)} MB (${Object.entries(
     pss.byName,
   )
     .map(([name, mb]) => `${name} ${mb.toFixed(1)}`)
@@ -193,8 +208,8 @@ function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) 
           `      lo que mas crecio: ${classGrowth(first, last)}`,
       );
   };
-  grew("el heap vivo (MB)", first.heap.mb, last.heap.mb, Math.max(2, first.heap.mb * 0.1));
-  grew("los objetos vivos", first.heap.objects, last.heap.objects, first.heap.objects * 0.05);
+  grew("el heap vivo sin codigo compilado (MB)", appHeapMb(first.heap), appHeapMb(last.heap), Math.max(2, appHeapMb(first.heap) * 0.1));
+  grew("los objetos vivos sin codigo compilado", appObjects(first.heap), appObjects(last.heap), appObjects(first.heap) * 0.05);
   // La memoria propia de la app (Anonymous: su heap y su pila), no su PSS:
   // el PSS reparte las bibliotecas compartidas entre quienes las usan, y
   // sube solo cuando muere otro proceso que las compartia. Sube y baja con
@@ -622,14 +637,9 @@ for (const { name, body } of selected.filter((candidate) => !only || candidate.n
   let app = null;
   let page = null;
   try {
-    // Si la app no llega a mostrar su pagina (paso alguna vez en CI en el
-    // tercer arranque), se cierra y se intenta una vez mas, en otro puerto.
-    ({ app, page } = await startApp(profileDir, port).catch(async (error) => {
-      console.log(`      reintento: ${error.message}`);
-      if (error.app) await stop(error.app);
-      port += 100;
-      return startApp(profileDir, port);
-    }).catch((error) => {
+    // Sin reintento: la app arranca en menos de 2 s con su propio bus de
+    // sesion (e2e.yml, #62); si no muestra su pagina en 30 s, es un fallo.
+    ({ app, page } = await startApp(profileDir, port).catch((error) => {
       app = error.app ?? null;
       throw error;
     }));
