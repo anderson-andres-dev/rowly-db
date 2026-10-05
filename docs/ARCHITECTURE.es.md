@@ -212,7 +212,7 @@ Cada dato tiene un dueño. Donde una copia es inevitable, un test la mantiene ig
 | Versión exacta | El servidor, leído por su driver (`ServerIdentity`) | `ConnectionEngineContext` | ninguna |
 | Línea, revisión, capacidades, palabras reservadas, sintaxis eliminada | `support/<engine>.json`, parseado por `khipu_engine::lines` | drivers (capacidades), analizador (sintaxis eliminada), SQL generado y perfiles del frontend (reservadas), contexto (línea, revisión) | Ids de línea en `lines.json` (`crates/engine/tests/lines.rs`); un paquete descargado reemplaza una línea solo con una revisión mayor |
 | Piso de compatibilidad | `COMPATIBILITY_FLOOR_*` en el `version.rs` de cada driver | el aviso del explorador | Igual al inicio de la primera línea (`the_floor_is_where_the_first_line_starts`) |
-| Estado de soporte del fabricante | `tools/support/vendor-support.json` | contexto, Ajustes → Motores | `tools/test-dbs/window.mjs` aplica la misma regla de ventana en CI |
+| Estado de soporte del fabricante | `tools/support/vendor-support.json` | contexto | `tools/test-dbs/window.mjs` aplica la misma regla de ventana en CI |
 | Versiones verificadas | `verified` en `tools/test-dbs/lines.json`, fijadas por digest | contexto («verificada»), la matriz (`sql-engine.yml`), la evidencia | Las imágenes de `e2e.yml` y `docker-compose.yml` se comparan con ella (`crates/server-tests`) |
 | Cobertura de cada fila S/A/G/D | `tests/sql/coverage.json` | `tools/inventory/coverage.mjs` | Cada test contra servidor real tiene que probar una fila |
 | Dependencias | `Cargo.lock`, `app/package-lock.json` | builds | `tools/inventory/dependencies.mjs`: solo crates.io y registry.npmjs.org |
@@ -271,7 +271,7 @@ Cada dato tiene un dueño. Donde una copia es inevitable, un test la mantiene ig
 | :--- | :--- | :--- |
 | Conexión | `ActiveConnection` en el backend; `stores/connection.ts` en el frontend | Al volver a la lista (`disconnect`) o cerrar la ventana |
 | Motor, versión y modo | `ConnectionEngineContext` | Nunca cambia: reconectar crea una generación nueva |
-| Líneas activas y paquetes de soporte | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` solo los muestra | Al instalar, quitar o desactivar; cada conexión conserva las que tomó al conectar |
+| Líneas activas y paquetes de soporte | `support.rs` (`Dialect::activate_lines`); `stores/supportPackages.ts` los llama (por ahora sin pantalla) | Al instalar, quitar o desactivar; cada conexión conserva las que tomó al conectar |
 | Catálogo | `ActiveConnection.catalog`; `catalogTables` y `databaseExplorer` en el frontend | Cada cambio de esquema sube `schemaEpoch` |
 | Caché del análisis | `editor/analysisSession.ts`, una a la vez | Otra generación, `schemaEpoch`, motor o conjunto de tablas que crea el documento; `analyze_sql` rechaza pedidos hechos con otro contexto |
 | Consolas y su texto | `stores/queryConsoles.ts` | Al cerrar la consola |

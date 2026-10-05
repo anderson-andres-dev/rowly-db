@@ -102,6 +102,15 @@ Never delete a release. The app lets people go back to any published version.
 
 Updates are signed with the key stored in the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets. If that key is lost, installed copies will reject every future update, so keep a backup.
 
+### Release highlight
+
+Before tagging, decide whether the release has a highlight worth telling. If it does, attach `highlight.json` (and its image, if any) to the GitHub release; the update prompt of the installed app shows it. Without it, the prompt is the classic "vX.Y.Z available".
+
+- Format: [`docs/release/highlight.example.json`](docs/release/highlight.example.json). `format` is `1`; `title` is required; `badge`, up to four `items`, `image` and `imageAlt` are optional. Every text is a map by language (`es`, `en`, `pt-BR`, `fr`, `de`) and must include `en`, which is the fallback.
+- Icons for `items`: `sparkles`, `database`, `table`, `pencil`, `eye`, `shield-check`, `zap`, `keyboard`, `search`, `history`, `file-code`, `palette`, `undo`, `check`, `rocket`, `wand`. An unknown one shows `sparkles`.
+- Image: a plain file name next to `highlight.json`, PNG, WebP or JPEG, up to 1.5 MB. Around 900 px wide reads well.
+- The app checks the file and falls back to the classic prompt on any error (`app/src-tauri/src/release_highlight.rs`); the example is validated by its tests.
+
 ## Website
 
 The landing page lives in `site/`: plain HTML, CSS and JavaScript, English at `site/index.html` and Spanish at `site/es/index.html`. Keep both in sync. Pages are templates: `{{version}}` and `{{site}}` are filled in by `.github/scripts/render-site.py` with the latest published release and the site address (the `SITE_URL` repository variable, GitHub Pages by default). GitHub Pages republishes the site on every push to `main` that touches `site/` and after each Release run. To try it locally, run `python3 .github/scripts/render-site.py _site && python3 -m http.server --directory _site`. Screenshots live in `site/assets/img/shots/`, in light and dark, taken from the real app with sample data.

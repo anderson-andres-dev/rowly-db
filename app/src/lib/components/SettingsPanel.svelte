@@ -1,8 +1,7 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
-  import { Code2, Database, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Sun, X } from "@lucide/svelte";
+  import { Check, Code2, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, SlidersHorizontal, Sun, X } from "@lucide/svelte";
   import UpdatesSection from "$lib/components/UpdatesSection.svelte";
-  import EnginesSection from "$lib/components/EnginesSection.svelte";
   import Select from "$lib/components/Select.svelte";
   import NumberStepper from "$lib/components/NumberStepper.svelte";
   import { newerRelease } from "$lib/stores/updates";
@@ -29,23 +28,35 @@
   import type { IndentSize, IndentStyle } from "$lib/sqlIndentationConfig";
   import { GRID_ROW_STYLES, gridSettings, setGridRowStyle } from "$lib/stores/gridSettings";
 
-  // Ajustes: una lista a la izquierda y, a la derecha, filas agrupadas
+  // Ajustes: la lista de secciones a la izquierda y, a la derecha,
+  // una cabecera fija (titulo y cerrar) sobre filas que se desplazan
   // (styles/controls.css). Cada fila es un texto corto y su control; nada de
   // subtitulos ni tarjetas sueltas.
-  type Section = "appearance" | "editor" | "shortcuts" | "engines" | "updates";
+  type Section = "general" | "appearance" | "editor" | "shortcuts" | "updates";
 
-  let { onclose, initialSection = "appearance" }: { onclose: () => void; initialSection?: Section } = $props();
+  let { onclose, initialSection = "general" }: { onclose: () => void; initialSection?: Section } = $props();
 
   // svelte-ignore state_referenced_locally
   let activeSection = $state<Section>(initialSection);
 
   const sections = [
+    { id: "general", icon: SlidersHorizontal },
     { id: "appearance", icon: Palette },
     { id: "editor", icon: Code2 },
     { id: "shortcuts", icon: Keyboard },
-    { id: "engines", icon: Database },
     { id: "updates", icon: RefreshCw },
   ] as const satisfies { id: Section; icon: typeof Palette }[];
+
+  // La linea bajo la cabecera aparece solo cuando hay contenido debajo.
+  let scrolled = $state(false);
+  let scrollEl: HTMLElement | undefined = $state();
+
+  // Otra seccion empieza desde arriba.
+  $effect(() => {
+    void activeSection;
+    if (scrollEl) scrollEl.scrollTop = 0;
+    scrolled = false;
+  });
 
   let dialogEl: HTMLDialogElement | undefined = $state();
   let navEl: HTMLElement | undefined = $state();
@@ -228,332 +239,306 @@
     </aside>
 
     <div class="settings-main">
-      <button class="ui-icon-button close" type="button" aria-label={$t("common.close")} onclick={() => dialogEl?.close()}>
-        <X size={16} aria-hidden="true" />
-      </button>
-
-      <div class="settings-content">
+      <header class="settings-head" class:scrolled>
         <h1 id="settings-title">{$t(`settings.nav.${activeSection}`)}</h1>
+        <button class="ui-icon-button close" type="button" aria-label={$t("common.close")} onclick={() => dialogEl?.close()}>
+          <X size={16} aria-hidden="true" />
+        </button>
+      </header>
 
-        {#if activeSection === "appearance"}
-          <div class="set-group">
-            <div class="set-row">
-              <span class="set-label">{$t("settings.appearance.scheme")}</span>
-              <div class="ui-segmented" role="radiogroup" aria-label={$t("settings.appearance.scheme")}>
-                {#each schemeOptions as option (option.value)}
-                  {@const Icon = option.icon}
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={$themeChoice.scheme === option.value}
-                    onclick={() => setScheme(option.value)}
-                  >
-                    <Icon size={14} aria-hidden="true" />
-                    {$t(`settings.scheme.${option.value}`)}
-                  </button>
-                {/each}
+      <div class="settings-scroll" bind:this={scrollEl} onscroll={(event) => (scrolled = event.currentTarget.scrollTop > 0)}>
+        <div class="settings-content">
+          {#if activeSection === "general"}
+            <div class="set-group">
+              <div class="set-row">
+                <span class="set-label">{$t("settings.appearance.language")}</span>
+                <Select
+                  value={$localePreference}
+                  options={languageOptions}
+                  label={$t("settings.appearance.language")}
+                  onchange={(value) => localePreference.set(value as LocalePreference)}
+                />
+              </div>
+              <div class="set-row">
+                <span class="set-label">{$t("settings.appearance.rows")}</span>
+                <div class="ui-segmented" role="radiogroup" aria-label={$t("settings.appearance.rows")}>
+                  {#each GRID_ROW_STYLES as style (style)}
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={$gridSettings.rowStyle === style}
+                      onclick={() => setGridRowStyle(style)}
+                    >
+                      {$t(`settings.appearance.rows.${style}`)}
+                    </button>
+                  {/each}
+                </div>
               </div>
             </div>
-            <div class="set-row">
-              <span class="set-label">{$t("settings.appearance.rows")}</span>
-              <div class="ui-segmented" role="radiogroup" aria-label={$t("settings.appearance.rows")}>
-                {#each GRID_ROW_STYLES as style (style)}
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={$gridSettings.rowStyle === style}
-                    onclick={() => setGridRowStyle(style)}
-                  >
-                    {$t(`settings.appearance.rows.${style}`)}
-                  </button>
-                {/each}
+          {:else if activeSection === "appearance"}
+            <div class="set-group">
+              <div class="set-row">
+                <span class="set-label">{$t("settings.appearance.scheme")}</span>
+                <div class="ui-segmented" role="radiogroup" aria-label={$t("settings.appearance.scheme")}>
+                  {#each schemeOptions as option (option.value)}
+                    {@const Icon = option.icon}
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={$themeChoice.scheme === option.value}
+                      onclick={() => setScheme(option.value)}
+                    >
+                      <Icon size={14} aria-hidden="true" />
+                      {$t(`settings.scheme.${option.value}`)}
+                    </button>
+                  {/each}
+                </div>
               </div>
             </div>
-            <div class="set-row">
-              <span class="set-label">{$t("settings.appearance.language")}</span>
-              <Select
-                value={$localePreference}
-                options={languageOptions}
-                label={$t("settings.appearance.language")}
-                onchange={(value) => localePreference.set(value as LocalePreference)}
-              />
-            </div>
-          </div>
-          {#if darkOnlyNotice}
-            <p class="notice">
-              <Moon size={13} aria-hidden="true" />
-              {$t("settings.appearance.darkOnlyNotice", { theme: darkOnlyNotice })}
-            </p>
-          {/if}
+            {#if darkOnlyNotice}
+              <p class="notice">
+                <Moon size={13} aria-hidden="true" />
+                {$t("settings.appearance.darkOnlyNotice", { theme: darkOnlyNotice })}
+              </p>
+            {/if}
 
-          <div class="block-head">
-            <h3 class="set-caption">{$t("settings.appearance.palette")}</h3>
-            <label class="ui-field theme-search">
-              <Search size={13} aria-hidden="true" />
-              <input type="search" bind:value={themeQuery} placeholder={$t("settings.appearance.themeSearch")} />
-            </label>
-          </div>
-          {#if visibleThemes.length === 0}
-            <p class="empty">{$t("settings.appearance.noThemes", { query: themeQuery.trim() })}</p>
-          {:else}
-            <div class="palette-grid" role="radiogroup" aria-label={$t("settings.appearance.palette")}>
-              {#each visibleThemes as family (family.id)}
-                <!-- Cada tarjeta se pinta en el modo que se pide, asi se ve como
-                     quedaria el tema antes de elegirlo. -->
-                {@const preview = themeVariant(family.id, $requestedScheme)}
-                {@const editor = preview.editor}
-                <button
-                  class:selected={$themeChoice.family === family.id}
-                  class="palette-option"
-                  type="button"
-                  role="radio"
-                  aria-checked={$themeChoice.family === family.id}
-                  onclick={() => setFamily(family.id)}
-                >
-                  <span
-                    class="theme-preview"
-                    style:background={preview.shell.surface}
-                    style:border-color={preview.shell.border}
-                    aria-hidden="true"
+            <div class="block-head">
+              <h3 class="set-caption">{$t("settings.appearance.palette")}</h3>
+              <label class="ui-field theme-search">
+                <Search size={13} aria-hidden="true" />
+                <input type="search" bind:value={themeQuery} placeholder={$t("settings.appearance.themeSearch")} />
+              </label>
+            </div>
+            {#if visibleThemes.length === 0}
+              <p class="empty">{$t("settings.appearance.noThemes", { query: themeQuery.trim() })}</p>
+            {:else}
+              <!-- Una fila por tema, con una muestra de sus colores en el modo que
+                   se pide: el elegido ya se ve aplicado en toda la app. -->
+              <div class="set-group theme-list" role="radiogroup" aria-label={$t("settings.appearance.palette")}>
+                {#each visibleThemes as family (family.id)}
+                  {@const preview = themeVariant(family.id, $requestedScheme)}
+                  {@const editor = preview.editor}
+                  {@const selected = $themeChoice.family === family.id}
+                  <button
+                    class="set-row theme-row"
+                    class:selected
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onclick={() => setFamily(family.id)}
                   >
-                    <span class="preview-tabs" style:border-color={preview.shell.border}>
-                      <span class="preview-tab active" style:background={editor.background} style:box-shadow={`inset 0 1.5px 0 ${preview.shell.accent}`}>
-                        <i style:background={preview.shell.textPrimary}></i>
-                      </span>
-                      <span class="preview-tab">
-                        <i style:background={preview.shell.textSecondary}></i>
-                      </span>
+                    <span class="swatch" style:background={editor.background} style:border-color={preview.shell.border} aria-hidden="true">
+                      <span><i style:background={editor.keyword}></i><i class="short" style:background={editor.foreground}></i></span>
+                      <span><i class="short" style:background={editor.string}></i><i class="tiny" style:background={editor.number}></i></span>
                     </span>
-                    <span class="preview-sidebar" style:background={preview.shell.surfaceElevated} style:border-color={preview.shell.border}>
-                      <i style:background={preview.shell.accent}></i>
-                      <i style:background={preview.shell.textSecondary}></i>
-                      <i style:background={preview.shell.textSecondary}></i>
-                      <i style:background={preview.shell.textSecondary}></i>
-                    </span>
-                    <span class="preview-editor" style:background={editor.background}>
-                      <span class="preview-gutter" style:color={editor.lineNumber}>
-                        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
-                      </span>
-                      <span class="preview-code" style:color={editor.foreground}>
-                        <span style:color={editor.comment}>-- top 50</span>
-                        <span><b style:color={editor.keyword}>SELECT</b> id, <b style:color={editor.builtin ?? editor.foreground}>count</b>(*)</span>
-                        <span><b style:color={editor.keyword}>FROM</b> orders</span>
-                        <span><b style:color={editor.keyword}>WHERE</b> paid <b style:color={editor.operator ?? editor.foreground}>=</b> <b style:color={editor.constant}>true</b></span>
-                        <span><b style:color={editor.keyword}>LIMIT</b> <b style:color={editor.number}>50</b>;</span>
-                      </span>
-                    </span>
-                  </span>
-                  <span class="palette-text">
-                    <span class="palette-name">{family.label}</span>
-                    <span class="palette-modes">
-                      {#if palettes[family.id].light}
-                        {$t("settings.appearance.bothModes")}
-                      {:else}
-                        <Moon size={10} aria-hidden="true" />
+                    <span class="theme-name">{family.label}</span>
+                    {#if !palettes[family.id].light}
+                      <span class="theme-mode">
+                        <Moon size={12} aria-hidden="true" />
                         {$t("settings.appearance.darkOnly")}
-                      {/if}
+                      </span>
+                    {/if}
+                    <span class="theme-check" aria-hidden="true">
+                      {#if selected}<Check size={15} />{/if}
                     </span>
-                  </span>
-                  <span class="selection" aria-hidden="true"></span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        {:else if activeSection === "editor"}
-          <h3 class="set-caption">{$t("settings.editor.format")}</h3>
-          <div class="set-group">
-            <div class="set-row">
-              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.type")}</span></div>
-              <Select
-                value={$editorSettings.indentStyle}
-                options={indentStyleOptions}
-                label={$t("settings.editor.indent.type")}
-                onchange={(value) => setIndentStyle(value as IndentStyle)}
-              />
-            </div>
-            <div class="set-row">
-              <div class="set-text"><span class="set-label">{$t("settings.editor.indent.size")}</span></div>
-              <Select
-                value={String($editorSettings.indentSize)}
-                options={indentSizeOptions}
-                label={$t("settings.editor.indent.size")}
-                onchange={(value) => setIndentSize(Number(value) as IndentSize)}
-              />
-            </div>
-            <div class="set-row">
-              <div class="set-text">
-                <span class="set-label">{$t("settings.editor.lineWidth")}</span>
-                <span class="set-desc">{$t("settings.editor.lineWidth.description")}</span>
-              </div>
-              <div class="row-control">
-                {#if $editorSettings.formatterLineWidth !== DEFAULT_FORMATTER_LINE_WIDTH}
-                  <button
-                    class="ui-icon-button"
-                    type="button"
-                    use:tooltip={$t("settings.editor.lineWidth.resetTitle", { width: DEFAULT_FORMATTER_LINE_WIDTH })}
-                    onclick={() => setFormatterLineWidth(DEFAULT_FORMATTER_LINE_WIDTH)}
-                  >
-                    <RotateCcw size={14} aria-hidden="true" />
                   </button>
-                {/if}
-                <NumberStepper
-                  id="formatter-line-width"
-                  label={$t("settings.editor.lineWidth")}
-                  value={$editorSettings.formatterLineWidth}
-                  min={MIN_FORMATTER_LINE_WIDTH}
-                  max={MAX_FORMATTER_LINE_WIDTH}
-                  suffix={$t("settings.editor.characters")}
-                  onchange={setFormatterLineWidth}
+                {/each}
+              </div>
+            {/if}
+          {:else if activeSection === "editor"}
+            <h3 class="set-caption">{$t("settings.editor.format")}</h3>
+            <div class="set-group">
+              <div class="set-row">
+                <div class="set-text"><span class="set-label">{$t("settings.editor.indent.type")}</span></div>
+                <Select
+                  value={$editorSettings.indentStyle}
+                  options={indentStyleOptions}
+                  label={$t("settings.editor.indent.type")}
+                  onchange={(value) => setIndentStyle(value as IndentStyle)}
+                />
+              </div>
+              <div class="set-row">
+                <div class="set-text"><span class="set-label">{$t("settings.editor.indent.size")}</span></div>
+                <Select
+                  value={String($editorSettings.indentSize)}
+                  options={indentSizeOptions}
+                  label={$t("settings.editor.indent.size")}
+                  onchange={(value) => setIndentSize(Number(value) as IndentSize)}
+                />
+              </div>
+              <div class="set-row">
+                <div class="set-text">
+                  <span class="set-label">{$t("settings.editor.lineWidth")}</span>
+                  <span class="set-desc">{$t("settings.editor.lineWidth.description")}</span>
+                </div>
+                <div class="row-control">
+                  {#if $editorSettings.formatterLineWidth !== DEFAULT_FORMATTER_LINE_WIDTH}
+                    <button
+                      class="ui-icon-button"
+                      type="button"
+                      use:tooltip={$t("settings.editor.lineWidth.resetTitle", { width: DEFAULT_FORMATTER_LINE_WIDTH })}
+                      onclick={() => setFormatterLineWidth(DEFAULT_FORMATTER_LINE_WIDTH)}
+                    >
+                      <RotateCcw size={14} aria-hidden="true" />
+                    </button>
+                  {/if}
+                  <NumberStepper
+                    id="formatter-line-width"
+                    label={$t("settings.editor.lineWidth")}
+                    value={$editorSettings.formatterLineWidth}
+                    min={MIN_FORMATTER_LINE_WIDTH}
+                    max={MAX_FORMATTER_LINE_WIDTH}
+                    suffix={$t("settings.editor.characters")}
+                    onchange={setFormatterLineWidth}
+                  />
+                </div>
+              </div>
+              <div class="set-row">
+                <div class="set-text">
+                  <span class="set-label" id="uppercase-label">{$t("settings.editor.uppercase")}</span>
+                </div>
+                <button
+                  class="ui-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={$editorSettings.autoUppercaseKeywords}
+                  aria-labelledby="uppercase-label"
+                  onclick={() => setAutoUppercaseKeywords(!$editorSettings.autoUppercaseKeywords)}
+                >
+                  <span></span>
+                </button>
+              </div>
+              <div class="set-row">
+                <div class="set-text">
+                  <span class="set-label" id="align-columns-label">{$t("settings.editor.alignColumns")}</span>
+                  <span class="set-desc">{$t("settings.editor.alignColumns.description")}</span>
+                </div>
+                <button
+                  class="ui-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={$editorSettings.formatterAlignColumns}
+                  aria-labelledby="align-columns-label"
+                  onclick={() => setFormatterAlignColumns(!$editorSettings.formatterAlignColumns)}
+                >
+                  <span></span>
+                </button>
+              </div>
+            </div>
+
+            <h3 class="set-caption">{$t("settings.editor.completion")}</h3>
+            <div class="set-group">
+              <div class="set-row">
+                <div class="set-text">
+                  <span class="set-label" id="tab-navigation-label">{$t("settings.editor.tabNavigation")}</span>
+                </div>
+                <button
+                  class="ui-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={$editorSettings.tabNavigatesCompletion}
+                  aria-labelledby="tab-navigation-label"
+                  onclick={() => setTabNavigatesCompletion(!$editorSettings.tabNavigatesCompletion)}
+                >
+                  <span></span>
+                </button>
+              </div>
+              <div class="set-row">
+                <div class="set-text">
+                  <span class="set-label">{$t("settings.editor.tableAliases")}</span>
+                  <span class="set-desc">{$t("settings.editor.tableAliases.description")}</span>
+                </div>
+                <Select
+                  value={$editorSettings.tableAliases}
+                  options={tableAliasOptions}
+                  label={$t("settings.editor.tableAliases")}
+                  onchange={(value) => setTableAliases(value as TableAliasMode)}
                 />
               </div>
             </div>
-            <div class="set-row">
-              <div class="set-text">
-                <span class="set-label" id="uppercase-label">{$t("settings.editor.uppercase")}</span>
-              </div>
-              <button
-                class="ui-switch"
-                type="button"
-                role="switch"
-                aria-checked={$editorSettings.autoUppercaseKeywords}
-                aria-labelledby="uppercase-label"
-                onclick={() => setAutoUppercaseKeywords(!$editorSettings.autoUppercaseKeywords)}
-              >
-                <span></span>
-              </button>
-            </div>
-            <div class="set-row">
-              <div class="set-text">
-                <span class="set-label" id="align-columns-label">{$t("settings.editor.alignColumns")}</span>
-                <span class="set-desc">{$t("settings.editor.alignColumns.description")}</span>
-              </div>
-              <button
-                class="ui-switch"
-                type="button"
-                role="switch"
-                aria-checked={$editorSettings.formatterAlignColumns}
-                aria-labelledby="align-columns-label"
-                onclick={() => setFormatterAlignColumns(!$editorSettings.formatterAlignColumns)}
-              >
-                <span></span>
-              </button>
-            </div>
-          </div>
+          {:else if activeSection === "shortcuts"}
+            <label class="ui-field shortcut-search">
+              <Search size={13} aria-hidden="true" />
+              <input type="search" bind:value={shortcutQuery} placeholder={$t("settings.shortcuts.search")} />
+            </label>
 
-          <h3 class="set-caption">{$t("settings.editor.completion")}</h3>
-          <div class="set-group">
-            <div class="set-row">
-              <div class="set-text">
-                <span class="set-label" id="tab-navigation-label">{$t("settings.editor.tabNavigation")}</span>
-              </div>
-              <button
-                class="ui-switch"
-                type="button"
-                role="switch"
-                aria-checked={$editorSettings.tabNavigatesCompletion}
-                aria-labelledby="tab-navigation-label"
-                onclick={() => setTabNavigatesCompletion(!$editorSettings.tabNavigatesCompletion)}
-              >
-                <span></span>
-              </button>
-            </div>
-            <div class="set-row">
-              <div class="set-text">
-                <span class="set-label">{$t("settings.editor.tableAliases")}</span>
-                <span class="set-desc">{$t("settings.editor.tableAliases.description")}</span>
-              </div>
-              <Select
-                value={$editorSettings.tableAliases}
-                options={tableAliasOptions}
-                label={$t("settings.editor.tableAliases")}
-                onchange={(value) => setTableAliases(value as TableAliasMode)}
-              />
-            </div>
-          </div>
-        {:else if activeSection === "shortcuts"}
-          <label class="ui-field shortcut-search">
-            <Search size={13} aria-hidden="true" />
-            <input type="search" bind:value={shortcutQuery} placeholder={$t("settings.shortcuts.search")} />
-          </label>
-
-          {#if shortcutGroups.length === 0}
-            <p class="empty">{$t("settings.shortcuts.noResults", { query: shortcutQuery.trim() })}</p>
-          {/if}
-          {#each shortcutGroups as group (group.id)}
-            <h3 class="set-caption">{$t(`settings.shortcuts.group.${group.id}`)}</h3>
-            <div class="set-group">
-              {#each group.items as shortcut (shortcut.id)}
-                <div class="set-row shortcut-row">
-                  <div class="set-text">
-                    <span class="set-label">{shortcutText(shortcut.id, "label")}</span>
-                    {#if shortcut.conflict}
-                      <span class="set-desc conflict">
-                        {$t("settings.shortcuts.conflict", { name: shortcutText(shortcut.conflict.id, "label") })}
-                      </span>
-                    {:else if SHORTCUT_HINTS[shortcut.id]}
-                      <span class="set-desc">{$t(SHORTCUT_HINTS[shortcut.id])}</span>
-                    {/if}
+            {#if shortcutGroups.length === 0}
+              <p class="empty">{$t("settings.shortcuts.noResults", { query: shortcutQuery.trim() })}</p>
+            {/if}
+            {#each shortcutGroups as group (group.id)}
+              <h3 class="set-caption">{$t(`settings.shortcuts.group.${group.id}`)}</h3>
+              <div class="set-group">
+                {#each group.items as shortcut (shortcut.id)}
+                  <div class="set-row shortcut-row">
+                    <div class="set-text">
+                      <span class="set-label">{shortcutText(shortcut.id, "label")}</span>
+                      {#if shortcut.conflict}
+                        <span class="set-desc conflict">
+                          {$t("settings.shortcuts.conflict", { name: shortcutText(shortcut.conflict.id, "label") })}
+                        </span>
+                      {:else if SHORTCUT_HINTS[shortcut.id]}
+                        <span class="set-desc">{$t(SHORTCUT_HINTS[shortcut.id])}</span>
+                      {/if}
+                    </div>
+                    <div class="row-control">
+                      {#if shortcut.isCustom && recordingId !== shortcut.id}
+                        <button
+                          class="ui-icon-button"
+                          type="button"
+                          aria-label={$t("settings.shortcuts.resetLabel", { name: shortcutText(shortcut.id, "label") })}
+                          use:tooltip={$t("settings.shortcuts.resetTitle")}
+                          onclick={() => resetShortcutKeys(shortcut.id)}
+                        >
+                          <RotateCcw size={14} aria-hidden="true" />
+                        </button>
+                      {/if}
+                      {#if recordingId === shortcut.id}
+                        <button
+                          class="key-button recording"
+                          type="button"
+                          use:focusOnMount
+                          onkeydown={(event) => handleRecordKeydown(event, shortcut.id)}
+                          onblur={() => (recordingId = null)}
+                        >
+                          {$t("settings.shortcuts.recording")}
+                        </button>
+                      {:else}
+                        <button
+                          class="key-button"
+                          class:conflict={!!shortcut.conflict}
+                          type="button"
+                          aria-label={$t("settings.shortcuts.changeLabel", { name: shortcutText(shortcut.id, "label") })}
+                          use:tooltip={$t("settings.shortcuts.changeTitle")}
+                          onclick={() => (recordingId = shortcut.id)}
+                        >
+                          {@render keys(shortcut.keys)}
+                        </button>
+                      {/if}
+                    </div>
                   </div>
-                  <div class="row-control">
-                    {#if shortcut.isCustom && recordingId !== shortcut.id}
-                      <button
-                        class="ui-icon-button"
-                        type="button"
-                        aria-label={$t("settings.shortcuts.resetLabel", { name: shortcutText(shortcut.id, "label") })}
-                        use:tooltip={$t("settings.shortcuts.resetTitle")}
-                        onclick={() => resetShortcutKeys(shortcut.id)}
-                      >
-                        <RotateCcw size={14} aria-hidden="true" />
-                      </button>
-                    {/if}
-                    {#if recordingId === shortcut.id}
-                      <button
-                        class="key-button recording"
-                        type="button"
-                        use:focusOnMount
-                        onkeydown={(event) => handleRecordKeydown(event, shortcut.id)}
-                        onblur={() => (recordingId = null)}
-                      >
-                        {$t("settings.shortcuts.recording")}
-                      </button>
-                    {:else}
-                      <button
-                        class="key-button"
-                        class:conflict={!!shortcut.conflict}
-                        type="button"
-                        aria-label={$t("settings.shortcuts.changeLabel", { name: shortcutText(shortcut.id, "label") })}
-                        use:tooltip={$t("settings.shortcuts.changeTitle")}
-                        onclick={() => (recordingId = shortcut.id)}
-                      >
-                        {@render keys(shortcut.keys)}
-                      </button>
-                    {/if}
-                  </div>
+                {/each}
+              </div>
+            {/each}
+            {#if shortcutQuery.trim() === ""}
+              <div class="set-group reset-all">
+                <div class="set-row">
+                  <span class="set-label">{$t("settings.shortcuts.resetAll")}</span>
+                  <button
+                    class="action-button secondary small"
+                    type="button"
+                    disabled={!anyCustomShortcut}
+                    onclick={() => (confirmingReset = true)}
+                  >
+                    <RotateCcw size={13} aria-hidden="true" />
+                    {$t("settings.shortcuts.resetAllAction")}
+                  </button>
                 </div>
-              {/each}
-            </div>
-          {/each}
-          {#if shortcutQuery.trim() === ""}
-            <div class="set-group reset-all">
-              <div class="set-row">
-                <span class="set-label">{$t("settings.shortcuts.resetAll")}</span>
-                <button
-                  class="action-button secondary small"
-                  type="button"
-                  disabled={!anyCustomShortcut}
-                  onclick={() => (confirmingReset = true)}
-                >
-                  <RotateCcw size={13} aria-hidden="true" />
-                  {$t("settings.shortcuts.resetAllAction")}
-                </button>
               </div>
-            </div>
+            {/if}
+          {:else}
+            <UpdatesSection />
           {/if}
-        {:else if activeSection === "engines"}
-          <EnginesSection />
-        {:else}
-          <UpdatesSection />
-        {/if}
+        </div>
       </div>
     </div>
   </section>
@@ -600,15 +585,21 @@
 
   .settings-nav {
     min-width: 0;
+    overflow-y: auto;
     padding: var(--space-5) var(--space-3);
     background: var(--surface-elevated);
   }
 
+  /* En oscuro, la barra del mismo tono que las cajas, no mas clara. */
+  :global(:root[data-scheme="dark"]) .settings-nav {
+    background: var(--set-row-background);
+  }
+
   .nav-title {
-    margin: 0 0 var(--space-4) var(--space-2);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    font-weight: 500;
+    margin: 0 0 var(--space-5) var(--space-2);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
   nav {
@@ -616,6 +607,7 @@
     flex-direction: column;
     gap: 2px;
   }
+
 
   /* Mismo resaltado que las pestañas: relleno tenue en la activa. */
   .nav-item {
@@ -652,7 +644,7 @@
     color: var(--accent);
   }
 
-  .nav-item:focus {
+  .nav-item:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
   }
@@ -668,16 +660,41 @@
   /* --- Contenido --------------------------------------------------------- */
 
   .settings-main {
-    position: relative;
+    display: flex;
     min-width: 0;
-    overflow: auto;
-    padding: var(--space-6) var(--space-6) var(--space-6);
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  /* El titulo y cerrar quedan fijos; solo se desplaza lo de abajo. */
+  .settings-head {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5) var(--space-6) var(--space-4);
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--duration-fast);
+  }
+
+  .settings-head.scrolled {
+    border-bottom-color: var(--border);
   }
 
   .close {
     position: absolute;
-    top: var(--space-3);
+    top: 50%;
     right: var(--space-3);
+    translate: 0 -50%;
+  }
+
+  .settings-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-1) var(--space-6) var(--space-6);
+    scrollbar-gutter: stable;
   }
 
   .settings-content {
@@ -686,7 +703,8 @@
   }
 
   h1 {
-    margin: 0 0 var(--space-5);
+    width: min(100%, 44rem);
+    margin: 0;
     font-size: var(--font-size-heading);
     font-weight: var(--font-weight-heading);
     letter-spacing: var(--tracking-heading);
@@ -698,7 +716,7 @@
     margin-top: var(--space-6);
   }
 
-  h1 + .set-caption,
+  .settings-content > .set-caption:first-child,
   .shortcut-search + .set-caption,
   .shortcut-search + .empty + .set-caption {
     margin-top: 0;
@@ -801,199 +819,94 @@
 
   /* --- Temas --------------------------------------------------------------- */
 
-  .palette-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Filas como las demas: la muestra, el nombre y la marca del elegido. */
+  .theme-row {
+    width: 100%;
+    justify-content: flex-start;
     gap: var(--space-3);
-  }
-
-  .palette-option {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
+    border: 0;
     color: var(--text-primary);
     font: inherit;
-    cursor: pointer;
-  }
-
-  .palette-option:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
-
-  .palette-option {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--space-3) var(--space-2);
-    padding: var(--space-2) var(--space-3) var(--space-3) var(--space-2);
     text-align: left;
-    transition:
-      border-color var(--duration-fast),
-      background-color var(--duration-fast),
-      box-shadow var(--duration-fast),
-      transform var(--duration-fast);
+    cursor: pointer;
+    transition: background-color var(--duration-fast);
   }
 
-  .palette-option:hover {
-    border-color: var(--control-border);
+  .theme-row:hover {
+    background: color-mix(in srgb, var(--text-primary) 4%, var(--set-row-background, var(--surface-elevated)));
   }
 
-  .palette-option.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+  .theme-row:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
-  /* Una ventana en miniatura, apaisada: pestañas arriba, árbol a la
-     izquierda y el editor ocupando el resto. */
-  .theme-preview {
-    display: grid;
-    grid-column: 1 / -1;
-    grid-template-columns: 12% 1fr;
-    grid-template-rows: 0.95rem 1fr;
-    aspect-ratio: 16 / 7;
-    overflow: hidden;
-    border: 1px solid;
-    border-radius: calc(var(--radius-sm) - 2px);
-  }
-
-  .preview-tabs {
+  /* Dos lineas de codigo en miniatura, con el fondo y los colores del tema. */
+  .swatch {
     display: flex;
-    grid-column: 1 / -1;
-    align-items: stretch;
-    gap: 1px;
-    padding-left: 17%;
-    border-bottom: 1px solid;
-  }
-
-  .preview-tab {
-    display: flex;
-    align-items: center;
-    width: 26%;
-    padding: 0 0.3rem;
-  }
-
-  .preview-tab i {
-    display: block;
-    width: 70%;
-    height: 0.2rem;
-    border-radius: 999px;
-    opacity: 0.45;
-  }
-
-  .preview-tab.active i {
-    opacity: 0.8;
-  }
-
-  .preview-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    padding: 0.45rem 0.3rem;
-    border-right: 1px solid;
-  }
-
-  .preview-sidebar i {
-    display: block;
-    height: 0.2rem;
-    border-radius: 999px;
-    opacity: 0.5;
-  }
-
-  .preview-sidebar i:first-child {
-    width: 75%;
-    opacity: 1;
-  }
-
-  .preview-sidebar i:nth-child(2) {
-    width: 90%;
-    margin-left: 12%;
-  }
-
-  .preview-sidebar i:nth-child(3) {
-    width: 60%;
-    margin-left: 12%;
-  }
-
-  .preview-sidebar i:nth-child(4) {
-    width: 75%;
-    margin-left: 12%;
-  }
-
-  .preview-editor {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .preview-gutter,
-  .preview-code {
-    display: flex;
-    flex-direction: column;
-    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
-    font-size: 0.5625rem;
-    line-height: 1.4;
-    white-space: nowrap;
-  }
-
-  .preview-gutter {
     flex-shrink: 0;
-    width: 1.1rem;
-    padding-right: 0.3rem;
-    text-align: right;
-  }
-
-  .preview-code {
-    min-width: 0;
-  }
-
-  .preview-code b {
-    font-weight: 500;
-  }
-
-  .preview-code > span:first-child {
-    font-style: italic;
-  }
-
-  .palette-text {
-    display: flex;
     flex-direction: column;
-    gap: 0.125rem;
-    min-width: 0;
-    padding-left: var(--space-1);
+    justify-content: center;
+    gap: 3px;
+    width: 2.75rem;
+    height: 1.5rem;
+    padding: 0 0.3rem;
+    box-sizing: border-box;
+    border: 1px solid;
+    border-radius: var(--radius-sm);
   }
 
-  .palette-name {
+  .swatch > span {
+    display: flex;
+    gap: 3px;
+  }
+
+  .swatch i {
+    display: block;
+    width: 0.95rem;
+    height: 3px;
+    border-radius: 999px;
+  }
+
+  .swatch i.short {
+    width: 0.6rem;
+  }
+
+  .swatch i.tiny {
+    width: 0.35rem;
+  }
+
+  .theme-name {
+    min-width: 0;
     overflow: hidden;
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .palette-modes {
+  .theme-mode {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    margin-left: auto;
     color: var(--text-secondary);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     white-space: nowrap;
   }
 
-
-  .selection {
-    width: 0.75rem;
-    height: 0.75rem;
-    border: 1px solid var(--control-border);
-    border-radius: 50%;
+  .theme-check {
+    display: inline-flex;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    width: 1rem;
+    color: var(--accent);
   }
 
-
-  .palette-option.selected .selection {
-    border-color: var(--accent);
-    background: var(--accent);
-    box-shadow: inset 0 0 0 2px var(--surface-elevated);
+  .theme-name + .theme-check {
+    margin-left: auto;
   }
 
   .visually-hidden {
@@ -1010,15 +923,15 @@
       grid-template-columns: 9rem minmax(0, 1fr);
     }
 
-    .settings-main {
-      padding: var(--space-5) var(--space-4);
+    .settings-head {
+      padding-inline: var(--space-4);
     }
 
-    .palette-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .settings-scroll {
+      padding-inline: var(--space-4);
     }
 
-    .set-row {
+    .set-row:not(.theme-row) {
       align-items: flex-start;
       flex-direction: column;
     }

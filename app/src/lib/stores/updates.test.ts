@@ -13,6 +13,7 @@ function release(version: string, relation: ReleaseInfo["relation"], prerelease 
     url: "",
     relation,
     installable: true,
+    hasHighlight: false,
   };
 }
 

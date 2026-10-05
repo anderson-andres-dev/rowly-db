@@ -42,7 +42,17 @@
   gap: var(--space-5);
   padding: var(--space-3) var(--space-4);
   box-sizing: border-box;
-  background: var(--surface-elevated);
+  background: var(--set-row-background, var(--surface-elevated));
+}
+
+/* En oscuro, las cajas casi del color del panel: mas claras sacaban la
+   vista de lo oscuro. Las filas de un grupo se juntan sin separacion. */
+:root[data-scheme="dark"] {
+  --set-row-background: color-mix(in srgb, var(--text-primary) 3.5%, var(--surface));
+}
+
+:root[data-scheme="dark"] .set-group {
+  gap: 0;
 }
 
 .set-text {

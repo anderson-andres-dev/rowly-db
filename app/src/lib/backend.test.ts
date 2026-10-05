@@ -81,6 +81,7 @@ const OWNERS: Record<string, string> = {
   prune_console_texts: "lib/stores/queryConsoles.ts",
   read_console_text: "lib/stores/queryConsoles.ts",
   read_sql_file: "lib/sqlFiles.ts",
+  release_highlight: "lib/stores/updates.ts",
   remove_support_package: "lib/stores/supportPackages.ts",
   rename_sql_file: "lib/sqlFiles.ts",
   restart_app: "lib/stores/updates.ts",

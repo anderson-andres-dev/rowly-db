@@ -102,6 +102,15 @@ Nunca borres una release. La app permite volver a cualquier versión publicada.
 
 Las actualizaciones se firman con la clave guardada en los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Si esa clave se pierde, las copias instaladas rechazan todas las actualizaciones siguientes, así que guarda un respaldo.
 
+### Novedad de la versión
+
+Antes del tag, decide si la versión tiene una novedad que contar. Si la tiene, adjunta `highlight.json` (y su imagen, si hay) a la release de GitHub; el aviso de actualización de la app instalada la muestra. Sin él, el aviso es el clásico «vX.Y.Z disponible».
+
+- Formato: [`docs/release/highlight.example.json`](docs/release/highlight.example.json). `format` es `1`; `title` es obligatorio; `badge`, hasta cuatro `items`, `image` e `imageAlt` son opcionales. Cada texto es un mapa por idioma (`es`, `en`, `pt-BR`, `fr`, `de`) y debe incluir `en`, que es el de respaldo.
+- Iconos de los `items`: `sparkles`, `database`, `table`, `pencil`, `eye`, `shield-check`, `zap`, `keyboard`, `search`, `history`, `file-code`, `palette`, `undo`, `check`, `rocket`, `wand`. Uno desconocido muestra `sparkles`.
+- Imagen: un nombre de archivo plano junto a `highlight.json`, PNG, WebP o JPEG, hasta 1,5 MB. Unos 900 px de ancho se leen bien.
+- La app revisa el archivo y ante cualquier error muestra el aviso clásico (`app/src-tauri/src/release_highlight.rs`); sus tests validan el ejemplo.
+
 ## Sitio web
 
 La landing vive en `site/`: HTML, CSS y JavaScript sin dependencias, en inglés en `site/index.html` y en español en `site/es/index.html`. Mantén las dos al día. Las páginas son plantillas: `.github/scripts/render-site.py` rellena `{{version}}` y `{{site}}` con la última release publicada y la dirección del sitio (la variable `SITE_URL` del repositorio; sin ella, la de GitHub Pages). GitHub Pages la vuelve a publicar con cada push a `main` que toque `site/` y después de cada Release. Para verla en local, ejecuta `python3 .github/scripts/render-site.py _site && python3 -m http.server --directory _site`. Las capturas están en `site/assets/img/shots/`, en claro y en oscuro, tomadas de la app real con datos de ejemplo.

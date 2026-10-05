@@ -4,6 +4,8 @@ import { get } from "svelte/store";
 // La busqueda del arranque (list_releases) devuelve lo que el test elija.
 let listed: unknown[] = [];
 let listCalls = 0;
+// La novedad que devuelve release_highlight (una promesa: puede no llegar).
+let highlightAnswer: () => Promise<unknown> = async () => null;
 vi.mock("$app/environment", () => ({ browser: false }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -15,13 +17,14 @@ vi.mock("@tauri-apps/api/core", () => ({
       listCalls += 1;
       return listed;
     }
+    if (command === "release_highlight") return highlightAnswer();
     return undefined;
   },
 }));
 
-const { checkOnStartup, dismissUpdatePrompt, updatePrefs, updatePrompt } = await import("./updates");
+const { checkOnStartup, dismissUpdatePrompt, localizedText, releaseHighlights, updatePrefs, updatePrompt } = await import("./updates");
 
-function release(version: string, relation: "current" | "newer" | "older") {
+function release(version: string, relation: "current" | "newer" | "older", hasHighlight = false) {
   return {
     tag: `v${version}`,
     version,
@@ -32,6 +35,7 @@ function release(version: string, relation: "current" | "newer" | "older") {
     url: "",
     relation,
     installable: true,
+    hasHighlight,
   };
 }
 
@@ -43,6 +47,8 @@ describe("aviso de version nueva al abrir", () => {
     listCalls = 0;
     updatePrefs.set({ autoCheck: true, includePrereleases: false, skippedTag: null });
     updatePrompt.set(null);
+    releaseHighlights.set({});
+    highlightAnswer = async () => null;
   });
   afterEach(() => vi.useRealTimers());
 
@@ -89,5 +95,29 @@ describe("aviso de version nueva al abrir", () => {
     listed = [release("0.2.4", "newer"), release("0.2.3", "current")];
     await checkOnStartup();
     expect(get(updatePrompt)).toBeNull();
+  });
+
+  it("con novedad, el aviso abre con ella ya cargada", async () => {
+    const highlight = { badge: null, title: { en: "Review", es: "Revisa" }, items: [], image: null, imageAlt: null };
+    highlightAnswer = async () => highlight;
+    listed = [release("0.2.4", "newer", true), release("0.2.3", "current")];
+    await checkOnStartup();
+    expect(get(updatePrompt)?.tag).toBe("v0.2.4");
+    expect(get(releaseHighlights)["v0.2.4"]).toEqual(highlight);
+  });
+
+  it("si la novedad no llega, el aviso abre igual, clasico", async () => {
+    highlightAnswer = () => new Promise(() => {});
+    listed = [release("0.2.4", "newer", true), release("0.2.3", "current")];
+    const checking = checkOnStartup();
+    await vi.advanceTimersByTimeAsync(6000);
+    await checking;
+    expect(get(updatePrompt)?.tag).toBe("v0.2.4");
+    expect(get(releaseHighlights)["v0.2.4"]).toBeUndefined();
+  });
+
+  it("el texto sale en el idioma de la interfaz o en ingles", () => {
+    expect(localizedText({ en: "New", es: "Nuevo" }, "es")).toBe("Nuevo");
+    expect(localizedText({ en: "New", es: "Nuevo" }, "pt-BR")).toBe("New");
   });
 });

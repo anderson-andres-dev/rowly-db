@@ -10,8 +10,8 @@
 //! - Almacenamiento: `<datos de la app>/support/`; un paquete instalado se
 //!   guarda junto con su firma y se vuelve a verificar cada vez que se lee.
 //!   Instalar escribe un temporal y lo renombra: nunca queda uno a medias.
-//! - Red: solo al pedirlo el usuario (Ajustes → Motores). Conectar no la
-//!   usa; sin red, sin indice o sin paquetes la app usa las lineas incluidas.
+//! - Red: solo a pedido explicito (hoy la app no tiene pantalla para esto).
+//!   Conectar no la usa; sin red, sin indice o sin paquetes la app usa las lineas incluidas.
 //! - Activacion: las lineas activas de cada motor (`Dialect::activate_lines`)
 //!   cambian bajo `ACTIVATION`, que `connect` toma para leer; una conexion
 //!   abierta conserva las que tomo al conectar.

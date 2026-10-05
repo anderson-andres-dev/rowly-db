@@ -409,7 +409,7 @@
   }
 
   .release.current {
-    background: color-mix(in srgb, var(--surface-elevated) 92%, var(--accent));
+    background: color-mix(in srgb, var(--set-row-background, var(--surface-elevated)) 92%, var(--accent));
   }
 
   .release-main {
