@@ -67,12 +67,21 @@ impl ServerVersion {
         (self.major, self.minor, self.patch) >= (major, minor, patch)
     }
 
-    pub fn display(&self) -> String {
-        let product = match self.flavor {
+    fn product(&self) -> &'static str {
+        match self.flavor {
             Flavor::MySql => "MySQL",
             Flavor::MariaDb => "MariaDB",
-        };
-        format!("{product} {}.{}.{}", self.major, self.minor, self.patch)
+        }
+    }
+
+    pub fn display(&self) -> String {
+        format!(
+            "{} {}.{}.{}",
+            self.product(),
+            self.major,
+            self.minor,
+            self.patch
+        )
     }
 
     pub fn identity(&self) -> khipu_driver_core::ServerIdentity {
@@ -86,12 +95,22 @@ impl ServerVersion {
         }
     }
 
-    pub fn is_below_compatibility_floor(&self) -> bool {
-        let (major, minor) = match self.flavor {
+    fn floor(&self) -> (u32, u32) {
+        match self.flavor {
             Flavor::MySql => COMPATIBILITY_FLOOR_MYSQL,
             Flavor::MariaDb => COMPATIBILITY_FLOOR_MARIADB,
-        };
+        }
+    }
+
+    pub fn is_below_compatibility_floor(&self) -> bool {
+        let (major, minor) = self.floor();
         !self.at_least(major, minor, 0)
+    }
+
+    /// The floor of this server's engine, as the user reads it: "MySQL 5.7".
+    pub fn compatibility_floor(&self) -> String {
+        let (major, minor) = self.floor();
+        format!("{} {major}.{minor}", self.product())
     }
 
     pub fn capabilities(&self) -> Capabilities {
@@ -135,6 +154,25 @@ pub struct Capabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// El piso es de este driver (que catalogo sabe leer), y la primera linea
+    /// de cada motor (support/<engine>.json) empieza en el: cambiar uno sin
+    /// el otro tiene que ser una decision, no un descuido.
+    #[test]
+    fn the_floor_is_where_the_first_line_starts() {
+        for (flavor, dialect) in [
+            (Flavor::MySql, Dialect::MySql),
+            (Flavor::MariaDb, Dialect::MariaDb),
+        ] {
+            let (major, minor) = version(flavor, 0, 0, 0).floor();
+            let first = &dialect.bundled_lines().lines[0].line;
+            assert_eq!(
+                khipu_engine::lines::numbers(first),
+                vec![major, minor],
+                "{dialect:?}"
+            );
+        }
+    }
 
     fn version(flavor: Flavor, major: u32, minor: u32, patch: u32) -> ServerVersion {
         ServerVersion {

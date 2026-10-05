@@ -54,6 +54,11 @@ impl ServerVersion {
         self.0 < COMPATIBILITY_FLOOR_MAJOR * 10_000
     }
 
+    /// The floor as the user reads it: "PostgreSQL 10".
+    pub fn compatibility_floor(&self) -> String {
+        format!("PostgreSQL {COMPATIBILITY_FLOOR_MAJOR}")
+    }
+
     pub fn capabilities(&self) -> Capabilities {
         // Since which version each one exists is line data
         // (support/postgres.json); how to read it is this driver's.
@@ -84,6 +89,17 @@ pub struct Capabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// El piso es de este driver, y la primera linea de support/postgres.json
+    /// empieza en el (ver el test homonimo del driver de MySQL).
+    #[test]
+    fn the_floor_is_where_the_first_line_starts() {
+        let first = &Dialect::Postgres.bundled_lines().lines[0].line;
+        assert_eq!(
+            khipu_engine::lines::numbers(first),
+            vec![COMPATIBILITY_FLOOR_MAJOR]
+        );
+    }
 
     #[test]
     fn parses_server_version_num() {

@@ -719,9 +719,10 @@ mod tests {
     use super::*;
 
     /// tools/test-dbs/lines.json es la fuente unica de servidores de prueba:
-    /// el E2E levanta versiones verificadas, fijadas por el mismo digest.
+    /// el E2E y los servidores por defecto de up.sh son versiones
+    /// verificadas, fijadas por el mismo digest.
     #[test]
-    fn the_e2e_servers_are_verified_releases_of_lines_json() {
+    fn the_e2e_and_default_servers_are_verified_releases_of_lines_json() {
         let lines = lines_json();
         let registry = lines["registry"].as_str().unwrap();
         let declared: Vec<String> = lines["verified"]
@@ -737,22 +738,30 @@ mod tests {
                 )
             })
             .collect();
-        let workflow = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.github/workflows/e2e.yml"),
-        )
-        .unwrap();
-        let images: Vec<&str> = workflow
-            .lines()
-            .filter_map(|line| line.trim().strip_prefix("image:"))
-            .map(str::trim)
-            .collect();
-        assert!(!images.is_empty(), "e2e.yml sin imagenes");
-        for image in images {
-            assert!(
-                declared.iter().any(|known| known == image),
-                "e2e.yml levanta {image}, que no es una version verificada de lines.json"
-            );
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for file in [
+            ".github/workflows/e2e.yml",
+            "tools/test-dbs/docker-compose.yml",
+        ] {
+            let text = std::fs::read_to_string(root.join(file)).unwrap();
+            // `image: X` o, en el compose, `image: ${VARIABLE:-X}`.
+            let images: Vec<&str> = text
+                .lines()
+                .filter_map(|line| line.trim().strip_prefix("image:"))
+                .map(|image| {
+                    let image = image.trim();
+                    image
+                        .split_once(":-")
+                        .map_or(image, |(_, default)| default.trim_end_matches('}'))
+                })
+                .collect();
+            assert!(!images.is_empty(), "{file} sin imagenes");
+            for image in images {
+                assert!(
+                    declared.iter().any(|known| known == image),
+                    "{file} levanta {image}, que no es una version verificada de lines.json"
+                );
+            }
         }
     }
 
