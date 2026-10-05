@@ -372,10 +372,11 @@ mod tests {
     use std::sync::mpsc;
 
     /// Un bash interactivo sin la configuración del usuario: el prompt y lo
-    /// que hace al recibir `SIGHUP` son los de bash, no los de un rc.
+    /// que hace al recibir `SIGHUP` son los de bash, no los de un rc. Sin
+    /// expansión del historial (`+H`): el bash 3.2 de macOS la aplica a `$!`.
     fn bash() -> CommandBuilder {
         let mut command = CommandBuilder::new("bash");
-        command.args(["--noprofile", "--norc", "-i"]);
+        command.args(["--noprofile", "--norc", "+H", "-i"]);
         command.env("PS1", "$ ");
         command.env("TERM", "xterm-256color");
         command
