@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 136,
-    "tests": 1457,
+    "files": 137,
+    "tests": 1459,
     "ignored": 31,
     "byDecision": {
-      "keep": 136,
+      "keep": 137,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 130,
+      "pr": 131,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -2205,6 +2205,26 @@
       ],
       "external": [
         "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/workspace/consoleLifecycle.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/components/Workspace.svelte",
+      "property": "Cerrar una consola olvida todo lo que Workspace guarda por su id: ningun $state por consola crece con las consolas cerradas (#74)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "components/Workspace.svelte?raw"
+      ],
+      "external": [
         "vitest"
       ],
       "durationMs": null
