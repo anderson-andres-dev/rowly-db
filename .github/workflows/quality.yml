@@ -76,5 +76,8 @@ jobs:
       - name: El grafo de arquitectura coincide con el codigo (docs/ARCHITECTURE.md)
         run: node tools/architecture/graph.mjs --check
 
+      - name: El estado de README y SQL_ENGINE sale de sus datos
+        run: node tools/inventory/status.mjs
+
       - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
         run: node tools/test-dbs/window.mjs

@@ -909,7 +909,7 @@
       ]
     },
     "D9": {
-      "status": "partial",
+      "status": "covered",
       "tests": [
         {
           "file": "app/src-tauri/src/engine_context.rs",
@@ -944,6 +944,26 @@
         {
           "file": "app/src-tauri/src/engine_context.rs",
           "name": "a_request_from_another_generation_or_epoch_is_no_longer_current",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/engine_context.rs",
+          "name": "the_analysis_uses_the_line_only_when_it_is_of_the_profiles_engine",
+          "scope": "unit",
+          "engines": [
+            "mysql",
+            "mariadb",
+            "postgres"
+          ]
+        },
+        {
+          "file": "app/src-tauri/src/support.rs",
+          "name": "p_the_frontend_sees_the_revision_the_analysis_uses",
           "scope": "unit",
           "engines": [
             "mysql",
@@ -1070,8 +1090,7 @@
             "postgres"
           ]
         }
-      ],
-      "gap": "Todavia no hay revision de paquete: los paquetes por linea llegan con M4/M5"
+      ]
     },
     "D10": {
       "status": "covered",
