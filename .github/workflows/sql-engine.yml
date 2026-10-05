@@ -13,6 +13,7 @@ on:
       - "app/src/lib/engines/**"
       - "app/src/lib/sql*.ts"
       - "tests/sql/**"
+      - "support/**"
       - "tools/test-dbs/**"
       - "Cargo.lock"
       - ".github/workflows/sql-engine.yml"

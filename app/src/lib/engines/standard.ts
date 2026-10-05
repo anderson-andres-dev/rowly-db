@@ -28,6 +28,7 @@ export const standardSql: SqlProfile = {
   editorDialect: StandardSQL,
   formatterDialect: "sql",
   statementStarters: COMMON_STARTERS,
+  builtinFunctions: [],
   reservedWords: RESERVED,
   errorHelp: {},
   locateError: firstLocated(byServerPosition, byAnalyzerLocation),

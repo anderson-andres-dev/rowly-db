@@ -325,4 +325,36 @@ describe("lineas de version", () => {
     });
     expect(inferred).toEqual([]);
   });
+
+  it("solo el perfil y el registro de conexiones nombran un motor concreto", async () => {
+    // El resto de la app le pregunta al perfil (engines/types.ts): comparar
+    // con ENGINES.<id>, escribir un id o elegir un dialecto de lang-sql es
+    // tratar a un motor nuevo como a otro sin que nada falle.
+    const { readFileSync } = await import("node:fs");
+    const { execFileSync } = await import("node:child_process");
+    const langSql = await import("@codemirror/lang-sql");
+    const ids = Object.keys(ENGINES);
+    const dialects = Object.entries(langSql)
+      .filter(([, value]) => value instanceof langSql.SQLDialect)
+      .map(([name]) => name);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(dialects).toContain("MySQL");
+    const named = new RegExp(
+      [
+        `ENGINES\\.(${ids.join("|")})\\b`,
+        `["'\`](${ids.join("|")})["'\`]`,
+        `import\\s*\\{[^}]*\\b(${dialects.join("|")})\\b[^}]*\\}\\s*from\\s*["']@codemirror/lang-sql["']`,
+      ].join("|"),
+    );
+    // Solo lo versionado: una carpeta local ignorada no es la app.
+    const root = new URL("../../", import.meta.url);
+    const tracked = execFileSync("git", ["ls-files", "."], { cwd: root, encoding: "utf8" }).split("\n");
+    const owners = /^lib\/(engines\/|connections\.ts$)/;
+    const sources = tracked.filter(
+      (file) => /\.(ts|svelte)$/.test(file) && !/\.test\.ts$/.test(file) && !owners.test(file),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    const offenders = sources.filter((file) => named.test(readFileSync(new URL(file, root), "utf8")));
+    expect(offenders).toEqual([]);
+  });
 });

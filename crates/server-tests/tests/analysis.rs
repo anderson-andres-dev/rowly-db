@@ -536,7 +536,9 @@ async fn the_mixed_console_corpus_runs_through_guard_and_server() {
 fn valid_corpus(engine: Engine) -> &'static str {
     match engine {
         Engine::Postgres => include_str!("../../../tests/sql/postgres/common/valid.sql"),
-        _ => include_str!("../../../tests/sql/mysql/common/valid.sql"),
+        Engine::MySql | Engine::MariaDb => {
+            include_str!("../../../tests/sql/mysql/common/valid.sql")
+        }
     }
 }
 

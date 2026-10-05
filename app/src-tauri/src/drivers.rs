@@ -130,6 +130,58 @@ mod tests {
     use super::DatabaseKind;
     use khipu_engine::Dialect;
 
+    /// Este archivo es el registro de motores del backend (perfil -> motor ->
+    /// driver). El resto decide con `Dialect` y su definicion: nombrar aqui
+    /// fuera un motor concreto trataria a uno nuevo como a otro sin que el
+    /// compilador lo diga.
+    #[test]
+    fn solo_el_registro_nombra_un_motor_concreto() {
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        let mut named = vec!["DatabaseKind::".to_string()];
+        for dialect in Dialect::ALL {
+            named.push(format!("Dialect::{dialect:?}"));
+            named.push(format!("\"{}\"", dialect.id()));
+        }
+        let mut found = Vec::new();
+        for path in files {
+            let relative = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            if relative == "drivers.rs" {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            let code = text.split("#[cfg(test)]").next().unwrap();
+            for (number, line) in code.lines().enumerate() {
+                if line.trim_start().starts_with("//") {
+                    continue;
+                }
+                if named.iter().any(|name| line.contains(name.as_str())) {
+                    found.push(format!("{relative}:{}: {}", number + 1, line.trim()));
+                }
+            }
+        }
+        assert!(
+            found.is_empty(),
+            "decide con el Dialect de la conexion y su definicion:\n{}",
+            found.join("\n")
+        );
+    }
+
     /// Los nombres que manda el frontend (`ConnectionDriver`, en
     /// app/src/lib/connections.ts), los de tests/engines/contract.json: cada
     /// uno llega como su motor propio, y no hay otro.

@@ -38,12 +38,10 @@ struct Line {
 }
 
 fn engine_named(name: &str) -> Engine {
-    match name {
-        "mysql" => Engine::MySql,
-        "mariadb" => Engine::MariaDb,
-        "postgres" => Engine::Postgres,
-        other => panic!("lines.json: motor desconocido {other}"),
-    }
+    Engine::ALL
+        .into_iter()
+        .find(|engine| engine.name() == name)
+        .unwrap_or_else(|| panic!("lines.json: motor desconocido {name}"))
 }
 
 fn registry() -> Vec<(String, Vec<Line>)> {

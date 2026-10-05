@@ -15,7 +15,9 @@ const PAYLOADS: [&str; 2] = [
 fn attacks_corpus(engine: Engine) -> &'static str {
     match engine {
         Engine::Postgres => include_str!("../../../tests/sql/postgres/common/attacks.sql"),
-        _ => include_str!("../../../tests/sql/mysql/common/attacks.sql"),
+        Engine::MySql | Engine::MariaDb => {
+            include_str!("../../../tests/sql/mysql/common/attacks.sql")
+        }
     }
 }
 

@@ -195,8 +195,9 @@ async fn a_server_error_keeps_its_code_and_position() {
             QueryExecutionResult::Error { code, position, .. } => {
                 assert!(code.is_some(), "{engine:?}: sin codigo");
                 // MySQL y MariaDB no informan la posicion; PostgreSQL si.
-                if engine == Engine::Postgres {
-                    assert!(position.is_some(), "{engine:?}: sin posicion");
+                match engine {
+                    Engine::Postgres => assert!(position.is_some(), "{engine:?}: sin posicion"),
+                    Engine::MySql | Engine::MariaDb => {}
                 }
             }
             other => panic!("{engine:?}: se esperaba un error: {other:?}"),
@@ -762,8 +763,9 @@ async fn tls_verify_ca_rejects_self_signed_certificates() {
 /// La CA que el servidor de prueba genero para su propio certificado (MySQL
 /// la deja en su datadir). `None` si el servidor no la guarda en un archivo.
 fn server_ca(engine: Engine) -> Option<std::path::PathBuf> {
-    if engine != Engine::MySql {
-        return None;
+    match engine {
+        Engine::MySql => {}
+        Engine::MariaDb | Engine::Postgres => return None,
     }
     let output = std::process::Command::new("docker")
         .args(["exec", engine.container(), "cat", "/var/lib/mysql/ca.pem"])

@@ -41,6 +41,9 @@ export interface SqlProfile {
   formatterDialect: FormatterDialect;
   // Lo que puede abrir una sentencia (autocompletado al inicio).
   statementStarters: readonly string[];
+  // Funciones del motor que sugiere el autocompletado, ademas de las comunes
+  // a todos (editor/catalogCompletions.ts).
+  builtinFunctions: readonly string[];
   // Palabras que no pueden ser un alias sin comillas (editor/relations.ts; se
   // suman a las keywords del dialecto del editor).
   reservedWords: ReadonlySet<string>;

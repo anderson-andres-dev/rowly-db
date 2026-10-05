@@ -43,7 +43,7 @@ fn large_schema_sql(engine: Engine) -> Vec<String> {
             statements.push("DROP SCHEMA IF EXISTS rowly_bench_large CASCADE".into());
             statements.push("CREATE SCHEMA rowly_bench_large".into());
         }
-        _ => {
+        Engine::MySql | Engine::MariaDb => {
             statements.push("DROP DATABASE IF EXISTS rowly_bench_large".into());
             statements.push("CREATE DATABASE rowly_bench_large".into());
             // Se crea como root; la app la lee como `rowly`.
@@ -76,7 +76,7 @@ fn drop_large(engine: Engine) {
         engine,
         match engine {
             Engine::Postgres => "DROP SCHEMA IF EXISTS rowly_bench_large CASCADE",
-            _ => "DROP DATABASE IF EXISTS rowly_bench_large",
+            Engine::MySql | Engine::MariaDb => "DROP DATABASE IF EXISTS rowly_bench_large",
         },
     );
 }
@@ -84,7 +84,9 @@ fn drop_large(engine: Engine) {
 fn corpus(engine: Engine) -> &'static str {
     match engine {
         Engine::Postgres => include_str!("../../../tests/sql/postgres/common/valid.sql"),
-        _ => include_str!("../../../tests/sql/mysql/common/valid.sql"),
+        Engine::MySql | Engine::MariaDb => {
+            include_str!("../../../tests/sql/mysql/common/valid.sql")
+        }
     }
 }
 
@@ -104,7 +106,7 @@ async fn main() {
         let conn = Conn::open(engine).await;
         let small_schema = match engine {
             Engine::Postgres => "public",
-            _ => "sakila",
+            Engine::MySql | Engine::MariaDb => "sakila",
         };
         let mut small = vec![];
         let mut small_tables = 0;
