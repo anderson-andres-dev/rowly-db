@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-desktop"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "keyring",
@@ -2532,7 +2532,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -2543,7 +2543,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-mysql"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-driver-postgres"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2567,7 +2567,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-engine"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "khipu-lsp"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "khipu-engine",
  "serde_json",
@@ -3883,7 +3883,7 @@ dependencies = [
 
 [[package]]
 name = "rowly-server-tests"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "khipu-driver-core",
  "khipu-driver-mysql",
