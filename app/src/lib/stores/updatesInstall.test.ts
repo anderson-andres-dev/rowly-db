@@ -18,6 +18,7 @@ const release = {
   url: "",
   relation: "newer" as const,
   installable: true,
+  hasHighlight: false,
 };
 
 describe("instalar una version", () => {

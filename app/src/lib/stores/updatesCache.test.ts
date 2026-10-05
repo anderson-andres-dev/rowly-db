@@ -20,7 +20,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       if (backend.failure) throw backend.failure;
       return [{
         tag: "v0.2.4", version: "0.2.4", name: "v0.2.4", notes: "", publishedAt: null,
-        prerelease: false, url: "", relation: "current", installable: true,
+        prerelease: false, url: "", relation: "current", installable: true, hasHighlight: false,
       }];
     }
     return undefined;

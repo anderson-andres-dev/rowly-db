@@ -3,6 +3,10 @@ import { defineMessages } from "../define";
 // Ajustes > Actualizaciones.
 export default defineMessages({
   es: {
+    "highlight.badge": "Novedad",
+    "highlight.version": "Versión {version} · tienes la {current}",
+    "highlight.updateTo": "Actualizar a {version}",
+    "highlight.allNotes": "Ver todas las notas",
     check: "Buscar",
     checking: "Buscando…",
     upToDate: "Estás al día",
@@ -47,6 +51,10 @@ export default defineMessages({
     "error.notInstallable": "Esta copia no puede actualizarse desde la app.",
   },
   en: {
+    "highlight.badge": "New",
+    "highlight.version": "Version {version} · you have {current}",
+    "highlight.updateTo": "Update to {version}",
+    "highlight.allNotes": "See full notes",
     check: "Check",
     checking: "Checking…",
     upToDate: "Up to date",
@@ -91,6 +99,10 @@ export default defineMessages({
     "error.notInstallable": "This copy can’t be updated from the app.",
   },
   "pt-BR": {
+    "highlight.badge": "Novidade",
+    "highlight.version": "Versão {version} · você tem a {current}",
+    "highlight.updateTo": "Atualizar para {version}",
+    "highlight.allNotes": "Ver todas as notas",
     check: "Procurar",
     checking: "Procurando…",
     upToDate: "Está atualizado",
@@ -135,6 +147,10 @@ export default defineMessages({
     "error.notInstallable": "Esta cópia não pode ser atualizada pelo app.",
   },
   fr: {
+    "highlight.badge": "Nouveauté",
+    "highlight.version": "Version {version} · vous avez la {current}",
+    "highlight.updateTo": "Mettre à jour vers {version}",
+    "highlight.allNotes": "Voir toutes les notes",
     check: "Rechercher",
     checking: "Recherche…",
     upToDate: "À jour",
@@ -179,6 +195,10 @@ export default defineMessages({
     "error.notInstallable": "Cette copie ne peut pas être mise à jour depuis l’app.",
   },
   de: {
+    "highlight.badge": "Neu",
+    "highlight.version": "Version {version} · installiert ist {current}",
+    "highlight.updateTo": "Auf {version} aktualisieren",
+    "highlight.allNotes": "Alle Hinweise anzeigen",
     check: "Suchen",
     checking: "Wird gesucht…",
     upToDate: "Aktuell",

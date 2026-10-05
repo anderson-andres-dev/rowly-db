@@ -93,6 +93,8 @@ pub struct ReleaseInfo {
     relation: Relation,
     /// Tiene `latest.json`, o sea que se puede instalar desde la app.
     installable: bool,
+    /// Trae su novedad para el aviso (release_highlight.rs).
+    has_highlight: bool,
 }
 
 /// Error con un código estable para que la interfaz lo traduzca; `detail`
@@ -150,7 +152,7 @@ fn releases_page() -> String {
     format!("https://github.com/{REPOSITORY}/releases")
 }
 
-fn version_from_tag(tag: &str) -> Option<Version> {
+pub(crate) fn version_from_tag(tag: &str) -> Option<Version> {
     Version::parse(tag.strip_prefix('v').unwrap_or(tag)).ok()
 }
 
@@ -230,7 +232,7 @@ pub fn update_context<R: Runtime>(app: AppHandle<R>) -> UpdateContext {
     }
 }
 
-fn http_client() -> Result<reqwest::Client, UpdateError> {
+pub(crate) fn http_client() -> Result<reqwest::Client, UpdateError> {
     // Mismo proveedor criptográfico que usa tauri-plugin-updater.
     let _ = rustls::crypto::ring::default_provider().install_default();
     reqwest::Client::builder()
@@ -305,10 +307,9 @@ fn to_release_infos(releases: Vec<GithubRelease>, current: &Version) -> Vec<Rele
         .filter(|release| !release.draft)
         .filter_map(|release| {
             let version = version_from_tag(&release.tag_name)?;
-            let installable = release
-                .assets
-                .iter()
-                .any(|asset| asset.name == "latest.json");
+            let has_asset = |name: &str| release.assets.iter().any(|asset| asset.name == name);
+            let installable = has_asset("latest.json");
+            let has_highlight = has_asset(crate::release_highlight::HIGHLIGHT_FILE);
             let info = ReleaseInfo {
                 relation: relation(current, &version),
                 version: version.to_string(),
@@ -322,6 +323,7 @@ fn to_release_infos(releases: Vec<GithubRelease>, current: &Version) -> Vec<Rele
                 prerelease: release.prerelease,
                 url: release.html_url,
                 installable,
+                has_highlight,
             };
             Some((version, info))
         })
@@ -331,9 +333,14 @@ fn to_release_infos(releases: Vec<GithubRelease>, current: &Version) -> Vec<Rele
     infos.into_iter().map(|(_, info)| info).collect()
 }
 
+/// Donde se descargan los adjuntos de cada release (`<base>/<tag>/<archivo>`).
+pub(crate) fn download_base() -> String {
+    std::env::var(DOWNLOAD_BASE_ENV)
+        .unwrap_or_else(|_| format!("https://github.com/{REPOSITORY}/releases/download"))
+}
+
 fn release_manifest_url(tag: &str) -> Result<url::Url, UpdateError> {
-    let base = std::env::var(DOWNLOAD_BASE_ENV)
-        .unwrap_or_else(|_| format!("https://github.com/{REPOSITORY}/releases/download"));
+    let base = download_base();
     url::Url::parse(&format!("{}/{tag}/latest.json", base.trim_end_matches('/')))
         .map_err(|error| UpdateError::new("network", error))
 }

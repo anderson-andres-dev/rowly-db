@@ -3,6 +3,7 @@ mod credentials;
 mod desktop_portal;
 mod drivers;
 mod engine_context;
+mod release_highlight;
 mod services;
 mod state;
 mod support;
@@ -85,6 +86,7 @@ pub fn run() {
             updates::list_releases,
             updates::install_release,
             updates::restart_app,
+            release_highlight::release_highlight,
             support::support_lines,
             support::check_support_updates,
             support::install_support_package,

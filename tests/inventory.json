@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 138,
-    "tests": 1460,
+    "files": 139,
+    "tests": 1467,
     "ignored": 31,
     "byDecision": {
-      "keep": 138,
+      "keep": 139,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 132,
+      "pr": 133,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -177,6 +177,22 @@
       "environment": "none",
       "env": [],
       "durationMs": 0
+    },
+    {
+      "path": "app/src-tauri/src/release_highlight.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/release_highlight.rs",
+      "property": "La novedad de una version solo se muestra si viene en formato 1, en los idiomas de la app y con imagen plana y acotada; cualquier fallo deja el aviso clasico",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 7,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
     },
     {
       "path": "app/src-tauri/src/services/catalog.rs",

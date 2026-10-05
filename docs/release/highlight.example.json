@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "badge": { "es": "Nuevo", "en": "New", "pt-BR": "Novo", "fr": "Nouveau", "de": "Neu" },
+  "title": {
+    "es": "Revisa cada cambio antes de que llegue a la base",
+    "en": "Review every change before it reaches the database",
+    "pt-BR": "Revise cada mudança antes que chegue ao banco",
+    "fr": "Relisez chaque modification avant qu’elle n’atteigne la base",
+    "de": "Jede Änderung prüfen, bevor sie die Datenbank erreicht"
+  },
+  "items": [
+    {
+      "icon": "eye",
+      "title": { "es": "Todo como SQL", "en": "Everything as SQL" },
+      "text": {
+        "es": "Las filas editadas, agregadas y borradas se muestran como UPDATE, INSERT y DELETE.",
+        "en": "Edited, added and deleted rows show up as UPDATE, INSERT and DELETE."
+      }
+    }
+  ],
+  "image": "highlight.webp",
+  "imageAlt": { "es": "La vista previa de los cambios", "en": "The changes preview" }
+}
