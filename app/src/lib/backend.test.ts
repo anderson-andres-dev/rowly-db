@@ -10,6 +10,17 @@ describe("backendText", () => {
     expect(backendText("Unknown column 'x' in 'field list'")).toBe("Unknown column 'x' in 'field list'");
     expect(backendText({ key: "algo.nuevo" })).toBe("algo.nuevo");
   });
+
+  it("un fallo de red al buscar paquetes llega traducido, sin el texto de reqwest (#64)", () => {
+    // Lo que manda support.rs con el puerto cerrado (test de Rust
+    // a_closed_port_says_the_server_does_not_respond_not_what_reqwest_says).
+    const text = backendText({ key: "support.network.unreachable" });
+    expect(text).toBe("No se pudo consultar los paquetes: el servidor no responde.");
+    expect(text).not.toContain("error sending request for url");
+    expect(backendText({ key: "support.network.status", params: { status: "404" } })).toBe(
+      "No se pudo consultar los paquetes: el servidor respondió con el error 404.",
+    );
+  });
 });
 
 // Toda clave que emite el backend (Message::key en Rust) tiene que tener su
@@ -32,6 +43,8 @@ describe("mensajes del backend", () => {
       for (const match of source.matchAll(/soft\([\s\S]*?"(\w+)",\s*warnings,?\s*\)/g)) keys.add(`introspect.${match[1]}`);
       // NotEditable::as_key -> notEditable.<motivo>
       for (const match of source.matchAll(/NotEditable::\w+ => "(\w+)"/g)) keys.add(`notEditable.${match[1]}`);
+      // support::Network::key -> support.network.<motivo>
+      for (const match of source.matchAll(/Network::\w+(?:\(_\))? => "(support\.network\.\w+)"/g)) keys.add(match[1]);
     }
     expect(keys.size).toBeGreaterThan(40);
     const known = new Set(Object.keys(backend.es));

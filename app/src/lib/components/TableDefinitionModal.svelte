@@ -8,6 +8,7 @@
   import { sql } from "@codemirror/lang-sql";
   import { activeEngine } from "$lib/stores/connection";
   import { standardSql } from "$lib/engines";
+  import { dialectFor } from "$lib/editor/completionSource";
   import { Check, Copy, X } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
   import { writeClipboardText } from "$lib/results/gridClipboard";
@@ -77,7 +78,7 @@
         EditorState.readOnly.of(true),
         drawSelection(),
         keymap.of([{ key: "Mod-a", run: selectAll }]),
-        sql({ dialect: (get(activeEngine) ?? standardSql).editorDialect }),
+        sql({ dialect: dialectFor(get(activeEngine) ?? standardSql) }),
         buildCmTheme(get(editorPalette), get(effectiveScheme)),
       ],
     });
