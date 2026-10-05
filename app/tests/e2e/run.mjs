@@ -4,7 +4,8 @@
 //
 // Cada recorrido arranca su propio tauri-driver con un perfil vacio
 // (XDG_* en un directorio temporal): no depende de lo que dejo el anterior.
-// Necesita un display X (xvfb-run) y xdotool para los acordes.
+// Necesita un display X (xvfb-run), su propio bus de sesion (dbus-run-session;
+// ver e2e.yml) y xdotool para los acordes.
 //
 // Necesita un MySQL desechable en E2E_MYSQL_PORT (por defecto 3306) con
 // root/rowly; el propio script crea la base `rowly_e2e`. Nunca se apunta a una
