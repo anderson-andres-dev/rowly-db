@@ -127,6 +127,25 @@ Download the package for your system from the [latest release](https://github.co
 Linux packages are x86_64. New versions show up in **Settings → Updates**.
 
 <details>
+<summary><strong>Linux: slow start (about 30 s)</strong></summary>
+<br>
+
+Rowly DB needs a working `xdg-desktop-portal` on Linux, or none at all. If the portal is installed but cannot answer (no backend for your desktop, or a session started without `DISPLAY`/`WAYLAND_DISPLAY`), GTK and the window toolkit wait for it before showing the window: about 25 s, plus 5 s. The app then opens normally, and prints a notice to stderr when startup took longer than 10 s.
+
+To check it:
+
+```bash
+gdbus call --session --dest org.freedesktop.portal.Desktop \
+  --object-path /org/freedesktop/portal/desktop --method org.freedesktop.DBus.Peer.Ping
+# healthy: "()" in well under a second; broken: TimedOut after about 25 s
+systemctl --user status xdg-desktop-portal   # the portal log says why
+```
+
+To fix it, install the portal backend for your desktop (`xdg-desktop-portal-gnome`, `-kde`, `-wlr`, `-hyprland` or `-gtk`), or make sure the session exports `DISPLAY`/`WAYLAND_DISPLAY` to the user services (`systemctl --user import-environment`).
+
+</details>
+
+<details>
 <summary><strong>Build from source</strong></summary>
 <br>
 

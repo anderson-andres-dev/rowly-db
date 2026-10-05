@@ -2,22 +2,24 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 135,
-    "tests": 1438,
-    "ignored": 29,
+    "files": 136,
+    "tests": 1450,
+    "ignored": 31,
     "byDecision": {
-      "keep": 135,
+      "keep": 136,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 129,
+      "pr": 130,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
     },
-    "sqlEngineRowsWithoutTest": []
+    "sqlEngineRowsWithoutTest": [
+      "D10"
+    ]
   },
   "tests": [
     {
@@ -109,6 +111,22 @@
       "durationMs": null
     },
     {
+      "path": "app/src-tauri/src/desktop_portal.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/desktop_portal.rs",
+      "property": "Un arranque de mas de 10 s en Linux deja un aviso en stderr que apunta al portal de escritorio; uno normal no (#75)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
+      "durationMs": null
+    },
+    {
       "path": "app/src-tauri/src/drivers.rs",
       "domain": "desktop",
       "owner": "app/src-tauri/src/drivers.rs",
@@ -121,7 +139,7 @@
       ],
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 1,
+      "tests": 2,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2426,7 +2444,7 @@
       ],
       "kind": "rust",
       "crate": "crates/driver-core",
-      "tests": 2,
+      "tests": 3,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2551,7 +2569,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/mysql",
-      "tests": 7,
+      "tests": 8,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2609,7 +2627,7 @@
       ],
       "kind": "rust",
       "crate": "crates/drivers/postgres",
-      "tests": 5,
+      "tests": 6,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2672,7 +2690,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 7,
+      "tests": 8,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2751,7 +2769,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 7,
+      "tests": 10,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -2828,7 +2846,7 @@
       "decision": "keep",
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 5,
+      "tests": 6,
       "ignored": 0,
       "environment": "none",
       "env": [
@@ -2874,8 +2892,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 14,
-      "ignored": 14,
+      "tests": 15,
+      "ignored": 15,
       "environment": "real-server",
       "env": [],
       "durationMs": null
@@ -2918,8 +2936,8 @@
       ],
       "kind": "rust",
       "crate": "crates/server-tests",
-      "tests": 4,
-      "ignored": 4,
+      "tests": 5,
+      "ignored": 5,
       "environment": "real-server",
       "env": [
         "ROWLY_FUZZ_CASES",

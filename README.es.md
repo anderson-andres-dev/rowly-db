@@ -127,6 +127,25 @@ Descarga el paquete para tu sistema desde la [última versión](https://github.c
 Los paquetes Linux son para x86_64. Las nuevas versiones aparecen en **Ajustes → Actualizaciones**.
 
 <details>
+<summary><strong>Linux: arranque lento (unos 30 s)</strong></summary>
+<br>
+
+En Linux, Rowly DB necesita un `xdg-desktop-portal` que funcione, o ninguno. Si el portal está instalado pero no puede responder (sin backend para tu escritorio, o una sesión iniciada sin `DISPLAY`/`WAYLAND_DISPLAY`), GTK y la biblioteca de ventanas lo esperan antes de mostrar la ventana: unos 25 s, más 5. Después la app abre con normalidad y escribe un aviso en stderr si el arranque pasó de 10 s.
+
+Para comprobarlo:
+
+```bash
+gdbus call --session --dest org.freedesktop.portal.Desktop \
+  --object-path /org/freedesktop/portal/desktop --method org.freedesktop.DBus.Peer.Ping
+# sano: "()" en mucho menos de un segundo; roto: TimedOut tras unos 25 s
+systemctl --user status xdg-desktop-portal   # el log del portal dice por qué
+```
+
+Para corregirlo, instala el backend del portal de tu escritorio (`xdg-desktop-portal-gnome`, `-kde`, `-wlr`, `-hyprland` o `-gtk`), o asegúrate de que la sesión pase `DISPLAY`/`WAYLAND_DISPLAY` a los servicios de usuario (`systemctl --user import-environment`).
+
+</details>
+
+<details>
 <summary><strong>Compilar desde el código</strong></summary>
 <br>
 
