@@ -11,9 +11,9 @@
 // - el arbol de support/, tests/sql o tools/test-dbs tiene cambios sin commit
 //   (el indice nombra el commit del que sale);
 // - las lineas de support/ y las de tools/test-dbs/lines.json no coinciden;
-// - la evidencia de la matriz (--evidence, los artefactos real-* de
-//   sql-engine.yml) no esta completa para cada version verificada: la decide
-//   tools/test-dbs/evidence.mjs, sin copia;
+// - la evidencia de la matriz (--evidence, los artefactos real-* y lines-*
+//   de sql-engine.yml) no esta completa para cada version verificada o no es
+//   de este commit: la decide tools/test-dbs/evidence.mjs, sin copia;
 // - un dato de linea no tiene su fixture (crates/engine/tests/lines.rs);
 // - no hay clave para firmar.
 //
@@ -112,7 +112,7 @@ function publish({ out, evidence, requiresApp }) {
     if (ours !== tested) fail(`${source.engine}: support/ tiene [${ours}] y lines.json [${tested}]`);
   }
 
-  const check = spawnSync(process.execPath, [join(ROOT, "tools/test-dbs/evidence.mjs"), evidence], { encoding: "utf8" });
+  const check = spawnSync(process.execPath, [join(ROOT, "tools/test-dbs/evidence.mjs"), evidence, "--commit", commit], { encoding: "utf8" });
   if (check.status !== 0) fail(`la evidencia no esta completa:\n${check.stderr || check.stdout}`);
   // Cada dato de linea con su fixture, y las lineas validas (SQL_ENGINE §5.4).
   const data = spawnSync("cargo", ["test", "--locked", "-p", "khipu-engine", "--test", "lines"], { cwd: ROOT, encoding: "utf8" });

@@ -65,7 +65,7 @@ cargo test -p rowly-server-tests -- --ignored --test-threads=1
 
 `tools/test-dbs/lines.sh` comprueba los límites de las líneas de versión. El CI corre todo esto en cada PR de motor, en cada versión exacta verificada (`.github/workflows/sql-engine.yml`); los comandos y las reglas están en [SQL_ENGINE.es.md, §7](SQL_ENGINE.es.md#7-compuertas). No anuncies una versión como verificada sin su evidencia completa.
 
-Los paquetes de soporte de versión (SQL_ENGINE.es.md, §11) salen de `support/` con `node tools/support/publish.mjs --out <dir> --evidence <artefactos real-* de sql-engine.yml>`, con la clave de firma de las actualizaciones en `TAURI_SIGNING_PRIVATE_KEY`; la herramienta se niega sin evidencia completa. Los fixtures de prueba se regeneran con `node tests/support/fixtures.mjs` y están firmados con `tests/support/test-key`, una clave solo de prueba.
+Los paquetes de soporte de versión (SQL_ENGINE.es.md, §11) salen de `support/` con `node tools/support/publish.mjs --out <dir> --evidence <artefactos real-* y lines-* de sql-engine.yml, del mismo commit>`, con la clave de firma de las actualizaciones en `TAURI_SIGNING_PRIVATE_KEY`; la herramienta se niega sin evidencia completa. Los fixtures de prueba se regeneran con `node tests/support/fixtures.mjs` y están firmados con `tests/support/test-key`, una clave solo de prueba.
 
 Al preparar una release, comprueba las fechas de soporte en los avisos oficiales de cada fabricante y después ejecuta `python3 tools/support/vendor-support.py` desde la raíz. El script usa `endoflife.date` como listado y aplica excepciones oficiales cuando hay discrepancias. Revisa el diff de `tools/support/vendor-support.json` y corre `node tools/inventory/status.mjs --write`, que regenera SQL_ENGINE §5.3 a partir de él.
 

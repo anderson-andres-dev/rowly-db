@@ -264,7 +264,7 @@ Where it is declared today: lexical and call rules in each `SqlProfile` (`app/sr
 | **PR** | Every pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, test inventory check, and the E2E walks in the real app (Linux, WebKitGTK) | Yes: `.github/workflows/quality.yml` and `e2e.yml` |
 | **Engine PR** | Changes the splitter, analyzer, guard, introspection, autocomplete, a driver or execution | PR plus the complete real-server matrix of §6 on **every affected verified exact release**, with 4,000 fuzz cases per release; a shared change affects all engines | Yes: `.github/workflows/sql-engine.yml` runs the matrix on every verified exact release, D7/D8 on every probe, and fails when a release lacks complete evidence. |
 | **Exact release or pack** | Before advertising a verified release or publishing its line pack (§11) | Complete matrix on that release and the line's other verified releases; D7 against the previous line if behavior changes | No |
-| **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | No |
+| **App release** | Before publishing Rowly DB | Complete matrix on all verified exact releases, fuzz with at least three seeds, driver tests, review of each engine's newest release, support window (§5.2), and manual UI smoke test | Partly: `release.yml` runs Quality, E2E, the matrix and D7/D8 on the tagged commit and does not publish without that commit's evidence; it publishes `verification.json` (commit, releases, results) next to the installers. The rest, by hand |
 
 Commands, today:
 
@@ -294,7 +294,7 @@ tools/test-dbs/lines.sh down postgres
 
 ```
 
-In CI, each verified exact release runs in its own job against its pinned image; the harness stops if the server is not the declared release or if its global `sql_mode` was left in another mode. The last job (`tools/test-dbs/evidence.mjs`) requires, for every release in `verified`, the declared server and every real-server test passing with none ignored, and lists the N/As. A release without that evidence is not advertised as verified.
+In CI, each verified exact release runs in its own job against its pinned image; the harness stops if the server is not the declared release or if its global `sql_mode` was left in another mode. Each job records the commit it tested in its evidence (`origin.json`). The last job (`tools/test-dbs/evidence.mjs`) requires, for every release in `verified` and every line (D7/D8), evidence from that same commit, the declared server and every real-server test passing with none ignored, and lists the N/As. Evidence from another commit does not count. A release without that evidence is not advertised as verified.
 
 The real-server tests share the table `rowly_test.victim`. Run them with `--test-threads=1`, and never two runs against the same server at the same time.
 
@@ -349,7 +349,6 @@ Ordered by priority. Each one becomes a row of §6 when it is closed.
 | The guard fuzz on PostgreSQL 13 generates 37 dangerous cases out of 4000, and the test needs more than 30 to measure anything (S2) | P3 | Not a regression: the fuzz is deterministic (a fixed seed per engine) and its skeletons are filtered by release. PostgreSQL 13 has no SQL-standard function bodies, so it draws from three skeletons fewer and gets another sequence; 37 is constant for 13.23 with this corpus. The minimum is what keeps the fuzz from going toothless, so a corpus or mutator change that drops it below 30 must fail. |
 | A `SET GLOBAL sql_mode` run after connecting reaches the pool's new connections, while result editing keeps writing literals with the mode read on connect | P3 | Reconnecting reads it again. |
 | MariaDB `VECTOR` values show as hex: the server sends them as plain binary, with no type to tell them apart | P3 | |
-| The evidence `publish.mjs` requires does not say which commit it comes from: `evidence.mjs` checks release, digest and results, but not that the artifacts come from the same commit as the packs | P2 | Publishing from the matrix job, with its artifacts, guarantees it in practice; recording the commit in the evidence would make it checkable. |
 | Not covered yet: users with reduced permissions, stale catalogs, large schemas (hundreds of tables), reconnection, timeouts, cancellation under load | P3 | Add each when the feature it protects is touched. |
 | Not tested against a server: `USE` persisting in the console end to end, a physical loss of the console connection (not retried, reported) and closing a console with an open transaction rolling it back | P3 | The code does not retry (§8) and the server rolls back when the connection closes; it still needs proof with `KILL`/`pg_terminate_backend` and by disconnecting with an open transaction. |
 
@@ -463,7 +462,7 @@ Exploratory testing is welcome, and it found real bugs here: a panic on a half-t
 
 ### 14.1 Support level of each engine
 
-MySQL, MariaDB and PostgreSQL are **Integrable** (§4): P0 = 0 and P1 = 0, and every applicable §6 row passes on every verified exact release, with the real-server suite in CI (`sql-engine.yml`, §7), or its gap is in §9 as P2 or lower. Stable still needs history: being released across several versions with no P0/P1 regressions, and the exact-release and app-release gates (§7) are still run by hand.
+MySQL, MariaDB and PostgreSQL are **Integrable** (§4): P0 = 0 and P1 = 0, and every applicable §6 row passes on every verified exact release, with the real-server suite in CI (`sql-engine.yml`, §7), or its gap is in §9 as P2 or lower. Stable still needs history: being released across several versions with no P0/P1 regressions, and the exact-release gate and the manual part of the app-release gate (§7) are still run by hand.
 
 ### 14.2 Coverage of each row
 

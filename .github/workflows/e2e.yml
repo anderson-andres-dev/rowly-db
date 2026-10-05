@@ -18,6 +18,8 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  # La release la corre sobre su propio commit (release.yml).
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always

@@ -264,7 +264,7 @@ Dónde se declara hoy: las reglas léxicas y de llamada, en cada `SqlProfile` (`
 | **PR** | Cada pull request | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run check`, `npm test`, `npm run build`, comprobación del inventario de tests y los recorridos E2E en la app real (Linux, WebKitGTK) | Sí: `.github/workflows/quality.yml` y `e2e.yml` |
 | **PR de motor** | Cambia divisor, analizador, guard, introspección, autocompletado, driver o ejecución | PR, más matriz real completa de §6 en **cada versión exacta verificada afectada**, con fuzz de 4000 casos por versión; un cambio común afecta a todos los motores | Sí: `.github/workflows/sql-engine.yml` corre la matriz en cada versión exacta verificada, D7/D8 en cada probe, y falla si una versión no tiene la evidencia completa. |
 | **Versión exacta o paquete** | Antes de anunciar una versión verificada o publicar su paquete de línea (§11) | Matriz completa en esa versión y en las demás versiones verificadas de la línea afectada; D7 frente a línea anterior si cambia el comportamiento | No |
-| **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | No |
+| **Release** | Antes de publicar Rowly DB | Matriz completa de todas las versiones exactas verificadas, fuzz de al menos tres semillas, tests de driver, revisión de la versión más nueva de cada motor, ventana de soporte (§5.2) y humo manual de interfaz | En parte: `release.yml` corre Quality, E2E, la matriz y D7/D8 sobre el commit del tag y no publica sin la evidencia de ese commit; publica `verification.json` (commit, versiones, resultados) con los instaladores. Lo demás, a mano |
 
 Comandos, hoy:
 
@@ -294,7 +294,7 @@ tools/test-dbs/lines.sh down postgres
 
 ```
 
-En CI, cada versión exacta verificada corre en su propio job contra su imagen fijada; el harness se detiene si el servidor no es la versión declarada o si su `sql_mode` global quedó en otro modo. El último job (`tools/test-dbs/evidence.mjs`) exige, para cada versión de `verified`, el servidor declarado y todas las pruebas reales en verde, ninguna ignorada, y enumera los N/A. Una versión sin esa evidencia no se anuncia como verificada.
+En CI, cada versión exacta verificada corre en su propio job contra su imagen fijada; el harness se detiene si el servidor no es la versión declarada o si su `sql_mode` global quedó en otro modo. Cada job deja en su evidencia el commit que probó (`origin.json`). El último job (`tools/test-dbs/evidence.mjs`) exige, para cada versión de `verified` y cada línea (D7/D8), evidencia de ese mismo commit, el servidor declarado y todas las pruebas reales en verde, ninguna ignorada, y enumera los N/A. Evidencia de otro commit no cuenta. Una versión sin esa evidencia no se anuncia como verificada.
 
 Las pruebas contra servidor real comparten la tabla `rowly_test.victim`. Se corren con `--test-threads=1` y nunca dos corridas a la vez contra el mismo servidor.
 
@@ -349,7 +349,6 @@ Ordenados por prioridad. Cada uno se convierte en una fila de §6 cuando se cier
 | El fuzz del guard en PostgreSQL 13 genera 37 casos peligrosos de 4000, y la prueba exige más de 30 para medir algo (S2) | P3 | No es una regresión: el fuzz es determinista (semilla fija por motor) y sus esqueletos se filtran por versión. PostgreSQL 13 no tiene cuerpos de función del estándar SQL, así que sortea entre tres esqueletos menos y obtiene otra secuencia; 37 es constante para 13.23 con este corpus. El mínimo es lo que impide que el fuzz deje de medir, así que un cambio del corpus o del mutador que lo baje de 30 tiene que fallar. |
 | Un `SET GLOBAL sql_mode` ejecutado después de conectar llega a las conexiones nuevas del pool, mientras la edición de resultados sigue escribiendo literales con el modo leído al conectar | P3 | Reconectar lo vuelve a leer. |
 | Los valores `VECTOR` de MariaDB se ven en hexadecimal: el servidor los envía como binario sin un tipo que los distinga | P3 | |
-| La evidencia que exige `publish.mjs` no dice de qué commit es: `evidence.mjs` comprueba versión, digest y resultados, pero no que los artefactos salgan del mismo commit que los paquetes | P2 | Publicar desde el job de la matriz, con sus artefactos, lo garantiza en la práctica; registrar el commit en la evidencia lo haría comprobable. |
 | Sin cubrir todavía: usuarios con permisos reducidos, catálogos desactualizados, esquemas grandes (cientos de tablas), reconexión, timeouts, cancelación bajo carga | P3 | Se añade cada uno cuando se toque la función que protege. |
 | Sin prueba contra un servidor: que `USE` se conserve en la consola de punta a punta, la pérdida física de la conexión de la consola (no se reintenta y se avisa) y que cerrar una consola con una transacción abierta la deshaga | P3 | El código no reintenta (§8) y el rollback lo hace el servidor al cerrarse la conexión; falta demostrarlo con `KILL`/`pg_terminate_backend` y desconectando con una transacción abierta. |
 
@@ -463,7 +462,7 @@ Las pruebas exploratorias son bienvenidas, y aquí encontraron bugs reales: un p
 
 ### 14.1 Nivel de soporte de cada motor
 
-MySQL, MariaDB y PostgreSQL son **Integrables** (§4): P0 = 0 y P1 = 0, y cada fila aplicable de §6 pasa en cada versión exacta verificada, con la suite contra servidor real en el CI (`sql-engine.yml`, §7), o su hueco está en §9 como P2 o menos. Para Estable falta historial: publicarse en varias versiones sin regresiones P0/P1, y las compuertas de versión exacta y de release (§7) todavía se corren a mano.
+MySQL, MariaDB y PostgreSQL son **Integrables** (§4): P0 = 0 y P1 = 0, y cada fila aplicable de §6 pasa en cada versión exacta verificada, con la suite contra servidor real en el CI (`sql-engine.yml`, §7), o su hueco está en §9 como P2 o menos. Para Estable falta historial: publicarse en varias versiones sin regresiones P0/P1, y la compuerta de versión exacta y la parte manual de la de release (§7) todavía se corren a mano.
 
 ### 14.2 Cobertura de cada fila
 

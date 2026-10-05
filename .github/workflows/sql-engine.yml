@@ -24,6 +24,12 @@ on:
       fuzz_cases:
         description: "Casos de fuzz por motor (SQL_ENGINE §7: 4000 por PR de motor)"
         default: "4000"
+  # La release la corre sobre su propio commit (release.yml).
+  workflow_call:
+    inputs:
+      fuzz_cases:
+        type: string
+        default: "4000"
 
 env:
   CARGO_TERM_COLOR: always
@@ -77,6 +83,10 @@ jobs:
         run: cargo test -p rowly-server-tests --test safety --test analysis --test generated --test contract --locked --no-run
       - name: Servidor ${{ matrix.engine }} ${{ matrix.version }} con Sakila/Pagila
         run: tools/test-dbs/up.sh "${{ matrix.engine }}=${{ matrix.version }}"
+      - name: Origen de la evidencia
+        run: >-
+          printf '{"commit":"%s","run":"%s","attempt":"%s","job":"%s","date":"%s"}\n'
+          "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "real-${{ matrix.engine }}-${{ matrix.version }}" "$(date -u +%FT%TZ)" > origin.json
       - name: Matriz real y contrato de los drivers (SQL_ENGINE §6)
         env:
           ROWLY_ENGINES: ${{ matrix.engine }}
@@ -89,6 +99,7 @@ jobs:
         with:
           name: real-${{ matrix.engine }}-${{ matrix.version }}
           path: |
+            origin.json
             crates/server-tests/evidence.jsonl
             real.log
 
@@ -108,6 +119,10 @@ jobs:
         run: cargo test -p rowly-server-tests --test version_lines --locked --no-run
       - name: Un servidor por extremo de cada linea
         run: tools/test-dbs/lines.sh up "${{ matrix.engine }}"
+      - name: Origen de la evidencia
+        run: >-
+          printf '{"commit":"%s","run":"%s","attempt":"%s","job":"%s","date":"%s"}\n'
+          "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "lines-${{ matrix.engine }}" "$(date -u +%FT%TZ)" > origin.json
       - name: Demostracion de lineas
         env:
           ROWLY_ENGINES: ${{ matrix.engine }}
@@ -117,12 +132,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lines-${{ matrix.engine }}
-          path: lines.log
+          path: |
+            origin.json
+            lines.log
 
   report:
     name: Evidencia por version
     # Tambien cuando falla un job: el reporte dice que version quedo incompleta.
-    needs: [matrix, real]
+    needs: [matrix, real, lines]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -131,5 +148,13 @@ jobs:
         with:
           pattern: real-*
           path: evidence
-      - name: Cada version verificada con su matriz completa
-        run: node tools/test-dbs/evidence.mjs evidence
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lines-*
+          path: evidence
+      - name: Cada version verificada y cada linea con su evidencia completa, de este commit
+        run: node tools/test-dbs/evidence.mjs evidence --out verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verification
+          path: verification.json
