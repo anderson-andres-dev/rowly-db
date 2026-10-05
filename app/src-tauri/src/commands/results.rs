@@ -146,7 +146,8 @@ pub async fn export_query_to_file(
         }
         // El archivo sale en el mismo orden que el grid (orden de los
         // encabezados, aplicado en la base igual que al paginar).
-        let sorted = khipu_engine::pagination::sort_sql(&sql, active.dialect, &sort);
+        let sorted =
+            khipu_engine::pagination::sort_sql(&sql, active.dialect, active.guard_options(), &sort);
         Ok((
             Arc::clone(&active.connector),
             sorted.unwrap_or_else(|| sql.clone()),

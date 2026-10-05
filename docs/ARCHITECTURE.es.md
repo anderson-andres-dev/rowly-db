@@ -46,7 +46,7 @@ El motor no depende de ningún driver, ni siquiera de `driver-core`. Los drivers
 | `commands/` | Un archivo por dominio (`query`, `catalog`, `connection`, `files`, `results`). Cada comando adapta sus argumentos y llama a lo que ya existe; no repite el guard, el catálogo ni los pools. |
 | `services/` | Lo que hacen los comandos, sin Tauri: el catálogo del motor, los textos de las consolas, los archivos `.sql`, exportar y editar resultados. |
 
-Todo lo que ejecuta SQL pasa por el guard antes de llegar al driver, con el modo de la sesión: ejecutar, contar filas, exportar y aplicar cambios del grid.
+El SQL que escribe el usuario pasa por el guard antes de llegar al driver, con el modo de la sesión: ejecutar, contar filas y exportar. Cuando el backend lo reescribe para ordenar, paginar o contar (`khipu_engine::pagination`), lo que llega al servidor es el texto reescrito, así que también pasa por el guard: tiene que leerse de vuelta con las mismas cadenas y volver a pasar el guard, o corre el texto original. Aplicar cambios del grid ejecuta SQL que genera Rowly DB (`khipu_engine::editing`) desde el catálogo cargado, no texto del usuario: no pasa por el guard; solo escribe en una tabla del catálogo, por su clave primaria completa, y en producción solo tras la confirmación del usuario.
 
 ### Frontend (`app/src/lib`)
 

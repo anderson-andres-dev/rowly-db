@@ -446,6 +446,97 @@ async fn the_guard_reads_strings_like_a_server_in_no_backslash_escapes_mode() {
     assert!(failures.is_empty(), "\n{}\n", failures.join("\n---\n"));
 }
 
+// --- S2 sobre el texto que llega al servidor: la app ordena, pagina y cuenta reescribiendo ---
+
+/// Lecturas cuyas cadenas el re-render de sqlparser cambiaba (`'\\'` salia
+/// como `'\'`), con la carga escondida en otra cadena: una reescritura infiel
+/// la deja fuera de ella.
+fn rewritten_reads(engine: Engine) -> &'static [&'static str] {
+    match engine {
+        Engine::MySql | Engine::MariaDb => &[
+            r"SELECT '\\' AS a, '; {x}; -- ' AS b",
+            r"SELECT 'a\\nb' AS a, '; {x}; -- ' AS b",
+            r"SELECT 'it\'s' AS a, '; {x}; -- ' AS b",
+            r"SELECT '\\\'' AS a, '; {x}; -- ' AS b",
+            r#"SELECT "\\" AS a, "; {x}; -- " AS b"#,
+        ],
+        Engine::Postgres => &[
+            r"SELECT E'\\' AS a, '; {x}; -- ' AS b",
+            r"SELECT 'C:\' AS a, '; {x}; -- ' AS b",
+            r"SELECT E'it\'s' AS a, '; {x}; -- ' AS b",
+            r"SELECT E'a\\nb' AS a, '; {x}; -- ' AS b",
+        ],
+    }
+}
+
+/// Lo que ejecuta la app al ordenar, paginar o contar no es el texto que
+/// reviso el guard sino su reescritura: medida sin la barrera del driver, es
+/// una sola sentencia y lee lo mismo que el original.
+#[tokio::test]
+#[ignore = "requiere tools/test-dbs/up.sh"]
+async fn what_the_app_rewrites_runs_as_one_statement_and_reads_the_same() {
+    use khipu_engine::execution_guard::GuardOptions;
+    use khipu_engine::pagination::{SortKey, count_sql, paginate_sql, sort_sql};
+    let mut failures = Vec::new();
+    for engine in selected(Engine::ALL) {
+        let conn = Conn::open(engine).await;
+        let dialect = engine.dialect();
+        let options = GuardOptions::default();
+        for template in rewritten_reads(engine) {
+            for payload in PAYLOADS {
+                let sql = template.replace("{x}", payload);
+                assert!(
+                    classification(engine, &sql).is_ok(),
+                    "{engine:?}: el guard debe aceptar el original: {sql}"
+                );
+                let expected = conn.scalar(&sql).await;
+                assert!(expected.is_some(), "{engine:?}: el original no lee: {sql}");
+                let keys = [SortKey {
+                    column: 0,
+                    descending: true,
+                }];
+                let rewrites = [
+                    (
+                        "ordenar",
+                        sort_sql(&sql, dialect, options, &keys),
+                        &expected,
+                    ),
+                    (
+                        "paginar",
+                        paginate_sql(&sql, dialect, options, 0, 101),
+                        &expected,
+                    ),
+                    (
+                        "contar",
+                        count_sql(&sql, dialect, options),
+                        &Some("1".into()),
+                    ),
+                ];
+                for (what, text, reads) in rewrites {
+                    let Some(text) = text else {
+                        failures.push(format!("{engine:?}: no se pudo {what}:\n{sql}"));
+                        continue;
+                    };
+                    fresh(&conn, engine).await;
+                    Conn::multi_statement(engine, &text).await;
+                    if !victim_intact(&conn).await {
+                        failures.push(format!(
+                            "{engine:?}: al {what}, el servidor ejecuto la carga:\n{sql}\n{text}"
+                        ));
+                    }
+                    let got = conn.scalar(&text).await;
+                    if &got != reads {
+                        failures.push(format!(
+                            "{engine:?}: al {what} se lee {got:?}, no {reads:?}:\n{sql}\n{text}"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "\n{}\n", failures.join("\n---\n"));
+}
+
 // --- Destructividad: lo que daña datos no puede pasar como NotDestructive ---
 
 const SCRATCH: &str = "rowly_test.scratch";

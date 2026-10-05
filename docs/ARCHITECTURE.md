@@ -46,7 +46,7 @@ The engine depends on no driver, not even `driver-core`. Drivers do read the eng
 | `commands/` | One file per domain (`query`, `catalog`, `connection`, `files`, `results`). Each command adapts its arguments and calls what already exists; it never repeats the guard, the catalog or the pools. |
 | `services/` | What the commands do, without Tauri: the engine catalog, console texts, `.sql` files, exporting and editing results. |
 
-Everything that runs SQL goes through the guard, with the session mode, before it reaches the driver: running, counting rows, exporting and applying grid changes.
+SQL the user writes goes through the guard, with the session mode, before it reaches the driver: running, counting rows and exporting. When the backend rewrites it to sort, page or count (`khipu_engine::pagination`), the rewritten text is what reaches the server, so it is guarded too: it must read back with the same strings and pass the guard again, or the original text runs instead. Applying grid changes runs SQL that Rowly DB generates (`khipu_engine::editing`) from the loaded catalog, not user text: it does not go through the guard; it only writes to a table of the catalog, by its complete primary key, and in production only after the user confirms.
 
 ### Frontend (`app/src/lib`)
 
