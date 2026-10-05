@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 139,
-    "tests": 1467,
+    "files": 140,
+    "tests": 1475,
     "ignored": 31,
     "byDecision": {
-      "keep": 139,
+      "keep": 140,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 133,
+      "pr": 134,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -322,6 +322,22 @@
       "env": [
         "ROWLY_SUPPORT_URL"
       ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src-tauri/src/terminal.rs",
+      "domain": "desktop",
+      "owner": "app/src-tauri/src/terminal.rs",
+      "property": "Terminal integrada: el shell abre y responde, cerrar no deja el shell ni sus trabajos vivos (100 ciclos), el tamano llega al shell, un caracter UTF-8 partido entre lecturas llega en bytes, una ventana no opera la terminal de otra, salir del shell la quita del registro y avisa; en Windows pwsh antes que powershell y si no ComSpec",
+      "risk": "P1",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "app/src-tauri",
+      "tests": 8,
+      "ignored": 0,
+      "environment": "none",
+      "env": [],
       "durationMs": null
     },
     {

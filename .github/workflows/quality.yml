@@ -37,6 +37,25 @@ jobs:
       - name: cargo test
         run: cargo test --workspace --locked
 
+  # El PTY de la terminal integrada en las otras plataformas: en macOS los
+  # mismos tests con un shell real; en Windows se compila ConPTY y se prueba
+  # la eleccion del shell (los tests de PTY son de Unix).
+  terminal:
+    name: Terminal (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.90
+
+      - name: cargo test terminal
+        run: cargo test -p khipu-desktop --lib --locked terminal
+
   node:
     name: Node (check, test, build)
     runs-on: ubuntu-latest
