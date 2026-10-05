@@ -1,5 +1,6 @@
 pub mod assembly;
 mod connection_error;
+mod console;
 mod message;
 mod query_cancel;
 
@@ -9,6 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub use connection_error::{ConnectionErrorKind, io_error_kind, probe_tcp, tls_failure_kind};
+pub use console::{ConsoleConnection, ConsoleGuard, session_lost};
 pub use message::Message;
 pub use query_cancel::QueryCancel;
 
@@ -57,6 +59,23 @@ pub struct ConnectionConfig {
     /// doesn't include private CAs such as AWS RDS's or Azure's.
     #[serde(default)]
     pub ca_certificate_path: Option<String>,
+}
+
+/// The server as the driver detected it on connect, parsed once: the engine
+/// it really is (a MariaDB behind a "mysql" profile says `"mariadb"`), its
+/// version as numbers and the label shown to the user. Whoever needs the
+/// engine or the version reads `engine` and `version`, never the label.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerIdentity {
+    /// `"mysql"`, `"mariadb"` or `"postgres"`: the ids of
+    /// tests/engines/contract.json.
+    pub engine: &'static str,
+    /// `[8, 4, 11]`; PostgreSQL 10 and later have two parts (`[16, 2]`).
+    pub version: Vec<u32>,
+    /// `"MySQL 8.4.11"`, `"MariaDB 11.8.9"`, `"PostgreSQL 16.2"`: display
+    /// only.
+    pub label: String,
 }
 
 /// What TLS a connection actually ended up with, measured on the server
@@ -379,9 +398,8 @@ pub trait DbConnector: Send + Sync {
     where
         Self: Sized;
 
-    /// Server product and version as detected on connect, for display
-    /// (`"MySQL 8.0.35"`, `"MariaDB 10.6.12"`, `"PostgreSQL 16.2"`).
-    fn server_version(&self) -> String;
+    /// The server as detected on connect (see `ServerIdentity`).
+    fn server(&self) -> ServerIdentity;
 
     /// TLS negotiated on connect (see `TlsStatus`).
     fn tls_status(&self) -> TlsStatus;
@@ -441,6 +459,13 @@ pub trait DbConnector: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = QueryExecutionResult> + Send + 'a>> {
         let _ = cancel;
         self.execute_query(sql, options)
+    }
+
+    /// Rises each time the console connection (`ConsoleConnection`) opens or
+    /// closes: `execute_query`, `stream_query` and what they leave in the
+    /// session run on it. A driver without one stays at 0.
+    fn console_epoch(&self) -> u64 {
+        0
     }
 
     /// Asks the server to interrupt the query `cancel` tracks, from another

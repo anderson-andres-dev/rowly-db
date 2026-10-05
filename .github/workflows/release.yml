@@ -4,6 +4,12 @@ name: Release
 # release con los instaladores de cada sistema y el latest.json firmado que
 # usa Ajustes > Actualizaciones. Las releases no se borran: son el historial
 # al que la app deja volver.
+#
+# Nada se publica sin las compuertas del mismo commit: Quality, E2E y la
+# compuerta de motor (matriz de cada versión verificada y D7/D8) corren en
+# esta misma corrida sobre el commit del tag, y `verify` comprueba que toda la
+# evidencia sea de ese commit (tools/test-dbs/evidence.mjs). La verificación
+# (verification.json, con el commit) se publica junto a los instaladores.
 
 on:
   push:
@@ -11,7 +17,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   version:
@@ -26,8 +32,54 @@ jobs:
             exit 1
           fi
 
-  release:
+  quality:
     needs: version
+    uses: ./.github/workflows/quality.yml
+
+  e2e:
+    needs: version
+    uses: ./.github/workflows/e2e.yml
+
+  sql:
+    needs: version
+    uses: ./.github/workflows/sql-engine.yml
+    with:
+      fuzz_cases: "4000"
+
+  verify:
+    name: Evidencia del commit ${{ github.sha }}
+    needs: [quality, e2e, sql]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: El checkout es el commit del tag
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Nada fuera de la ventana de soporte anunciado como verificado (SQL_ENGINE §5.2)
+        run: node tools/test-dbs/window.mjs --release
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: real-*
+          path: evidence
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lines-*
+          path: evidence
+      - name: Toda la evidencia es de este commit y las compuertas pasaron
+        run: >-
+          node tools/test-dbs/evidence.mjs evidence --commit "$GITHUB_SHA"
+          --gate quality=${{ needs.quality.result }}
+          --gate e2e=${{ needs.e2e.result }}
+          --gate sql=${{ needs.sql.result }}
+          --out verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-verification
+          path: verification.json
+
+  release:
+    needs: verify
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -79,14 +131,31 @@ jobs:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: "Rowly DB ${{ github.ref_name }}"
+          releaseBody: "Commit ${{ github.sha }}. Verificación de este commit (Quality, E2E, matriz SQL y D7/D8): verification.json."
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
           # Firmas de actualización solo aquí: compilar el repo no necesita la clave.
           args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json
 
+  # La verificacion del commit, junto a los instaladores que salieron de el.
+  verification:
+    needs: release
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-verification
+      - run: gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber verification.json
+
   arch:
     needs: release
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     env:

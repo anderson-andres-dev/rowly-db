@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "scenario": "editor-node",
+  "date": "2026-10-03T04:07:05.844Z",
+  "node": "v24.18.1",
+  "note": "Node, sin WebView: coste de los modulos puros del editor por tecla",
+  "results": {
+    "10k-lines": {
+      "lines": 10001,
+      "bytes": 295000,
+      "statements": 2500,
+      "splitAllMs": 17.3,
+      "indexBuildMs": 2.3,
+      "indexSteps": 1,
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 1.1807,
+        "p95": 1.5289,
+        "p99": 1.8928,
+        "max": 3.804
+      },
+      "statementNearMs": {
+        "n": 500,
+        "p50": 0.0014,
+        "p95": 0.0037,
+        "p99": 0.0124,
+        "max": 0.156
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0099,
+        "p95": 0.0152,
+        "p99": 0.0463,
+        "max": 0.4036
+      }
+    },
+    "1M-lines": {
+      "lines": 1000001,
+      "bytes": 29500000,
+      "statements": 250000,
+      "splitAllMs": 573.1,
+      "indexBuildMs": 532.1,
+      "indexSteps": 28,
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 1.2174,
+        "p95": 2.3586,
+        "p99": 3.6359,
+        "max": 7.3883
+      },
+      "statementNearMs": {
+        "n": 500,
+        "p50": 0.0062,
+        "p95": 0.0145,
+        "p99": 0.0271,
+        "max": 0.0336
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0118,
+        "p95": 0.0313,
+        "p99": 0.0594,
+        "max": 0.2044
+      }
+    }
+  }
+}

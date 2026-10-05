@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "engine": "mariadb",
+  "lines": [
+    {
+      "line": "10.3",
+      "revision": 1,
+      "capabilities": { "checkConstraints": "10.2.1", "sequences": "10.3" }
+    },
+    { "line": "10.6", "revision": 1 },
+    { "line": "11.7", "revision": 1 }
+  ]
+}

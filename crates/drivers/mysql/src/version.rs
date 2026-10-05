@@ -1,6 +1,10 @@
 //! Server flavor/version detection and the catalog capabilities derived from
 //! it. Introspection picks its queries from `Capabilities`, never from the
-//! raw version, so every version-dependent decision lives in one place.
+//! raw version; since which version each capability exists is declared once,
+//! in the engine's lines (`support/<engine>.json`, `khipu_engine::lines`).
+
+use khipu_engine::Dialect;
+use khipu_engine::lines::Capability;
 
 /// MySQL and MariaDB speak the same protocol and share most of
 /// `information_schema`, but diverged after MySQL 5.5 / MariaDB 10.0 in
@@ -19,10 +23,14 @@ pub struct ServerVersion {
     pub patch: u32,
 }
 
-/// Oldest versions introspection is written against. Older servers still
-/// connect and load whatever their catalog supports, with a warning.
-const MIN_MYSQL: (u32, u32) = (5, 7);
-const MIN_MARIADB: (u32, u32) = (10, 3);
+/// Compatibility floor: the oldest versions whose catalog introspection is
+/// written against. It is not a support threshold: vendor support comes from
+/// the support window (SQL_ENGINE.md §5.2, `tools/support/vendor-support.json`) and
+/// verification from `verified` in `tools/test-dbs/lines.json`. Older servers
+/// still connect, with their line, and load what their catalog has, with a
+/// warning.
+const COMPATIBILITY_FLOOR_MYSQL: (u32, u32) = (5, 7);
+const COMPATIBILITY_FLOOR_MARIADB: (u32, u32) = (10, 3);
 
 impl ServerVersion {
     /// Parses what `SELECT VERSION()` returns: `"8.0.35"`, `"5.7.44-log"`,
@@ -59,49 +67,69 @@ impl ServerVersion {
         (self.major, self.minor, self.patch) >= (major, minor, patch)
     }
 
-    pub fn display(&self) -> String {
-        let product = match self.flavor {
+    fn product(&self) -> &'static str {
+        match self.flavor {
             Flavor::MySql => "MySQL",
             Flavor::MariaDb => "MariaDB",
-        };
-        format!("{product} {}.{}.{}", self.major, self.minor, self.patch)
+        }
     }
 
-    pub fn is_below_minimum(&self) -> bool {
-        let (major, minor) = match self.flavor {
-            Flavor::MySql => MIN_MYSQL,
-            Flavor::MariaDb => MIN_MARIADB,
-        };
+    pub fn display(&self) -> String {
+        format!(
+            "{} {}.{}.{}",
+            self.product(),
+            self.major,
+            self.minor,
+            self.patch
+        )
+    }
+
+    pub fn identity(&self) -> khipu_driver_core::ServerIdentity {
+        khipu_driver_core::ServerIdentity {
+            engine: match self.flavor {
+                Flavor::MySql => "mysql",
+                Flavor::MariaDb => "mariadb",
+            },
+            version: vec![self.major, self.minor, self.patch],
+            label: self.display(),
+        }
+    }
+
+    fn floor(&self) -> (u32, u32) {
+        match self.flavor {
+            Flavor::MySql => COMPATIBILITY_FLOOR_MYSQL,
+            Flavor::MariaDb => COMPATIBILITY_FLOOR_MARIADB,
+        }
+    }
+
+    pub fn is_below_compatibility_floor(&self) -> bool {
+        let (major, minor) = self.floor();
         !self.at_least(major, minor, 0)
     }
 
-    pub fn capabilities(&self) -> Capabilities {
-        let check_constraints = match self.flavor {
-            // information_schema.check_constraints appeared in 8.0.16, when
-            // CHECK stopped being parsed-and-ignored.
-            Flavor::MySql => {
-                if self.at_least(8, 0, 16) {
-                    CheckConstraints::JoinTableConstraints
-                } else {
-                    CheckConstraints::Unsupported
-                }
-            }
-            // MariaDB has had it since 10.2.1, with TABLE_NAME in the view
-            // itself (and it also lists column-level checks).
-            Flavor::MariaDb => {
-                if self.at_least(10, 2, 1) {
-                    CheckConstraints::WithTableName
-                } else {
-                    CheckConstraints::Unsupported
-                }
-            }
-        };
+    /// The floor of this server's engine, as the user reads it: "MySQL 5.7".
+    pub fn compatibility_floor(&self) -> String {
+        let (major, minor) = self.floor();
+        format!("{} {major}.{minor}", self.product())
+    }
 
+    pub fn capabilities(&self) -> Capabilities {
+        // Since which version each one exists is line data
+        // (support/<engine>.json); how to read it is this driver's.
+        let lines = match self.flavor {
+            Flavor::MySql => Dialect::MySql,
+            Flavor::MariaDb => Dialect::MariaDb,
+        }
+        .lines();
+        let version = [self.major, self.minor, self.patch];
+        let supports = |capability| lines.supports(capability, &version);
         Capabilities {
-            check_constraints,
-            // MariaDB 10.3 sequences show up in information_schema.tables
-            // with TABLE_TYPE = 'SEQUENCE'.
-            sequences: self.flavor == Flavor::MariaDb && self.at_least(10, 3, 0),
+            check_constraints: match (supports(Capability::CheckConstraints), self.flavor) {
+                (false, _) => CheckConstraints::Unsupported,
+                (true, Flavor::MySql) => CheckConstraints::JoinTableConstraints,
+                (true, Flavor::MariaDb) => CheckConstraints::WithTableName,
+            },
+            sequences: supports(Capability::Sequences),
         }
     }
 }
@@ -126,6 +154,25 @@ pub struct Capabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// El piso es de este driver (que catalogo sabe leer), y la primera linea
+    /// de cada motor (support/<engine>.json) empieza en el: cambiar uno sin
+    /// el otro tiene que ser una decision, no un descuido.
+    #[test]
+    fn the_floor_is_where_the_first_line_starts() {
+        for (flavor, dialect) in [
+            (Flavor::MySql, Dialect::MySql),
+            (Flavor::MariaDb, Dialect::MariaDb),
+        ] {
+            let (major, minor) = version(flavor, 0, 0, 0).floor();
+            let first = &dialect.bundled_lines().lines[0].line;
+            assert_eq!(
+                khipu_engine::lines::numbers(first),
+                vec![major, minor],
+                "{dialect:?}"
+            );
+        }
+    }
 
     fn version(flavor: Flavor, major: u32, minor: u32, patch: u32) -> ServerVersion {
         ServerVersion {
@@ -169,10 +216,21 @@ mod tests {
     }
 
     #[test]
+    fn the_identity_is_the_real_engine_with_its_numbers() {
+        let mariadb = ServerVersion::parse("5.5.5-10.11.6-MariaDB").identity();
+        assert_eq!(mariadb.engine, "mariadb");
+        assert_eq!(mariadb.version, vec![10, 11, 6]);
+        assert_eq!(mariadb.label, "MariaDB 10.11.6");
+        let mysql = ServerVersion::parse("8.0.35-0ubuntu0.22.04.1").identity();
+        assert_eq!(mysql.engine, "mysql");
+        assert_eq!(mysql.version, vec![8, 0, 35]);
+    }
+
+    #[test]
     fn unparseable_version_is_treated_as_oldest() {
         let parsed = ServerVersion::parse("garbage");
         assert_eq!(parsed, version(Flavor::MySql, 0, 0, 0));
-        assert!(parsed.is_below_minimum());
+        assert!(parsed.is_below_compatibility_floor());
         assert_eq!(
             parsed.capabilities().check_constraints,
             CheckConstraints::Unsupported
@@ -209,9 +267,9 @@ mod tests {
 
     #[test]
     fn minimum_versions_per_flavor() {
-        assert!(version(Flavor::MySql, 5, 6, 51).is_below_minimum());
-        assert!(!version(Flavor::MySql, 5, 7, 0).is_below_minimum());
-        assert!(version(Flavor::MariaDb, 10, 2, 44).is_below_minimum());
-        assert!(!version(Flavor::MariaDb, 10, 3, 0).is_below_minimum());
+        assert!(version(Flavor::MySql, 5, 6, 51).is_below_compatibility_floor());
+        assert!(!version(Flavor::MySql, 5, 7, 0).is_below_compatibility_floor());
+        assert!(version(Flavor::MariaDb, 10, 2, 44).is_below_compatibility_floor());
+        assert!(!version(Flavor::MariaDb, 10, 3, 0).is_below_compatibility_floor());
     }
 }

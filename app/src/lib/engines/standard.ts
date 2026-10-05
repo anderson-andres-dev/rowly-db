@@ -1,5 +1,5 @@
 import { StandardSQL } from "@codemirror/lang-sql";
-import { byAnalyzerLocation, byServerPosition, firstLocated } from "$lib/sqlDiagnostics";
+import { byAnalyzerLocation, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
 import { ansiString, COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, caseInsensitiveName } from "./common";
 import type { SqlProfile } from "./types";
 
@@ -28,6 +28,7 @@ export const standardSql: SqlProfile = {
   editorDialect: StandardSQL,
   formatterDialect: "sql",
   statementStarters: COMMON_STARTERS,
+  builtinFunctions: [],
   reservedWords: RESERVED,
   errorHelp: {},
   locateError: firstLocated(byServerPosition, byAnalyzerLocation),

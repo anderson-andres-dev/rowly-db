@@ -5,13 +5,16 @@
   import { drawSelection, keymap } from "@codemirror/view";
   import { selectAll } from "@codemirror/commands";
   import { EditorState } from "@codemirror/state";
-  import { sql, MySQL } from "@codemirror/lang-sql";
+  import { sql } from "@codemirror/lang-sql";
+  import { activeEngine } from "$lib/stores/connection";
+  import { standardSql } from "$lib/engines";
+  import { dialectFor } from "$lib/editor/completionSource";
   import { Check, Copy, X } from "@lucide/svelte";
   import { tooltip } from "$lib/tooltip";
-  import { writeClipboardText } from "$lib/gridClipboard";
+  import { writeClipboardText } from "$lib/results/gridClipboard";
   import { t } from "$lib/i18n";
   import { fetchTableDefinition } from "$lib/tableDefinition";
-  import { alignColumnDefinitions } from "$lib/sqlFormatLayout";
+  import { alignColumnDefinitions } from "$lib/editor/formatLayout";
   import { editorSettings } from "$lib/stores/editorSettings";
   import { buildCmTheme } from "$lib/theming/codemirrorTheme";
   import { editorPalette, effectiveScheme } from "$lib/theming/theme";
@@ -75,7 +78,7 @@
         EditorState.readOnly.of(true),
         drawSelection(),
         keymap.of([{ key: "Mod-a", run: selectAll }]),
-        sql({ dialect: MySQL }),
+        sql({ dialect: dialectFor(get(activeEngine) ?? standardSql) }),
         buildCmTheme(get(editorPalette), get(effectiveScheme)),
       ],
     });

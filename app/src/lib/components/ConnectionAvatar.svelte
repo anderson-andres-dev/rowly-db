@@ -1,6 +1,6 @@
 <script lang="ts">
   import { NEUTRAL_IDENTITY_COLOR } from "$lib/connectionColors";
-  import { initials, readableTextColor } from "$lib/connectionIdentity";
+  import { initials, readableTextColor } from "$lib/connections/connectionIdentity";
 
   // Avatar de identidad de una conexion: sus iniciales sobre el color que
   // eligio el usuario (como los proyectos de JetBrains, "CT"). Sin color,

@@ -1,6 +1,6 @@
 use khipu_driver_core::{
     ConnectionConfig, DbConnector, DriverError, QueryExecutionOptions, QueryExecutionResult,
-    SchemaObjects, TlsStatus,
+    SchemaObjects, ServerIdentity, TlsStatus,
 };
 use khipu_driver_mysql::MySqlConnector;
 use khipu_driver_postgres::PostgresConnector;
@@ -35,7 +35,7 @@ impl DatabaseKind {
 /// `execute_query` and the database explorer keep using the same pool.
 pub struct ConnectedDatabase {
     pub connector: Arc<dyn DbConnector>,
-    pub server_version: String,
+    pub server: ServerIdentity,
     pub tls: TlsStatus,
     /// The schema the profile resolves unqualified names against (see
     /// `DbConnector::current_schema`); always loaded, never hidden.
@@ -81,7 +81,7 @@ async fn report<C: DbConnector>(connector: C) -> Result<TestConnectionReport, Dr
     };
 
     Ok(TestConnectionReport {
-        server_version: connector.server_version(),
+        server_version: connector.server().label,
         default_schema: connector.current_schema().await.ok(),
         latency_ms,
         tls: connector.tls_status(),
@@ -116,7 +116,7 @@ async fn open<C: DbConnector + 'static>(connector: C) -> Result<ConnectedDatabas
     }
 
     Ok(ConnectedDatabase {
-        server_version: connector.server_version(),
+        server: connector.server(),
         tls: connector.tls_status(),
         connector: Arc::new(connector),
         default_schema,
@@ -130,17 +130,80 @@ mod tests {
     use super::DatabaseKind;
     use khipu_engine::Dialect;
 
+    /// Este archivo es el registro de motores del backend (perfil -> motor ->
+    /// driver). El resto decide con `Dialect` y su definicion: nombrar aqui
+    /// fuera un motor concreto trataria a uno nuevo como a otro sin que el
+    /// compilador lo diga.
+    #[test]
+    fn solo_el_registro_nombra_un_motor_concreto() {
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        let mut named = vec!["DatabaseKind::".to_string()];
+        for dialect in Dialect::ALL {
+            named.push(format!("Dialect::{dialect:?}"));
+            named.push(format!("\"{}\"", dialect.id()));
+        }
+        let mut found = Vec::new();
+        for path in files {
+            let relative = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            if relative == "drivers.rs" {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            let code = text.split("#[cfg(test)]").next().unwrap();
+            for (number, line) in code.lines().enumerate() {
+                if line.trim_start().starts_with("//") {
+                    continue;
+                }
+                if named.iter().any(|name| line.contains(name.as_str())) {
+                    found.push(format!("{relative}:{}: {}", number + 1, line.trim()));
+                }
+            }
+        }
+        assert!(
+            found.is_empty(),
+            "decide con el Dialect de la conexion y su definicion:\n{}",
+            found.join("\n")
+        );
+    }
+
     /// Los nombres que manda el frontend (`ConnectionDriver`, en
-    /// app/src/lib/connections.ts), cada uno con su motor propio.
+    /// app/src/lib/connections.ts), los de tests/engines/contract.json: cada
+    /// uno llega como su motor propio, y no hay otro.
     #[test]
     fn cada_motor_del_frontend_llega_como_el_suyo() {
-        for (name, dialect) in [
-            ("mysql", Dialect::MySql),
-            ("mariadb", Dialect::MariaDb),
-            ("postgres", Dialect::Postgres),
-        ] {
-            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(name)).unwrap();
-            assert_eq!(kind.dialect(), dialect, "{name}");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/engines/contract.json");
+        let contract: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let ids: Vec<&str> = contract["engines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|engine| engine["id"].as_str().unwrap())
+            .collect();
+        for id in &ids {
+            let kind: DatabaseKind = serde_json::from_value(serde_json::json!(id)).unwrap_or_else(|_| {
+                panic!("DatabaseKind (app/src-tauri/src/drivers.rs) no tiene el motor {id}: sumarlo con su driver")
+            });
+            assert_eq!(kind.dialect().id(), *id);
         }
+        let all: Vec<&str> = Dialect::ALL.iter().map(|dialect| dialect.id()).collect();
+        assert_eq!(all, ids);
     }
 }

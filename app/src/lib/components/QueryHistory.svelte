@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import { Search } from "@lucide/svelte";
   import { locale, numberFormat, t } from "$lib/i18n";
-  import { highlightSql } from "$lib/sqlHighlight";
+  import { highlightSql } from "$lib/editor/highlight";
   import { filterHistory, groupHistoryByDay, type HistoryDay, type HistoryEntry } from "$lib/stores/queryHistory";
 
   // Historial de la conexion activa (Ctrl+E): capa flotante sobre el editor,

@@ -7,9 +7,7 @@ export default defineMessages({
     close: "Cerrar",
     save: "Guardar",
     discard: "Descartar",
-    delete: "Eliminar",
     apply: "Aplicar",
-    back: "Volver",
     loading: "Cargando…",
   },
   en: {
@@ -17,9 +15,7 @@ export default defineMessages({
     close: "Close",
     save: "Save",
     discard: "Discard",
-    delete: "Delete",
     apply: "Apply",
-    back: "Back",
     loading: "Loading…",
   },
   "pt-BR": {
@@ -27,9 +23,7 @@ export default defineMessages({
     close: "Fechar",
     save: "Salvar",
     discard: "Descartar",
-    delete: "Excluir",
     apply: "Aplicar",
-    back: "Voltar",
     loading: "Carregando…",
   },
   fr: {
@@ -37,9 +31,7 @@ export default defineMessages({
     close: "Fermer",
     save: "Enregistrer",
     discard: "Ignorer",
-    delete: "Supprimer",
     apply: "Appliquer",
-    back: "Retour",
     loading: "Chargement…",
   },
   de: {
@@ -47,9 +39,7 @@ export default defineMessages({
     close: "Schließen",
     save: "Speichern",
     discard: "Verwerfen",
-    delete: "Löschen",
     apply: "Anwenden",
-    back: "Zurück",
     loading: "Wird geladen…",
   },
 });

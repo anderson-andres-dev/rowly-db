@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "scenario": "bundle",
+  "label": "v0.3.0-cachyos",
+  "initialJs": {
+    "files": 10,
+    "kb": 1424.0,
+    "gzip_kb": 437.9
+  },
+  "allJs": {
+    "files": 13,
+    "kb": 1682.1,
+    "gzip_kb": 510.5
+  },
+  "allCss": {
+    "files": 2,
+    "kb": 45.7,
+    "gzip_kb": 7.3
+  }
+}

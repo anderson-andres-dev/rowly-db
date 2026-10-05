@@ -16,7 +16,7 @@
 // decidirlo. Un tramo que solo tiene espacios o comentarios no es una
 // sentencia. Las pruebas de todo esto estan en sqlBlankLines.test.ts.
 //
-// En el editor no se usa sobre el texto entero: sqlStatementIndex.ts lleva
+// En el editor no se usa sobre el texto entero: editor/statementIndex.ts lleva
 // las sentencias del documento al dia por partes, con este mismo escaner.
 
 import { commentAt, executablePrefix, opensDashComment } from "$lib/sqlComments";
@@ -29,7 +29,7 @@ export interface StatementRange {
 export interface ScannedStatement extends StatementRange {
   // Termino en ";": justo despues el escaner esta fuera de todo (comillas,
   // comentarios), asi que se puede volver a escanear desde ahi sin mirar
-  // atras (sqlStatementIndex.ts). Una sentencia cortada por una linea en
+  // atras (editor/statementIndex.ts). Una sentencia cortada por una linea en
   // blanco no lo es: si esa linea se borra, se une con la siguiente, y eso
   // solo se ve escaneando desde antes.
   terminated: boolean;
@@ -73,7 +73,7 @@ export const STANDARD_LEXICAL: SqlLexical = {
 };
 
 // Donde quedo el escaner al cortar un trozo: el documento se escanea por
-// partes (sqlStatementIndex.ts) y cada una sigue donde la anterior quedo.
+// partes (editor/statementIndex.ts) y cada una sigue donde la anterior quedo.
 export interface ScanState {
   mode: number;
   // La comilla que cierra lo abierto (codigo de caracter) o el $tag$ abierto.

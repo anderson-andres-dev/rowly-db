@@ -3,7 +3,7 @@
   import { onMount, onDestroy, tick } from "svelte";
   import { onePerFrame } from "$lib/onePerFrame";
   import { focusZoneAction, installFocusZones, setSidebarRevealer } from "$lib/focusZones";
-  import { registerCommands } from "$lib/commands";
+  import { registerCommands } from "$lib/workspace/commands";
   import { installKeybindings } from "$lib/keybindings";
   import { installNumpadFix } from "$lib/numpadKeys";
   import type { Snippet } from "svelte";
@@ -61,7 +61,7 @@
   let cleanupThemeEffects: (() => void) | undefined;
   let cleanupLocaleEffects: (() => void) | undefined;
   let settingsOpen = $state(false);
-  let settingsSection = $state<"appearance" | "shortcuts">("appearance");
+  let settingsSection = $state<"general" | "shortcuts">("general");
 
   // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
   let sheetOpen = $state(false);
@@ -174,9 +174,8 @@
   }
 
   // "Recargar tablas" es, en la practica, volver a conectar al mismo
-  // perfil activo: no hay pool vivo que reintrospectar (ver comentario de
-  // reset() en connection.ts), asi que connectToProfile ya hace exactamente
-  // lo que un refresh necesita, sin agregar ningun comando nuevo en Rust.
+  // perfil activo: connect reemplaza la conexion de la ventana y vuelve a
+  // introspectar, que es exactamente lo que un refresh necesita.
   async function handleRefreshTables() {
     const profile = activeProfile;
     if (!profile || refreshingTables) return;
@@ -404,7 +403,7 @@
       aria-expanded={settingsOpen}
       aria-pressed={settingsOpen}
       onclick={() => {
-        settingsSection = "appearance";
+        settingsSection = "general";
         settingsOpen = !settingsOpen;
       }}
     >

@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
-import { ENGINES, standardSql, type SqlProfile } from "$lib/engines";
+import { ENGINES, engineForContext, standardSql, type SqlProfile } from "$lib/engines";
+import type { ConnectionEngineContext } from "$lib/types";
 import type { ConnectionDriver } from "$lib/connections";
-import type { ExecutionError } from "$lib/sqlDiagnostics";
+import type { ExecutionError } from "$lib/editor/diagnostics";
 import { splitStatements } from "$lib/sqlStatements";
-import { normalizePastedSql } from "$lib/sqlPaste";
-import { sqlTokens } from "$lib/sqlContext";
-import { aliasFor } from "$lib/sqlRelations";
-import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/sqlSchema";
+import { normalizePastedSql } from "$lib/editor/paste";
+import { sqlTokens } from "$lib/editor/context";
+import { aliasFor } from "$lib/editor/relations";
+import { buildCompletionSource, buildSqlSchema, dialectFor } from "$lib/editor/completionSource";
 import type { CatalogTable, SchemaObjects } from "$lib/types";
-import { buildRoutineIndex, callHints } from "$lib/sqlCallHints";
+import { buildRoutineIndex, callHints } from "$lib/editor/callHints";
 
-// El contrato que cumple cada perfil de motor (docs/specs/v0.2-perfiles-de-motor.md,
-// §5). Un motor nuevo se suma a ENGINES y a FIXTURES (el tipo lo exige) y
+// El contrato que cumple cada perfil de motor
+// (SQL_ENGINE.es.md). Un motor nuevo se suma a
+// ENGINES y a FIXTURES (el tipo lo exige) y
 // tiene que pasar todo esto sin tocar nada mas.
 
 interface Fixture {
@@ -224,3 +226,135 @@ describe.each(Object.entries(ENGINES) as [ConnectionDriver, (typeof ENGINES)[Con
     });
   },
 );
+
+// tests/engines/contract.json: lo mismo que deciden el nucleo de Rust y el
+// backend para cada motor, en el mismo orden. Un cambio en un lado se hace en
+// los tres y en ese archivo.
+describe("contrato compartido con Rust", () => {
+  it("cada motor del frontend coincide con el nucleo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = new URL("../../../../tests/engines/contract.json", import.meta.url);
+    const contract = JSON.parse(readFileSync(path, "utf8")) as {
+      engines: {
+        id: string;
+        identifierQuote: string;
+        backslashEscapes: boolean;
+        executableComments: string[];
+        pending?: boolean;
+      }[];
+    };
+    const pending = contract.engines.filter((engine) => engine.pending).map((engine) => engine.id);
+    expect(pending, "motores pendientes (tools/engine/new.mjs): escribir sus valores y quitar pending").toEqual([]);
+    expect(
+      Object.keys(ENGINES),
+      "motores de ConnectionDriver (app/src/lib/connections.ts) y ENGINES (app/src/lib/engines) frente a tests/engines/contract.json",
+    ).toEqual(contract.engines.map((engine) => engine.id));
+    const ours = Object.entries(ENGINES).map(([id, profile]) => ({
+      id,
+      // La comilla con que la app cita un nombre (no las que acepta al leer).
+      identifierQuote: profile.quoteIdentifier("x")[0],
+      backslashEscapes: profile.lexical.backslashEscapes,
+      executableComments: [...profile.lexical.executableComments],
+    }));
+    expect(ours).toEqual(contract.engines);
+  });
+});
+
+// Las lineas de version (support/<motor>.json): la misma declaracion que
+// compila el backend. G6: lo que una linea vuelve reservado lo cita el SQL
+// generado en cualquier version del motor, y ningun alias automatico lo usa.
+describe("lineas de version", () => {
+  it("cada motor cita las palabras que reserva cualquiera de sus lineas (G6)", async () => {
+    const { readFileSync } = await import("node:fs");
+    let checked = 0;
+    for (const [id, engine] of Object.entries(ENGINES)) {
+      const path = new URL(`../../../../support/${id}.json`, import.meta.url);
+      const data = JSON.parse(readFileSync(path, "utf8")) as { engine: string; lines: { reservedWords?: string[] }[] };
+      expect(data.engine).toBe(id);
+      for (const word of data.lines.flatMap((line) => line.reservedWords ?? [])) {
+        expect(engine.identifier(word), `${id}: ${word}`).toBe(engine.quoteIdentifier(word));
+        expect(engine.reservedWords.has(word), `${id}: ${word} como alias`).toBe(true);
+        expect(aliasFor(`${word}_items`, new Set(), engine.reservedWords)).not.toBe(word);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    // MariaDB cita tambien lo que reservan las lineas de MySQL: una comilla
+    // de mas no rompe nada.
+    expect(ENGINES.mariadb.identifier("rank")).toBe("`rank`");
+  });
+
+  it("una reservada que trae un paquete de soporte se cita en esa conexion (P, G6)", () => {
+    const context = (reservedWords: string[], noBackslashEscapes = false): ConnectionEngineContext => ({
+      generation: 1,
+      engineId: "mysql",
+      server: { engine: "mysql", version: [8, 4, 11], label: "MySQL 8.4.11" },
+      sessionMode: { noBackslashEscapes },
+      line: { id: "8.4", revision: 2, origin: "downloaded" },
+      reservedWords,
+      schemaEpoch: 0,
+      support: null,
+      verification: "verified",
+    });
+    // Lo que la app ya cita no crea otro perfil.
+    expect(engineForContext(context(["rank"]))).toBe(ENGINES.mysql);
+    const withPack = engineForContext(context(["rank", "qualify"]));
+    expect(withPack.identifier("qualify")).toBe("`qualify`");
+    expect(withPack.identifier("Qualify")).toBe("`Qualify`");
+    expect(withPack.identifier("users")).toBe("users");
+    expect(withPack.reservedWords.has("qualify")).toBe(true);
+    expect(ENGINES.mysql.identifier("qualify")).toBe("qualify");
+    // La misma revision es el mismo perfil (clave de las caches), y se suma
+    // al modo de la sesion.
+    expect(engineForContext(context(["qualify", "rank"]))).toBe(withPack);
+    const both = engineForContext(context(["qualify"], true));
+    expect(both.identifier("qualify")).toBe("`qualify`");
+    expect(both.lexical.backslashEscapes).toBe(false);
+  });
+
+  it("el frontend no deduce linea ni version: las recibe del backend", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const root = new URL("../../", import.meta.url);
+    const sources = (readdirSync(root, { recursive: true }) as string[]).filter(
+      (file) => /\.(ts|svelte)$/.test(file) && !/\.test\.ts$/.test(file),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    const inferred = sources.filter((file) => {
+      const text = readFileSync(new URL(file, root), "utf8");
+      return /server\.version\b|server\.label\.(match|split|replace|slice)|\.line\.id\s*[<>=]/.test(text);
+    });
+    expect(inferred).toEqual([]);
+  });
+
+  it("solo el perfil y el registro de conexiones nombran un motor concreto", async () => {
+    // El resto de la app le pregunta al perfil (engines/types.ts): comparar
+    // con ENGINES.<id>, escribir un id o elegir un dialecto de lang-sql es
+    // tratar a un motor nuevo como a otro sin que nada falle.
+    const { readFileSync } = await import("node:fs");
+    const { execFileSync } = await import("node:child_process");
+    const langSql = await import("@codemirror/lang-sql");
+    const ids = Object.keys(ENGINES);
+    const dialects = Object.entries(langSql)
+      .filter(([, value]) => value instanceof langSql.SQLDialect)
+      .map(([name]) => name);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(dialects).toContain("MySQL");
+    const named = new RegExp(
+      [
+        `ENGINES\\.(${ids.join("|")})\\b`,
+        `["'\`](${ids.join("|")})["'\`]`,
+        `import\\s*\\{[^}]*\\b(${dialects.join("|")})\\b[^}]*\\}\\s*from\\s*["']@codemirror/lang-sql["']`,
+      ].join("|"),
+    );
+    // Solo lo versionado: una carpeta local ignorada no es la app.
+    const root = new URL("../../", import.meta.url);
+    const tracked = execFileSync("git", ["ls-files", "."], { cwd: root, encoding: "utf8" }).split("\n");
+    const owners = /^lib\/(engines\/|connections\.ts$)/;
+    const sources = tracked.filter(
+      (file) => /\.(ts|svelte)$/.test(file) && !/\.test\.ts$/.test(file) && !owners.test(file),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    const offenders = sources.filter((file) => named.test(readFileSync(new URL(file, root), "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});

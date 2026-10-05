@@ -2,11 +2,13 @@
 
 MySQL, MariaDB y PostgreSQL en Docker, cargadas con la base clásica **Sakila** (MySQL y MariaDB) y su port a PostgreSQL, **Pagila**: el mismo videoclub en los tres motores, con tablas, vistas, procedimientos, funciones y triggers. Son el objetivo de las pruebas contra servidor de `crates/server-tests`.
 
-| Motor | Imagen | Puerto | Base |
-|---|---|---|---|
-| MySQL | `mysql:8.4` | 33306 | `sakila`, `rowly_test` |
-| MariaDB | `mariadb:11` | 33307 | `sakila`, `rowly_test` |
-| PostgreSQL | `pgvector/pgvector:pg18` | 55432 | `pagila` (schema `rowly_test`) |
+| Motor | Puerto | Base |
+|---|---|---|
+| MySQL | 33306 | `sakila`, `rowly_test` |
+| MariaDB | 33307 | `sakila`, `rowly_test` |
+| PostgreSQL | 55432 | `pagila` (schema `rowly_test`) |
+
+Cada imagen es una versión de `verified` en `lines.json`, fijada por digest. Sin argumentos `up.sh` levanta la de por defecto de `docker-compose.yml` (`crates/server-tests` la compara con `lines.json`); `up.sh postgres=13.23` levanta cualquier otra verificada.
 
 Usuario y clave: `rowly` / `rowly` (clave de root en MySQL y MariaDB: `rowly`). Los puertos solo escuchan en `127.0.0.1`.
 
@@ -40,3 +42,4 @@ Se descargan de `public.ecr.aws/docker/library`, el espejo público de las imág
 - `the_routines_corpus_…`: un corpus de procedures, funciones, triggers y eventos (`crates/server-tests/corpus`) pasa por el guard y se crea y se llama en cada servidor.
 - `the_definitions_the_server_returns_…`: todas las definiciones que los servidores devuelven para Sakila y Pagila (`SHOW CREATE …`, `pg_get_functiondef`) deben ser aceptadas por el guard.
 - `no_text_the_guard_accepts_…` y `fuzzing_the_guard_…`: textos con una segunda sentencia escondida corren en el servidor real; si el guard aceptó alguno, la tabla centinela debe seguir intacta. El fuzz muta rutinas válidas; `ROWLY_FUZZ_CASES`, `ROWLY_FUZZ_SEED` y `ROWLY_ENGINES=mysql,postgres` lo ajustan.
+- `tls_verification_uses_the_configured_ca`: copia del contenedor la CA que MySQL generó para su propio certificado (`docker exec … cat /var/lib/mysql/ca.pem`) y comprueba `VerifyCa` y `VerifyIdentity` con ella y con `tls/unrelated-ca.pem`, una CA de prueba que no firma nada (no se guarda ninguna clave privada).

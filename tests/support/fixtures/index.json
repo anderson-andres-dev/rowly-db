@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "commit": "0000000000000000000000000000000000000000",
+  "packages": [
+    {
+      "engine": "mysql",
+      "line": "8.4",
+      "revision": 2,
+      "requiresApp": "0.3.0",
+      "file": "mysql-8.4-r2.json",
+      "size": 668,
+      "sha256": "c81132928cccb4b37bfead85558c2ad37aea7107a9f2de53ca32660349d45ff0"
+    },
+    {
+      "engine": "mysql",
+      "line": "10",
+      "revision": 1,
+      "requiresApp": "0.3.0",
+      "file": "mysql-10-r1.json",
+      "size": 118,
+      "sha256": "acc649319d85583142207650bdf3487cf387d553367f1f39b4f7037253f2955a"
+    }
+  ]
+}

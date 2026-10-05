@@ -1,3 +1,5 @@
+import type { ConnectionDriver } from "$lib/connections";
+
 export interface CatalogColumn {
   name: string;
   dataType: string;
@@ -95,7 +97,7 @@ export interface ExplorerRoutine {
   kind: "procedure" | "function";
   arguments: string;
   returnType?: string | null;
-  // Uno por uno, para los hints de parametros (sqlCallHints.ts). Puede faltar
+  // Uno por uno, para los hints de parametros (editor/callHints.ts). Puede faltar
   // con un backend viejo.
   parameters?: RoutineParameter[];
 }
@@ -142,7 +144,7 @@ export interface TlsStatus {
 }
 
 // Por que fallo conectar (ConnectionErrorKind en driver-core): la app lo
-// explica en su idioma (connectionErrors.ts) y el detalle tecnico queda para
+// explica en su idioma (connections/connectionErrors.ts) y el detalle tecnico queda para
 // copiar.
 export type ConnectionErrorKind =
   | "authFailed"
@@ -170,8 +172,36 @@ export interface TestConnectionReport {
   tls: TlsStatus;
 }
 
+export type SupportStatus = "supported" | "grace" | "unsupported" | "newer";
+
+// Lo que el backend sabe del motor de la conexion, armado una vez al
+// conectar (ConnectionEngineContext en src-tauri/src/engine_context.rs). De
+// solo lectura: el frontend no deduce motor ni version de la etiqueta.
+export interface ConnectionEngineContext {
+  // Sube en cada conexion y cuando cambia el modo de la sesion: lo pedido
+  // con otra ya no vale.
+  generation: number;
+  // El motor con que se parte, analiza y protege el SQL (el del perfil).
+  engineId: ConnectionDriver;
+  // El servidor como lo detecto el driver; `label` es solo para mostrar.
+  server: { engine: ConnectionDriver; version: number[]; label: string };
+  sessionMode: { noBackslashEscapes: boolean };
+  // La linea de comportamiento efectiva, la revision de sus datos y de donde
+  // salen (la app o un paquete de soporte descargado), elegida por el
+  // backend al conectar.
+  line: { id: string; revision: number; origin: "included" | "downloaded" } | null;
+  // Las reservadas de todas las lineas del motor en esa misma revision: el
+  // SQL que escribe el editor las cita (G6).
+  reservedWords: string[];
+  // Sube cuando cambian los schemas cargados.
+  schemaEpoch: number;
+  // Ciclo de vida del fabricante: solo para mostrar.
+  support: { status: SupportStatus; release?: string; eol?: string } | null;
+  verification: "verified" | "unverified";
+}
+
 export interface DatabaseExplorer {
-  serverVersion: string;
+  context: ConnectionEngineContext;
   tls: TlsStatus;
   defaultSchema: string;
   availableSchemas: string[];
@@ -243,4 +273,12 @@ export interface SortKey {
 
 export type ExecuteQueryResponse =
   | { type: "confirmationRequired"; statement: DestructiveStatement }
-  | { type: "completed"; result: QueryExecutionResult; page?: ResultPage };
+  | {
+      type: "completed";
+      result: QueryExecutionResult;
+      page?: ResultPage;
+      // La sentencia cambio el modo de la sesion: el contexto nuevo.
+      context?: ConnectionEngineContext;
+      // La sesion de la consola se perdio y la que sigue empieza limpia.
+      sessionReset?: boolean;
+    };

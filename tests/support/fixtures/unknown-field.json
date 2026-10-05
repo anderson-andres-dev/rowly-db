@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "engine": "mysql",
+  "requiresApp": "0.3.0",
+  "line": {
+    "line": "8.4",
+    "revision": 3,
+    "removedSyntax": [
+      {
+        "words": [
+          "^",
+          "SHOW",
+          "SLAVE",
+          "STATUS"
+        ],
+        "instead": "SHOW REPLICA STATUS"
+      },
+      {
+        "words": [
+          "^",
+          "SHOW",
+          "MASTER",
+          "STATUS"
+        ],
+        "instead": "SHOW BINARY LOG STATUS"
+      }
+    ],
+    "destructiveKeywords": []
+  }
+}

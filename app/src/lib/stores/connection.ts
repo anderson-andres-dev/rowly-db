@@ -1,9 +1,16 @@
 import { derived, get, writable } from "svelte/store";
-import { engineFor } from "$lib/engines";
+import { engineForContext } from "$lib/engines";
 import { backendText, invoke } from "$lib/backend";
 import { browser } from "$app/environment";
-import type { CatalogTable, ConnectionFailure, DatabaseExplorer, TestConnectionReport, TlsMode } from "$lib/types";
-import { toConnectionFailure } from "$lib/connectionErrors";
+import type {
+  CatalogTable,
+  ConnectionEngineContext,
+  ConnectionFailure,
+  DatabaseExplorer,
+  TestConnectionReport,
+  TlsMode,
+} from "$lib/types";
+import { toConnectionFailure } from "$lib/connections/connectionErrors";
 import { forgetQueryHistory } from "./queryHistory";
 import { getDriver, type ConnectionDriver } from "$lib/connections";
 import { forgetConnectionPassword, loadConnectionPassword } from "$lib/credentials";
@@ -14,7 +21,7 @@ import { forgetPinnedTables } from "./pinnedTables";
 
 export interface ConnectionState {
   // true = el ultimo connect() cargo un catalogo con exito. El backend
-  // mantiene vivo ese pool (ActiveConnection en src-tauri/src/lib.rs) para
+  // mantiene vivo ese pool (ActiveConnection en src-tauri/src/state.rs) para
   // execute_query y el explorador hasta el proximo connect().
   connected: boolean;
   connecting: boolean;
@@ -40,9 +47,6 @@ export const activeProfile = derived(
     ($connection.connected && $profiles.find((profile) => profile.id === $connection.profileId)) || null,
 );
 
-// El perfil del motor de la conexion activa (lib/engines); null sin
-// conexion.
-export const activeEngine = derived(activeProfile, ($profile) => ($profile ? engineFor($profile.driver) : null));
 
 // La conexion activa es de produccion: el backend ya pide confirmar cada
 // escritura; la interfaz lo hace visible y confirma tambien los cambios del
@@ -51,13 +55,20 @@ export const isProduction = derived(activeProfile, ($profile) => $profile?.envir
 
 // Tablas del catalogo cargado por el ultimo connect() exitoso. Se usa tanto
 // para el arbol de tablas del sidebar (SchemaTree.svelte) como para el
-// autocompletado del editor (SqlEditor.svelte via sqlSchema.ts) - no hay
+// autocompletado del editor (SqlEditor.svelte via editor/completionSource.ts) - no hay
 // comando de Tauri aparte para sugerencias, el catalogo ya viaja completo.
 export const catalogTables = writable<CatalogTable[]>([]);
 
 // Todo lo que muestra el arbol del sidebar (SchemaTree.svelte): schemas
 // visibles con sus tablas, vistas, rutinas, etc. null = sin conexion.
 export const databaseExplorer = writable<DatabaseExplorer | null>(null);
+// El perfil del motor de la conexion activa, con su modo de sesion
+// (lib/engines, engineForContext): lo que dice el backend al conectar. null
+// sin conexion.
+export const activeEngine = derived([connection, databaseExplorer], ([$connection, $explorer]) =>
+  $connection.connected && $explorer ? engineForContext($explorer.context) : null,
+);
+
 // true mientras set_visible_schemas introspecta schemas recien elegidos.
 export const explorerLoading = writable(false);
 let connectionGeneration = 0;
@@ -96,6 +107,15 @@ function withTranslatedWarnings(explorer: DatabaseExplorer): DatabaseExplorer {
     ...explorer,
     schemas: explorer.schemas.map((objects) => ({ ...objects, warnings: objects.warnings.map(backendText) })),
   };
+}
+
+// Una sentencia de la consola cambio el modo de la sesion (SET sql_mode): el
+// backend manda el contexto con otra generacion. Si mientras tanto se
+// reconecto, el de la conexion nueva es mas reciente y se queda.
+export function applySessionContext(context: ConnectionEngineContext): void {
+  databaseExplorer.update((explorer) =>
+    explorer && explorer.context.generation < context.generation ? { ...explorer, context } : explorer,
+  );
 }
 
 // Pide al backend que muestre exactamente `schemas` (mas el por defecto) y
@@ -275,11 +295,12 @@ export async function testConnection(
   return await invoke<TestConnectionReport>("test_connection", { kind, config });
 }
 
-// reset() SOLO limpia el estado del lado del frontend. No existe un comando
-// de Tauri para "desconectar" o descartar el catalogo en AppState hoy, asi
-// que esto no llama a invoke(): reconectar es simplemente volver a llamar a
-// connect().
+// Volver a la lista de conexiones: el frontend queda sin conexion y el
+// backend suelta la suya (disconnect): su pool y su catalogo no siguen vivos
+// hasta cerrar la ventana. Una consulta que todavia corre conserva su
+// conector y termina igual. Reconectar es volver a llamar a connect().
 export function reset(): void {
+  void releaseBackendConnection();
   connectionGeneration += 1;
   explorerLoading.set(false);
   connection.set(initialState);
@@ -291,6 +312,16 @@ export function reset(): void {
 // va primero: si el keyring falla, el perfil se conserva para no dejar una
 // contraseña huerfana imposible de borrar desde la interfaz. Los archivos
 // .sql de la carpeta vinculada no se tocan, solo se olvida el vinculo.
+// Si no habia conexion, disconnect no hace nada; si falla, no hay nada que
+// mostrar: la ventana ya no la usa.
+async function releaseBackendConnection(): Promise<void> {
+  try {
+    await invoke("disconnect");
+  } catch {
+    // Nada que hacer.
+  }
+}
+
 export async function deleteConnectionProfile(profileId: string): Promise<void> {
   await forgetConnectionPassword(profileId);
   saveVisibleSchemas(profileId, []);

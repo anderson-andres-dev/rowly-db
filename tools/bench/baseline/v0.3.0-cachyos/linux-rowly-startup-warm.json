@@ -1,0 +1,304 @@
+{
+  "format": 1,
+  "scenario": "startup",
+  "app": "Rowly DB",
+  "label": "v0.3.0-cachyos",
+  "date": "2026-10-02T22:42:42-0500",
+  "environment": {
+    "os": "CachyOS",
+    "kernel": "7.1.8-1-cachyos",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "cores": 16,
+    "memory_gb": 15.3,
+    "governor": "powersave",
+    "platform_profile": "balanced",
+    "power_supply": {
+      "ADP0": "1",
+      "ucsi-source-psy-USBC000:001": "0",
+      "BAT0": "Full"
+    },
+    "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)\n00:06.2 PCI bridge: Intel Corporation Device a73d",
+    "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+    "compositor": "Hyprland v0.56.2",
+    "session": "wayland",
+    "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+    "workspace": "special:rowlybench (silent, fuera de pantalla)",
+    "binary": "target/release/rowly-db (v0.3.0, npx tauri build --no-bundle)"
+  },
+  "mode": "warm",
+  "settle_rule": "<20 ms de CPU en el ultimo segundo",
+  "runs": [
+    {
+      "window_ms": 138,
+      "settle_ms": 1390,
+      "pss_mb": 267.5,
+      "rss_mb": 436.4,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    },
+    {
+      "window_ms": 144,
+      "settle_ms": 1083,
+      "pss_mb": 269.4,
+      "rss_mb": 434.7,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    },
+    {
+      "window_ms": 134,
+      "settle_ms": 1006,
+      "pss_mb": 270.1,
+      "rss_mb": 439.0,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    },
+    {
+      "window_ms": 148,
+      "settle_ms": 950,
+      "pss_mb": 268.6,
+      "rss_mb": 437.9,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    },
+    {
+      "window_ms": 141,
+      "settle_ms": 906,
+      "pss_mb": 268.1,
+      "rss_mb": 437.6,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 197,
+      "settle_ms": 973,
+      "pss_mb": 268.0,
+      "rss_mb": 435.9,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 208,
+      "settle_ms": 1297,
+      "pss_mb": 270.1,
+      "rss_mb": 439.1,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 155,
+      "settle_ms": 1160,
+      "pss_mb": 268.7,
+      "rss_mb": 437.5,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 146,
+      "settle_ms": 908,
+      "pss_mb": 266.8,
+      "rss_mb": 435.6,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 139,
+      "settle_ms": 1023,
+      "pss_mb": 266.9,
+      "rss_mb": 436.0,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 139,
+      "settle_ms": 918,
+      "pss_mb": 270.2,
+      "rss_mb": 439.5,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 140,
+      "settle_ms": 949,
+      "pss_mb": 268.5,
+      "rss_mb": 437.7,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.113.5:443"
+      ]
+    },
+    {
+      "window_ms": 146,
+      "settle_ms": 1026,
+      "pss_mb": 270.4,
+      "rss_mb": 439.3,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 149,
+      "settle_ms": 1034,
+      "pss_mb": 268.8,
+      "rss_mb": 435.9,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 145,
+      "settle_ms": 961,
+      "pss_mb": 269.9,
+      "rss_mb": 439.1,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 143,
+      "settle_ms": 953,
+      "pss_mb": 269.7,
+      "rss_mb": 438.6,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 144,
+      "settle_ms": 1068,
+      "pss_mb": 268.0,
+      "rss_mb": 437.5,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 214,
+      "settle_ms": 982,
+      "pss_mb": 269.4,
+      "rss_mb": 438.2,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.114.5:443"
+      ]
+    },
+    {
+      "window_ms": 151,
+      "settle_ms": 929,
+      "pss_mb": 268.4,
+      "rss_mb": 437.5,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    },
+    {
+      "window_ms": 159,
+      "settle_ms": 968,
+      "pss_mb": 270.0,
+      "rss_mb": 439.3,
+      "processes": 3,
+      "threads": 72,
+      "remotes": [
+        "140.82.112.6:443"
+      ]
+    }
+  ],
+  "summary": {
+    "window_ms": {
+      "n": 20,
+      "median": 145.5,
+      "p95": 208,
+      "min": 134,
+      "max": 214,
+      "stdev": 23.5,
+      "dispersion_pct": 16.1
+    },
+    "settle_ms": {
+      "n": 20,
+      "median": 977.5,
+      "p95": 1297,
+      "min": 906,
+      "max": 1390,
+      "stdev": 127.3,
+      "dispersion_pct": 13.0
+    },
+    "pss_mb": {
+      "n": 20,
+      "median": 268.8,
+      "p95": 270.2,
+      "min": 266.8,
+      "max": 270.4,
+      "stdev": 1.1,
+      "dispersion_pct": 0.4
+    },
+    "rss_mb": {
+      "n": 20,
+      "median": 437.6,
+      "p95": 439.3,
+      "min": 434.7,
+      "max": 439.5,
+      "stdev": 1.4,
+      "dispersion_pct": 0.3
+    },
+    "threads": {
+      "n": 20,
+      "median": 72.0,
+      "p95": 72,
+      "min": 72,
+      "max": 72,
+      "stdev": 0.0,
+      "dispersion_pct": 0.0
+    }
+  },
+  "remotes": [
+    "140.82.112.6:443",
+    "140.82.113.5:443",
+    "140.82.114.5:443"
+  ]
+}

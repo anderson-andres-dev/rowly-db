@@ -99,6 +99,18 @@
   <sub>Pensado para el teclado &nbsp;·&nbsp; En producción cada escritura pide confirmación &nbsp;·&nbsp; Las contraseñas quedan en el almacén seguro del sistema &nbsp;·&nbsp; Las actualizaciones se instalan cuando tú decides</sub>
 </p>
 
+## Bases de datos
+
+MySQL, MariaDB y PostgreSQL. Cada versión de esta tabla pasa la matriz completa de calidad SQL contra un servidor real en el CI; las demás conectan con las reglas de su línea de versión y se muestran como no verificadas ([SQL_ENGINE.es.md](SQL_ENGINE.es.md#5-líneas-de-versión)).
+
+<!-- generated: engines (tools/inventory/status.mjs) -->
+| Motor | Versiones verificadas | Líneas de versión |
+|---|---|---|
+| MySQL | 8.0.46, 8.4.11, 9.7.2 | 5.7, 8.0, 8.4, 9 |
+| MariaDB | 10.6.28, 11.8.9 | 10.3, 10.6, 11.7 |
+| PostgreSQL | 13.23, 14.24, 15.19, 16.15, 17.11, 18.6 | 10, 11, 12, 14, 15, 16, 17, 18 |
+<!-- /generated: engines -->
+
 ## Instalación
 
 Descarga el paquete para tu sistema desde la [última versión](https://github.com/anderson-andres-dev/rowly-db/releases/latest).
@@ -113,6 +125,25 @@ Descarga el paquete para tu sistema desde la [última versión](https://github.c
 | Cualquier Linux | `.AppImage` | `chmod +x Rowly*.AppImage && ./Rowly*.AppImage` |
 
 Los paquetes Linux son para x86_64. Las nuevas versiones aparecen en **Ajustes → Actualizaciones**.
+
+<details>
+<summary><strong>Linux: arranque lento (unos 30 s)</strong></summary>
+<br>
+
+En Linux, Rowly DB necesita un `xdg-desktop-portal` que funcione, o ninguno. Si el portal está instalado pero no puede responder (sin backend para tu escritorio, o una sesión iniciada sin `DISPLAY`/`WAYLAND_DISPLAY`), GTK y la biblioteca de ventanas lo esperan antes de mostrar la ventana: unos 25 s, más 5. Después la app abre con normalidad y escribe un aviso en stderr si el arranque pasó de 10 s.
+
+Para comprobarlo:
+
+```bash
+gdbus call --session --dest org.freedesktop.portal.Desktop \
+  --object-path /org/freedesktop/portal/desktop --method org.freedesktop.DBus.Peer.Ping
+# sano: "()" en mucho menos de un segundo; roto: TimedOut tras unos 25 s
+systemctl --user status xdg-desktop-portal   # el log del portal dice por qué
+```
+
+Para corregirlo, instala el backend del portal de tu escritorio (`xdg-desktop-portal-gnome`, `-kde`, `-wlr`, `-hyprland` o `-gtk`), o asegúrate de que la sesión pase `DISPLAY`/`WAYLAND_DISPLAY` a los servicios de usuario (`systemctl --user import-environment`).
+
+</details>
 
 <details>
 <summary><strong>Compilar desde el código</strong></summary>
@@ -133,7 +164,15 @@ Los paquetes quedan en `target/release/bundle/`.
 
 ## Contribuir
 
-Los reportes de errores y los pull requests son bienvenidos. Empieza por la [guía de desarrollo](CONTRIBUTING.es.md) o [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues).
+Los reportes de errores y los pull requests son bienvenidos; para algo grande, [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues) primero. Por dónde empezar:
+
+| Para | Lee |
+| :--- | :--- |
+| Entender cómo está construido Rowly DB: capas, fronteras, cómo fluye el SQL, el grafo de arquitectura generado | [docs/ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) |
+| Saber qué tiene que demostrar cada motor SQL, en qué versiones, y su estado actual | [SQL_ENGINE.es.md](SQL_ENGINE.es.md) |
+| Añadir o cambiar un motor de base de datos, una línea de versión o una versión verificada | [ENGINE_GUIDE.es.md](ENGINE_GUIDE.es.md) |
+| Preparar el entorno, crear la rama, correr las compuertas y abrir un pull request | [CONTRIBUTING.es.md](CONTRIBUTING.es.md) |
+| Correr las pruebas contra servidores reales de MySQL, MariaDB y PostgreSQL | [tools/test-dbs/README.es.md](tools/test-dbs/README.es.md) |
 
 ## Licencia
 

@@ -1,6 +1,6 @@
 import { defineMessages } from "../define";
 
-// Editor SQL (SqlEditor.svelte), su barra de búsqueda (editorSearchPanel.ts),
+// Editor SQL (SqlEditor.svelte), su barra de búsqueda (editor/search.ts),
 // el marcador de ejecución y el autocompletado. Las claves "cm.*" son las
 // frases propias de CodeMirror (EditorState.phrases).
 export default defineMessages({
@@ -18,6 +18,7 @@ export default defineMessages({
     "diagnostics.close": "cerrar",
     "diagnostics.noErrors": "Sin errores",
     "serverVersion": "Versión del servidor de la conexión activa",
+    "serverUnverified": "Versión del servidor de la conexión activa. Rowly DB no verificó esta versión exacta: usa las reglas de la línea {line}.",
     "serverUnsupported": "Sin soporte oficial",
     "serverUnsupportedHint": "{version} no tiene soporte del fabricante desde {date}. Rowly DB sigue conectando, pero esta versión no se prueba y puede faltar algún objeto.",
     "diagnostics.countOne": "{count} error",
@@ -141,6 +142,7 @@ export default defineMessages({
     "diagnostics.close": "close",
     "diagnostics.noErrors": "No errors",
     "serverVersion": "Server version of the active connection",
+    "serverUnverified": "Server version of the active connection. Rowly DB hasn’t verified this exact version: it uses the rules of the {line} line.",
     "serverUnsupported": "No official support",
     "serverUnsupportedHint": "{version} has had no vendor support since {date}. Rowly DB still connects, but this version is not tested and some objects may be missing.",
     "diagnostics.countOne": "{count} error",
@@ -264,6 +266,7 @@ export default defineMessages({
     "diagnostics.close": "fechar",
     "diagnostics.noErrors": "Sem erros",
     "serverVersion": "Versão do servidor da conexão ativa",
+    "serverUnverified": "Versão do servidor da conexão ativa. O Rowly DB não verificou esta versão exata: usa as regras da linha {line}.",
     "serverUnsupported": "Sem suporte oficial",
     "serverUnsupportedHint": "{version} não tem suporte do fabricante desde {date}. O Rowly DB continua conectando, mas esta versão não é testada e alguns objetos podem faltar.",
     "diagnostics.countOne": "{count} erro",
@@ -387,6 +390,7 @@ export default defineMessages({
     "diagnostics.close": "fermer",
     "diagnostics.noErrors": "Aucune erreur",
     "serverVersion": "Version du serveur de la connexion active",
+    "serverUnverified": "Version du serveur de la connexion active. Rowly DB n’a pas vérifié cette version exacte : il applique les règles de la ligne {line}.",
     "serverUnsupported": "Sans support officiel",
     "serverUnsupportedHint": "{version} n’est plus prise en charge par l’éditeur depuis {date}. Rowly DB se connecte toujours, mais cette version n’est pas testée et certains objets peuvent manquer.",
     "diagnostics.countOne": "{count} erreur",
@@ -510,6 +514,7 @@ export default defineMessages({
     "diagnostics.close": "schließen",
     "diagnostics.noErrors": "Keine Fehler",
     "serverVersion": "Serverversion der aktiven Verbindung",
+    "serverUnverified": "Serverversion der aktiven Verbindung. Rowly DB hat genau diese Version nicht verifiziert: Es gelten die Regeln der Linie {line}.",
     "serverUnsupported": "Kein offizieller Support",
     "serverUnsupportedHint": "{version} wird seit {date} vom Hersteller nicht mehr unterstützt. Rowly DB verbindet sich weiterhin, aber diese Version wird nicht getestet und einige Objekte können fehlen.",
     "diagnostics.countOne": "{count} Fehler",

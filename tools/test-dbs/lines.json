@@ -1,26 +1,313 @@
 {
+  "format": 2,
+  "about": "Fuente unica de servidores de prueba (SQL_ENGINE §10.1). `engines`: un probe por extremo de cada linea (D7). `verified`: las versiones exactas que Rowly DB declara verificadas hoy; cada una corre la matriz completa (§6). `retired`: las que fueron verificadas y salieron de la ventana de soporte (§5.2): ya no se anuncian ni se corren, y guardan `until` (fin de su ventana) y `evidence` (commit y corrida de su ultima evidencia verde). Imagenes fijadas por digest; el harness compara la version que devuelve el servidor con `version`. `tls` (solo en `verified`): lo que el servidor ofrece en su imagen, `encrypted`, `fallback` o `none` (D5).",
   "registry": "public.ecr.aws/docker/library",
-  "engines": {
+  "datasets": {
+    "sakila": {
+      "url": "https://downloads.mysql.com/docs/sakila-db.tar.gz",
+      "sha256": {
+        "sakila-schema.sql": "b32170e1e2ad5828749b61a5ec896155bcd143104b076e5ee8a3a3b013f44915",
+        "sakila-data.sql": "8c228c678cec6ea9e5145ea868f48be87982252e806a547dcddb67758cadf174"
+      }
+    },
+    "pagila": {
+      "repository": "devrimgunduz/pagila",
+      "commit": "5ba5a57aeb159f75f02aca2432d3c262186d13d3",
+      "sha256": {
+        "pagila-schema.sql": "8ce358e4c8014087b85296694a0893887bd7a4190e3ce407f2721b86b98e5707",
+        "pagila-data.sql": "880580fb2cd4daaa99f290ced264988cdd657b3158be63cd281466f796f6dbf2"
+      },
+      "why": "Ultimo commit que carga en todas las versiones verificadas: desde a8bdd3e Pagila exige PostgreSQL 18 (uuidv7, columnas virtuales)"
+    }
+  },
+  "verified": {
     "mysql": [
-      { "line": "5.7", "probes": [{ "image": "mysql:5.7.44", "port": 34001 }] },
-      { "line": "8.0", "probes": [{ "image": "mysql:8.0.46", "port": 34002 }, { "image": "mysql:8.3.0", "port": 34003 }] },
-      { "line": "8.4", "probes": [{ "image": "mysql:8.4.11", "port": 34004 }] },
-      { "line": "9", "probes": [{ "image": "mysql:9.0.1", "port": 34005 }, { "image": "mysql:9.7.2", "port": 34006 }] }
+      {
+        "version": "8.0.46",
+        "image": "mysql:8.0.46",
+        "digest": "sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b",
+        "tls": "encrypted"
+      },
+      {
+        "version": "8.4.11",
+        "image": "mysql:8.4.11",
+        "digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+        "tls": "encrypted"
+      },
+      {
+        "version": "9.7.2",
+        "image": "mysql:9.7.2",
+        "digest": "sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497",
+        "tls": "encrypted"
+      }
     ],
     "mariadb": [
-      { "line": "10.3", "probes": [{ "image": "mariadb:10.3.39", "port": 34101 }, { "image": "mariadb:10.5.29", "port": 34102 }] },
-      { "line": "10.6", "probes": [{ "image": "mariadb:10.6.28", "port": 34103 }, { "image": "mariadb:11.4.13", "port": 34107 }] },
-      { "line": "11.7", "probes": [{ "image": "mariadb:11.7.2", "port": 34104 }, { "image": "mariadb:11.8.9", "port": 34105 }, { "image": "mariadb:13.0.2", "port": 34106 }] }
+      {
+        "version": "10.6.28",
+        "image": "mariadb:10.6.28",
+        "digest": "sha256:23616f0bd3aff922f4dea4130f1d0a09f3571d20b7b36c8f49840672dc309e8c",
+        "tls": "none"
+      },
+      {
+        "version": "11.8.9",
+        "image": "mariadb:11.8.9",
+        "digest": "sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15",
+        "tls": "encrypted"
+      }
     ],
     "postgres": [
-      { "line": "10", "probes": [{ "image": "postgres:10", "port": 34201 }] },
-      { "line": "11", "probes": [{ "image": "postgres:11", "port": 34202 }] },
-      { "line": "12", "probes": [{ "image": "postgres:12.22", "port": 34203 }, { "image": "postgres:13.23", "port": 34204 }] },
-      { "line": "14", "probes": [{ "image": "postgres:14.24", "port": 34205 }] },
-      { "line": "15", "probes": [{ "image": "postgres:15.19", "port": 34206 }] },
-      { "line": "16", "probes": [{ "image": "postgres:16.15", "port": 34207 }] },
-      { "line": "17", "probes": [{ "image": "postgres:17.11", "port": 34208 }] },
-      { "line": "18", "probes": [{ "image": "postgres:18.6", "port": 34209 }] }
+      {
+        "version": "13.23",
+        "image": "postgres:13.23",
+        "digest": "sha256:4689940c683801b4ab839ab3b0a0a3555a5fe425371422310944e89eca7d8068",
+        "tls": "none"
+      },
+      {
+        "version": "14.24",
+        "image": "postgres:14.24",
+        "digest": "sha256:c2427de38f998489d36de7ca3553db2134872c400f2b08be4b824e5c50e4d619",
+        "tls": "none"
+      },
+      {
+        "version": "15.19",
+        "image": "postgres:15.19",
+        "digest": "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
+        "tls": "none"
+      },
+      {
+        "version": "16.15",
+        "image": "postgres:16.15",
+        "digest": "sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54",
+        "tls": "none"
+      },
+      {
+        "version": "17.11",
+        "image": "postgres:17.11",
+        "digest": "sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f",
+        "tls": "none"
+      },
+      {
+        "version": "18.6",
+        "image": "postgres:18.6",
+        "digest": "sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722",
+        "tls": "none"
+      }
+    ]
+  },
+  "retired": {},
+  "engines": {
+    "mysql": [
+      {
+        "line": "5.7",
+        "probes": [
+          {
+            "image": "mysql:5.7.44",
+            "port": 34001,
+            "digest": "sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb",
+            "version": "5.7.44"
+          }
+        ]
+      },
+      {
+        "line": "8.0",
+        "probes": [
+          {
+            "image": "mysql:8.0.46",
+            "port": 34002,
+            "digest": "sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b",
+            "version": "8.0.46"
+          },
+          {
+            "image": "mysql:8.3.0",
+            "port": 34003,
+            "digest": "sha256:9de9d54fecee6253130e65154b930978b1fcc336bcc86dfd06e89b72a2588ebe",
+            "version": "8.3.0"
+          }
+        ]
+      },
+      {
+        "line": "8.4",
+        "probes": [
+          {
+            "image": "mysql:8.4.11",
+            "port": 34004,
+            "digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+            "version": "8.4.11"
+          }
+        ]
+      },
+      {
+        "line": "9",
+        "probes": [
+          {
+            "image": "mysql:9.0.1",
+            "port": 34005,
+            "digest": "sha256:92dc869678019f65d761155dacac660a904f6245bfe1b7997da0a73b2bfc68c9",
+            "version": "9.0.1"
+          },
+          {
+            "image": "mysql:9.7.2",
+            "port": 34006,
+            "digest": "sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497",
+            "version": "9.7.2"
+          }
+        ]
+      }
+    ],
+    "mariadb": [
+      {
+        "line": "10.3",
+        "probes": [
+          {
+            "image": "mariadb:10.3.39",
+            "port": 34101,
+            "digest": "sha256:4f08c16ef56f0b097139c917e68d60f2c65d9f2b2defb770ee7e4d3a51bb7864",
+            "version": "10.3.39"
+          },
+          {
+            "image": "mariadb:10.5.29",
+            "port": 34102,
+            "digest": "sha256:a530aeeefd82f4fa5150f391b6c75462140904780338766f6b03acecb1cca3ce",
+            "version": "10.5.29"
+          }
+        ]
+      },
+      {
+        "line": "10.6",
+        "probes": [
+          {
+            "image": "mariadb:10.6.28",
+            "port": 34103,
+            "digest": "sha256:23616f0bd3aff922f4dea4130f1d0a09f3571d20b7b36c8f49840672dc309e8c",
+            "version": "10.6.28"
+          },
+          {
+            "image": "mariadb:11.4.13",
+            "port": 34107,
+            "digest": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+            "version": "11.4.13"
+          }
+        ]
+      },
+      {
+        "line": "11.7",
+        "probes": [
+          {
+            "image": "mariadb:11.7.2",
+            "port": 34104,
+            "digest": "sha256:fcc7fcd7114adb5d41f14d116b8aac45f94280d2babfbbb71b4782922ee6d8d4",
+            "version": "11.7.2"
+          },
+          {
+            "image": "mariadb:11.8.9",
+            "port": 34105,
+            "digest": "sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15",
+            "version": "11.8.9"
+          },
+          {
+            "image": "mariadb:13.0.2",
+            "port": 34106,
+            "digest": "sha256:f1bba652ba57bea3099ca2fe1af692af537c27d96e0bcde39dce29e2ba1ec4f3",
+            "version": "13.0.2"
+          }
+        ]
+      }
+    ],
+    "postgres": [
+      {
+        "line": "10",
+        "probes": [
+          {
+            "image": "postgres:10",
+            "port": 34201,
+            "digest": "sha256:b2baf8998630663d21370da06387c950e587071bdd307ee34e661cdcc7442bcc",
+            "version": "10.21"
+          }
+        ]
+      },
+      {
+        "line": "11",
+        "probes": [
+          {
+            "image": "postgres:11",
+            "port": 34202,
+            "digest": "sha256:5d2aa4a7b5f9bdadeddcf87cf7f90a176737a02a30d917de4ab2e6a329bd2d45",
+            "version": "11.16"
+          }
+        ]
+      },
+      {
+        "line": "12",
+        "probes": [
+          {
+            "image": "postgres:12.22",
+            "port": 34203,
+            "digest": "sha256:2f2a8c2a7d10862e7fba2602e304523554f9df8244c632dafe2628ccb398fb5c",
+            "version": "12.22"
+          },
+          {
+            "image": "postgres:13.23",
+            "port": 34204,
+            "digest": "sha256:4689940c683801b4ab839ab3b0a0a3555a5fe425371422310944e89eca7d8068",
+            "version": "13.23"
+          }
+        ]
+      },
+      {
+        "line": "14",
+        "probes": [
+          {
+            "image": "postgres:14.24",
+            "port": 34205,
+            "digest": "sha256:c2427de38f998489d36de7ca3553db2134872c400f2b08be4b824e5c50e4d619",
+            "version": "14.24"
+          }
+        ]
+      },
+      {
+        "line": "15",
+        "probes": [
+          {
+            "image": "postgres:15.19",
+            "port": 34206,
+            "digest": "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
+            "version": "15.19"
+          }
+        ]
+      },
+      {
+        "line": "16",
+        "probes": [
+          {
+            "image": "postgres:16.15",
+            "port": 34207,
+            "digest": "sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54",
+            "version": "16.15"
+          }
+        ]
+      },
+      {
+        "line": "17",
+        "probes": [
+          {
+            "image": "postgres:17.11",
+            "port": 34208,
+            "digest": "sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f",
+            "version": "17.11"
+          }
+        ]
+      },
+      {
+        "line": "18",
+        "probes": [
+          {
+            "image": "postgres:18.6",
+            "port": 34209,
+            "digest": "sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722",
+            "version": "18.6"
+          }
+        ]
+      }
     ]
   }
 }

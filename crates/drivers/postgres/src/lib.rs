@@ -5,21 +5,29 @@ mod version;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use khipu_driver_core::{
-    ConnectionConfig, ConnectionErrorKind, DbConnector, DriverError, Message, QueryCancel,
-    QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue, RowSink,
-    SchemaObjects, TlsMode, TlsStatus, TransactionError, TransactionStatement, probe_tcp,
+    ConnectionConfig, ConnectionErrorKind, ConsoleConnection, DbConnector, DriverError, Message,
+    QueryCancel, QueryColumn, QueryExecutionOptions, QueryExecutionResult, QueryRow, QueryValue,
+    RowSink, SchemaObjects, ServerIdentity, TlsMode, TlsStatus, TransactionError,
+    TransactionStatement, probe_tcp,
 };
 use sqlx::postgres::{
     PgConnectOptions, PgConnection, PgDatabaseError, PgErrorPosition, PgPoolOptions,
 };
-use sqlx::{Column, Executor, PgPool, Row, TypeInfo};
+use sqlx::{Column, Connection, Executor, PgPool, Row, TypeInfo};
 use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 pub struct PostgresConnector {
     pool: PgPool,
+    /// Where the console runs (see `ConsoleConnection`): a connection taken
+    /// out of the pool, so it opens with the same options and session.
+    console: ConsoleConnection<PgConnection>,
     version: version::ServerVersion,
+    /// What introspection reads, decided once on connect from the engine's
+    /// active lines: a support pack installed later applies from the next
+    /// connection, never halfway through this one.
+    capabilities: version::Capabilities,
     tls: TlsStatus,
 }
 
@@ -151,15 +159,18 @@ impl DbConnector for PostgresConnector {
                 .await
                 .map_err(|e| DriverError::connection(ConnectionErrorKind::Other, e.to_string()))?;
         let tls = tls::read_status(&pool, fell_back).await;
+        let version = version::ServerVersion::parse(&raw_version);
         Ok(Self {
             pool,
-            version: version::ServerVersion::parse(&raw_version),
+            console: ConsoleConnection::default(),
+            capabilities: version.capabilities(),
+            version,
             tls,
         })
     }
 
-    fn server_version(&self) -> String {
-        self.version.display()
+    fn server(&self) -> ServerIdentity {
+        self.version.identity()
     }
 
     fn tls_status(&self) -> TlsStatus {
@@ -193,13 +204,13 @@ impl DbConnector for PostgresConnector {
 
     async fn introspect_schema(&self, schema: &str) -> Result<SchemaObjects, DriverError> {
         let mut objects =
-            introspect::introspect_schema(&self.pool, schema, self.version.capabilities()).await?;
-        if self.version.is_below_minimum() {
+            introspect::introspect_schema(&self.pool, schema, self.capabilities).await?;
+        if self.version.is_below_compatibility_floor() {
             objects.warnings.insert(
                 0,
-                Message::key("introspect.unsupportedVersion")
+                Message::key("introspect.belowCompatibilityFloor")
                     .with("version", self.version.display())
-                    .with("minimum", "PostgreSQL 10"),
+                    .with("floor", self.version.compatibility_floor()),
             );
         }
         Ok(objects)
@@ -299,7 +310,8 @@ impl DbConnector for PostgresConnector {
                 QueryExecutionResult::Error { message, .. } => message,
                 _ => Message::key("export.readFailed"),
             };
-            let mut conn = self.pool.acquire().await.map_err(message)?;
+            let mut console = self.open_console().await.map_err(message)?;
+            let conn = console.connection();
             let describe = conn.describe(sql).await.map_err(message)?;
             if describe.columns().is_empty() {
                 return Err(Message::key("export.noRows"));
@@ -337,9 +349,9 @@ impl DbConnector for PostgresConnector {
             }
             .await;
             if !finished {
-                // Quedaron filas sin leer: devolver la conexion al pool
-                // haria que sqlx las drene todas. Se cierra.
-                drop(conn.detach());
+                // Quedaron filas sin leer: leerlas todas para seguir usando
+                // la conexion podria tardar sin limite. Se cierra.
+                console.discard();
             }
             outcome?;
             sink.finish()?;
@@ -410,6 +422,10 @@ impl DbConnector for PostgresConnector {
             .map(|_| ())
             .map_err(|error| DriverError::Query(error.to_string()))
     }
+
+    fn console_epoch(&self) -> u64 {
+        self.console.epoch()
+    }
 }
 
 impl PostgresConnector {
@@ -419,10 +435,11 @@ impl PostgresConnector {
         options: QueryExecutionOptions,
         cancel: Option<&QueryCancel>,
     ) -> QueryExecutionResult {
-        let mut conn = match self.pool.acquire().await {
-            Ok(conn) => conn,
+        let mut console = match self.open_console().await {
+            Ok(console) => console,
             Err(error) => return postgres_error_to_result(error),
         };
+        let conn = console.connection();
 
         // Id de la conexion en el servidor: cancelar la interrumpe desde otra
         // (ver QueryCancel). Si ya se cancelo mientras se esperaba una
@@ -434,22 +451,37 @@ impl PostgresConnector {
             {
                 Ok(id) if !cancel.begin(id as u64) => return cancelled_before_start(),
                 Ok(_) => {}
-                Err(error) => return postgres_error_to_result(error),
+                Err(error) => {
+                    if conn.ping().await.is_err() {
+                        console.discard();
+                    }
+                    return postgres_error_to_result(error);
+                }
             }
         }
 
-        let outcome = execute_on_connection(&mut conn, sql, options).await;
+        let outcome = execute_on_connection(conn, sql, options).await;
         if let Some(cancel) = cancel {
             cancel.end();
         }
-        if !outcome.connection_reusable {
-            // Devolverla al pool haria que sqlx la "limpie" leyendo (y
-            // tirando) todo lo que el servidor todavia tenga para mandar
-            // — ver MAX_ROWS_TO_DRAIN. Cerrar el socket corta el envio
-            // en seco; el pool abre otra conexion cuando haga falta.
-            drop(conn.detach());
+        // Seguir usandola obligaria a leer (y tirar) todo lo que el servidor
+        // todavia tenga para mandar — ver MAX_ROWS_TO_DRAIN — o ya no
+        // responde. Cerrar el socket corta el envio en seco; la siguiente
+        // sentencia abre otra sesion.
+        let lost = matches!(outcome.result, QueryExecutionResult::Error { .. })
+            && conn.ping().await.is_err();
+        if !outcome.connection_reusable || lost {
+            console.discard();
         }
         outcome.result
+    }
+
+    async fn open_console(
+        &self,
+    ) -> Result<khipu_driver_core::ConsoleGuard<'_, PgConnection>, sqlx::Error> {
+        self.console
+            .lock(async || Ok(self.pool.acquire().await?.detach()))
+            .await
     }
 }
 
@@ -461,21 +493,21 @@ fn cancelled_before_start() -> QueryExecutionResult {
     }
 }
 
-/// Rows past `max_rows` that are still read (and discarded) so the
-/// connection can go back to the pool clean. The simple query protocol
+/// Rows past `max_rows` that are still read (and discarded) so the console
+/// connection can run the next statement. The simple query protocol
 /// streams the whole result set and can't be stopped midway: whatever isn't
-/// read here, sqlx reads on release (`ping`) before reusing the connection.
+/// read here, the next statement would have to read first.
 /// Without a bound, a `SELECT * FROM big_table` that shows 500 rows
 /// downloads the whole table in the background, and a few of those in a row
-/// starve the pool — every later query waits up to `acquire_timeout`. Past
-/// this bound the connection is discarded instead (see
+/// starve the console — every later query waits behind them. Past this
+/// bound the connection is closed instead, and the session with it (see
 /// `ExecutionOutcome::connection_reusable`).
 const MAX_ROWS_TO_DRAIN: usize = 1000;
 
 struct ExecutionOutcome {
     result: QueryExecutionResult,
     /// `false` when the connection still has unread rows pending and must
-    /// not go back to the pool.
+    /// be closed.
     connection_reusable: bool,
 }
 
@@ -578,574 +610,5 @@ async fn execute_on_connection(
             truncated,
         },
         connection_reusable: stream_finished,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn config_from_env() -> ConnectionConfig {
-        let host = std::env::var("KHIPU_TEST_POSTGRES_HOST")
-            .expect("set KHIPU_TEST_POSTGRES_HOST, KHIPU_TEST_POSTGRES_PORT, KHIPU_TEST_POSTGRES_USER, KHIPU_TEST_POSTGRES_PASSWORD and KHIPU_TEST_POSTGRES_DATABASE etc. to run this test");
-        let port = std::env::var("KHIPU_TEST_POSTGRES_PORT")
-            .expect("set KHIPU_TEST_POSTGRES_HOST, KHIPU_TEST_POSTGRES_PORT, KHIPU_TEST_POSTGRES_USER, KHIPU_TEST_POSTGRES_PASSWORD and KHIPU_TEST_POSTGRES_DATABASE etc. to run this test")
-            .parse()
-            .expect("KHIPU_TEST_POSTGRES_PORT must be a valid u16");
-        let username = std::env::var("KHIPU_TEST_POSTGRES_USER")
-            .expect("set KHIPU_TEST_POSTGRES_HOST, KHIPU_TEST_POSTGRES_PORT, KHIPU_TEST_POSTGRES_USER, KHIPU_TEST_POSTGRES_PASSWORD and KHIPU_TEST_POSTGRES_DATABASE etc. to run this test");
-        let password = std::env::var("KHIPU_TEST_POSTGRES_PASSWORD")
-            .expect("set KHIPU_TEST_POSTGRES_HOST, KHIPU_TEST_POSTGRES_PORT, KHIPU_TEST_POSTGRES_USER, KHIPU_TEST_POSTGRES_PASSWORD and KHIPU_TEST_POSTGRES_DATABASE etc. to run this test");
-        let database = std::env::var("KHIPU_TEST_POSTGRES_DATABASE")
-            .expect("set KHIPU_TEST_POSTGRES_HOST, KHIPU_TEST_POSTGRES_PORT, KHIPU_TEST_POSTGRES_USER, KHIPU_TEST_POSTGRES_PASSWORD and KHIPU_TEST_POSTGRES_DATABASE etc. to run this test");
-
-        ConnectionConfig {
-            host,
-            port,
-            database,
-            username,
-            password,
-            tls_mode: TlsMode::Auto,
-            ca_certificate_path: None,
-        }
-    }
-
-    // The session is back on the server's time zone, not sqlx's UTC (see
-    // RESTORE_SERVER_TIME_ZONE): what a client that sends no TimeZone (psql)
-    // gets. Set KHIPU_TEST_POSTGRES_TIME_ZONE to the zone the server (or an
-    // ALTER DATABASE/ROLE ... SET timezone) gives; without it, the server's
-    // configured zone.
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn session_uses_the_server_time_zone() {
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable Postgres instance");
-        let (time_zone, server_zone): (String, String) =
-            sqlx::query_as("SELECT current_setting('TimeZone'), current_setting('log_timezone')")
-                .fetch_one(&connector.pool)
-                .await
-                .expect("session time zone should be readable");
-        let expected = std::env::var("KHIPU_TEST_POSTGRES_TIME_ZONE").unwrap_or(server_zone);
-        assert_eq!(time_zone, expected);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn connects_and_lists_schemas_and_tables_against_real_postgres() {
-        let config = config_from_env();
-
-        let connector = PostgresConnector::connect(&config)
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-
-        let schemas = connector
-            .list_schemas()
-            .await
-            .expect("list_schemas should succeed");
-        assert!(
-            !schemas.is_empty(),
-            "expected at least one schema to be reported"
-        );
-
-        let schema = schemas
-            .iter()
-            .find(|s| s.as_str() == "public")
-            .unwrap_or_else(|| schemas.first().expect("checked non-empty above"));
-
-        let tables = connector
-            .list_tables(schema)
-            .await
-            .expect("list_tables should succeed");
-        for table in &tables {
-            assert_eq!(table.schema, *schema);
-            assert!(!table.name.is_empty());
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn execute_query_returns_result_set_with_null_and_types() {
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-
-        let result = connector
-            .execute_query(
-                "SELECT 1 AS id, 'Anderson'::text AS name, NULL::text AS email",
-                QueryExecutionOptions { max_rows: 500 },
-            )
-            .await;
-
-        match result {
-            QueryExecutionResult::ResultSet {
-                columns,
-                rows,
-                row_count,
-                truncated,
-                ..
-            } => {
-                assert_eq!(columns.len(), 3);
-                assert_eq!(row_count, 1);
-                assert!(!truncated);
-                assert_eq!(rows[0][1], Some("Anderson".to_string()));
-                assert_eq!(rows[0][2], None);
-            }
-            other => panic!("expected a ResultSet, got {other:?}"),
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn execute_query_truncates_at_max_rows() {
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-
-        let result = connector
-            .execute_query(
-                "SELECT * FROM generate_series(1, 3)",
-                QueryExecutionOptions { max_rows: 2 },
-            )
-            .await;
-
-        match result {
-            QueryExecutionResult::ResultSet {
-                row_count,
-                truncated,
-                ..
-            } => {
-                assert_eq!(row_count, 2);
-                assert!(truncated);
-            }
-            other => panic!("expected a ResultSet, got {other:?}"),
-        }
-    }
-
-    async fn raw_connection(config: &ConnectionConfig) -> PgConnection {
-        use sqlx::Connection;
-        let options = PgConnectOptions::new()
-            .host(&config.host)
-            .port(config.port)
-            .username(&config.username)
-            .password(&config.password)
-            .database(&config.database);
-        PgConnection::connect_with(&options)
-            .await
-            .expect("connect should succeed against a reachable Postgres instance")
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn truncated_query_with_few_extra_rows_leaves_connection_reusable() {
-        let mut conn = raw_connection(&config_from_env()).await;
-
-        let outcome = execute_on_connection(
-            &mut conn,
-            "SELECT n FROM generate_series(1, 900) AS n",
-            QueryExecutionOptions { max_rows: 2 },
-        )
-        .await;
-
-        assert!(matches!(
-            outcome.result,
-            QueryExecutionResult::ResultSet {
-                row_count: 2,
-                truncated: true,
-                ..
-            }
-        ));
-        assert!(outcome.connection_reusable);
-    }
-
-    // Con muchas filas pendientes la conexion no debe volver al pool: sqlx
-    // la "limpiaria" descargando el resto del resultado en segundo plano.
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn truncated_query_with_many_extra_rows_discards_connection() {
-        let mut conn = raw_connection(&config_from_env()).await;
-
-        let outcome = execute_on_connection(
-            &mut conn,
-            "SELECT n FROM generate_series(1, 1000000) AS n",
-            QueryExecutionOptions { max_rows: 2 },
-        )
-        .await;
-
-        assert!(matches!(
-            outcome.result,
-            QueryExecutionResult::ResultSet {
-                row_count: 2,
-                truncated: true,
-                ..
-            }
-        ));
-        assert!(!outcome.connection_reusable);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn execute_query_returns_command_for_ddl() {
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-
-        let result = connector
-            .execute_query(
-                "CREATE TEMPORARY TABLE khipu_execute_query_smoke (id INT)",
-                QueryExecutionOptions { max_rows: 500 },
-            )
-            .await;
-
-        assert!(
-            matches!(result, QueryExecutionResult::Command { .. }),
-            "expected a Command result, got {result:?}"
-        );
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn execute_query_returns_error_with_code_and_position_for_bad_sql() {
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-
-        let result = connector
-            .execute_query(
-                "SELECT * FROM this_table_does_not_exist",
-                QueryExecutionOptions { max_rows: 500 },
-            )
-            .await;
-
-        match result {
-            QueryExecutionResult::Error { code, .. } => {
-                assert!(
-                    code.is_some(),
-                    "expected Postgres to report a SQLSTATE code"
-                );
-            }
-            other => panic!("expected an Error result, got {other:?}"),
-        }
-    }
-
-    /// Creates one object of every kind the explorer shows in a throwaway
-    /// schema and checks `introspect_schema` finds each under the right
-    /// category. Needs CREATE on the database. The procedure is only
-    /// created and asserted on PostgreSQL 11+.
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn introspect_schema_classifies_every_object_kind() {
-        use khipu_driver_core::{RelationKind, RoutineKind};
-
-        const SCHEMA: &str = "khipu_introspect_test";
-        let connector = PostgresConnector::connect(&config_from_env())
-            .await
-            .expect("connect should succeed against a reachable PostgreSQL instance");
-        let has_procedures = connector.version.capabilities().prokind;
-
-        let run = |sql: String| {
-            let connector = &connector;
-            async move {
-                let result = connector
-                    .execute_query(&sql, QueryExecutionOptions { max_rows: 10 })
-                    .await;
-                assert!(
-                    !matches!(result, QueryExecutionResult::Error { .. }),
-                    "{sql} failed: {result:?}"
-                );
-            }
-        };
-
-        run(format!("DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")).await;
-        run(format!("CREATE SCHEMA {SCHEMA}")).await;
-        run(format!(
-            "CREATE TABLE {SCHEMA}.customers (id int, region int, email text NOT NULL UNIQUE, \
-             PRIMARY KEY (id, region))"
-        ))
-        .await;
-        run(format!(
-            "CREATE TABLE {SCHEMA}.orders (id serial PRIMARY KEY, customer_id int, region int, \
-             total numeric(10,2) CONSTRAINT chk_total CHECK (total >= 0), \
-             CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id, region) \
-               REFERENCES {SCHEMA}.customers (id, region))"
-        ))
-        .await;
-        run(format!("CREATE INDEX idx_total ON {SCHEMA}.orders (total)")).await;
-        run(format!(
-            "CREATE VIEW {SCHEMA}.big_orders AS SELECT id, total FROM {SCHEMA}.orders WHERE total > 100"
-        ))
-        .await;
-        run(format!(
-            "CREATE MATERIALIZED VIEW {SCHEMA}.order_totals AS SELECT sum(total) AS total FROM {SCHEMA}.orders"
-        ))
-        .await;
-        run(format!("CREATE SEQUENCE {SCHEMA}.invoice_number")).await;
-        run(format!(
-            "CREATE FUNCTION {SCHEMA}.twice(p integer) RETURNS integer LANGUAGE sql AS 'SELECT p * 2'"
-        ))
-        .await;
-        run(format!(
-            "CREATE FUNCTION {SCHEMA}.touch() RETURNS trigger LANGUAGE plpgsql AS \
-             'BEGIN RETURN NEW; END'"
-        ))
-        .await;
-        run(format!(
-            "CREATE FUNCTION {SCHEMA}.calc(p_id integer, INOUT p_total numeric, \
-             p_note text DEFAULT 'x', VARIADIC p_tags text[] DEFAULT '{{}}') \
-             LANGUAGE sql AS 'SELECT p_total'"
-        ))
-        .await;
-        run(format!(
-            "CREATE TRIGGER orders_audit AFTER INSERT OR UPDATE ON {SCHEMA}.orders \
-             FOR EACH ROW EXECUTE PROCEDURE {SCHEMA}.touch()"
-        ))
-        .await;
-        if has_procedures {
-            run(format!(
-                "CREATE PROCEDURE {SCHEMA}.purge(p_before integer) LANGUAGE sql AS 'SELECT 1'"
-            ))
-            .await;
-        }
-
-        let objects = connector.introspect_schema(SCHEMA).await;
-        run(format!("DROP SCHEMA {SCHEMA} CASCADE")).await;
-        let objects = objects.expect("introspect_schema should succeed");
-        assert!(objects.warnings.is_empty(), "{:?}", objects.warnings);
-
-        let table = |name: &str| {
-            objects
-                .tables
-                .iter()
-                .find(|table| table.name == name)
-                .unwrap_or_else(|| panic!("{name} missing from {:?}", objects.tables))
-        };
-        assert_eq!(table("big_orders").kind, RelationKind::View);
-        assert_eq!(table("order_totals").kind, RelationKind::MaterializedView);
-        assert_eq!(table("order_totals").columns[0].name, "total");
-
-        let customers = table("customers");
-        let primary = customers
-            .keys
-            .iter()
-            .find(|key| key.primary)
-            .expect("customers has a PK");
-        assert_eq!(primary.columns, vec!["id", "region"]);
-        assert!(
-            customers
-                .keys
-                .iter()
-                .any(|key| !key.primary && key.columns == ["email"])
-        );
-
-        let orders = table("orders");
-        let foreign_key: Vec<_> = orders
-            .foreign_keys
-            .iter()
-            .map(|fk| {
-                (
-                    fk.name.as_str(),
-                    fk.column.as_str(),
-                    fk.referenced_column.as_str(),
-                )
-            })
-            .collect();
-        assert_eq!(
-            foreign_key,
-            vec![
-                ("fk_orders_customer", "customer_id", "id"),
-                ("fk_orders_customer", "region", "region"),
-            ]
-        );
-        assert_eq!(orders.checks[0].name, "chk_total");
-        let index = orders
-            .indexes
-            .iter()
-            .find(|i| i.name == "idx_total")
-            .expect("idx_total");
-        assert_eq!(index.columns, vec!["total"]);
-        assert_eq!(index.method.as_deref(), Some("btree"));
-        assert_eq!(orders.triggers[0].timing, "AFTER");
-        assert_eq!(orders.triggers[0].events, vec!["INSERT", "UPDATE"]);
-
-        assert!(objects.sequences.iter().any(|s| s.name == "invoice_number"));
-        let twice = objects
-            .routines
-            .iter()
-            .find(|r| r.name == "twice")
-            .expect("twice");
-        assert_eq!(twice.kind, RoutineKind::Function);
-        assert_eq!(twice.arguments, "p integer");
-        assert_eq!(twice.return_type.as_deref(), Some("integer"));
-        let only = &twice.parameters[..];
-        assert_eq!(only.len(), 1);
-        assert_eq!(only[0].name.as_deref(), Some("p"));
-        assert_eq!(only[0].data_type, "integer");
-
-        use khipu_driver_core::ParameterMode;
-        let calc = objects
-            .routines
-            .iter()
-            .find(|r| r.name == "calc")
-            .expect("calc");
-        let described: Vec<(Option<&str>, ParameterMode, &str, bool)> = calc
-            .parameters
-            .iter()
-            .map(|p| {
-                (
-                    p.name.as_deref(),
-                    p.mode,
-                    p.data_type.as_str(),
-                    p.has_default,
-                )
-            })
-            .collect();
-        assert_eq!(
-            described,
-            vec![
-                (Some("p_id"), ParameterMode::In, "integer", false),
-                (Some("p_total"), ParameterMode::InOut, "numeric", false),
-                (Some("p_note"), ParameterMode::In, "text", true),
-                (Some("p_tags"), ParameterMode::Variadic, "text[]", true),
-            ]
-        );
-        if has_procedures {
-            let purge = objects
-                .routines
-                .iter()
-                .find(|r| r.name == "purge")
-                .expect("purge");
-            assert_eq!(purge.kind, RoutineKind::Procedure);
-            assert_eq!(purge.return_type, None);
-            assert_eq!(purge.parameters[0].name.as_deref(), Some("p_before"));
-        }
-    }
-
-    /// What the server under test is expected to negotiate in `Auto`, from
-    /// `KHIPU_TEST_POSTGRES_EXPECT_TLS`: `encrypted` (a modern server with
-    /// TLS), `fallback` (offers TLS rustls can't negotiate, e.g. MySQL 5.7),
-    /// `none` (TLS not enabled on the server, e.g. the MariaDB < 11.4 image),
-    /// or unset to only check the invariants that hold for any server.
-    fn expected_tls() -> Option<String> {
-        std::env::var("KHIPU_TEST_POSTGRES_EXPECT_TLS").ok()
-    }
-
-    fn config_with_tls(mode: TlsMode) -> ConnectionConfig {
-        ConnectionConfig {
-            tls_mode: mode,
-            ..config_from_env()
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn tls_auto_always_connects_and_reports_what_it_negotiated() {
-        let connector = PostgresConnector::connect(&config_with_tls(TlsMode::Auto))
-            .await
-            .expect("Auto must connect whatever TLS the server offers");
-        let status = connector.tls_status();
-
-        if status.fell_back {
-            assert_eq!(status.encrypted, Some(false));
-        }
-        match expected_tls().as_deref() {
-            Some("encrypted") => {
-                assert_eq!(status.encrypted, Some(true), "{status:?}");
-                assert!(!status.fell_back);
-                assert!(status.detail.is_some_and(|detail| detail.contains("TLS")));
-            }
-            Some("fallback") => assert!(status.fell_back, "{status:?}"),
-            Some("none") => {
-                assert_eq!(status.encrypted, Some(false), "{status:?}");
-                assert!(!status.fell_back, "nothing to fall back from: {status:?}");
-            }
-            _ => {}
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn tls_required_encrypts_or_fails_with_an_actionable_message() {
-        let result = PostgresConnector::connect(&config_with_tls(TlsMode::Required)).await;
-
-        match (result, expected_tls().as_deref()) {
-            (Ok(connector), expected) => {
-                assert!(
-                    matches!(expected, None | Some("encrypted")),
-                    "Required must not connect without TLS"
-                );
-                assert_eq!(connector.tls_status().encrypted, Some(true));
-                assert!(!connector.tls_status().fell_back);
-            }
-            (Err(DriverError::Connection { kind, detail }), expected) => {
-                assert_ne!(expected, Some("encrypted"), "{detail}");
-                assert!(
-                    matches!(
-                        kind,
-                        ConnectionErrorKind::TlsIncompatible | ConnectionErrorKind::TlsUnavailable
-                    ),
-                    "{kind:?}: {detail}"
-                );
-                if expected == Some("none") {
-                    assert_eq!(kind, ConnectionErrorKind::TlsUnavailable, "{detail}");
-                }
-            }
-            (Err(other), _) => panic!("unexpected error: {other}"),
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn tls_disabled_connects_unencrypted() {
-        let connector = PostgresConnector::connect(&config_with_tls(TlsMode::Disabled))
-            .await
-            .expect("Disabled should connect");
-
-        let status = connector.tls_status();
-        assert_eq!(status.encrypted, Some(false));
-        assert!(!status.fell_back);
-    }
-
-    /// Servers in these tests use self-signed certificates, which no public
-    /// CA vouches for: VerifyCa without a CA file must refuse them.
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn tls_verify_ca_rejects_self_signed_certificates() {
-        if expected_tls().as_deref() != Some("encrypted") {
-            return;
-        }
-        let result = PostgresConnector::connect(&config_with_tls(TlsMode::VerifyCa)).await;
-
-        match result {
-            Err(DriverError::Connection { kind, detail }) => {
-                assert_eq!(kind, ConnectionErrorKind::TlsCertificate, "{detail}")
-            }
-            Ok(_) => panic!("a self-signed certificate must not pass VerifyCa"),
-            Err(other) => panic!("unexpected error: {other}"),
-        }
-    }
-
-    /// With `KHIPU_TEST_POSTGRES_CA_CERT` pointing at the CA that signed the
-    /// server certificate, both verifying modes must accept it: proves the CA
-    /// file path actually reaches the TLS configuration. The certificate needs
-    /// the test host in its subjectAltName: with sqlx 0.8.6 and current
-    /// rustls, VerifyCa checks the host name too (see
-    /// docs/design/explorador-base-de-datos.md, "Limitaciones conocidas").
-    #[tokio::test]
-    #[ignore = "requires database"]
-    async fn tls_verify_ca_accepts_the_configured_ca() {
-        let Ok(ca) = std::env::var("KHIPU_TEST_POSTGRES_CA_CERT") else {
-            return;
-        };
-        for mode in [TlsMode::VerifyCa, TlsMode::VerifyIdentity] {
-            let config = ConnectionConfig {
-                ca_certificate_path: Some(ca.clone()),
-                ..config_with_tls(mode)
-            };
-
-            let connector = PostgresConnector::connect(&config)
-                .await
-                .unwrap_or_else(|error| panic!("{mode:?} with the server's CA: {error}"));
-            assert_eq!(connector.tls_status().encrypted, Some(true));
-        }
     }
 }

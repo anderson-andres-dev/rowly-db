@@ -1,0 +1,151 @@
+name: E2E
+
+# Recorridos criticos en la app real sobre Linux/WebKitGTK (tauri-driver).
+# Windows/WebView2 y macOS/WKWebView siguen siendo humo manual de release:
+# tauri-driver no soporta macOS y en Windows necesita msedgedriver.
+#
+# Los recorridos funcionales (run.mjs) y los ciclos de recursos
+# (resources.mjs) son jobs separados sobre el mismo binario: un fallo de
+# recursos no tapa ni ensucia el resultado funcional, y los dos cuentan.
+#
+# Cada uno corre con su propio bus de sesion (dbus-run-session), dentro de su
+# Xvfb. Sin el, la app usa el bus de systemd del runner, que activa
+# xdg-desktop-portal sin DISPLAY: cada arranque de la app quedaba 12-31 s
+# esperando al portal, contra un limite de 30 s (#62).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  # La release la corre sobre su propio commit (release.yml).
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  APT: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev libgtk-3-dev webkit2gtk-driver xvfb xdotool mysql-client dbus-bin
+
+jobs:
+  build:
+    name: Compilar la app (debug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias de Tauri
+        run: sudo apt-get update && sudo apt-get install -y $APT
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: npm ci
+        working-directory: app
+        run: npm ci
+
+      - name: Compilar la app (debug, sin instaladores)
+        working-directory: app
+        run: npx tauri build --debug --no-bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e2e-app
+          path: target/debug/rowly-db
+          retention-days: 1
+
+  linux:
+    name: E2E (Linux, WebKitGTK)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Imagenes de `verified` en tools/test-dbs/lines.json, con su digest: la
+    # fuente unica de servidores de prueba (crates/server-tests lo comprueba).
+    services:
+      mysql:
+        image: public.ecr.aws/docker/library/mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+        env:
+          MYSQL_ROOT_PASSWORD: rowly
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -prowly"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: WebKitWebDriver, Xvfb y dbus-run-session
+        run: sudo apt-get update && sudo apt-get install -y $APT
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+
+      # run.mjs solo usa la biblioteca estandar de Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-app
+          path: bin
+
+      - name: Recorridos E2E
+        working-directory: app
+        env:
+          E2E_MYSQL_PORT: "3306"
+        # run.mjs arranca un tauri-driver por recorrido, dentro de este display.
+        run: chmod +x ../bin/rowly-db && xvfb-run --auto-servernum dbus-run-session -- node tests/e2e/run.mjs --app "$GITHUB_WORKSPACE/bin/rowly-db"
+
+  resources:
+    name: Recursos (Linux, WebKitGTK)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: public.ecr.aws/docker/library/mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+        env:
+          MYSQL_ROOT_PASSWORD: rowly
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -prowly"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      # Solo para los ciclos de reconexion: otro motor y otra linea.
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_PASSWORD: rowly
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xvfb y dbus-run-session
+        run: sudo apt-get update && sudo apt-get install -y $APT
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22: WebSocket nativo para el inspector de resources.mjs.
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-app
+          path: bin
+
+      - name: Ciclos de recursos
+        working-directory: app
+        env:
+          E2E_MYSQL_PORT: "3306"
+          E2E_PG_PORT: "5432"
+        # Sin WebDriver: la app se abre con el inspector de WebKit, que mide el
+        # heap de JavaScript vivo (tests/e2e/inspector.mjs).
+        run: chmod +x ../bin/rowly-db && xvfb-run --auto-servernum dbus-run-session -- node tests/e2e/resources.mjs --app "$GITHUB_WORKSPACE/bin/rowly-db"

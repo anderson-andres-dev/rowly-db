@@ -33,7 +33,7 @@
     Zap,
   } from "@lucide/svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
-  import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/explorerTree";
+  import { buildExplorerTree, expandableKeys, type ExplorerIcon, type ExplorerNode } from "$lib/connections/explorerTree";
   import { t } from "$lib/i18n";
   import type { DatabaseExplorer } from "$lib/types";
   import { pinnedTables, togglePinnedTable } from "$lib/stores/pinnedTables";
@@ -152,7 +152,7 @@
         : explorer.tls.encrypted === false
           ? $t("explorer.tls.unencrypted")
           : $t("explorer.tls.unknown");
-    return `${connectionLabel}\n${explorer.serverVersion} · ${tls}`;
+    return `${connectionLabel}\n${explorer.context.server.label} · ${tls}`;
   });
   const nodes = $derived(
     explorer ? buildExplorerTree(explorer, filter, $pinnedTables[profileId] ?? [], $t("explorer.pinned")) : [],

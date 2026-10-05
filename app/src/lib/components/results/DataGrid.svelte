@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { summarizeSelection, type SelectionSummary } from "$lib/gridSelectionSummary";
+  import { summarizeSelection, type SelectionSummary } from "$lib/results/gridSelectionSummary";
   import { gridSettings } from "$lib/stores/gridSettings";
   import { activeEngine } from "$lib/stores/connection";
   import { hideTooltipFor, scheduleTooltipFor, tooltip } from "$lib/tooltip";
-  import { typeProblem } from "$lib/cellTypes";
+  import { typeProblem } from "$lib/results/cellTypes";
   import { settleTransitions } from "$lib/settleTransitions";
   import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Filter, Key } from "@lucide/svelte";
   import { tick, untrack } from "svelte";
   import type { ColumnCatalogInfo, QueryColumn, QueryRow, SortKey } from "$lib/types";
   import { t } from "$lib/i18n";
-  import { detectJsonColumns, escapeHtml, highlightJson } from "$lib/jsonHighlight";
-  import type { FindMatch } from "$lib/gridFind";
-  import { CHUNK_ROWS, GROUP_COLS, chunkWindow, groupWindow, rowAtVisual, type ChunkWindow } from "$lib/gridWindow";
+  import { detectJsonColumns, escapeHtml, highlightJson } from "$lib/results/jsonHighlight";
+  import type { FindMatch } from "$lib/results/gridFind";
+  import { CHUNK_ROWS, GROUP_COLS, chunkWindow, groupWindow, rowAtVisual, type ChunkWindow } from "$lib/results/gridWindow";
   import { onePerFrame } from "$lib/onePerFrame";
-  import { NAVIGATION_KEYS, navigationTarget, type GridBounds, type GridCell } from "$lib/gridNavigation";
+  import { NAVIGATION_KEYS, navigationTarget, type GridBounds, type GridCell } from "$lib/results/gridNavigation";
   import { numpadText } from "$lib/numpadKeys";
   import {
     parseClipboard,
@@ -23,7 +23,7 @@
     writeClipboardText,
     type CopyFormat,
     type PasteBlock,
-  } from "$lib/gridClipboard";
+  } from "$lib/results/gridClipboard";
   import {
     EMPTY_EDITS,
     originalValue,
@@ -31,7 +31,7 @@
     type PendingEdits,
     type ResultEditInfo,
     type RowRange,
-  } from "$lib/resultEditing";
+  } from "$lib/results/resultEditing";
 
   let {
     columns,
@@ -65,7 +65,7 @@
     // la columna # muestra la numeracion global (501, 502... en la pagina 2).
     rowOffset?: number;
     columnCatalogInfo?: Map<string, ColumnCatalogInfo> | null;
-    // Edicion del resultado (ver resultEditing.ts). Sin editInfo el grid es
+    // Edicion del resultado (ver results/resultEditing.ts). Sin editInfo el grid es
     // de solo lectura y editBlockedReason explica por que.
     editInfo?: ResultEditInfo | null;
     editBlockedReason?: string | null;
@@ -76,7 +76,7 @@
     onfillcells?: (ranges: RowRange[], value: CellValue, hidden: ReadonlySet<number> | null) => void;
     oneditblocked?: (reason: string) => void;
     onselectionchange?: (range: RowRange | null) => void;
-    // Filas, celdas y suma de la seleccion (gridSelectionSummary.ts), para
+    // Filas, celdas y suma de la seleccion (results/gridSelectionSummary.ts), para
     // la barra del resultado. null sin seleccion.
     onselectionsummary?: (summary: SelectionSummary | null) => void;
     // Ctrl+C: formato para varias celdas (una sola se copia como su valor).
@@ -93,13 +93,13 @@
     findMatches?: FindMatch[];
     findCurrent?: number;
     hiddenRows?: ReadonlySet<number> | null;
-    // Orden desde los encabezados (se aplica en la base, ver gridSort.ts):
+    // Orden desde los encabezados (se aplica en la base, ver results/gridSort.ts):
     // criterios actuales, si la consulta lo admite, y el clic (Shift =
     // agregar criterio).
     sort?: SortKey[];
     sortable?: boolean;
     onsort?: (column: number, additive: boolean) => void;
-    // Filtro local por columna (columnFilters.ts, lo maneja ResultPane): las
+    // Filtro local por columna (results/columnFilters.ts, lo maneja ResultPane): las
     // columnas con valores desmarcados y el clic en el embudo, con donde
     // abrir el filtro.
     filteredColumns?: ReadonlySet<number> | null;
@@ -1363,7 +1363,7 @@
     return list;
   }
 
-  // Por que un valor editado no encaja en su columna (cellTypes.ts), ya en
+  // Por que un valor editado no encaja en su columna (results/cellTypes.ts), ya en
   // el idioma de la app; null si encaja o si la columna no se conoce.
   function problemFor(col: number, value: CellValue): string | null {
     const column = editInfo?.columns[col];
@@ -1532,13 +1532,13 @@
   }
 
   // --- Cuerpo virtualizado por tramos -------------------------------------
-  // (docs/specs/v0.2-rendimiento.md, 21a.) Con la pagina entera en el DOM
+  // Con la pagina entera en el DOM
   // (500 x 43 = 21.500 celdas, hasta 10.000 filas) cualquier cambio de
   // tamaño del area principal — mover el sidebar, el splitter — volvia a
   // maquetar todas las celdas en cada frame.
   //
   // El cuerpo se divide en mosaicos: tramos de CHUNK_ROWS filas por grupos
-  // de GROUP_COLS columnas (gridWindow.ts; con pocas columnas, un solo
+  // de GROUP_COLS columnas (results/gridWindow.ts; con pocas columnas, un solo
   // grupo). Cada mosaico es una <table> propia, en absoluto en su posicion,
   // dentro de un contenedor con el tamaño total (el scroll no cambia de
   // largo). Una tabla por mosaico porque agregar filas a UNA tabla obliga a
@@ -2829,7 +2829,7 @@
     height: 4rem;
   }
 
-  /* Resaltado de celdas JSON (ver jsonHighlight.ts): los colores salen del
+  /* Resaltado de celdas JSON (ver results/jsonHighlight.ts): los colores salen del
      tema del editor (--syntax-*, puestos por theme.ts); la puntuacion toma
      el color secundario de la celda. */
   .grid-body-table :global(td.json-value) {

@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "scenario": "editor-node",
+  "date": "2026-10-03T16:09:03.472Z",
+  "node": "v24.18.1",
+  "note": "Mediana de 5 corridas alternadas con v0.3.0 en la misma sesion (cierre de C5).",
+  "results": {
+    "10k-lines": {
+      "lines": 10001,
+      "bytes": 295000,
+      "statements": 2500,
+      "splitAllMs": 11,
+      "indexBuildMs": 2.2,
+      "indexSteps": 1,
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 1.197,
+        "p95": 2.1444,
+        "p99": 2.8088,
+        "max": 3.7069
+      },
+      "statementNearMs": {
+        "n": 500,
+        "p50": 0.0016,
+        "p95": 0.0053,
+        "p99": 0.0119,
+        "max": 0.1534
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0105,
+        "p95": 0.0228,
+        "p99": 0.0492,
+        "max": 0.3818
+      }
+    },
+    "1M-lines": {
+      "lines": 1000001,
+      "bytes": 29500000,
+      "statements": 250000,
+      "splitAllMs": 554.6,
+      "indexBuildMs": 558.6,
+      "indexSteps": 28,
+      "keystrokeIndexUpdateMs": {
+        "n": 500,
+        "p50": 1.2427,
+        "p95": 1.7033,
+        "p99": 2.4814,
+        "max": 3.0357
+      },
+      "statementNearMs": {
+        "n": 500,
+        "p50": 0.0069,
+        "p95": 0.0115,
+        "p99": 0.0207,
+        "max": 0.0375
+      },
+      "completionContextMs": {
+        "n": 500,
+        "p50": 0.0123,
+        "p95": 0.0192,
+        "p99": 0.0285,
+        "max": 0.0894
+      }
+    }
+  }
+}

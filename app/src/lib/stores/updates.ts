@@ -26,6 +26,25 @@ export interface ReleaseInfo {
   url: string;
   relation: "current" | "newer" | "older";
   installable: boolean;
+  /** Trae su novedad para el aviso (`highlight.json` en la release). */
+  hasHighlight: boolean;
+}
+
+/** Un texto por idioma de la app; el inglés siempre está. */
+export type LocalizedText = Record<string, string>;
+
+/** La novedad de una versión (release_highlight.rs); la imagen ya es `data:`. */
+export interface ReleaseHighlight {
+  badge: LocalizedText | null;
+  title: LocalizedText;
+  items: { icon: string | null; title: LocalizedText; text: LocalizedText | null }[];
+  image: string | null;
+  imageAlt: LocalizedText | null;
+}
+
+/** El texto en el idioma de la interfaz, o en inglés si no lo trae. */
+export function localizedText(text: LocalizedText, locale: string): string {
+  return text[locale] ?? text.en ?? "";
 }
 
 export type UpdateErrorCode =
@@ -227,12 +246,31 @@ export async function checkForUpdates({ automatic = false }: { automatic?: boole
  */
 export const updatePrompt = writable<ReleaseInfo | null>(null);
 
+/** Las novedades ya pedidas, por tag; null es «sin novedad»: aviso clásico. */
+export const releaseHighlights = writable<Record<string, ReleaseHighlight | null>>({});
+
+/** Lo que se espera a la novedad antes de abrir el aviso igual, clásico. */
+const HIGHLIGHT_WAIT_MS = 6000;
+
+export async function loadReleaseHighlight(release: ReleaseInfo): Promise<ReleaseHighlight | null> {
+  const known = get(releaseHighlights);
+  if (release.tag in known) return known[release.tag];
+  const highlight = release.hasHighlight
+    ? await invoke<ReleaseHighlight | null>("release_highlight", { tag: release.tag }).catch(() => null)
+    : null;
+  releaseHighlights.update((all) => ({ ...all, [release.tag]: highlight }));
+  return highlight;
+}
+
 /** Búsqueda silenciosa al arrancar: solo si el usuario la dejó activada. */
 export async function checkOnStartup(): Promise<void> {
   if (!get(updatePrefs).autoCheck) return;
   await checkForUpdates({ automatic: true });
   const newer = get(newerRelease);
-  if (newer && newer.tag !== get(updatePrefs).skippedTag) updatePrompt.set(newer);
+  if (!newer || newer.tag === get(updatePrefs).skippedTag) return;
+  // El aviso abre ya con su forma final: con la novedad o, si tarda, clásico.
+  await Promise.race([loadReleaseHighlight(newer), new Promise((resolve) => setTimeout(resolve, HIGHLIGHT_WAIT_MS))]);
+  updatePrompt.set(newer);
 }
 
 /** Cierra el aviso; con `skip`, esa versión no vuelve a preguntar. */

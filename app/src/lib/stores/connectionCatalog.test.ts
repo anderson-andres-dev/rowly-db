@@ -1,15 +1,37 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import type { CatalogTable, DatabaseExplorer } from "$lib/types";
+import type { CatalogTable, ConnectionEngineContext, DatabaseExplorer } from "$lib/types";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("$lib/backend", () => ({ invoke, backendText: (value: unknown) => String(value) }));
 
-import { catalogTables, connection, databaseExplorer, explorerLoading, refreshCatalog, reset } from "./connection";
+import { ENGINES } from "$lib/engines";
+import {
+  activeEngine,
+  applySessionContext,
+  catalogTables,
+  connection,
+  databaseExplorer,
+  explorerLoading,
+  refreshCatalog,
+  reset,
+} from "./connection";
+
+const CONTEXT: ConnectionEngineContext = {
+  generation: 1,
+  engineId: "mysql",
+  server: { engine: "mysql", version: [8, 4, 0], label: "MySQL 8.4.0" },
+  sessionMode: { noBackslashEscapes: false },
+  line: { id: "8.4", revision: 1, origin: "included" },
+  reservedWords: [],
+  schemaEpoch: 0,
+  support: null,
+  verification: "unverified",
+};
 
 function explorer(schema: string): DatabaseExplorer {
   return {
-    serverVersion: "8.0", tls: { encrypted: false, detail: null, fellBack: false },
+    context: CONTEXT, tls: { encrypted: false, detail: null, fellBack: false },
     defaultSchema: schema, availableSchemas: [schema],
     schemas: [{ schema, tables: [], routines: [], sequences: [], events: [], warnings: [] }],
   };
@@ -57,4 +79,36 @@ it("publica juntos el explorador y las tablas si ambos pedidos terminan", async 
   expect(get(databaseExplorer)?.defaultSchema).toBe("new");
   expect(get(catalogTables)).toBe(newTables);
   expect(get(explorerLoading)).toBe(false);
+});
+
+it("going back to the connection list releases the backend's connection", async () => {
+  invoke.mockReset();
+  reset();
+  await Promise.resolve();
+  expect(invoke).toHaveBeenCalledWith("disconnect");
+  expect(get(connection).connected).toBe(false);
+});
+
+it("the active engine is the one the backend reports, with its session mode", () => {
+  expect(get(activeEngine)).toBe(ENGINES.mysql);
+  databaseExplorer.set({ ...oldExplorer, context: { ...CONTEXT, sessionMode: { noBackslashEscapes: true } } });
+  expect(get(activeEngine)?.lexical.backslashEscapes).toBe(false);
+  databaseExplorer.set({ ...oldExplorer, context: { ...CONTEXT, engineId: "postgres" } });
+  expect(get(activeEngine)).toBe(ENGINES.postgres);
+  reset();
+  expect(get(activeEngine)).toBeNull();
+});
+
+it("a SET sql_mode in the console moves the editor to the new session mode, never back", () => {
+  const changed = { ...CONTEXT, generation: 2, sessionMode: { noBackslashEscapes: true } };
+  applySessionContext(changed);
+  expect(get(databaseExplorer)?.context).toBe(changed);
+  expect(get(databaseExplorer)?.defaultSchema).toBe("old");
+  expect(get(activeEngine)?.lexical.backslashEscapes).toBe(false);
+  // Una respuesta atrasada (de antes de reconectar) no pisa la mas nueva.
+  applySessionContext({ ...CONTEXT, generation: 1 });
+  expect(get(databaseExplorer)?.context).toBe(changed);
+  reset();
+  applySessionContext(changed);
+  expect(get(databaseExplorer)).toBeNull();
 });

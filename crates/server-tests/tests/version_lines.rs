@@ -17,7 +17,19 @@ fn repo() -> PathBuf {
 
 struct Probe {
     image: String,
+    version: String,
     port: u16,
+}
+
+/// Lo que cada probe devuelve tiene que ser la version exacta que declara
+/// lines.json: una etiqueta movida o una imagen equivocada no prueba la linea.
+fn check_version(engine_name: &str, probe: &Probe, conn: &Conn) {
+    let actual = conn.exact_version();
+    assert_eq!(
+        actual, probe.version,
+        "{engine_name}: {} en 127.0.0.1:{} informa {actual}, lines.json declara {}",
+        probe.image, probe.port, probe.version
+    );
 }
 
 struct Line {
@@ -26,12 +38,10 @@ struct Line {
 }
 
 fn engine_named(name: &str) -> Engine {
-    match name {
-        "mysql" => Engine::MySql,
-        "mariadb" => Engine::MariaDb,
-        "postgres" => Engine::Postgres,
-        other => panic!("lines.json: motor desconocido {other}"),
-    }
+    Engine::ALL
+        .into_iter()
+        .find(|engine| engine.name() == name)
+        .unwrap_or_else(|| panic!("lines.json: motor desconocido {name}"))
 }
 
 fn registry() -> Vec<(String, Vec<Line>)> {
@@ -54,6 +64,7 @@ fn registry() -> Vec<(String, Vec<Line>)> {
                         .iter()
                         .map(|probe| Probe {
                             image: probe["image"].as_str().unwrap().to_string(),
+                            version: probe["version"].as_str().unwrap().to_string(),
                             port: probe["port"].as_u64().unwrap() as u16,
                         })
                         .collect(),
@@ -76,7 +87,9 @@ fn label(entry: &str) -> String {
     entry
         .lines()
         .take_while(|line| line.starts_with("--"))
-        .filter(|line| since(line).is_none() && !line.starts_with("-- expect:"))
+        .filter(|line| {
+            since(line).is_none() && !line.starts_with("-- expect:") && !line.starts_with("-- gap:")
+        })
         .map(|line| line.trim_start_matches('-').trim())
         .collect::<Vec<_>>()
         .join(" ")
@@ -85,7 +98,7 @@ fn label(entry: &str) -> String {
 /// `-- since: 11.8`: lo que cambia dentro de la linea, desde esa version
 /// (SQL_ENGINE.md §5.1). Antes de ella, la linea se comporta como la anterior.
 fn since(line: &str) -> Option<Vec<u32>> {
-    line.strip_prefix("-- since:").map(numbers)
+    line.strip_prefix("-- since:").map(version_numbers)
 }
 
 fn entry_since(entry: &str) -> Option<Vec<u32>> {
@@ -95,14 +108,21 @@ fn entry_since(entry: &str) -> Option<Vec<u32>> {
         .find_map(since)
 }
 
-/// Los numeros de la primera version que aparece: "MariaDB 11.7.2" -> [11, 7, 2].
-fn numbers(text: &str) -> Vec<u32> {
-    text.split(|c: char| !c.is_ascii_digit() && c != '.')
-        .find(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
-        .unwrap_or("")
-        .split('.')
-        .filter_map(|part| part.parse().ok())
-        .collect()
+/// El analizador, con la linea del servidor, marca la sentencia como
+/// sintaxis que esa linea o una anterior elimino (A9).
+fn marks_removed_syntax(engine: Engine, sql: &str, line: &khipu_engine::lines::Line) -> bool {
+    khipu_engine::diagnostics::analyze_statement_with(
+        sql,
+        engine.dialect(),
+        None,
+        false,
+        Some((&engine.dialect().lines(), line)),
+    )
+    .iter()
+    .any(|diagnostic| {
+        matches!(&diagnostic.message, khipu_engine::diagnostics::DiagnosticMessage::Key { key, .. }
+                if key.starts_with("diagnostic.removedInLine"))
+    })
 }
 
 struct Server {
@@ -125,6 +145,7 @@ impl Server {
 async fn every_version_line_is_told_apart_from_the_previous_one() {
     let mut failures = Vec::new();
     let mut report = Vec::new();
+    let mut removed_marked = 0;
     for (engine_name, lines) in registry() {
         let engine = engine_named(&engine_name);
         if !engine_selected(engine) {
@@ -147,12 +168,22 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             line.name, probe.image, probe.port
                         )
                     });
+                check_version(&engine_name, probe, &conn);
+                // D6: la version que informa el servidor real cae en la linea
+                // que este probe demuestra (support/<motor>.json).
+                let lines = engine.dialect().lines();
+                let effective = lines.effective(&conn.version());
+                assert_eq!(
+                    effective.line, line.name,
+                    "{engine_name} {}: support/{engine_name}.json la asigna a la linea {}",
+                    probe.version, effective.line
+                );
                 for statement in &setup {
                     let _ = conn.raw(statement).await;
                 }
                 ends.push(Server {
                     image: probe.image.clone(),
-                    version: conn.server_version(),
+                    version: conn.exact_version(),
                     conn,
                 });
             }
@@ -162,7 +193,11 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
         // Un directorio de linea que lines.json no conoce no prueba nada.
         for entry in std::fs::read_dir(&dir).unwrap().flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if entry.path().is_dir() && !lines.iter().any(|line| line.name == name) {
+            // `common/` es el corpus valido en cada linea (SQL_ENGINE §10.1).
+            if entry.path().is_dir()
+                && name != "common"
+                && !lines.iter().any(|line| line.name == name)
+            {
                 failures.push(format!(
                     "{engine_name}: tests/sql/{engine_name}/{name} no es una linea de lines.json"
                 ));
@@ -201,7 +236,7 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                     if let Some(from) = &from {
                         let below = servers[index]
                             .iter()
-                            .filter(|s| numbers(&s.version) < *from)
+                            .filter(|s| version_numbers(&s.version) < *from)
                             .count();
                         if below == 0 || below == servers[index].len() {
                             failures.push(format!(
@@ -216,9 +251,24 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
                             let changed = in_line
                                 && from
                                     .as_ref()
-                                    .is_none_or(|from| numbers(&server.version) >= *from);
+                                    .is_none_or(|from| version_numbers(&server.version) >= *from);
                             let should_pass = changed == new_in_line;
                             let outcome = server.accepts(sql).await;
+                            // A9: lo que el analizador marca como eliminado en
+                            // la linea de este servidor, el servidor lo rechaza.
+                            let lines = engine.dialect().lines();
+                            let line_of_server = lines.effective(&version_numbers(&server.version));
+                            if marks_removed_syntax(engine, sql, line_of_server) {
+                                removed_marked += 1;
+                                if outcome.is_ok() {
+                                    failures.push(format!(
+                                        "{engine_name} {}: «{}» marcado como eliminado en {} y el servidor lo acepta",
+                                        line.name,
+                                        label(sql),
+                                        server.version
+                                    ));
+                                }
+                            }
                             if outcome.is_ok() != should_pass {
                                 failures.push(format!(
                                     "{engine_name} {}: «{}» en {} ({}) {}\n    {}",
@@ -248,6 +298,9 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
             ));
         }
     }
+    report.push(format!(
+        "sintaxis eliminada marcada por el analizador (A9): {removed_marked}"
+    ));
     println!("{}", report.join("\n"));
     assert!(
         failures.is_empty(),
@@ -258,6 +311,17 @@ async fn every_version_line_is_told_apart_from_the_previous_one() {
 }
 
 /// `-- expect: valor`: lo que debe mostrar la primera celda.
+/// `-- gap: <error>`: un hueco conocido del driver (SQL_ENGINE §9). La
+/// lectura tiene que fallar con ese error; si un dia funciona, la prueba lo
+/// dice para que se quite la marca y vuelva a ser una lectura comprobada.
+fn known_gap(entry: &str) -> Option<String> {
+    entry
+        .lines()
+        .take_while(|line| line.starts_with("--"))
+        .find_map(|line| line.strip_prefix("-- gap:"))
+        .map(|value| value.trim().to_string())
+}
+
 fn expected(entry: &str) -> Option<String> {
     entry
         .lines()
@@ -274,6 +338,7 @@ fn expected(entry: &str) -> Option<String> {
 async fn every_column_type_a_line_returns_is_read() {
     let mut failures = Vec::new();
     let mut checked = 0;
+    let mut gaps = 0;
     for (engine_name, lines) in registry() {
         let engine = engine_named(&engine_name);
         if !engine_selected(engine) {
@@ -294,7 +359,8 @@ async fn every_column_type_a_line_returns_is_read() {
                 let conn = Conn::open_line(engine, probe.port).await.unwrap_or_else(|error| {
                     panic!("{engine_name} {} ({}): {error}\nlevantalo con tools/test-dbs/lines.sh up {engine_name}", line.name, probe.image)
                 });
-                let version = conn.server_version();
+                check_version(&engine_name, probe, &conn);
+                let version = conn.exact_version();
                 // Cada test prepara lo suyo (SQL_ENGINE.md §10.2).
                 for statement in &fixture(
                     &repo()
@@ -305,11 +371,35 @@ async fn every_column_type_a_line_returns_is_read() {
                     let _ = conn.raw(statement).await;
                 }
                 for sql in &reads {
-                    if entry_since(sql).is_some_and(|from| numbers(&version) < from) {
+                    if entry_since(sql).is_some_and(|from| version_numbers(&version) < from) {
                         continue;
                     }
                     checked += 1;
-                    let problem = match conn.raw(sql).await {
+                    let result = conn.raw(sql).await;
+                    if let Some(gap) = known_gap(sql) {
+                        let problem = match &result {
+                            QueryExecutionResult::ResultSet { .. } => Some(
+                                "ya se lee: quitar la marca -- gap y su hueco de SQL_ENGINE §9"
+                                    .to_string(),
+                            ),
+                            other if !error_text(other).contains(&gap) => Some(format!(
+                                "fallo con otro error que el del hueco ({gap}): {}",
+                                error_text(other)
+                            )),
+                            _ => None,
+                        };
+                        if let Some(problem) = problem {
+                            failures.push(format!(
+                                "{engine_name} {} ({version}): «{}» {problem}",
+                                line.name,
+                                label(sql)
+                            ));
+                        } else {
+                            gaps += 1;
+                        }
+                        continue;
+                    }
+                    let problem = match result {
                         QueryExecutionResult::ResultSet { rows, .. } => {
                             let first = rows.first().and_then(|row| row.first().cloned()).flatten();
                             match expected(sql) {
@@ -332,7 +422,9 @@ async fn every_column_type_a_line_returns_is_read() {
             }
         }
     }
-    println!("lecturas comprobadas: {checked}");
+    println!(
+        "lecturas comprobadas: {checked} (huecos conocidos que siguen fallando igual: {gaps})"
+    );
     assert!(
         failures.is_empty(),
         "\n{} problemas:\n{}\n",

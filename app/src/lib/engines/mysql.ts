@@ -1,6 +1,7 @@
 import { MySQL } from "@codemirror/lang-sql";
-import { byAnalyzerLocation, byNearFragment, byQuotedName, byServerPosition, firstLocated } from "$lib/sqlDiagnostics";
-import { COMMON_RESERVED, COMMON_STARTERS, identifierWith, QUOTING_RESERVED, quoteWith, caseInsensitiveName } from "./common";
+import { byAnalyzerLocation, byNearFragment, byQuotedName, byServerPosition, firstLocated } from "$lib/editor/diagnostics";
+import mysqlLines from "../../../../support/mysql.json";
+import { COMMON_RESERVED, COMMON_STARTERS, identifierWith, lineReservedWords, QUOTING_RESERVED, quoteWith, caseInsensitiveName } from "./common";
 import type { EngineProfile, TlsModeName } from "./types";
 
 const TLS: Record<TlsModeName, string> = {
@@ -48,7 +49,32 @@ const RESERVED: ReadonlySet<string> = new Set([
   "type",
   "year",
   "zone",
+  ...lineReservedWords(mysqlLines),
 ]);
+
+// Lo que solo se escribe entre comillas: lo reservado en el motor y en
+// cualquiera de sus lineas. MariaDB parte de esta misma lista.
+export const MYSQL_QUOTING = [
+  ...QUOTING_RESERVED,
+  "key",
+  "keys",
+  "index",
+  "database",
+  "change",
+  "range",
+  "read",
+  "write",
+  "groups",
+  "interval",
+  "div",
+  "mod",
+  "xor",
+  "usage",
+  "condition",
+  "lock",
+  ...lineReservedWords(mysqlLines),
+];
+export const MYSQL_PLAIN = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 
 export const mysql: EngineProfile = {
   lexical: {
@@ -65,30 +91,7 @@ export const mysql: EngineProfile = {
   quoteIdentifier: (name) => quoteWith("`", "`", name),
   // Las mayusculas dan igual: solo caracteres raros o reservadas.
   nameMatches: caseInsensitiveName,
-  identifier: identifierWith(
-    /^[A-Za-z_][A-Za-z0-9_$]*$/,
-    new Set([
-      ...QUOTING_RESERVED,
-      "key",
-      "keys",
-      "index",
-      "database",
-      "change",
-      "range",
-      "read",
-      "write",
-      "rank",
-      "groups",
-      "interval",
-      "div",
-      "mod",
-      "xor",
-      "usage",
-      "condition",
-      "lock",
-    ]),
-    (name) => quoteWith("`", "`", name),
-  ),
+  identifier: identifierWith(MYSQL_PLAIN, new Set(MYSQL_QUOTING), (name) => quoteWith("`", "`", name)),
   // Sin NO_BACKSLASH_ESCAPES (lo habitual), la barra invertida escapa.
   quoteString: (value) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`,
   editorDialect: MySQL,
@@ -104,6 +107,7 @@ export const mysql: EngineProfile = {
     "use",
     "call",
   ],
+  builtinFunctions: ["NOW", "CONCAT", "IFNULL", "IF", "DATE_FORMAT", "JSON_EXTRACT", "JSON_OBJECT", "JSON_ARRAY", "GROUP_CONCAT", "UUID", "CURDATE"],
   reservedWords: RESERVED,
   errorHelp: {
     "1146": "tableMissing",

@@ -3,7 +3,7 @@
   import { t, type MessageKey } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { writeClipboard } from "$lib/clipboard";
-  import type { QuickFix, SqlDiagnostic } from "$lib/sqlDiagnostics";
+  import type { QuickFix, SqlDiagnostic } from "$lib/editor/diagnostics";
 
   // Ventana de detalle de un diagnostico (Ctrl+. o el mouse encima del
   // subrayado): que paso en lenguaje humano, el codigo y el texto crudo del

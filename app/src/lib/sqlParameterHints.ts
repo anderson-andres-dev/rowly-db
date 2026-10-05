@@ -1,12 +1,12 @@
 import { Facet, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import type { SqlProfile } from "$lib/engines";
-import { callHints, type RoutineIndex } from "$lib/sqlCallHints";
-import { statementsIn } from "$lib/sqlStatementIndex";
+import { callHints, type RoutineIndex } from "$lib/editor/callHints";
+import { statementsIn } from "$lib/editor/statementIndex";
 
-// Los hints de parametros en el editor (docs/specs/v0.2-hints-de-parametros.md):
+// Los hints de parametros en el editor:
 // solo las sentencias que tocan lo visible, cada una con el lexer liviano de
-// sqlCallHints.ts.
+// editor/callHints.ts.
 
 export interface ParameterHintConfig {
   engine: SqlProfile;

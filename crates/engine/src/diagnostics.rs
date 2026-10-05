@@ -1,4 +1,4 @@
-//! Diagnosticos de SQL mientras se escribe (docs/specs/v0.2-diagnosticos.md).
+//! Diagnosticos de SQL mientras se escribe.
 //!
 //! Dos pasadas por sentencia, sin tocar la base:
 //! 1. Sintaxis: el error de sqlparser con su linea y columna, afinado con
@@ -13,8 +13,9 @@
 //! Posiciones: linea y columna 1-based, en caracteres, relativas a la
 //! sentencia; el fin es exclusivo. El frontend las pasa a su offset.
 
-use crate::Dialect;
 use crate::catalog::CatalogTable;
+use crate::lines::{EngineLines, Line};
+use crate::{Dialect, RoutineBodies};
 use serde::Serialize;
 use sqlparser::ast::{
     Expr, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr, Ident, JoinConstraint,
@@ -107,6 +108,37 @@ pub struct CatalogView<'a> {
 /// Cuantos arreglos se prueban para seguir buscando errores.
 const MAX_REPAIRS: usize = 10;
 
+/// Como `analyze_statement`, para una sesion de MySQL / MariaDB con
+/// NO_BACKSLASH_ESCAPES: la barra invertida es un caracter mas dentro de una
+/// cadena. Cada una pasa a `/`, que no escapa nada, para que el tokenizer
+/// corte las cadenas donde las corta el servidor; las posiciones siguen
+/// siendo las del texto original, porque la longitud no cambia.
+///
+/// Con la linea del servidor (`line`: las lineas de `dialect` que la conexion
+/// tomo al conectar, y la suya), tambien la sintaxis que esa linea o una
+/// anterior elimino (A9). Sin linea (sin conexion, o un servidor de otro
+/// motor que el del perfil), nada de eso.
+pub fn analyze_statement_with(
+    sql: &str,
+    dialect: Dialect,
+    catalog: Option<&CatalogView>,
+    no_backslash_escapes: bool,
+    line: Option<(&EngineLines, &Line)>,
+) -> Vec<Diagnostic> {
+    if let Some(found) = line.and_then(|(lines, line)| removed_syntax(sql, dialect, lines, line)) {
+        return vec![found];
+    }
+    if !no_backslash_escapes || !dialect.backslash_escapes() || !sql.contains('\\') {
+        return analyze_statement(sql, dialect, catalog);
+    }
+    let mut bytes = sql.as_bytes().to_vec();
+    for index in crate::execution_guard::backslashes_in_strings(sql) {
+        bytes[index] = b'/';
+    }
+    let read = String::from_utf8(bytes).expect("solo cambian bytes ASCII");
+    analyze_statement(&read, dialect, catalog)
+}
+
 /// Todos los errores de la sentencia, no solo el primero: el parser se
 /// detiene en uno, asi que cada error con un arreglo seguro (la coma que
 /// falta, la que sobra, `WHER` por `WHERE`) se aplica a una copia y se vuelve
@@ -125,11 +157,11 @@ pub fn analyze_statement(
     if has_unparsed_syntax(sql, dialect) {
         return Vec::new();
     }
-    // Los cuerpos de PostgreSQL pueden ser cadenas con otro lenguaje.
-    if postgres_opaque_definition(sql, dialect) {
+    // Cuerpos entre comillas: pueden ser cadenas con otro lenguaje.
+    if quoted_routine_definition(sql, dialect) {
         return Vec::new();
     }
-    if matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+    if dialect.definition().select_into_variable_lists {
         if let Some(found) = mysql_select_into_errors(sql, dialect, catalog) {
             return found;
         }
@@ -194,9 +226,10 @@ pub fn analyze_statement(
     found
 }
 
-/// Lee una rutina MySQL completa. Cada fragmento conserva su offset original.
+/// Lee una rutina con cuerpo en bloque (MySQL, MariaDB) completa. Cada
+/// fragmento conserva su offset original.
 fn mysql_routine_errors(sql: &str, dialect: Dialect) -> Option<Vec<Diagnostic>> {
-    if !matches!(dialect, Dialect::MySql | Dialect::MariaDb) {
+    if dialect.definition().routine_bodies != RoutineBodies::Block {
         return None;
     }
     let all = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
@@ -275,7 +308,7 @@ fn mysql_routine_errors(sql: &str, dialect: Dialect) -> Option<Vec<Diagnostic>> 
                 _ => {}
             }
             if (tokens[i].token == Token::Comma && depth == 0) || i == close {
-                if start == i && i != close || i == close && start == i && i > open + 1 {
+                if start == i && (i != close || i > open + 1) {
                     let at = if i == close { tokens[i - 1] } else { tokens[i] };
                     found.push(at_token(
                         at,
@@ -849,8 +882,10 @@ fn routine_incomplete(token: &TokenWithSpan) -> Diagnostic {
     )
 }
 
-fn postgres_opaque_definition(sql: &str, dialect: Dialect) -> bool {
-    if dialect != Dialect::Postgres {
+/// Un CREATE de rutina, trigger o regla cuyo cuerpo es un texto en otro
+/// lenguaje (Postgres): opaco para el analizador.
+fn quoted_routine_definition(sql: &str, dialect: Dialect) -> bool {
+    if dialect.definition().routine_bodies != RoutineBodies::Quoted {
         return false;
     }
     if !sql
@@ -877,9 +912,8 @@ fn postgres_opaque_definition(sql: &str, dialect: Dialect) -> bool {
     }
     for word in words.iter().skip(1).take(32).map(String::as_str) {
         match word {
-            "PROCEDURE" | "FUNCTION" | "TRIGGER" => return true,
+            "PROCEDURE" | "FUNCTION" | "TRIGGER" | "RULE" => return true,
             "EVENT" => return false,
-            "RULE" => return dialect == Dialect::Postgres,
             "TABLE" | "VIEW" | "INDEX" | "DATABASE" | "SCHEMA" | "TYPE" | "DOMAIN" | "SEQUENCE"
             | "EXTENSION" | "POLICY" => return false,
             _ => {}
@@ -1034,6 +1068,71 @@ fn has_unparsed_syntax(sql: &str, dialect: Dialect) -> bool {
     known
         .iter()
         .any(|pattern| contains_pattern(&words, pattern))
+}
+
+/// La sintaxis que `line` o una linea anterior elimino, marcada donde esta,
+/// con la linea que la elimino y lo que se usa en su lugar
+/// (`support/<motor>.json`, `removedSyntax`).
+fn removed_syntax(
+    sql: &str,
+    dialect: Dialect,
+    lines: &EngineLines,
+    line: &Line,
+) -> Option<Diagnostic> {
+    let mut removed = lines.removed_until(line).peekable();
+    removed.peek()?;
+    let mut tokens: Vec<TokenWithSpan> = Tokenizer::new(&*dialect.as_sqlparser_dialect(), sql)
+        .tokenize_with_location()
+        .ok()?
+        .into_iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF))
+        .collect();
+    while matches!(
+        tokens.last().map(|token| &token.token),
+        Some(Token::SemiColon)
+    ) {
+        tokens.pop();
+    }
+    let words: Vec<String> = tokens
+        .iter()
+        .map(|token| match &token.token {
+            Token::Word(word) if word.quote_style.is_none() => word.value.to_uppercase(),
+            other => other.to_string(),
+        })
+        .collect();
+    removed.find_map(|(removing, syntax)| {
+        let at_start = syntax.words.first().is_some_and(|word| word == "^");
+        let at_end = syntax.words.last().is_some_and(|word| word == "$");
+        let pattern: Vec<&str> = syntax
+            .words
+            .iter()
+            .map(String::as_str)
+            .filter(|word| *word != "^" && *word != "$")
+            .collect();
+        let found = words
+            .windows(pattern.len())
+            .enumerate()
+            .position(|(at, window)| {
+                window
+                    .iter()
+                    .zip(&pattern)
+                    .all(|(word, wanted)| word == wanted)
+                    && (!at_start || at == 0)
+                    && (!at_end || at + pattern.len() == words.len())
+            })?;
+        let message = match &syntax.instead {
+            Some(instead) => DiagnosticMessage::key("diagnostic.removedInLineUse")
+                .with("line", &removing.line)
+                .with("instead", instead),
+            None => DiagnosticMessage::key("diagnostic.removedInLine").with("line", &removing.line),
+        };
+        Some(Diagnostic {
+            start: tokens[found].span.start.into(),
+            end: tokens[found + pattern.len() - 1].span.end.into(),
+            message,
+            suggestions: Vec::new(),
+        })
+    })
 }
 
 /// Las palabras del patron, en orden; cada tramo entre `...` seguido.
@@ -2524,6 +2623,30 @@ mod tests {
     use super::*;
     use crate::catalog::CatalogColumn;
 
+    #[test]
+    fn with_no_backslash_escapes_the_analysis_reads_strings_like_the_server() {
+        // Con NO_BACKSLASH_ESCAPES, 'C:\' es una cadena completa; con la
+        // regla de MySQL, la comilla queda escapada y la cadena sin cerrar.
+        let sql = "SELECT 'C:\\' AS ruta";
+        assert!(!analyze_statement(sql, Dialect::MySql, None).is_empty());
+        assert!(analyze_statement_with(sql, Dialect::MySql, None, true, None).is_empty());
+        assert_eq!(
+            analyze_statement_with(sql, Dialect::MySql, None, false, None),
+            analyze_statement(sql, Dialect::MySql, None)
+        );
+        // Lo que sigue a la cadena se sigue leyendo, en su sitio.
+        let after = "SELECT 'C:\\' AS ruta FROM t WHER x = 1";
+        assert_eq!(
+            analyze_statement_with(after, Dialect::MySql, None, true, None),
+            analyze_statement(
+                "SELECT 'C:/' AS ruta FROM t WHER x = 1",
+                Dialect::MySql,
+                None
+            )
+        );
+        assert!(!analyze_statement_with(after, Dialect::MySql, None, true, None).is_empty());
+    }
+
     fn column(name: &str) -> CatalogColumn {
         CatalogColumn {
             name: name.to_string(),
@@ -2955,8 +3078,9 @@ mod tests {
     }
 }
 
-/// El contrato de los diagnosticos (docs/specs/v0.2-perfiles-de-motor.md,
-/// §5): cada caso corre en todos los motores de `Dialect::ALL`. Lo comun se
+/// El contrato de los diagnosticos
+/// (SQL_ENGINE.es.md): cada caso corre en todos los
+/// motores de `Dialect::ALL`. Lo comun se
 /// escribe una vez (`Same`) y un motor nuevo ya lo cumple o falla aca; donde
 /// un motor difiere, el caso lo dice con un `match` exhaustivo (`PerEngine`):
 /// un motor nuevo no compila hasta decidir cada diferencia.
