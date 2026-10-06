@@ -45,8 +45,14 @@
     color var(--duration-fast) ease;
 }
 
+/* Al pasar por encima, un adelanto suave de la elegida: el contorno tenue
+   arriba que se desvanece hacia los lados, y un relleno que se apaga hacia
+   abajo (sin borde recto en la base). */
 .result-tab:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --tab-ring-top: color-mix(in srgb, var(--accent) 35%, transparent);
+  --tab-ring-side: transparent;
+  position: relative;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 6%, transparent), transparent);
   color: var(--text-primary);
 }
 
@@ -56,6 +62,8 @@
    color del contenido (la union sigue sin linea). */
 .result-tab.active {
   --tab-glow: color-mix(in srgb, var(--accent) 55%, transparent);
+  --tab-ring-top: color-mix(in srgb, var(--accent) 85%, transparent);
+  --tab-ring-side: var(--tab-glow);
   position: relative;
   background: linear-gradient(
     to bottom,
@@ -65,6 +73,7 @@
   color: var(--text-primary);
 }
 
+.result-tab:hover::before,
 .result-tab.active::before {
   position: absolute;
   /* Los lados terminan donde empieza la curva de abajo (::after), que los
@@ -76,8 +85,8 @@
      abajo y sigue por la linea base (::after). */
   background: radial-gradient(
     140% 220% at 50% 0%,
-    color-mix(in srgb, var(--accent) 85%, transparent) 0%,
-    var(--tab-glow) 70%
+    var(--tab-ring-top) 0%,
+    var(--tab-ring-side) 70%
   );
   content: "";
   pointer-events: none;
