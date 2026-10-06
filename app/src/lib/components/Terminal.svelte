@@ -248,11 +248,21 @@
     opacity: 1;
   }
 
-  /* La elegida en negrita, subrayada fino y cerca del texto. */
-  .session.active :global(.tab-select span) {
+  /* La elegida en negrita, con una linea fina en acento bajo el icono y el
+     nombre. */
+  .session.active :global(.tab-select) {
+    position: relative;
     font-weight: 600;
-    text-decoration: underline 1px var(--accent);
-    text-underline-offset: 4px;
+  }
+
+  .session.active :global(.tab-select)::after {
+    position: absolute;
+    right: 0;
+    bottom: -6px;
+    left: 0;
+    height: 1px;
+    background: var(--accent);
+    content: "";
   }
 
   /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
