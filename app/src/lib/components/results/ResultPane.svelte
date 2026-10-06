@@ -1156,8 +1156,11 @@
     align-self: stretch;
     align-items: flex-end;
     gap: 2px;
-    margin: 0 calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
-    padding: 0 var(--tab-reach) 0 var(--tab-curve);
+    /* 1px de aire arriba: el contorno de la pestaña elegida se dibuja 1px
+       por encima de ella (tabs.css) y overflow-y lo recortaba, despuntando
+       sus esquinas. */
+    margin: -1px calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
+    padding: 1px var(--tab-reach) 0 var(--tab-curve);
     overflow-x: auto;
     overflow-y: hidden;
     pointer-events: none;
