@@ -49,10 +49,10 @@
    contorno tenue arriba que se desvanece hacia los lados, y un relleno que
    se apaga hacia abajo (sin borde recto en la base). */
 .result-tab:hover {
-  --tab-ring-top: color-mix(in srgb, var(--text-primary) 22%, transparent);
+  --tab-ring-top: color-mix(in srgb, var(--text-primary) 10%, transparent);
   --tab-ring-side: transparent;
   position: relative;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 6%, transparent), transparent);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent);
   color: var(--text-primary);
 }
 
