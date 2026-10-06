@@ -465,6 +465,17 @@
 
   $effect(() => registerCommands("global", { "toggle-terminal": toggleTerminal }));
 
+  // Una pestaña de tabla es solo su resultado, sin fila de Salida ni de
+  // resultados: con la terminal encima no se veian sus datos ni habia como
+  // volver a ellos. Al abrirla o pasar a ella, la terminal se oculta (sigue
+  // viva; Ctrl+T la trae). Entre consolas normales, sigue a la vista.
+  let lastTableTab: string | null = null;
+  $effect(() => {
+    const tableTab = activeConsole?.table ? activeConsole.id : null;
+    if (tableTab && tableTab !== lastTableTab) terminalActive = false;
+    lastTableTab = tableTab;
+  });
+
   // Ctrl+Tab y Ctrl+1..9 fuera del panel inferior y de la terminal: las
   // consolas (workspace/tabCommands.ts).
   $effect(() =>
@@ -1018,8 +1029,10 @@
         onclosetab={(key) => void closeResultTab(key)}
         onexport={() => (exportFor = viewKey)}
         onpin={() => activeConsole && pinCurrentResult(activeConsole.id)}
-        fileEncoding={activeConsole && !activeConsole.table ? fileEncoding(activeConsole) : null}
-        onencodingchange={(encoding) => activeConsole && setQueryConsoleEncoding(activeConsole.id, encoding)}
+        fileEncoding={activeConsole ? fileEncoding(activeConsole) : null}
+        onencodingchange={activeConsole && !activeConsole.table
+          ? (encoding) => setQueryConsoleEncoding(activeConsole.id, encoding)
+          : null}
         onunpin={() => unpinTab(viewKey)}
         onrepin={() => {
           const id = pinnedIdOf(viewKey);

@@ -5,6 +5,10 @@
 //
 // Las filas son `.row` dentro de `li[role="treeitem"]`; una carpeta lleva
 // aria-expanded en su li y se abre o cierra con un clic en su fila.
+//
+// Como en un arbol clasico, la fila con el foco lleva la barra de seleccion
+// y, al salir del arbol, la ultima queda marcada en tono suave
+// (data-selected; el estilo es de cada arbol).
 
 const ROW = '[role="treeitem"] > .row, [role="treeitem"] > .row-wrap > .row';
 
@@ -18,13 +22,13 @@ function itemOf(row: HTMLElement): HTMLElement | null {
   return row.closest<HTMLElement>('[role="treeitem"]');
 }
 
-function focusRow(row: HTMLElement | undefined) {
+function focusRow(row: HTMLElement | undefined, scroll = true) {
   if (!row) return;
   // Las hojas (columnas, indices...) no son botones: se enfocan sin entrar
   // al orden del Tab.
   if (!row.hasAttribute("tabindex") && row.tagName !== "BUTTON") row.tabIndex = -1;
-  row.focus();
-  row.scrollIntoView({ block: "nearest" });
+  row.focus({ preventScroll: true });
+  if (scroll) row.scrollIntoView({ block: "nearest" });
 }
 
 export function treeKeys(tree: HTMLElement) {
@@ -64,10 +68,30 @@ export function treeKeys(tree: HTMLElement) {
     focusRow(next);
   }
 
+  // WebKit no enfoca un boton al hacer clic: sin esto, tras un clic en una
+  // fila el foco seguia donde estaba (otra zona) y las flechas iban alla.
+  function onClick(event: MouseEvent) {
+    const row = (event.target as Element).closest<HTMLElement>(".row");
+    if (row && tree.contains(row) && row.matches(ROW)) focusRow(row, false);
+  }
+
+  let selected: HTMLElement | null = null;
+  function onFocusIn(event: FocusEvent) {
+    const row = (event.target as Element).closest<HTMLElement>(".row");
+    if (!row || !row.matches(ROW) || row === selected) return;
+    selected?.removeAttribute("data-selected");
+    selected = row;
+    row.setAttribute("data-selected", "");
+  }
+
   tree.addEventListener("keydown", onKeydown);
+  tree.addEventListener("click", onClick);
+  tree.addEventListener("focusin", onFocusIn);
   return {
     destroy() {
       tree.removeEventListener("keydown", onKeydown);
+      tree.removeEventListener("click", onClick);
+      tree.removeEventListener("focusin", onFocusIn);
     },
   };
 }

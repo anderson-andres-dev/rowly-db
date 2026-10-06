@@ -83,6 +83,15 @@ describe("teclado del arbol", () => {
     expect(focused()).toBe("clientes");
   });
 
+  it("un clic en una fila la enfoca, tambien una hoja: las flechas siguen desde ahi", () => {
+    const { action } = mountTree();
+    cleanup = action.destroy;
+    document.getElementById("id")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(focused()).toBe("id");
+    press("ArrowDown");
+    expect(focused()).toBe("facturas");
+  });
+
   it("con modificadores no toca la tecla: Ctrl+Shift+flechas son para cambiar de zona", () => {
     const { action } = mountTree();
     cleanup = action.destroy;

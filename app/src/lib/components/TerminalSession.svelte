@@ -164,8 +164,8 @@
   .terminal-host {
     position: absolute;
     inset: 0;
-    /* Aire bajo la fila de sesiones: la primera linea no va pegada. */
-    padding: var(--space-2) 0 0 var(--space-3);
+    /* Sin aire arriba: la fila de sesiones ya deja el suyo bajo la pestaña. */
+    padding: 0 0 0 var(--space-3);
   }
 
   .terminal-host.hidden {

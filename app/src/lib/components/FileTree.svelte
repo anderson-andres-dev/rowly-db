@@ -499,9 +499,20 @@
     background: var(--surface-hover);
   }
 
-  .row:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: -2px;
+  /* Seleccion de arbol clasico (treeKeys.ts): la fila con el foco lleva la
+     barra de acento, por encima del gris del mouse; fuera del arbol, la
+     ultima queda en tono suave. Moviendose entre zonas (Ctrl+Shift), nada. */
+  .row:global([data-selected]) {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+
+  .row:focus {
+    outline: none;
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
+  :global(:root.zone-moving) .row:focus {
+    background: transparent;
   }
 
   .row.leaf,

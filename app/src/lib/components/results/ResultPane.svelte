@@ -147,7 +147,9 @@
     // Una pestaña de texto (consola o archivo): su encoding, abajo a la
     // derecha de todo. Una de tabla no lo tiene (null).
     fileEncoding?: TextEncoding | null;
-    onencodingchange?: (encoding: TextEncoding) => void;
+    // null: se muestra sin poder cambiarse (una pestaña de tabla no tiene
+    // archivo que guardar).
+    onencodingchange?: ((encoding: TextEncoding) => void) | null;
     // Registro de la pestaña Salida.
     outputLog?: LogEntry[];
     // Hay una ejecucion nueva en curso en la consola (indicador de la Salida).
