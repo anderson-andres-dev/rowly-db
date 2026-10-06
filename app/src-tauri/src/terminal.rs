@@ -9,6 +9,12 @@
 //! recoge siempre al shell: un proceso que el usuario separó (`setsid`) puede
 //! dejar abierto el PTY con el shell ya muerto, y en Windows ConPTY no da fin
 //! de lectura hasta que se cierra la pseudoconsola.
+//!
+//! Control de flujo: el frontend confirma lo que xterm ya proceso
+//! (`ack_terminal`) y el lector deja de leer con mas de `MAX_UNACKED` sin
+//! confirmar. Asi el PTY se llena y el kernel frena al programa que escribe.
+//! Sin esto, `yes` crecia unos 80 MB/s en el backend y 40 MB/s en WebKit, y
+//! al pasar xterm de 50 MB pendientes la terminal quedaba muerta.
 
 use khipu_driver_core::Message;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -17,7 +23,7 @@ use std::ffi::OsStr;
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tauri::ipc::{Channel, InvokeResponseBody};
 
@@ -33,6 +39,49 @@ pub(crate) struct TerminalSession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Box<dyn MasterPty + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    flow: Arc<Flow>,
+}
+
+/// Al salir del registro (el shell termino o se cerro) el lector ya no
+/// espera confirmaciones: lee hasta el final del PTY.
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        self.flow.close();
+    }
+}
+
+/// Lo que el lector mando y xterm todavia no proceso.
+#[derive(Default)]
+struct Flow {
+    /// Bytes sin confirmar y si la sesion ya se cerro.
+    state: Mutex<(usize, bool)>,
+    changed: Condvar,
+}
+
+impl Flow {
+    /// Antes de mandar `bytes`: espera, dormido, mientras haya demasiado sin
+    /// confirmar.
+    fn reserve(&self, bytes: usize) {
+        let mut state = self.state.lock().expect("terminal flow mutex poisoned");
+        while state.0 > MAX_UNACKED && !state.1 {
+            state = self
+                .changed
+                .wait(state)
+                .expect("terminal flow mutex poisoned");
+        }
+        state.0 += bytes;
+    }
+
+    fn ack(&self, bytes: usize) {
+        let mut state = self.state.lock().expect("terminal flow mutex poisoned");
+        state.0 = state.0.saturating_sub(bytes);
+        self.changed.notify_all();
+    }
+
+    fn close(&self) {
+        self.state.lock().expect("terminal flow mutex poisoned").1 = true;
+        self.changed.notify_all();
+    }
 }
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
@@ -40,6 +89,11 @@ static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 /// Lo que se lee del PTY de una vez: una ráfaga cruza la IPC en pocos
 /// mensajes grandes y el eco de una tecla, en uno pequeño.
 const READ_BUFFER: usize = 64 * 1024;
+
+/// Lo que puede estar en camino o esperando a xterm: mas de lo que el
+/// frontend acumula antes de confirmar (64 KiB) y lejos de los 50 MB en que
+/// xterm empieza a descartar.
+const MAX_UNACKED: usize = 1024 * 1024;
 
 /// Cuánto espera `close` a que el shell termine con `SIGHUP` antes de cerrar
 /// el PTY por su cuenta.
@@ -59,6 +113,31 @@ fn windows_shell(path: Option<&OsStr>) -> Option<PathBuf> {
             .map(|dir| dir.join(name))
             .find(|candidate| candidate.is_file())
     })
+}
+
+#[derive(Debug, PartialEq)]
+enum Outside {
+    Unchanged,
+    Kept(std::ffi::OsString),
+    Empty,
+}
+
+/// Una lista de rutas (separadas por `:`) sin las que están dentro de la
+/// carpeta de la AppImage. Un valor sin ninguna queda como está.
+#[cfg_attr(windows, allow(dead_code))]
+fn outside_appdir(value: &OsStr, appdir: &Path) -> Outside {
+    // Path::starts_with("") es cierto para cualquier ruta.
+    if !appdir.is_absolute() || !std::env::split_paths(value).any(|entry| entry.starts_with(appdir))
+    {
+        return Outside::Unchanged;
+    }
+    let kept: Vec<PathBuf> = std::env::split_paths(value)
+        .filter(|entry| !entry.as_os_str().is_empty() && !entry.starts_with(appdir))
+        .collect();
+    match std::env::join_paths(kept) {
+        Ok(kept) if !kept.is_empty() => Outside::Kept(kept),
+        _ => Outside::Empty,
+    }
 }
 
 /// Lo que muestra la cabecera del panel: el nombre del shell y la carpeta
@@ -112,6 +191,19 @@ fn shell_command(cwd: Option<String>) -> (CommandBuilder, String, String) {
     command.env("COLORTERM", "truecolor");
     if crate::webkit_env::dmabuf_set_by_rowly() {
         command.env_remove(crate::webkit_env::DMABUF_VAR);
+    }
+    // Dentro de una AppImage, AppRun apunta PYTHONHOME, LD_LIBRARY_PATH,
+    // GTK_PATH, PATH... a la carpeta montada de la app, y con eso python3 ni
+    // arranca. El shell es del usuario: se le quitan esas entradas.
+    #[cfg(not(windows))]
+    if let (Some(appdir), Some(_)) = (std::env::var_os("APPDIR"), std::env::var_os("APPIMAGE")) {
+        for (name, value) in std::env::vars_os() {
+            match outside_appdir(&value, Path::new(&appdir)) {
+                Outside::Unchanged => {}
+                Outside::Kept(kept) => command.env(name, kept),
+                Outside::Empty => command.env_remove(name),
+            }
+        }
     }
     let name = Path::new(&shell)
         .file_stem()
@@ -169,6 +261,7 @@ fn open(
     };
 
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let flow = Arc::new(Flow::default());
     lock(registry).insert(
         id,
         TerminalSession {
@@ -176,6 +269,7 @@ fn open(
             writer: Arc::new(Mutex::new(writer)),
             master: pair.master,
             killer,
+            flow: Arc::clone(&flow),
         },
     );
 
@@ -186,7 +280,10 @@ fn open(
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
-                    Ok(read) => output(buffer[..read].to_vec()),
+                    Ok(read) => {
+                        flow.reserve(read);
+                        output(buffer[..read].to_vec());
+                    }
                     Err(e) if e.kind() == ErrorKind::Interrupted => continue,
                     // En Linux, leer un PTY sin nadie del otro lado da EIO:
                     // es su fin.
@@ -260,6 +357,17 @@ fn shut_down(registry: &Registry, ids: &[u32]) {
         ids.iter().filter_map(|id| sessions.remove(id)).collect()
     };
     drop(left);
+}
+
+/// xterm proceso `bytes` de la salida.
+fn ack(registry: &Registry, window: &str, id: u32, bytes: usize) -> Result<(), Message> {
+    match lock(registry).get(&id) {
+        Some(session) if session.window == window => {
+            session.flow.ack(bytes);
+            Ok(())
+        }
+        _ => Err(not_found()),
+    }
 }
 
 fn close(registry: &Registry, window: &str, id: u32) -> Result<(), Message> {
@@ -353,6 +461,16 @@ pub async fn resize_terminal(
     rows: u16,
 ) -> Result<(), Message> {
     resize(&state.terminals, window.label(), id, cols, rows)
+}
+
+#[tauri::command]
+pub async fn ack_terminal(
+    window: tauri::Window,
+    state: tauri::State<'_, crate::state::AppState>,
+    id: u32,
+    bytes: u32,
+) -> Result<(), Message> {
+    ack(&state.terminals, window.label(), id, bytes as usize)
 }
 
 #[tauri::command]
@@ -550,6 +668,72 @@ mod tests {
         assert!(gone(&pids), "siguen vivos: {alive:?}");
     }
 
+    /// Lo recibido hasta que pasan `quiet` sin nada nuevo.
+    fn drain(terminal: &mut Opened, quiet: Duration) -> usize {
+        let mut total = 0;
+        while let Ok(bytes) = terminal.output.recv_timeout(quiet) {
+            total += bytes.len();
+            terminal.seen.extend(bytes);
+        }
+        total
+    }
+
+    #[test]
+    fn sin_confirmar_el_lector_se_detiene_y_al_confirmar_sigue() {
+        let registry = Registry::default();
+        let mut terminal = start(&registry, "main", bash());
+        terminal.until("$ ");
+        // 4 MB sin confirmar nada: el lector para en MAX_UNACKED (más una
+        // lectura) y el resto espera en el PTY.
+        write(
+            &registry,
+            "main",
+            terminal.id,
+            b"head -c 4000000 /dev/zero | tr '\\0' a; echo; echo FIN-$((6*7))\r",
+        )
+        .unwrap();
+        let first = drain(&mut terminal, Duration::from_millis(800));
+        assert!(
+            first <= MAX_UNACKED + 2 * READ_BUFFER,
+            "sin confirmar llegaron {first} bytes"
+        );
+        // Confirmando lo recibido llega todo.
+        let mut total = first;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !String::from_utf8_lossy(&terminal.seen).contains("FIN-42") {
+            assert!(
+                Instant::now() < deadline,
+                "no llegó el final con {total} bytes"
+            );
+            ack(&registry, "main", terminal.id, total).unwrap();
+            total = drain(&mut terminal, Duration::from_millis(50));
+        }
+        let received = terminal.seen.iter().filter(|byte| **byte == b'a').count();
+        assert!(received >= 4_000_000, "llegaron {received} de 4000000");
+        close(&registry, "main", terminal.id).unwrap();
+    }
+
+    #[test]
+    fn cerrar_con_el_lector_detenido_no_deja_nada() {
+        let registry = Registry::default();
+        let mut terminal = start(&registry, "main", bash());
+        write(&registry, "main", terminal.id, b"echo S=$$; yes\r").unwrap();
+        let pid = terminal.pid("S=");
+        drain(&mut terminal, Duration::from_millis(500));
+        close(&registry, "main", terminal.id).unwrap();
+        assert!(lock(&registry).is_empty());
+        assert!(terminal.exit.recv_timeout(Duration::from_secs(5)).is_ok());
+        assert!(gone(&[pid]), "el shell {pid} sigue vivo");
+        // El lector termina: suelta el canal de salida.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match terminal.output.recv_timeout(Duration::from_millis(100)) {
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                _ => assert!(Instant::now() < deadline, "el lector sigue vivo"),
+            }
+        }
+    }
+
     #[test]
     fn una_ventana_no_opera_la_terminal_de_otra() {
         let registry = Registry::default();
@@ -557,6 +741,7 @@ mod tests {
         terminal.until("$ ");
         assert!(write(&registry, "connection-b", terminal.id, b"exit\r").is_err());
         assert!(resize(&registry, "connection-b", terminal.id, 10, 10).is_err());
+        assert!(ack(&registry, "connection-b", terminal.id, 10).is_err());
         assert!(close(&registry, "connection-b", terminal.id).is_err());
         close_window(&registry, "connection-b");
         assert!(lock(&registry).contains_key(&terminal.id));
@@ -591,7 +776,7 @@ mod tests {
 
 #[cfg(test)]
 mod shell_tests {
-    use super::{shown_dir, windows_shell};
+    use super::{Outside, outside_appdir, shown_dir, windows_shell};
     use std::fs;
     use std::path::{MAIN_SEPARATOR, Path};
 
@@ -610,6 +795,40 @@ mod shell_tests {
             outside.display().to_string()
         );
         assert_eq!(shown_dir(None, Some(&home)), "~");
+    }
+
+    // Lo que AppRun dejó en la AppImage medida en CI (ubuntu-22.04).
+    #[cfg(unix)]
+    #[test]
+    fn el_shell_no_hereda_las_rutas_de_la_appimage() {
+        use std::ffi::OsStr;
+        let appdir = Path::new("/tmp/appimage_extracted_fb50");
+        let outside = |value: &str| outside_appdir(OsStr::new(value), appdir);
+        assert_eq!(outside("/tmp/appimage_extracted_fb50/usr/"), Outside::Empty);
+        assert_eq!(
+            outside(
+                "/tmp/appimage_extracted_fb50/usr/lib/:/tmp/appimage_extracted_fb50//usr/lib/x86_64-linux-gnu/:"
+            ),
+            Outside::Empty
+        );
+        assert_eq!(
+            outside("/tmp/appimage_extracted_fb50/usr/bin/:/home/u/.cargo/bin:/usr/bin"),
+            Outside::Kept("/home/u/.cargo/bin:/usr/bin".into())
+        );
+        // Lo que no apunta a la AppImage no se toca, ni una carpeta que solo
+        // empieza igual.
+        assert_eq!(
+            outside("/usr/share::/var/lib/snapd/desktop"),
+            Outside::Unchanged
+        );
+        assert_eq!(
+            outside("/tmp/appimage_extracted_fb50x/usr"),
+            Outside::Unchanged
+        );
+        assert_eq!(
+            outside_appdir(OsStr::new("/usr/bin"), Path::new("")),
+            Outside::Unchanged
+        );
     }
 
     #[test]

@@ -58,6 +58,7 @@ describe("mensajes del backend", () => {
 // conexion, el volcado con retraso). Un comando nuevo se agrega aqui con su
 // dueño.
 const OWNERS: Record<string, string> = {
+  ack_terminal: "lib/terminal.ts",
   analyze_sql: "lib/editor/analysisSession.ts",
   apply_result_changes: "lib/results/resultEditing.ts",
   cancel_query: "lib/queryExecution.ts",

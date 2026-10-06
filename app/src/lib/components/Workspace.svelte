@@ -7,7 +7,8 @@
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
-  import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
+  import { CircleCheck, FileCode, Icon, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
+  import type { IconNode } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import ExecutionGuard from "$lib/components/ExecutionGuard.svelte";
@@ -436,6 +437,10 @@
   // Una por ventana, debajo del editor y los resultados. Se monta la primera
   // vez que se muestra; ocultarla deja el shell vivo; cerrarla (o `exit`)
   // la desmonta y la proxima vez abre un shell nuevo.
+  // El ">_" de Lucide (Terminal), distinto del SquareTerminal de las
+  // consolas. Con el Icon base y sus datos, no con el componente del icono:
+  // el JS inicial no tiene que crecer por la terminal.
+  const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
   let terminalMounted = $state(false);
   let terminalVisible = $state(false);
   // El panel y xterm se cargan la primera vez que se muestra: quien no la
@@ -888,7 +893,7 @@
       use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
       onclick={toggleTerminal}
     >
-      <SquareTerminal size={14} aria-hidden="true" />
+      <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
     </button>
   </div>
   {#if !activeConsole}

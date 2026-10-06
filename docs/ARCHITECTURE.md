@@ -251,6 +251,7 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | `support.rs` | Version support packs (SQL_ENGINE §11): signed index and packs, atomic install, removing and disabling, and each engine's active lines. Network only when the user asks. |
 | `commands/` | One file per domain (`query`, `catalog`, `connection`, `files`, `results`). Each command adapts its arguments and calls what already exists; it never repeats the guard, the catalog or the pools. |
 | `services/` | What the commands do, without Tauri: the engine catalog, console texts, `.sql` files, exporting and editing results. |
+| `terminal.rs` | The integrated terminal: owns each PTY and its shell (see [Integrated terminal](#integrated-terminal)). |
 
 ### Frontend (`app/src/lib`)
 
@@ -262,6 +263,7 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | `connections/` | A connection's errors and identity, its test and the explorer tree. |
 | `engines/` | Each engine's profile and `engineForContext`, which applies the session mode and the line's reserved words to it. |
 | `stores/` | Shared state, each with one owner: connection and catalog (`connection.ts`), consoles (`queryConsoles.ts`), grid drafts (`resultEdits.ts`), history, settings. |
+| `terminal.ts`, `components/Terminal.svelte` | The terminal panel and its IPC; loaded the first time it is shown. |
 
 `SqlEditor.svelte` and `Workspace.svelte` only compose: they mount what these folders provide and translate events.
 
@@ -276,12 +278,23 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | Analysis cache | `editor/analysisSession.ts`, one at a time | Another generation, `schemaEpoch`, engine or set of tables the document creates; `analyze_sql` rejects requests made under another context |
 | Consoles and their text | `stores/queryConsoles.ts` | When the console is closed |
 | Grid drafts | `stores/resultEdits.ts` | On apply, revert or closing the tab |
+| Terminal: PTY and shell | `AppState.terminals` in the backend; the output buffer is xterm's | On closing the panel, `exit` in the shell, closing the window or quitting the app |
 
 Each backend command has a single frontend module that invokes it, pinned by `app/src/lib/backend.test.ts`: SQL runs only from `queryExecution.ts` (itself called only by `workspace/executionSession.ts`). A new command goes into that table with its owner. `app/src-tauri/src/lib.rs` checks that what is registered is exactly what the frontend invokes.
 
 ### Resources
 
-Whatever repeats leaves nothing behind: 300 reconnections alternating engines, 300 cycles of opening, running and closing consoles with a theme switch, and idling with an open connection. `app/tests/e2e/resources.mjs` checks it on every PR using the live JavaScript heap, the backend and the DOM ([tools/bench/README.md](../tools/bench/README.md#resource-cycles)).
+Whatever repeats leaves nothing behind: 300 reconnections alternating engines, 300 cycles of opening, running and closing consoles with a theme switch, 300 cycles of opening and closing the terminal (every shell reaped, the backend back to its threads), idling with an open connection and with the terminal open, and 50 MB of terminal output plus `yes` for 30 s with the interface responsive and memory bounded. `app/tests/e2e/resources.mjs` checks it on every PR using the live JavaScript heap, the backend and the DOM ([tools/bench/README.md](../tools/bench/README.md#resource-cycles)).
+
+### Integrated terminal
+
+A shell for the user's own work, not part of the SQL path: it does not go through the guard, and Rowly never writes to it or passes it credentials. Only what the user types reaches the shell.
+
+- **Ownership.** `terminal.rs` owns each PTY and its shell (`portable-pty`); the frontend only knows an id, and the id belongs to the window that opened it: another window cannot write to it, resize it, acknowledge it or close it. Commands: `create_terminal`, `write_terminal`, `resize_terminal`, `ack_terminal`, `close_terminal`. Output travels as raw bytes on one `Channel` and the exit code on another; xterm decodes UTF-8 incrementally, so a character split across two reads arrives whole.
+- **Lifecycle.** Each terminal has two threads asleep in blocking calls, never polling: the reader (`read` → output) and the waiter (`wait` → removes the session → exit). Waiting apart from reading always reaps the shell, even when a detached process keeps the PTY open or ConPTY gives no end of input. Closing sends `SIGHUP` first (Windows: `TerminateProcess`), waits up to 500 ms and only then drops the PTY: on drop, portable-pty's writer sends a newline and EOF, which would run whatever was left typed at the prompt. A destroyed window closes its terminals; `RunEvent::Exit` closes them all, because with `panic = "abort"` no `Drop` of the state runs. The shell is a session leader and the hangup reaches its jobs; whatever the user detached on purpose (`nohup`, `disown`, `setsid`) survives. portable-pty closes inherited descriptors in the child: the shell never gets Rowly's database sockets.
+- **Flow control.** The frontend acknowledges what xterm has processed in 64 KiB steps; the reader stops at 1 MiB unacknowledged, the PTY fills and the kernel throttles the writer. Without it, `yes` grew the backend about 80 MB/s and, past 50 MB pending in xterm, the terminal stopped for good.
+- **Shell and environment.** Linux and macOS: `$SHELL` if executable, else passwd, else `/bin/sh`, as a login shell. Windows: `pwsh.exe`, else `powershell.exe` (both with `-NoLogo`), else `%ComSpec%`. The environment is the app's plus `TERM=xterm-256color` and `COLORTERM=truecolor`; `WEBKIT_DISABLE_DMABUF_RENDERER` is removed only when Rowly set it. Inside an AppImage, AppRun points `PYTHONHOME`, `LD_LIBRARY_PATH`, `GTK_PATH`, `PATH`… at the app's mounted folder (`python3` would not start): those entries are dropped from each variable, and the variable itself when nothing is left. It starts in the profile's SQL folder, or `HOME`.
+- **Panel.** One per window, below the editor and results, shown and hidden with `Alt+F12` (with the focus inside, it is the only shortcut that is not the shell's, besides `Ctrl+Shift+C/V` to copy and paste) or its button. It loads with xterm the first time it is shown, so the initial bundle does not carry it. Hiding keeps the shell and its buffer; closing ends the shell. No store holds output: the buffer is xterm's, 5000 lines of scrollback (about 7 MB when full at 120 columns); colors come from `editorPalette`, the cursor does not blink and resize reaches the backend only when columns or rows change.
 
 ## `khipu-lsp`
 

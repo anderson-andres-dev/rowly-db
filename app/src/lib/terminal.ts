@@ -35,6 +35,12 @@ export function resizeTerminal(id: number, cols: number, rows: number): Promise<
   return invoke("resize_terminal", { id, cols, rows });
 }
 
+// xterm ya proceso `bytes` de la salida: el backend deja de leer el PTY con
+// demasiado sin confirmar, y asi el programa que escribe espera.
+export function ackTerminal(id: number, bytes: number): Promise<void> {
+  return invoke("ack_terminal", { id, bytes });
+}
+
 export function closeTerminal(id: number): Promise<void> {
   return invoke("close_terminal", { id });
 }

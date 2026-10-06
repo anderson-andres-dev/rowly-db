@@ -11,7 +11,7 @@
   import { sqlFolders } from "$lib/stores/sqlFolders";
   import type { EditorPalette } from "$lib/theming/palettes";
   import { backendText } from "$lib/backend";
-  import { closeTerminal, createTerminal, resizeTerminal, writeTerminal, type TerminalInfo } from "$lib/terminal";
+  import { ackTerminal, closeTerminal, createTerminal, resizeTerminal, writeTerminal, type TerminalInfo } from "$lib/terminal";
 
   // El panel de la terminal integrada: una por ventana, debajo del editor y
   // los resultados. Ocultarlo (visible = false) deja el shell y el buffer
@@ -36,6 +36,9 @@
   const HEIGHT_KEY = "khipu:terminal-height:v1";
   const MIN_HEIGHT = 96;
   const DEFAULT_HEIGHT = 240;
+  // Lo procesado por xterm se confirma al backend de a 64 KiB (no por tecla);
+  // el backend para de leer con 1 MiB sin confirmar.
+  const ACK_BYTES = 64 * 1024;
   // La misma pila monoespaciada que el resto de la app.
   const FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace';
 
@@ -57,6 +60,14 @@
   let observer: ResizeObserver | null = null;
   let unsubscribeTheme: (() => void) | null = null;
   let destroyed = false;
+  let processed = 0;
+
+  function written(bytes: number) {
+    processed += bytes;
+    if (processed < ACK_BYTES || !info) return;
+    void ackTerminal(info.id, processed).catch(() => {});
+    processed = 0;
+  }
 
   function themeOf(palette: EditorPalette): ITheme {
     return {
@@ -122,7 +133,7 @@
     const opened = term;
     try {
       info = await createTerminal(opened.cols, opened.rows, get(sqlFolders).folderByProfile[profileId] ?? null, {
-        output: (bytes) => opened.write(bytes),
+        output: (bytes) => opened.write(bytes, () => written(bytes.length)),
         exit: () => onclose(),
       });
     } catch (error) {
@@ -284,6 +295,7 @@
     gap: var(--space-2);
     padding: 0 var(--space-2) 0 var(--space-3);
     border-bottom: 1px solid var(--border);
+    background: var(--surface);
     color: var(--text-secondary);
     font-size: 0.75rem;
   }
@@ -332,6 +344,11 @@
     color: var(--text-primary);
   }
 
+  .terminal-action:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
   .terminal-host {
     min-height: 0;
     flex: 1;
@@ -340,5 +357,11 @@
 
   .terminal-host :global(.xterm) {
     height: 100%;
+  }
+
+  /* xterm.css pinta el viewport de negro; debajo de la ultima fila tiene
+     que verse el fondo del tema. */
+  .terminal-host :global(.xterm .xterm-viewport) {
+    background-color: transparent;
   }
 </style>

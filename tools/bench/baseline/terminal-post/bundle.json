@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "scenario": "bundle",
+  "label": "terminal-post",
+  "initialJs": {
+    "files": 10,
+    "kb": 1449.0,
+    "gzip_kb": 445.2
+  },
+  "allJs": {
+    "files": 16,
+    "kb": 2039.3,
+    "gzip_kb": 602.0
+  },
+  "allCss": {
+    "files": 3,
+    "kb": 49.7,
+    "gzip_kb": 8.3
+  }
+}

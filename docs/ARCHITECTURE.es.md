@@ -251,6 +251,7 @@ Cada dato tiene un dueño. Donde una copia es inevitable, un test la mantiene ig
 | `support.rs` | Paquetes de soporte de versiones (SQL_ENGINE §11): índice y paquetes firmados, instalación atómica, quitar y desactivar, y las líneas activas de cada motor. Red solo cuando el usuario lo pide. |
 | `commands/` | Un archivo por dominio (`query`, `catalog`, `connection`, `files`, `results`). Cada comando adapta sus argumentos y llama a lo que ya existe; nunca repite el guard, el catálogo ni los pools. |
 | `services/` | Lo que hacen los comandos, sin Tauri: el catálogo del núcleo, los textos de consola, los archivos `.sql`, exportar y editar resultados. |
+| `terminal.rs` | La terminal integrada: es dueño de cada PTY y su shell (ver [Terminal integrada](#terminal-integrada)). |
 
 ### Frontend (`app/src/lib`)
 
@@ -262,6 +263,7 @@ Cada dato tiene un dueño. Donde una copia es inevitable, un test la mantiene ig
 | `connections/` | Los errores y la identidad de una conexión, su prueba y el árbol del explorador. |
 | `engines/` | El perfil de cada motor y `engineForContext`, que le aplica el modo de la sesión y las reservadas de la línea. |
 | `stores/` | Estado compartido, cada uno con un dueño: conexión y catálogo (`connection.ts`), consolas (`queryConsoles.ts`), borradores del grid (`resultEdits.ts`), historial, ajustes. |
+| `terminal.ts`, `components/Terminal.svelte` | El panel de la terminal y su IPC; se cargan la primera vez que se muestra. |
 
 `SqlEditor.svelte` y `Workspace.svelte` solo componen: montan lo que dan estas carpetas y traducen eventos.
 
@@ -276,12 +278,23 @@ Cada dato tiene un dueño. Donde una copia es inevitable, un test la mantiene ig
 | Caché del análisis | `editor/analysisSession.ts`, una a la vez | Otra generación, `schemaEpoch`, motor o conjunto de tablas que crea el documento; `analyze_sql` rechaza pedidos hechos con otro contexto |
 | Consolas y su texto | `stores/queryConsoles.ts` | Al cerrar la consola |
 | Borradores del grid | `stores/resultEdits.ts` | Al aplicar, revertir o cerrar la pestaña |
+| Terminal: PTY y shell | `AppState.terminals` en el backend; el buffer de la salida es el de xterm | Al cerrar el panel, `exit` en el shell, cerrar la ventana o salir de la app |
 
 Cada comando del backend tiene un único módulo del frontend que lo invoca, fijado por `app/src/lib/backend.test.ts`: el SQL solo se ejecuta desde `queryExecution.ts` (al que solo llama `workspace/executionSession.ts`). Un comando nuevo entra en esa tabla con su dueño. `app/src-tauri/src/lib.rs` comprueba que lo registrado es exactamente lo que invoca el frontend.
 
 ### Recursos
 
-Lo que se repite no deja nada atrás: 300 reconexiones alternando motores, 300 ciclos de abrir, ejecutar y cerrar consolas con cambio de tema, y reposo con una conexión abierta. `app/tests/e2e/resources.mjs` lo comprueba en cada PR con el heap vivo de JavaScript, el backend y el DOM ([tools/bench/README.es.md](../tools/bench/README.es.md#ciclos-de-recursos)).
+Lo que se repite no deja nada atrás: 300 reconexiones alternando motores, 300 ciclos de abrir, ejecutar y cerrar consolas con cambio de tema, 300 ciclos de abrir y cerrar la terminal (cada shell recogido y el backend de vuelta a sus hilos), reposo con una conexión abierta y con la terminal abierta, y 50 MB de salida en la terminal más `yes` durante 30 s con la interfaz respondiendo y la memoria acotada. `app/tests/e2e/resources.mjs` lo comprueba en cada PR con el heap vivo de JavaScript, el backend y el DOM ([tools/bench/README.es.md](../tools/bench/README.es.md#ciclos-de-recursos)).
+
+### Terminal integrada
+
+Un shell para el trabajo propio del usuario, fuera del camino del SQL: no pasa por el guard, y Rowly nunca le escribe ni le pasa credenciales. Al shell solo llega lo que el usuario teclea.
+
+- **Dueño.** `terminal.rs` es dueño de cada PTY y su shell (`portable-pty`); el frontend solo conoce un id, y el id pertenece a la ventana que lo abrió: otra ventana no puede escribirle, cambiarle el tamaño, confirmarle salida ni cerrarla. Comandos: `create_terminal`, `write_terminal`, `resize_terminal`, `ack_terminal`, `close_terminal`. La salida viaja en bytes por un `Channel` y el código de salida por otro; xterm decodifica el UTF-8 de forma incremental, así que un carácter partido entre dos lecturas llega entero.
+- **Ciclo de vida.** Cada terminal tiene dos hilos dormidos en llamadas bloqueantes, sin sondeos: el lector (`read` → salida) y el que espera (`wait` → quita la sesión → salida del shell). Esperar aparte de leer recoge siempre el shell, aunque un proceso separado deje el PTY abierto o ConPTY no dé fin de lectura. Cerrar manda primero `SIGHUP` (en Windows, `TerminateProcess`), espera hasta 500 ms y solo después suelta el PTY: al soltarse, el writer de portable-pty manda un salto de línea y un EOF, que ejecutarían lo que quedó escrito en el prompt. Una ventana destruida cierra sus terminales; `RunEvent::Exit` las cierra todas, porque con `panic = "abort"` no corre ningún `Drop` del estado. El shell es líder de sesión y el cuelgue llega a sus trabajos; lo que el usuario separó a propósito (`nohup`, `disown`, `setsid`) sobrevive. portable-pty cierra en el hijo los descriptores heredados: el shell no recibe los sockets de base de datos de Rowly.
+- **Control de flujo.** El frontend confirma lo que xterm ya procesó de a 64 KiB; el lector se detiene con 1 MiB sin confirmar, el PTY se llena y el kernel frena al programa que escribe. Sin esto, `yes` hacía crecer el backend unos 80 MB/s y, al pasar xterm de 50 MB pendientes, la terminal quedaba parada para siempre.
+- **Shell y entorno.** Linux y macOS: `$SHELL` si es ejecutable, si no el de passwd, si no `/bin/sh`, como shell de login. Windows: `pwsh.exe`, si no `powershell.exe` (los dos con `-NoLogo`), si no `%ComSpec%`. El entorno es el de la app más `TERM=xterm-256color` y `COLORTERM=truecolor`; `WEBKIT_DISABLE_DMABUF_RENDERER` se quita solo si la puso Rowly. Dentro de una AppImage, AppRun apunta `PYTHONHOME`, `LD_LIBRARY_PATH`, `GTK_PATH`, `PATH`… a la carpeta montada de la app (con eso `python3` no arrancaba): de cada variable se quitan esas entradas y, si no queda ninguna, la variable. Arranca en la carpeta SQL del perfil o en `HOME`.
+- **Panel.** Uno por ventana, debajo del editor y los resultados; se muestra y oculta con `Alt+F12` (con el foco dentro, es el único atajo que no es del shell, además de `Ctrl+Shift+C/V` para copiar y pegar) o con su botón. Se carga con xterm la primera vez que se muestra, así que el bundle inicial no lo lleva. Ocultarlo conserva el shell y su buffer; cerrarlo termina el shell. Ningún store guarda la salida: el buffer es el de xterm, con 5000 líneas de scrollback (unos 7 MB llenas a 120 columnas); los colores salen de `editorPalette`, el cursor no parpadea y el cambio de tamaño llega al backend solo si cambian columnas o filas.
 
 ## `khipu-lsp`
 

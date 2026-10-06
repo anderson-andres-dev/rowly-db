@@ -23,7 +23,7 @@
 // (con 1500 reconexiones, hacia la 600-700; con JIT y sin el).
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { connectInspector, liveHeap } from "./inspector.mjs";
@@ -228,6 +228,75 @@ function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) 
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
 
+// Lo que haga la app sola durante IDLE_SECONDS: llamadas al backend,
+// timers, CPU y memoria. Ninguna llamada ni setInterval, menos del 10 % de un
+// nucleo y sin crecer.
+async function idleFor(page, app) {
+  // Lo que haga la app sola desde aqui: llamadas al backend y timers.
+  await page.evaluate(`(() => {
+    const counts = (window.__idle = { invokes: [], timeouts: 0, intervals: 0, frames: 0 });
+    const requestAnimationFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback) => (counts.frames++, requestAnimationFrame(callback));
+    const internals = window.__TAURI_INTERNALS__;
+    const invoke = internals.invoke.bind(internals);
+    internals.invoke = (command, ...rest) => (counts.invokes.push(command), invoke(command, ...rest));
+    const setTimeout = window.setTimeout;
+    window.setTimeout = (...rest) => (counts.timeouts++, setTimeout(...rest));
+    const setInterval = window.setInterval;
+    window.setInterval = (...rest) => (counts.intervals++, setInterval(...rest));
+    return true;
+  })()`);
+  await sleep(5000);
+  const before = await sample(page, app, 0);
+  // La CPU se cuenta solo en el reposo: recolectar y tomar el snapshot del
+  // heap tambien gastan, y no son de la app.
+  // Muestras de memoria cada 30 s, sin recolectar (para no sumar trabajo).
+  const idleStart = pss(app.pid);
+  const during = [{ index: 0, pss: idleStart }];
+  for (let elapsed = 30; elapsed <= IDLE_SECONDS; elapsed += 30) {
+    await sleep(30000);
+    during.push({ index: elapsed, pss: pss(app.pid) });
+  }
+  await sleep((IDLE_SECONDS % 30) * 1000);
+  const idleEnd = pss(app.pid);
+  const after = await sample(page, app, IDLE_SECONDS);
+  const idle = await page.evaluate("window.__idle");
+  // Lo que anima solo: animaciones y transiciones CSS que siguen corriendo.
+  const animations = await page.evaluate(`document.getAnimations()
+    .filter((animation) => animation.playState === "running")
+    .map((animation) => {
+      const target = animation.effect?.target;
+      const where = target ? target.tagName.toLowerCase() + (target.classList.length ? "." + [...target.classList].join(".") : "") : "?";
+      return (animation.animationName ?? animation.transitionProperty ?? "animacion") + " en " + where;
+    })`);
+  const clock = Number(execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8" }).trim());
+  const cpuSeconds = (idleEnd.ticks - idleStart.ticks) / clock;
+  const cpuByProcess = Object.keys(idleEnd.ticksByName)
+    .map((name) => `${name} ${((idleEnd.ticksByName[name] - (idleStart.ticksByName[name] ?? 0)) / clock).toFixed(2)} s`)
+    .join(", ");
+  console.log(`        ${format(before)}\n        ${format(after)}`);
+  console.log(
+    `        memoria propia por proceso cada 30 s: ${during
+      .map(({ index, pss }) => `${index}: ${Object.entries(pss.anonymousByName).map(([name, mb]) => `${name} ${mb.toFixed(1)}`).join(" / ")}`)
+      .join("; ")}`,
+  );
+  console.log(
+    `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
+      `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
+      `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
+      `animando: ${animations.join(", ") || "nada"}`,
+  );
+  if (idle.invokes.length > 0) throw new Error(`en reposo se llamo al backend: ${idle.invokes.join(", ")}`);
+  if (idle.intervals > 0) throw new Error(`en reposo se crearon ${idle.intervals} setInterval`);
+  // Con el editor enfocado, el cursor parpadea: bajo Xvfb, sin GPU, eso y el
+  // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
+  // continuo (sondeos, bucles), que se ve muy por encima.
+  if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
+  // El heap vivo y el DOM, del principio al final; la memoria propia de la
+  // app, por pisos de las muestras cada 30 s.
+  assertStable([before, after], during);
+}
+
 // --- Conexiones -------------------------------------------------------------
 
 const card = (name) =>
@@ -278,11 +347,11 @@ function writeSql(page, text) {
 
 // Un atajo de la app: keydown sobre lo que tiene el foco (keybindings.ts
 // decide la zona por ahi) o sobre el documento.
-function press(page, { key, code, ctrl = false, shift = false }, target = null) {
+function press(page, { key, code, ctrl = false, shift = false, alt = false }, target = null) {
   return page.evaluate(`(() => {
     const target = ${target ? `document.querySelector(${JSON.stringify(target)})` : "null"} ?? document.activeElement ?? document.body;
     target.focus?.();
-    target.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, code: ${JSON.stringify(code)}, ctrlKey: ${ctrl}, shiftKey: ${shift}, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, code: ${JSON.stringify(code)}, ctrlKey: ${ctrl}, shiftKey: ${shift}, altKey: ${alt}, bubbles: true, cancelable: true }));
     return true;
   })()`);
 }
@@ -405,69 +474,161 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
   await writeSql(page, "SELECT id, name FROM victim ORDER BY id");
   await press(page, { key: "Enter", code: "Enter", ctrl: true }, ".cm-content");
   await waitFor(page, "el resultado", `${gridText}.includes("tres")`);
-  // Lo que haga la app sola desde aqui: llamadas al backend y timers.
-  await page.evaluate(`(() => {
-    const counts = (window.__idle = { invokes: [], timeouts: 0, intervals: 0, frames: 0 });
-    const requestAnimationFrame = window.requestAnimationFrame;
-    window.requestAnimationFrame = (callback) => (counts.frames++, requestAnimationFrame(callback));
-    const internals = window.__TAURI_INTERNALS__;
-    const invoke = internals.invoke.bind(internals);
-    internals.invoke = (command, ...rest) => (counts.invokes.push(command), invoke(command, ...rest));
-    const setTimeout = window.setTimeout;
-    window.setTimeout = (...rest) => (counts.timeouts++, setTimeout(...rest));
-    const setInterval = window.setInterval;
-    window.setInterval = (...rest) => (counts.intervals++, setInterval(...rest));
+  await idleFor(page, app);
+});
+
+// --- Terminal integrada -----------------------------------------------------
+
+// Como los demas ciclos: el backend calienta hasta el 100 y la compuerta
+// compara desde ahi.
+const TERMINAL_CYCLES = Number(process.env.E2E_TERMINAL_CYCLES ?? 300);
+const terminalText = `(document.querySelector(".terminal-host .xterm-rows")?.innerText ?? "")`;
+const terminalPanel = `document.querySelector(".terminal-panel")`;
+
+// Alt+F12, como lo recibe el despachador de atajos.
+const toggleTerminal = (page) => press(page, { key: "F12", code: "F12", alt: true }, "body");
+
+// Escribir en el shell: lo que xterm recibe de un metodo de entrada
+// (insertText) lo manda tal cual por onData, \r incluido.
+function typeInTerminal(page, text) {
+  return page.evaluate(`(() => {
+    const input = document.querySelector(".terminal-host textarea");
+    input.focus();
+    input.dispatchEvent(new InputEvent("input", { data: ${JSON.stringify(text)}, inputType: "insertText", bubbles: true }));
     return true;
   })()`);
-  await sleep(5000);
-  const before = await sample(page, app, 0);
-  // La CPU se cuenta solo en el reposo: recolectar y tomar el snapshot del
-  // heap tambien gastan, y no son de la app.
-  // Muestras de memoria cada 30 s, sin recolectar (para no sumar trabajo).
-  const idleStart = pss(app.pid);
-  const during = [{ index: 0, pss: idleStart }];
-  for (let elapsed = 30; elapsed <= IDLE_SECONDS; elapsed += 30) {
-    await sleep(30000);
-    during.push({ index: elapsed, pss: pss(app.pid) });
+}
+
+// El pid que imprime el shell tras `marker`.
+async function shellPid(page, marker) {
+  const pattern = `/${marker}(\\d+)\\s/`;
+  await waitFor(page, `el pid ${marker}`, `${pattern}.test(${terminalText})`);
+  return Number(await page.evaluate(`${pattern}.exec(${terminalText})[1]`));
+}
+
+const threads = (pid) => readdirSync(`/proc/${pid}/task`).length;
+
+async function openTerminal(page, index = 0) {
+  await toggleTerminal(page);
+  await waitFor(page, `la terminal ${index}`, `!!document.querySelector(".terminal-host textarea") && ${terminalText}.trim().length > 0`);
+}
+
+cycle(`${TERMINAL_CYCLES} ciclos de terminal: abrir con Alt+F12, esperar el shell y cerrar, sin procesos ni memoria detras`, async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  const baseThreads = threads(app.pid);
+  const shells = [];
+  const samples = [];
+  for (let index = 1; index <= TERMINAL_CYCLES; index += 1) {
+    await openTerminal(page, index);
+    await typeInTerminal(page, "echo RW$$ \r");
+    shells.push(await shellPid(page, "RW"));
+    // Cerrar con el boton de la cabecera: termina el shell y desmonta el panel.
+    await page.evaluate(`document.querySelectorAll(".terminal-action")[1].click(), true`);
+    await waitFor(page, `cerrar la terminal ${index}`, `!${terminalPanel}`);
+    if (index === Math.min(WARMUP, TERMINAL_CYCLES) || (index > WARMUP && index % 50 === 0) || index === TERMINAL_CYCLES)
+      samples.push(await sample(page, app, index));
   }
-  await sleep((IDLE_SECONDS % 30) * 1000);
-  const idleEnd = pss(app.pid);
-  const after = await sample(page, app, IDLE_SECONDS);
-  const idle = await page.evaluate("window.__idle");
-  // Lo que anima solo: animaciones y transiciones CSS que siguen corriendo.
-  const animations = await page.evaluate(`document.getAnimations()
-    .filter((animation) => animation.playState === "running")
-    .map((animation) => {
-      const target = animation.effect?.target;
-      const where = target ? target.tagName.toLowerCase() + (target.classList.length ? "." + [...target.classList].join(".") : "") : "?";
-      return (animation.animationName ?? animation.transitionProperty ?? "animacion") + " en " + where;
-    })`);
-  const clock = Number(execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8" }).trim());
-  const cpuSeconds = (idleEnd.ticks - idleStart.ticks) / clock;
-  const cpuByProcess = Object.keys(idleEnd.ticksByName)
-    .map((name) => `${name} ${((idleEnd.ticksByName[name] - (idleStart.ticksByName[name] ?? 0)) / clock).toFixed(2)} s`)
-    .join(", ");
-  console.log(`        ${format(before)}\n        ${format(after)}`);
+  console.log(samples.map((s) => `        ${format(s)}`).join("\n"));
+  // Cada shell se recogio (ni vivo ni zombi) y el backend volvio a sus hilos:
+  // dos por terminal mientras esta abierta.
+  const deadline = Date.now() + 5000;
+  let alive = shells;
+  while (Date.now() < deadline && (alive = shells.filter((pid) => existsSync(`/proc/${pid}`))).length > 0) await sleep(100);
+  if (alive.length > 0) throw new Error(`quedaron ${alive.length} shells: ${alive.slice(0, 5).join(", ")}`);
+  console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
+  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; antes de las terminales, ${baseThreads}`);
+  assertStable(samples);
+});
+
+cycle(`${IDLE_SECONDS} s de reposo con la terminal abierta: sin trabajo, llamadas al backend ni memoria que crezca`, async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  await openTerminal(page);
+  await typeInTerminal(page, "echo listo\r");
+  await waitFor(page, "el eco", `${terminalText}.includes("listo\\n")`);
+  await idleFor(page, app);
+});
+
+// P4: salida grande. Durante la rafaga la pagina sigue respondiendo (se mide
+// el retraso del bucle de eventos con un timer propio de la prueba) y, con
+// un productor sin fin (yes), la memoria no crece sin limite.
+cycle("salida grande en la terminal: 50 MB y yes durante 30 s, con la interfaz respondiendo y la memoria acotada", async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  await openTerminal(page);
+  // El retraso de cada tick de 50 ms: lo que una tarea larga hace esperar a
+  // un clic.
+  const lagProbe = `(() => {
+    const lag = (window.__lag = { max: 0, over200: 0, ticks: 0 });
+    let last = performance.now();
+    window.__lagTimer = setInterval(() => {
+      const now = performance.now();
+      const late = now - last - 50;
+      last = now;
+      lag.ticks++;
+      lag.max = Math.max(lag.max, late);
+      if (late > 200) lag.over200++;
+    }, 50);
+    return true;
+  })()`;
+  const lagResult = `(() => { clearInterval(window.__lagTimer); return window.__lag; })()`;
+  const memory = () => {
+    const now = pss(app.pid);
+    const backend = now.anonymousByName[basename(APP).slice(0, 15)] ?? 0;
+    return { backend, webkit: now.anonymousByName.WebKitWebProces ?? 0 };
+  };
+
+  // 50 MB de bytes al azar en base64 (unos 68 MB de texto) y una marca al final.
+  await page.evaluate(lagProbe);
+  const started = Date.now();
+  await typeInTerminal(page, "head -c 50M /dev/urandom | base64; echo FIN-$((6*7))\r");
+  const during = [];
+  const flood = (async () => {
+    while (!(await page.evaluate(`${terminalText}.includes("FIN-42")`))) {
+      during.push(memory());
+      await sleep(2000);
+    }
+  })();
+  await Promise.race([flood, sleep(600000).then(() => Promise.reject(new Error("los 50 MB no terminaron en 10 min")))]);
+  const seconds = (Date.now() - started) / 1000;
+  const floodLag = await page.evaluate(lagResult);
+  const peak = during.reduce((max, m) => ({ backend: Math.max(max.backend, m.backend), webkit: Math.max(max.webkit, m.webkit) }), { backend: 0, webkit: 0 });
   console.log(
-    `        memoria propia por proceso cada 30 s: ${during
-      .map(({ index, pss }) => `${index}: ${Object.entries(pss.anonymousByName).map(([name, mb]) => `${name} ${mb.toFixed(1)}`).join(" / ")}`)
-      .join("; ")}`,
+    `        50 MB en ${seconds.toFixed(1)} s; bucle de eventos: retraso maximo ${floodLag.max.toFixed(0)} ms, ${floodLag.over200} de ${floodLag.ticks} ticks con mas de 200 ms; ` +
+      `pico de memoria propia: backend ${peak.backend.toFixed(1)} MB, WebKit ${peak.webkit.toFixed(1)} MB`,
   );
+  // Sin control de flujo, al pasar xterm de 50 MB pendientes la terminal
+  // quedaba parada y la marca no llegaba nunca. Una tarea larga suelta no es
+  // un problema; muchas, si.
+  if (floodLag.over200 > Math.max(2, floodLag.ticks * 0.02))
+    throw new Error(`durante la rafaga ${floodLag.over200} de ${floodLag.ticks} ticks esperaron mas de 200 ms`);
+
+  // yes durante 30 s: muestras cada 5 s.
+  await page.evaluate(lagProbe);
+  await typeInTerminal(page, "yes\r");
+  const yes = [];
+  for (let second = 5; second <= 30; second += 5) {
+    await sleep(5000);
+    yes.push({ second, ...memory() });
+  }
+  await typeInTerminal(page, "\x03");
+  const yesLag = await page.evaluate(lagResult);
+  await typeInTerminal(page, "echo FIN-$((6*8))\r");
+  await waitFor(page, "el prompt despues de yes", `${terminalText}.includes("FIN-48")`, 120000);
+  await sleep(3000);
+  const after = memory();
   console.log(
-    `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
-      `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
-      `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
-      `animando: ${animations.join(", ") || "nada"}`,
+    `        yes: memoria propia cada 5 s ${yes.map((m) => `${m.second}s backend ${m.backend.toFixed(1)} / WebKit ${m.webkit.toFixed(1)}`).join("; ")}; ` +
+      `despues de Ctrl+C backend ${after.backend.toFixed(1)} / WebKit ${after.webkit.toFixed(1)}; retraso maximo ${yesLag.max.toFixed(0)} ms, ${yesLag.over200} de ${yesLag.ticks} ticks con mas de 200 ms`,
   );
-  if (idle.invokes.length > 0) throw new Error(`en reposo se llamo al backend: ${idle.invokes.join(", ")}`);
-  if (idle.intervals > 0) throw new Error(`en reposo se crearon ${idle.intervals} setInterval`);
-  // Con el editor enfocado, el cursor parpadea: bajo Xvfb, sin GPU, eso y el
-  // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
-  // continuo (sondeos, bucles), que se ve muy por encima.
-  if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
-  // El heap vivo y el DOM, del principio al final; la memoria propia de la
-  // app, por pisos de las muestras cada 30 s.
-  assertStable([before, after], during);
+  // Acotada: de los 10 s a los 30 s no sube (sin control de flujo crecia
+  // ~80 MB/s el backend y ~40 MB/s WebKit). WebKit oscila con el recolector.
+  const at = (second) => yes.find((m) => m.second === second);
+  if (at(30).backend > at(10).backend + 10) throw new Error(`con yes el backend crecio de ${at(10).backend.toFixed(1)} a ${at(30).backend.toFixed(1)} MB`);
+  if (at(30).webkit > at(10).webkit + 60) throw new Error(`con yes WebKit crecio de ${at(10).webkit.toFixed(1)} a ${at(30).webkit.toFixed(1)} MB`);
+  if (yesLag.over200 > Math.max(2, yesLag.ticks * 0.02))
+    throw new Error(`con yes ${yesLag.over200} de ${yesLag.ticks} ticks esperaron mas de 200 ms`);
 });
 
 // --- Ejecucion --------------------------------------------------------------
