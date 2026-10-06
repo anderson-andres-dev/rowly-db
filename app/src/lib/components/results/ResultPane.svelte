@@ -4,6 +4,7 @@
   import { formatDecimal, type SelectionSummary } from "$lib/results/gridSelectionSummary";
   import { tooltip } from "$lib/tooltip";
   import { settleTransitions } from "$lib/settleTransitions";
+  import { tabScroll } from "$lib/tabScroll";
   import {
     ArrowUpFromLine,
     Eye,
@@ -560,7 +561,6 @@
       class="result-tabs tab-strip"
       role="tablist"
       aria-label={$t("results.tabs")}
-      use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
       use:settleTransitions
     >
       {#if !tableView && hasActivity}
@@ -576,6 +576,13 @@
         <SquareTerminal size={12} aria-hidden="true" />
         <span>{$t("results.tab.output")}</span>
       </button>
+      <!-- Salida y Terminal quedan fijas; los resultados se desplazan entre
+           ellas, como las pestañas de las consolas. -->
+      <div
+        class="result-tabs-scroll"
+        use:tabScroll={`${selectedKey}|${tabs.length}`}
+        use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
+      >
       {#each tabs as tab (tab.key)}
         <div class="result-tab closable" class:active={selectedKey === tab.key} animate:flip={{ duration: flipDuration(160) }}>
           <button
@@ -597,6 +604,7 @@
           </button>
         </div>
       {/each}
+      </div>
       {/if}
       <!-- La terminal es de la ventana: su pestaña va aparte, a la derecha,
            y abierta se une a ella (el fondo de la terminal). -->
@@ -1105,6 +1113,55 @@
 
   .terminal-tab {
     margin-left: auto;
+  }
+
+  /* Scroll nativo sin barra; el desvanecido (tabScroll) indica que hay mas.
+     Reserva a los lados el lugar de las curvas y del contorno que sigue por
+     la linea base de la elegida (si no, contarian como desborde) y baja
+     sobre esa linea para que la elegida la tape; los margenes negativos lo
+     compensan. Las zonas reservadas no toman clics. */
+  .result-tabs-scroll {
+    --fade: 2rem;
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    align-self: stretch;
+    align-items: flex-end;
+    gap: 2px;
+    margin: 0 calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
+    padding: 0 var(--tab-reach) 0 var(--tab-curve);
+    overflow-x: auto;
+    overflow-y: hidden;
+    pointer-events: none;
+    scrollbar-width: none;
+    scroll-padding-inline: calc(var(--tab-curve) + var(--fade)) calc(var(--tab-reach) + var(--fade));
+  }
+
+  .result-tabs-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .result-tabs-scroll :global(.result-tab) {
+    margin-bottom: 0;
+    pointer-events: auto;
+  }
+
+  .result-tabs-scroll:global(.fade-end) {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--tab-reach) - var(--fade)), transparent calc(100% - var(--tab-reach)));
+  }
+
+  .result-tabs-scroll:global(.fade-start) {
+    mask-image: linear-gradient(to right, transparent var(--tab-curve), #000 calc(var(--tab-curve) + var(--fade)));
+  }
+
+  .result-tabs-scroll:global(.fade-start.fade-end) {
+    mask-image: linear-gradient(
+      to right,
+      transparent var(--tab-curve),
+      #000 calc(var(--tab-curve) + var(--fade)),
+      #000 calc(100% - var(--tab-reach) - var(--fade)),
+      transparent calc(100% - var(--tab-reach))
+    );
   }
 
   /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
