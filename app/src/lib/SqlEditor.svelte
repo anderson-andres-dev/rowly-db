@@ -40,6 +40,7 @@
     buildSqlSchema,
     dialectFor,
     extractDefaultTable,
+    resolveCatalogTable,
   } from "$lib/editor/completionSource";
   import { buildCatalogCompletions } from "$lib/editor/catalogCompletions";
   import { commentEditing } from "$lib/editor/commentEditing";
@@ -182,6 +183,16 @@
     return () => !!view?.hasFocus && run(view);
   }
 
+  // Ctrl+B: la tabla bajo el cursor, como Ctrl+clic (sqlDefinitionLink.ts).
+  function openTableAtCursor(current: EditorView): boolean {
+    const word = current.state.wordAt(current.state.selection.main.head);
+    if (!word) return false;
+    const ref = resolveCatalogTable(sqlSchema.schema, sqlSchema.defaultSchema, current.state.sliceDoc(word.from, word.to));
+    if (!ref || !onopentabledefinition) return false;
+    onopentabledefinition(ref);
+    return true;
+  }
+
   const unregisterCommands = registerCommands("editor", {
     "select-all": whenFocused(selectAll),
     "format-sql": whenFocused(formatCurrentSql),
@@ -191,6 +202,7 @@
     "previous-diagnostic": whenFocused((current) => jumpTo(current, -1)),
     "diagnostic-details": whenFocused((current) => details.showDetails(current)),
     "apply-quick-fix": whenFocused((current) => details.applyFirstFix(current)),
+    "open-table-definition": whenFocused(openTableAtCursor),
   });
 
   // Los Compartment de cada ajuste (editor/configuration.ts).
@@ -237,7 +249,7 @@
 
   // --- Contador de errores (abajo a la derecha) ---------------------------
   // Flota sobre el texto sin tapar las barras de scroll. Los mismos errores
-  // que recorre F2.
+  // que recorre Alt+N.
   let diagnosticCount = $state(0);
   // La version del servidor y su estado, como los dio el backend al conectar
   // (ConnectionEngineContext). Sin soporte del fabricante: una etiqueta junto
@@ -259,7 +271,7 @@
     view.focus();
   }
 
-  // F2 sin errores: un aviso breve en vez de no hacer nada.
+  // Alt+N sin errores: un aviso breve en vez de no hacer nada.
   const jumpTo = (current: EditorView, direction: 1 | -1) =>
     jump(current, direction, () => notifySuccess($t("editor.diagnostics.noErrors")));
 

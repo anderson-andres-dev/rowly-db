@@ -7,6 +7,7 @@ mod release_highlight;
 mod services;
 mod state;
 mod support;
+mod terminal;
 mod text_encoding;
 mod updates;
 mod webkit_env;
@@ -50,6 +51,11 @@ pub fn run() {
                         .lock()
                         .expect("connections mutex poisoned")
                         .remove(window.label());
+                    // Esperar a sus shells puede tardar: fuera del hilo de
+                    // la interfaz.
+                    let terminals = std::sync::Arc::clone(&state.terminals);
+                    let label = window.label().to_string();
+                    std::thread::spawn(move || terminal::close_window(&terminals, &label));
                 }
             }
         })
@@ -91,10 +97,20 @@ pub fn run() {
             support::check_support_updates,
             support::install_support_package,
             support::remove_support_package,
-            support::set_support_line_enabled
+            support::set_support_line_enabled,
+            terminal::create_terminal,
+            terminal::write_terminal,
+            terminal::resize_terminal,
+            terminal::ack_terminal,
+            terminal::close_terminal
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                terminal::close_all(&app.state::<AppState>().terminals);
+            }
+        });
 }
 
 #[cfg(test)]

@@ -21,49 +21,77 @@ export interface CommandDefinition {
   zone: CommandZone;
   group: CommandGroup;
   defaultKeys: string;
+  // Teclas de fabrica que tambien valen mientras el usuario no reasigne el
+  // comando (Ctrl+PageDown junto a Ctrl+Tab, F1 junto a Ctrl+?).
+  aliasKeys?: string[];
 }
+
+// Ir a la pestaña 1..9 de la fila del foco (Ctrl+1..9).
+export const TAB_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 // El orden es el de Ajustes > Atajos dentro de cada grupo.
 export const commandDefinitions: CommandDefinition[] = [
-  // Prefijo: despues, una flecha mueve el foco a la zona vecina
-  // (focusZones.ts).
-  { id: "focus-zone-prefix", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
-  { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Alt+1" },
+  // Mueven el foco a la zona vecina (focusZones.ts). Valen tambien con el
+  // foco en la terminal.
+  { id: "focus-zone-left", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowLeft" },
+  { id: "focus-zone-right", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowRight" },
+  { id: "focus-zone-up", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowUp" },
+  { id: "focus-zone-down", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowDown" },
+  // Las pestañas de la fila del foco: consolas, panel inferior o sesiones de
+  // la terminal (workspace/tabCommands.ts).
+  { id: "next-tab", zone: "global", group: "general", defaultKeys: "Ctrl+Tab", aliasKeys: ["Ctrl+PageDown"] },
+  { id: "previous-tab", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+Tab", aliasKeys: ["Ctrl+PageUp"] },
+  ...TAB_NUMBERS.map(
+    (n): CommandDefinition => ({ id: `go-to-tab-${n}`, zone: "global", group: "general", defaultKeys: `Ctrl+${n}` }),
+  ),
+  { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Ctrl+E" },
+  { id: "toggle-terminal", zone: "global", group: "general", defaultKeys: "Ctrl+T" },
   // Busca en la zona activa: cada zona registra su propio handler.
   { id: "find", zone: "global", group: "general", defaultKeys: "Ctrl+F" },
   // Como en DataGrip: buscar y reemplazar son atajos separados, no un
   // toggle dentro de buscar.
   { id: "replace", zone: "editor", group: "editor", defaultKeys: "Ctrl+R" },
-  // Ctrl+/ (lo habitual en otras apps) es comentar linea en el editor.
-  { id: "shortcut-sheet", zone: "global", group: "general", defaultKeys: "F1" },
-  { id: "new-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+Q" },
-  { id: "rename-query-console", zone: "global", group: "general", defaultKeys: "Shift+F6" },
+  // Ctrl+? sale con Shift en cualquier distribucion (Shift+/ en ingles,
+  // Shift+' en español).
+  { id: "shortcut-sheet", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+?", aliasKeys: ["F1"] },
+  { id: "open-settings", zone: "global", group: "general", defaultKeys: "Ctrl+," },
+  { id: "switch-connection", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+O" },
+  // En el arbol de archivos, crea un archivo (FileTree.svelte).
+  { id: "new-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+N" },
+  // Segun el foco: la consola, la sesion de la terminal o el archivo.
+  { id: "rename-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+R" },
+  // En el resultado, con cambios pendientes, los aplica (ResultPane.svelte).
   { id: "save-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+S" },
   { id: "save-query-console-as", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+S" },
   { id: "open-sql-file", zone: "global", group: "general", defaultKeys: "Ctrl+O" },
-  { id: "close-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+F4" },
+  { id: "close-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
+  // Solo con el foco en la terminal; fuera, la tecla sigue su camino.
+  { id: "new-terminal-session", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+T" },
+  { id: "close-terminal-session", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+W" },
   { id: "execute-query", zone: "editor", group: "editor", defaultKeys: "Ctrl+Enter" },
   { id: "execute-script", zone: "editor", group: "editor", defaultKeys: "Ctrl+Shift+Enter" },
   // Solo toma la tecla mientras corre una consulta; si no, Esc sigue su
   // camino (cerrar una busqueda, volver al editor...).
   { id: "cancel-query", zone: "global", group: "editor", defaultKeys: "Escape" },
-  { id: "query-history", zone: "global", group: "editor", defaultKeys: "Ctrl+E" },
+  { id: "query-history", zone: "global", group: "editor", defaultKeys: "Ctrl+H" },
   { id: "format-sql", zone: "editor", group: "editor", defaultKeys: "Ctrl+L" },
-  // Como en DataGrip; solo errores.
-  { id: "next-diagnostic", zone: "editor", group: "editor", defaultKeys: "F2" },
-  { id: "previous-diagnostic", zone: "editor", group: "editor", defaultKeys: "Shift+F2" },
+  // Solo errores.
+  { id: "next-diagnostic", zone: "editor", group: "editor", defaultKeys: "Alt+N" },
+  { id: "previous-diagnostic", zone: "editor", group: "editor", defaultKeys: "Alt+P" },
   { id: "diagnostic-details", zone: "editor", group: "editor", defaultKeys: "Ctrl+." },
   // Como en JetBrains.
   { id: "apply-quick-fix", zone: "editor", group: "editor", defaultKeys: "Alt+Enter" },
+  // Como Ctrl+clic; Ctrl+B es "ir a la declaracion" en JetBrains.
+  { id: "open-table-definition", zone: "editor", group: "editor", defaultKeys: "Ctrl+B" },
   { id: "select-all", zone: "editor", group: "editor", defaultKeys: "Ctrl+A" },
-  { id: "add-result-row", zone: "results", group: "results", defaultKeys: "Alt+Insert" },
-  { id: "delete-result-rows", zone: "results", group: "results", defaultKeys: "Ctrl+Y" },
-  { id: "revert-result-changes", zone: "results", group: "results", defaultKeys: "Ctrl+Alt+Z" },
+  { id: "add-result-row", zone: "results", group: "results", defaultKeys: "Ctrl+I" },
+  { id: "delete-result-rows", zone: "results", group: "results", defaultKeys: "Ctrl+Delete" },
+  { id: "revert-result-changes", zone: "results", group: "results", defaultKeys: "Ctrl+Z" },
   { id: "submit-result-changes", zone: "results", group: "results", defaultKeys: "Ctrl+Enter" },
   // Actuan sobre el resultado, pero sirven tambien desde el editor, recien
   // ejecutada la consulta.
-  { id: "next-result-page", zone: "global", group: "results", defaultKeys: "Ctrl+Alt+ArrowDown" },
-  { id: "previous-result-page", zone: "global", group: "results", defaultKeys: "Ctrl+Alt+ArrowUp" },
+  { id: "next-result-page", zone: "global", group: "results", defaultKeys: "Alt+ArrowRight" },
+  { id: "previous-result-page", zone: "global", group: "results", defaultKeys: "Alt+ArrowLeft" },
 ];
 
 // Dos comandos con la misma tecla chocan si actuan en la misma zona o si uno

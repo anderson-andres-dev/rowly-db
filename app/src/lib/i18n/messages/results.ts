@@ -4,8 +4,6 @@ import { defineMessages } from "../define";
 // paginación, vista previa de cambios, exportación y la pestaña Salida.
 export default defineMessages({
   es: {
-    "key.down": "Abajo",
-    "key.up": "Arriba",
     "key.insert": "Insertar",
     tabs: "Resultados",
     "tab.output": "Salida",
@@ -115,8 +113,6 @@ export default defineMessages({
     "filters.removeCondition": "Quitar condición",
   },
   en: {
-    "key.down": "Down",
-    "key.up": "Up",
     "key.insert": "Insert",
     tabs: "Results",
     "tab.output": "Output",
@@ -226,8 +222,6 @@ export default defineMessages({
     "filters.removeCondition": "Remove condition",
   },
   "pt-BR": {
-    "key.down": "Seta para baixo",
-    "key.up": "Seta para cima",
     "key.insert": "Insert",
     tabs: "Resultados",
     "tab.output": "Saída",
@@ -337,8 +331,6 @@ export default defineMessages({
     "filters.removeCondition": "Remover condição",
   },
   fr: {
-    "key.down": "Bas",
-    "key.up": "Haut",
     "key.insert": "Inser",
     tabs: "Résultats",
     "tab.output": "Sortie",
@@ -448,8 +440,6 @@ export default defineMessages({
     "filters.removeCondition": "Retirer la condition",
   },
   de: {
-    "key.down": "Pfeil runter",
-    "key.up": "Pfeil hoch",
     "key.insert": "Einfg",
     tabs: "Ergebnisse",
     "tab.output": "Ausgabe",

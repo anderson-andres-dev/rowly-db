@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import { t } from "$lib/i18n";
+import { shortcutKeyParts } from "$lib/stores/shortcuts";
 
 // Tooltip propio de la app: el unico que se usa. El `title` nativo sale con
 // el estilo del sistema (distinto en cada motor) y tarda; este se ve igual
@@ -7,6 +8,7 @@ import { t } from "$lib/i18n";
 //
 //   <button use:tooltip={$t("x")}>                     solo texto
 //   <button use:tooltip={{ label, shortcut: "Ctrl+F" }}> texto + atajo
+//   <button use:tooltip={{ label, focus: false }}>     solo con el mouse
 //
 // Un texto que termina en "(Ctrl+X)" muestra ese atajo como atajo. Sin
 // texto (null / undefined / "") no hay tooltip. Sale abajo del elemento, o
@@ -18,7 +20,9 @@ export type TooltipParams =
   | string
   | null
   | undefined
-  | { label: string | null | undefined; shortcut?: string; placement?: "below" | "above" };
+  // focus: false, solo al pasar el mouse: las filas de un arbol, que se
+  // recorren con las flechas y ya muestran su nombre.
+  | { label: string | null | undefined; shortcut?: string; placement?: "below" | "above"; focus?: boolean };
 
 const SHOW_DELAY_MS = 350;
 const GAP_PX = 6;
@@ -52,7 +56,7 @@ interface Resolved {
   placement: "below" | "above";
 }
 
-// Atajo al final del texto: "(Shift+Enter)", "(F2)", "(Ctrl+Alt+Z)".
+// Atajo al final del texto: "(Shift+Enter)", "(Alt+N)", "(Ctrl+Z)".
 const TRAILING_SHORTCUT = /^(.*\S)\s+\(((?:[A-Za-z0-9]+\+)+[A-Za-z0-9]+|F\d{1,2})\)$/;
 
 function resolve(params: TooltipParams): Resolved | null {
@@ -74,11 +78,9 @@ function resolve(params: TooltipParams): Resolved | null {
 
 function prettyShortcut(keys: string): string {
   if (!keys) return "";
-  const translate = get(t);
-  return keys
-    .replace("ArrowDown", translate("results.key.down"))
-    .replace("ArrowUp", translate("results.key.up"))
-    .replace("Insert", translate("results.key.insert"));
+  return shortcutKeyParts(keys)
+    .map((key) => (key === "Insert" ? get(t)("results.key.insert") : key))
+    .join("+");
 }
 
 function place(anchor: HTMLElement, tip: HTMLDivElement, placement: "below" | "above") {
@@ -138,8 +140,11 @@ export function hideTooltipFor(anchor: HTMLElement) {
   hide(anchor);
 }
 
+const showsOnFocus = (params: TooltipParams) => typeof params !== "object" || params === null || params.focus !== false;
+
 export function tooltip(node: HTMLElement, params: TooltipParams) {
   let resolved = resolve(params);
+  let onFocusToo = showsOnFocus(params);
   let ownAriaLabel = false;
 
   // Un boton de solo icono se quedaba sin nombre accesible al quitar el
@@ -164,7 +169,7 @@ export function tooltip(node: HTMLElement, params: TooltipParams) {
   }
 
   function onFocus() {
-    if (node.matches(":focus-visible")) schedule();
+    if (onFocusToo && node.matches(":focus-visible")) schedule();
   }
 
   function onLeave() {
@@ -183,6 +188,7 @@ export function tooltip(node: HTMLElement, params: TooltipParams) {
   return {
     update(next: TooltipParams) {
       resolved = resolve(next);
+      onFocusToo = showsOnFocus(next);
       syncAriaLabel();
       if (owner === node) {
         if (resolved) show(node, resolved);

@@ -10,6 +10,7 @@
   import { t } from "$lib/i18n";
   import { connectToProfile, pendingEdit } from "$lib/stores/connection";
   import type { ConnectionProfile } from "$lib/stores/connectionProfiles";
+  import { registerCommand } from "$lib/workspace/commands";
 
   let {
     profiles,
@@ -54,6 +55,18 @@
     );
     open = true;
   }
+
+  // Ctrl+Shift+O: abre la lista con el foco en el boton, para elegir con las
+  // flechas y Enter.
+  let trigger = $state<HTMLButtonElement>();
+
+  $effect(() =>
+    registerCommand("switch-connection", "global", () => {
+      if (disabled || profiles.length === 0 || !trigger) return false;
+      trigger.focus();
+      openMenu();
+    }),
+  );
 
   function handleKeydown(event: KeyboardEvent) {
     if (disabled) return;
@@ -140,6 +153,7 @@
     aria-haspopup="listbox"
     aria-expanded={open}
     {disabled}
+    bind:this={trigger}
     onclick={() => (open ? (open = false) : openMenu())}
     onkeydown={handleKeydown}
   >

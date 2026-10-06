@@ -21,7 +21,7 @@ crates/server-tests/examples/catalog_bench.rs
 | Cold and warm startup, 20 runs | Time to window, PSS once settled, initial JS | No more than 5 % over the reference median; within the machine's spread, repeat before deciding |
 | Five minutes without interaction, with and without a connection | CPU, memory, timers, backend calls | No growing slope; no work or network from disabled extensions |
 | Typing in 10,000 lines and opening a 1 M-line document | Per-keystroke index, analysis and context cost | Within the reference spread; large documents get no more than 10 % worse and never block the UI |
-| 300 reconnections and 300 console cycles | Live heap, objects, backend, mounted editors and styles | After warm-up, no sustained slope; any growth is explained and bounded (see [Resource cycles](#resource-cycles)) |
+| 300 reconnections, 300 console cycles and 300 terminal session cycles | Live heap, objects, backend, mounted editors and styles | After warm-up, no sustained slope; any growth is explained and bounded (see [Resource cycles](#resource-cycles)) |
 | MySQL, MariaDB and PostgreSQL with small and large catalogs | Connection, introspection, analysis | A UI change or a disabled extension adds no SQL queries |
 
 The percentages are **regression** gates, not latency promises on every machine. A failure is reproduced on the same machine and comes with a CPU, memory or frame trace.
@@ -62,6 +62,8 @@ Compare only against a reference taken on the same machine and system:
 | `baseline/v0.3.0-cachyos` | `v0.3.0` built from its tag (`npx tauri build --no-bundle`), the same way as the branch it is compared with | CachyOS, kernel 7.1.8, profile `balanced` (same CPU) |
 | `baseline/c5-cachyos` | The end of the consolidation, measured alternating with `v0.3.0-cachyos` in the same session; `node-editor.json` is the median of 5 runs | CachyOS, kernel 7.1.8, `balanced` profile |
 | `baseline/hardening-cachyos` | Keystroke-to-paint and grid frames (`linux-rowly-latency.json`), the first time they were measured: median of 3 runs of the release binary under Xvfb, each run kept in `runs` | CachyOS, kernel 7.1.8, `balanced` profile |
+| `baseline/terminal-pre` | `develop` at `af33348` (v0.4.0) before the integrated terminal: bundle, warm startup, idle, `resources.mjs` cycles and the first byte of the login shell outside the app; binary and package sizes in `summary.json` | Omarchy, kernel 7.2.5, `performance` profile |
+| `baseline/terminal-post` | Integrated terminal T3: the same as `terminal-pre`, with `af33348` measured again on this machine (`*.pre-local.json`) and the CI AppImage before and after; the comparison against the budgets is in `summary.json` | CachyOS, kernel 7.1.8, `performance` profile, on battery |
 
 `node-editor.json` has no dispersion field, so a single run against another single run can flag noise at the microsecond scale. Before calling it a regression, repeat both sides (five alternating runs) and compare medians.
 
@@ -72,14 +74,18 @@ Compare only against a reference taken on the same machine and system:
 | Cycle | What it does | Gate |
 |---|---|---|
 | 300 reconnections | Alternates a MySQL and a PostgreSQL profile, going back to the list each time | Each one shows its own server; analysis uses the current connection's catalog |
-| 300 consoles | Open (Ctrl+Shift+Q), run (Ctrl+Enter), switch palette in Settings, close (Ctrl+F4) | A single editor is left at the end |
+| 300 consoles | Open (Ctrl+N), run (Ctrl+Enter), switch palette in Settings, close (Ctrl+W) | A single editor is left at the end |
 | Idle with a connection | 300 s with a result on screen | No backend call or `setInterval`; under 10 % of one core |
+| Terminal tab | With no console, switching consoles, Ctrl+T there and back, `+` and `×` per session | Takes the grid's place without moving the panel or adding a splitter; each side keeps its state; `×` closes only its shell; the tab stays with no sessions |
+| 300 sessions | Open with `+`, wait for the shell, close with `×` | No shell left alive and the backend back to its thread count |
+| Idle with 1, 5 and 10 sessions | 300 s with one, 60 s with 5, with 10 and with the terminal hidden; then all are closed | Same as idle with a connection; at most 15 MB per session; once closed, the threads from before |
+| Large output | 50 MB of base64, then `yes` for 30 s | The 50 MB finish; during the burst and under `yes`, at most 2 event-loop ticks (or 2 %) wait over 200 ms; under `yes`, between 10 s and 30 s, own memory grows no more than 10 MB in the backend and 60 MB in WebKit |
 
 In all of them, from the warm-up (cycle 50) on, nothing grows: the live JavaScript heap after collecting (±10 % or 2 MB), live objects (±5 %), the floor of the backend's own memory (`Anonymous`, ±5 % or 2 MB), mounted editors and styles. If the heap grows, the error names the classes that added objects.
 
 The WebKitWebProcess PSS is reported but is not a gate: it rises with memory the collector already freed and WebKit keeps, and flattens on its own (over 1500 reconnections, around 600–700, with and without the JIT) while the live heap stays flat. At idle, under Xvfb without a GPU, the blinking cursor and the GTK compositor take ~3 % of one core.
 
-Locally: `xvfb-run node app/tests/e2e/resources.mjs --app <binary>`, with `run.mjs`'s databases and PostgreSQL on `E2E_PG_PORT`/`E2E_PG_USER`. `E2E_ONLY` picks a cycle; `E2E_RECONNECTIONS`, `E2E_CONSOLE_CYCLES` and `E2E_IDLE_SECONDS` change their length.
+Locally: `xvfb-run node app/tests/e2e/resources.mjs --app <binary>`, with `run.mjs`'s databases and PostgreSQL on `E2E_PG_PORT`/`E2E_PG_USER`. `E2E_ONLY` picks a cycle; `E2E_RECONNECTIONS`, `E2E_CONSOLE_CYCLES`, `E2E_TERMINAL_CYCLES` and `E2E_IDLE_SECONDS` change their length.
 
 ## Keystroke-to-paint and grid frames
 

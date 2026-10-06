@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
+  import { treeKeys } from "$lib/treeKeys";
   import {
     CalendarClock,
     Check,
@@ -164,10 +165,19 @@
     if (node.relation) togglePinnedTable(profileId, node.relation.schema, node.relation.name);
   }
 
+  // Con la fila de una tabla o vista enfocada: P la fija y Ctrl+Enter abre
+  // sus datos (el SELECT, como el doble clic). Enter es el de la fila: abre
+  // o cierra su estructura en el arbol.
   function onRowKeydown(event: KeyboardEvent, node: ExplorerNode) {
-    if (!node.relation || event.ctrlKey || event.altKey || event.metaKey || event.key.toLowerCase() !== "p") return;
-    event.preventDefault();
-    togglePin(node);
+    if (!node.relation || event.altKey || event.shiftKey) return;
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && event.key === "Enter") {
+      event.preventDefault();
+      onopentable(node.relation.schema, node.relation.name);
+    } else if (!mod && event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      togglePin(node);
+    }
   }
   const visibleSchemas = $derived(new Set(explorer?.schemas.map((objects) => objects.schema) ?? []));
 
@@ -252,7 +262,7 @@
         type="button"
         class="row"
         style:--depth={depth}
-        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={{ label: node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label), focus: false }}
         onclick={() => toggle(node.key, open)}
         onkeydown={(event) => onRowKeydown(event, node)}
         ondblclick={() => {
@@ -270,7 +280,7 @@
       <div
         class="row leaf"
         style:--depth={depth}
-        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={{ label: node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label), focus: false }}
         ondblclick={() => node.relation && onopentable(node.relation.schema, node.relation.name)}
       >
         {@render nodeContent(node, Icon)}
@@ -386,14 +396,14 @@
   </div>
 
   <nav class="tree-scroll" aria-label={$t("explorer.tree.label")} use:scrollFade>
-    <ul class="tree" role="tree">
+    <ul class="tree" role="tree" use:treeKeys>
       <li role="treeitem" aria-expanded={isConnectionOpen()} aria-selected="false">
         <div class="connection-row">
           <button
             type="button"
             class="row"
             style:--depth={0}
-            use:tooltip={connectionTitle}
+            use:tooltip={{ label: connectionTitle, focus: false }}
             onclick={() => toggle(CONNECTION_KEY, isConnectionOpen())}
           >
             {@render chevron(isConnectionOpen())}
@@ -726,9 +736,20 @@
     background: var(--surface-hover);
   }
 
-  .row:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: -2px;
+  /* Seleccion de arbol clasico (treeKeys.ts): la fila con el foco lleva la
+     barra de acento, por encima del gris del mouse; fuera del arbol, la
+     ultima queda en tono suave. Moviendose entre zonas (Ctrl+Shift), nada. */
+  .row:global([data-selected]) {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+
+  .row:focus {
+    outline: none;
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
+  :global(:root.zone-moving) .row:focus {
+    background: transparent;
   }
 
   .row.leaf {

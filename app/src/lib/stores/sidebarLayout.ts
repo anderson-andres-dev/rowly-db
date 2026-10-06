@@ -14,7 +14,7 @@ export function clampSidebarWidth(value: number): number {
 }
 
 // Resultado de soltar el arrastre en `width`: o se colapsa (conservando
-// el ultimo ancho util para cuando se vuelva a abrir con Alt+1), o queda
+// el ultimo ancho util para cuando se vuelva a abrir con Ctrl+E), o queda
 // fijo en ese ancho, acotado al rango permitido.
 export function releaseSidebarDrag(width: number): { collapse: true } | { collapse: false; width: number } {
   if (width < MIN_SIDEBAR_WIDTH) return { collapse: true };

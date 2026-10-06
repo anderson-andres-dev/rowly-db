@@ -80,19 +80,36 @@ export async function connectInspector(address) {
 
 // El heap de JavaScript que queda vivo tras recolectar dos veces: MB,
 // objetos y cuantos de cada clase (snapshot de Heap: [id, tamaño, clase,
-// flags] por nodo).
+// flags] por nodo; aristas [desde, hacia, tipo, dato]).
+//
+// El almacenamiento (Butterfly) que solo retiene codigo compilado es parte de
+// esa cache del motor: las constantes de un programa evaluado. Tauri entrega
+// cada mensaje pequeño de un Channel con webview.eval de un programa nuevo
+// (`new Uint8Array([...])`), y JavaScriptCore guarda su codigo y sus
+// constantes hasta podarlos. Se cuenta como "Cell Butterfly in CodeBlock",
+// que resources.mjs deja fuera junto con el resto del codigo compilado.
+const COMPILED = /(CodeBlock|Executable)$/;
+
 export async function liveHeap(inspector) {
   await inspector.send("Heap.gc");
   await sleep(300);
   await inspector.send("Heap.gc");
   const { snapshotData } = await inspector.send("Heap.snapshot");
-  const { nodes, nodeClassNames } = JSON.parse(snapshotData);
+  const { nodes, nodeClassNames, edges } = JSON.parse(snapshotData);
+  const classOf = new Map();
+  for (let index = 0; index < nodes.length; index += 4) classOf.set(nodes[index], nodeClassNames[nodes[index + 2]]);
+  // Butterflies con algun dueño que no es codigo compilado.
+  const ownedByApp = new Set();
+  for (let index = 0; index < (edges?.length ?? 0); index += 4) {
+    if (!COMPILED.test(classOf.get(edges[index]) ?? "")) ownedByApp.add(edges[index + 1]);
+  }
   let bytes = 0;
   // Por clase, para decir que crecio si algo crece.
   const classes = {};
   for (let index = 0; index < nodes.length; index += 4) {
     bytes += nodes[index + 1];
-    const name = nodeClassNames[nodes[index + 2]];
+    let name = nodeClassNames[nodes[index + 2]];
+    if (name === "Cell Butterfly" && edges && !ownedByApp.has(nodes[index])) name = "Cell Butterfly in CodeBlock";
     const entry = (classes[name] ??= { count: 0, bytes: 0 });
     entry.count += 1;
     entry.bytes += nodes[index + 1];

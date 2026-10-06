@@ -447,8 +447,28 @@
   }
 }
 
+/* Moviendose entre zonas (Ctrl+Shift sostenidos): solo la marca de la zona;
+   el anillo del elemento enfocado (una fila del arbol, una celda) sale al
+   soltar. */
+:root.zone-moving [data-focus-zone] :focus-visible {
+  outline-color: transparent !important;
+}
+
+/* Sin zona en esa direccion: un pulso breve del mismo borde, sin el
+   resplandor de la llegada. */
+[data-focus-zone].zone-nudge::after {
+  animation: zone-nudge 320ms ease-out;
+}
+
+@keyframes zone-nudge {
+  35% {
+    border-color: var(--accent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  [data-focus-zone].zone-flash::after {
+  [data-focus-zone].zone-flash::after,
+  [data-focus-zone].zone-nudge::after {
     animation: none;
   }
 }

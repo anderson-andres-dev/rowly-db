@@ -58,14 +58,17 @@ describe("mensajes del backend", () => {
 // conexion, el volcado con retraso). Un comando nuevo se agrega aqui con su
 // dueño.
 const OWNERS: Record<string, string> = {
+  ack_terminal: "lib/terminal.ts",
   analyze_sql: "lib/editor/analysisSession.ts",
   apply_result_changes: "lib/results/resultEditing.ts",
   cancel_query: "lib/queryExecution.ts",
   check_support_updates: "lib/stores/supportPackages.ts",
   classify_statements: "lib/queryExecution.ts",
+  close_terminal: "lib/terminal.ts",
   connect: "lib/stores/connection.ts",
   count_query_rows: "lib/queryExecution.ts",
   create_sql_file: "lib/sqlFiles.ts",
+  create_terminal: "lib/terminal.ts",
   database_explorer: "lib/stores/connection.ts",
   delete_connection_password: "lib/credentials.ts",
   disconnect: "lib/stores/connection.ts",
@@ -84,6 +87,7 @@ const OWNERS: Record<string, string> = {
   release_highlight: "lib/stores/updates.ts",
   remove_support_package: "lib/stores/supportPackages.ts",
   rename_sql_file: "lib/sqlFiles.ts",
+  resize_terminal: "lib/terminal.ts",
   restart_app: "lib/stores/updates.ts",
   result_edit_info: "lib/results/resultEditing.ts",
   save_connection_password: "lib/credentials.ts",
@@ -96,6 +100,7 @@ const OWNERS: Record<string, string> = {
   update_context: "lib/stores/updates.ts",
   write_console_text: "lib/stores/queryConsoles.ts",
   write_sql_file: "lib/sqlFiles.ts",
+  write_terminal: "lib/terminal.ts",
 };
 
 const sources = import.meta.glob(["../**/*.ts", "../**/*.svelte", "!../**/*.test.ts"], {
