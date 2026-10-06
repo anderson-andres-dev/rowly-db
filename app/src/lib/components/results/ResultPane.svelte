@@ -556,8 +556,7 @@
        resultado mas. -->
   {#if !tableView || terminal}
     <div
-      class="result-tabs"
-      class:joined={!terminalActive && hasActivity && showingResult}
+      class="result-tabs tab-strip"
       role="tablist"
       aria-label={$t("results.tabs")}
       use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
@@ -568,6 +567,7 @@
         type="button"
         role="tab"
         class="result-tab"
+        style:--tab-active="var(--surface-content)"
         class:active={showingOutput}
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
@@ -1003,23 +1003,8 @@
      son planas y se aclaran al pasar el mouse. */
   /* Pestañas y barra forman una sola cabecera: sin linea entre ellas, una
      sola al pie. Nada de cajas: el orden lo dan el espacio y el peso. */
-  .result-tabs {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: 2px;
-    min-height: 2.25rem;
-    padding: var(--space-1) var(--space-2);
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
 
   /* Con la barra debajo, la linea pasa al pie de la barra. */
-  .result-tabs.joined {
-    padding-bottom: 0;
-    border-bottom: 0;
-  }
 
   .result-toolbar {
     display: flex;
@@ -1117,6 +1102,7 @@
      acento mientras se ve. */
   .terminal-toggle {
     display: grid;
+    align-self: center;
     width: 1.75rem;
     height: 1.75rem;
     flex-shrink: 0;

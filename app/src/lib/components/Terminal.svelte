@@ -130,9 +130,9 @@
   });
 </script>
 
-<!-- Las mismas pestañas que las del resultado (styles/tabs.css), con el
-     fondo de la terminal. -->
-<div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
+<!-- Las mismas pestañas que las del resultado (styles/tabs.css): la elegida
+     con el fondo de la terminal, unida a ella. -->
+<div class="terminal-sessions tab-strip" style:--tab-active={$editorPalette.background} bind:this={row}>
   <div
     class="sessions-scroll"
     class:fade-start={overflow.start}
@@ -210,14 +210,50 @@
 </div>
 
 <style>
-  /* Alta como la barra del resultado, en su lugar. */
+  /* La franja de pestañas (tabs.css), alta como la barra del resultado. */
   .terminal-sessions {
-    display: flex;
-    flex-shrink: 0;
-    align-items: stretch;
     min-height: 2.5rem;
-    padding: 0 var(--space-2);
-    box-sizing: border-box;
+  }
+
+  /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
+  .sessions-scroll {
+    --fade: 2rem;
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    align-self: stretch;
+    align-items: flex-end;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    scroll-padding-inline: var(--fade);
+  }
+
+  /* La franja baja sobre la linea base (su scroll recorta lo que sale):
+     asi la pestaña elegida la tapa. */
+  .sessions-scroll {
+    margin-bottom: -1px;
+  }
+
+  .sessions-scroll :global(.result-tab) {
+    margin-bottom: 0;
+  }
+
+  .sessions-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sessions-scroll.fade-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .sessions-scroll.fade-start {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+  }
+
+  .sessions-scroll.fade-start.fade-end {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
   }
 
   .session {
@@ -247,8 +283,9 @@
     width: 1.5rem;
     height: 1.5rem;
     flex-shrink: 0;
-    align-self: center;
-    margin-left: var(--space-1);
+    /* Abajo, centrado con el texto de las pestañas (1,75rem de alto). */
+    align-self: flex-end;
+    margin: 0 0 0.125rem var(--space-1);
     place-items: center;
     padding: 0;
     border: 0;
