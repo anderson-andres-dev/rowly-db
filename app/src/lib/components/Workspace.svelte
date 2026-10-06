@@ -7,8 +7,7 @@
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
-  import { CircleCheck, FileCode, Icon, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
-  import type { IconNode } from "@lucide/svelte";
+  import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import ExecutionGuard from "$lib/components/ExecutionGuard.svelte";
@@ -434,48 +433,28 @@
   }
 
   // --- Terminal ------------------------------------------------------------
-  // Una por ventana, debajo del editor y los resultados. Se monta la primera
-  // vez que se muestra; ocultarla deja el shell vivo; cerrarla (o `exit`)
-  // la desmonta y la proxima vez abre un shell nuevo.
-  // El ">_" de Lucide (Terminal), distinto del SquareTerminal de las
-  // consolas. Con el Icon base y sus datos, no con el componente del icono:
-  // el JS inicial no tiene que crecer por la terminal.
-  const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
-  let terminalMounted = $state(false);
-  let terminalVisible = $state(false);
-  // El panel y xterm se cargan la primera vez que se muestra: quien no la
-  // usa no los descarga.
-  let TerminalPanel = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
-  // Donde estaba el foco al mostrarla: ahi vuelve al ocultarla.
+  // Una por ventana, como pestaña fija del panel inferior (ResultPane), con
+  // sus sesiones dentro. No es de ninguna consola: activa, sigue a la vista
+  // al cambiar de consola o sin ninguna abierta. Desactivarla vuelve a la
+  // pestaña que la consola tenia elegida, que no se toca.
+  let terminalActive = $state(false);
+  // Terminal.svelte (y con el, xterm) se carga la primera vez que se abre:
+  // quien no la usa no los descarga ni crea un shell.
+  let TerminalDock = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
+  // Donde estaba el foco al abrirla: ahi vuelve con Alt+F12.
   let terminalReturnFocus: HTMLElement | null = null;
 
-  function returnFromTerminal() {
-    const back = terminalReturnFocus;
-    terminalReturnFocus = null;
-    if (back?.isConnected) back.focus({ preventScroll: true });
-  }
-
   function toggleTerminal() {
-    if (terminalVisible) {
-      hideTerminal();
+    if (terminalActive) {
+      terminalActive = false;
+      if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
       return;
     }
     terminalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    terminalMounted = true;
-    terminalVisible = true;
-    if (!TerminalPanel) void import("$lib/components/Terminal.svelte").then((module) => (TerminalPanel = module.default));
+    terminalActive = true;
+    if (!TerminalDock) void import("$lib/components/Terminal.svelte").then((module) => (TerminalDock = module.default));
   }
 
-  function hideTerminal() {
-    terminalVisible = false;
-    returnFromTerminal();
-  }
-
-  function closeTerminalPanel() {
-    terminalMounted = false;
-    terminalVisible = false;
-    returnFromTerminal();
-  }
 
   $effect(() => registerCommands("global", { "toggle-terminal": toggleTerminal }));
 
@@ -628,6 +607,7 @@
   function executeFromHistory(sql: string) {
     const consoleId = activeConsole?.id;
     closeHistory(true);
+    terminalActive = false;
     if (consoleId) void requestExecution(consoleId, sql);
   }
 
@@ -885,18 +865,8 @@
     >
       <Plus size={14} aria-hidden="true" />
     </button>
-    <button
-      type="button"
-      class="new-console terminal-toggle"
-      aria-pressed={terminalVisible}
-      aria-label={$t("workspace.terminal.title")}
-      use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
-      onclick={toggleTerminal}
-    >
-      <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
-    </button>
   </div>
-  {#if !activeConsole}
+  {#if !activeConsole && !terminalActive}
     <div class="workspace-empty" in:fade={{ duration: 150 }}>
       <SquareTerminal size={30} strokeWidth={1.25} class="workspace-empty-icon" aria-hidden="true" />
       <div class="workspace-empty-actions">
@@ -910,9 +880,12 @@
         </button>
       </div>
     </div>
-  {:else}
-  <section class="workspace-body" bind:this={workspaceBody}>
-    {#if !activeConsole?.table}
+  {/if}
+  <!-- Sin consola, el panel inferior existe solo si ya se abrio la terminal
+       (para no perder sus sesiones), y se ve solo con ella activa. -->
+  {#if activeConsole || TerminalDock}
+  <section class="workspace-body" class:idle={!activeConsole && !terminalActive} bind:this={workspaceBody}>
+    {#if activeConsole && !activeConsole.table}
     <div
       class="editor-pane"
       bind:this={editorPane}
@@ -928,7 +901,13 @@
               bind:this={sqlEditor}
               value={activeConsole.sql}
               onchange={(sql) => updateQueryConsoleSql(activeConsole.id, sql)}
-              onexecute={(sql) => requestExecution(activeConsole.id, sql)}
+              onexecute={(sql) => {
+                // Ejecutar desde el editor (o el historial) muestra el
+                // resultado; una ejecucion que termina sola no saca de la
+                // terminal.
+                terminalActive = false;
+                void requestExecution(activeConsole.id, sql);
+              }}
               executing={liveExecution.isExecuting}
               result={liveExecution.result}
               onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
@@ -1006,7 +985,10 @@
         cancellingQuery={!!activeConsole && $cancelling[activeConsole.id] === true}
         tabs={resultTabs}
         activeTab={selectedTab}
-        onselecttab={(tab) => activeConsole && selectTab(activeConsole.id, tab)}
+        onselecttab={(tab) => {
+          terminalActive = false;
+          if (activeConsole) selectTab(activeConsole.id, tab);
+        }}
         onreordertabs={reorderResultTabs}
         onclosetab={(key) => void closeResultTab(key)}
         onexport={() => (exportFor = viewKey)}
@@ -1025,7 +1007,15 @@
         tableView={!!activeConsole?.table}
         filterCount={activeConsole?.table?.where ? activeConsole.table.conditions.filter((condition) => condition.column).length : 0}
         filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
+        terminal={TerminalDock ? terminalDock : undefined}
+        {terminalActive}
+        onterminal={toggleTerminal}
       />
+      {#snippet terminalDock()}
+        {#if TerminalDock}
+          <TerminalDock visible={terminalActive} {profileId} onerror={notifyError} />
+        {/if}
+      {/snippet}
       {#snippet tableFiltersBar()}
         {#if activeConsole?.table && $activeEngine}
           {@const consoleId = activeConsole.id}
@@ -1043,15 +1033,6 @@
       {/snippet}
     </div>
   </section>
-  {/if}
-  {#if terminalMounted && TerminalPanel}
-    <TerminalPanel
-      visible={terminalVisible}
-      {profileId}
-      onhide={hideTerminal}
-      onclose={closeTerminalPanel}
-      onerror={notifyError}
-    />
   {/if}
 </div>
 
@@ -1374,10 +1355,6 @@
     flex-shrink: 0;
   }
 
-  .terminal-toggle[aria-pressed="true"] {
-    color: var(--accent);
-  }
-
   /* Sin pestañas abiertas: accesos directos centrados, al estilo de la
      pantalla vacia de un editor. */
   .workspace-empty {
@@ -1467,6 +1444,10 @@
      linea de 1px centrada adentro (no un bloque con borde arriba y abajo:
      dos lineas a 4px de distancia se leen como una "linea doblada", no
      como una barra). El resto de la franja es hit-area invisible. */
+  .workspace-body.idle {
+    display: none;
+  }
+
   .splitter {
     position: relative;
     flex-shrink: 0;

@@ -10,6 +10,7 @@
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
   import "$lib/styles/controls.css";
+  import "$lib/styles/tabs.css";
   import "$lib/styles/alert-dialog.css";
   import "$lib/styles/review-dialog.css";
   import "$lib/styles/tooltip.css";

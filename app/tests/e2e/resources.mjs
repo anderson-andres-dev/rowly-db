@@ -228,10 +228,10 @@ function assertStable(samples, memory = samples.length > 3 ? samples.filter((s) 
     if (last.dom[key] !== first.dom[key]) throw new Error(`${key}: ${first.dom[key]} -> ${last.dom[key]}`);
 }
 
-// Lo que haga la app sola durante IDLE_SECONDS: llamadas al backend,
+// Lo que haga la app sola durante `seconds` (IDLE_SECONDS si no se dice): llamadas al backend,
 // timers, CPU y memoria. Ninguna llamada ni setInterval, menos del 10 % de un
 // nucleo y sin crecer.
-async function idleFor(page, app) {
+async function idleFor(page, app, seconds = IDLE_SECONDS) {
   // Lo que haga la app sola desde aqui: llamadas al backend y timers.
   await page.evaluate(`(() => {
     const counts = (window.__idle = { invokes: [], timeouts: 0, intervals: 0, frames: 0 });
@@ -253,13 +253,13 @@ async function idleFor(page, app) {
   // Muestras de memoria cada 30 s, sin recolectar (para no sumar trabajo).
   const idleStart = pss(app.pid);
   const during = [{ index: 0, pss: idleStart }];
-  for (let elapsed = 30; elapsed <= IDLE_SECONDS; elapsed += 30) {
+  for (let elapsed = 30; elapsed <= seconds; elapsed += 30) {
     await sleep(30000);
     during.push({ index: elapsed, pss: pss(app.pid) });
   }
-  await sleep((IDLE_SECONDS % 30) * 1000);
+  await sleep((seconds % 30) * 1000);
   const idleEnd = pss(app.pid);
-  const after = await sample(page, app, IDLE_SECONDS);
+  const after = await sample(page, app, seconds);
   const idle = await page.evaluate("window.__idle");
   // Lo que anima solo: animaciones y transiciones CSS que siguen corriendo.
   const animations = await page.evaluate(`document.getAnimations()
@@ -281,7 +281,7 @@ async function idleFor(page, app) {
       .join("; ")}`,
   );
   console.log(
-    `        en ${IDLE_SECONDS} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
+    `        en ${seconds} s: ${cpuSeconds.toFixed(2)} s de CPU (${((cpuSeconds / seconds) * 100).toFixed(2)} % de un nucleo: ${cpuByProcess}); ` +
       `${idle.invokes.length} llamadas al backend (${[...new Set(idle.invokes)].join(", ") || "ninguna"}); ` +
       `${idle.timeouts} setTimeout, ${idle.intervals} setInterval, ${idle.frames} requestAnimationFrame; ` +
       `animando: ${animations.join(", ") || "nada"}`,
@@ -291,10 +291,11 @@ async function idleFor(page, app) {
   // Con el editor enfocado, el cursor parpadea: bajo Xvfb, sin GPU, eso y el
   // compositor de GTK son ~3 % de un nucleo. Lo que se busca es trabajo
   // continuo (sondeos, bucles), que se ve muy por encima.
-  if (cpuSeconds / IDLE_SECONDS > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / IDLE_SECONDS) * 100).toFixed(2)} % de un nucleo`);
+  if (cpuSeconds / seconds > 0.1) throw new Error(`en reposo se uso ${((cpuSeconds / seconds) * 100).toFixed(2)} % de un nucleo`);
   // El heap vivo y el DOM, del principio al final; la memoria propia de la
   // app, por pisos de las muestras cada 30 s.
   assertStable([before, after], during);
+  return { cpu: cpuSeconds / seconds, pss: idleEnd };
 }
 
 // --- Conexiones -------------------------------------------------------------
@@ -482,8 +483,12 @@ cycle(`${IDLE_SECONDS} s de reposo con una conexion abierta: sin trabajo, llamad
 // Como los demas ciclos: el backend calienta hasta el 100 y la compuerta
 // compara desde ahi.
 const TERMINAL_CYCLES = Number(process.env.E2E_TERMINAL_CYCLES ?? 300);
-const terminalText = `(document.querySelector(".terminal-host .xterm-rows")?.innerText ?? "")`;
-const terminalPanel = `document.querySelector(".terminal-panel")`;
+// La sesion a la vista: las otras siguen montadas y ocultas.
+const terminalHost = `document.querySelector(".terminal-host:not(.hidden)")`;
+const terminalText = `(${terminalHost}?.querySelector(".xterm-rows")?.innerText ?? "")`;
+const terminalShown = `!!document.querySelector(".terminal-view:not(.hidden)")`;
+const sessionCount = `document.querySelectorAll(".terminal-sessions .result-tab.closable").length`;
+const terminalTab = `[...document.querySelectorAll(".result-tabs [role=tab]")].find((tab) => tab.textContent.trim() === "Terminal")`;
 
 // Alt+F12, como lo recibe el despachador de atajos.
 const toggleTerminal = (page) => press(page, { key: "F12", code: "F12", alt: true }, "body");
@@ -492,62 +497,186 @@ const toggleTerminal = (page) => press(page, { key: "F12", code: "F12", alt: tru
 // (insertText) lo manda tal cual por onData, \r incluido.
 function typeInTerminal(page, text) {
   return page.evaluate(`(() => {
-    const input = document.querySelector(".terminal-host textarea");
+    const input = ${terminalHost}.querySelector("textarea");
     input.focus();
     input.dispatchEvent(new InputEvent("input", { data: ${JSON.stringify(text)}, inputType: "insertText", bubbles: true }));
     return true;
   })()`);
 }
 
-// El pid que imprime el shell tras `marker`.
+// El pid que imprime el shell a la vista tras `marker`.
 async function shellPid(page, marker) {
+  await typeInTerminal(page, `echo ${marker}$$ \r`);
   const pattern = `/${marker}(\\d+)\\s/`;
   await waitFor(page, `el pid ${marker}`, `${pattern}.test(${terminalText})`);
   return Number(await page.evaluate(`${pattern}.exec(${terminalText})[1]`));
 }
 
 const threads = (pid) => readdirSync(`/proc/${pid}/task`).length;
+const alive = (pid) => existsSync(`/proc/${pid}`);
 
-async function openTerminal(page, index = 0) {
+// Espera a que la sesion a la vista tenga su shell.
+const shellReady = (page, what) =>
+  waitFor(page, what, `${terminalShown} && !!${terminalHost}?.querySelector("textarea") && ${terminalText}.trim().length > 0`);
+
+async function openTerminal(page) {
   await toggleTerminal(page);
-  await waitFor(page, `la terminal ${index}`, `!!document.querySelector(".terminal-host textarea") && ${terminalText}.trim().length > 0`);
+  await shellReady(page, "la terminal");
 }
 
-cycle(`${TERMINAL_CYCLES} ciclos de terminal: abrir con Alt+F12, esperar el shell y cerrar, sin procesos ni memoria detras`, async (page, app) => {
+async function addSession(page, count) {
+  await page.evaluate(`document.querySelector(".terminal-sessions > :last-child").click(), true`);
+  await waitFor(page, `la sesion ${count}`, `${sessionCount} === ${count}`);
+  await shellReady(page, `el shell de la sesion ${count}`);
+}
+
+async function closeSession(page, index, count) {
+  await page.evaluate(`document.querySelectorAll(".terminal-sessions .tab-close")[${index}].click(), true`);
+  await waitFor(page, `cerrar la sesion ${index}`, `${sessionCount} === ${count}`);
+}
+
+// Espera a que los shells dejen de existir (recogidos: ni vivos ni zombis).
+async function reaped(pids) {
+  const deadline = Date.now() + 5000;
+  let left = pids;
+  while (Date.now() < deadline && (left = pids.filter(alive)).length > 0) await sleep(100);
+  if (left.length > 0) throw new Error(`quedaron ${left.length} shells: ${left.slice(0, 5).join(", ")}`);
+}
+
+// Cierra todas las consolas (descartando el texto si pregunta).
+async function closeConsoles(page) {
+  while (await page.evaluate(`document.querySelectorAll(".console-tab").length > 0`)) {
+    const before = await page.evaluate(`document.querySelectorAll(".console-tab").length`);
+    await page.evaluate(`document.querySelector(".console-tab .close-tab").click(), true`);
+    await waitFor(page, "cerrar una consola", `document.querySelectorAll(".console-tab").length < ${before} || !!document.querySelector("dialog[open] .danger-soft")`);
+    if (await page.evaluate(`!!document.querySelector("dialog[open] .danger-soft")`))
+      await page.evaluate(`document.querySelector("dialog[open] .danger-soft").click(), true`);
+    await waitFor(page, "cerrar una consola", `document.querySelectorAll(".console-tab").length < ${before}`);
+  }
+}
+
+const rect = (selector) => `(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r ? [r.top, r.bottom, r.left, r.right].map(Math.round) : null; })()`;
+
+cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin consola, al cambiar de consola, con Alt+F12 y con varias sesiones", async (page) => {
   await seedProfiles(page, [MYSQL_PROFILE]);
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  const separators = await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`);
+
+  // Sin consola: Alt+F12 la abre igual, sin crear una consola.
+  await closeConsoles(page);
+  await openTerminal(page);
+  if (await page.evaluate(`document.querySelectorAll(".console-tab").length`)) throw new Error("abrir la terminal creo una consola");
+  const first = await shellPid(page, "RWA");
+  await toggleTerminal(page);
+  await waitFor(page, "la pantalla vacia", `!${terminalShown} && !!document.querySelector(".workspace-empty")`);
+  await toggleTerminal(page);
+  await waitFor(page, "la misma sesion", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
+
+  // Una consola nueva no la tapa; ejecutar si muestra el resultado.
+  await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true }, "body");
+  await waitFor(page, "la consola", `document.querySelectorAll(".console-tab").length === 1 && !!document.querySelector(".cm-content")`);
+  if (!(await page.evaluate(terminalShown))) throw new Error("crear una consola oculto la terminal");
+  await writeSql(page, "SELECT id, name FROM victim ORDER BY id");
+  await press(page, { key: "Enter", code: "Enter", ctrl: true }, ".cm-content");
+  await waitFor(page, "el resultado", `!${terminalShown} && ${gridText}.includes("tres")`);
+  const region = await page.evaluate(rect(".result-region"));
+
+  // Alt+F12: la terminal en el mismo lugar del grid, sin otro panel ni otro
+  // splitter; y otra vez, de vuelta a la pestaña que estaba.
+  await toggleTerminal(page);
+  await waitFor(page, "la terminal sobre el grid", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
+  const [view, tabs, after] = await page.evaluate(`[${rect(".terminal-view")}, ${rect(".result-tabs")}, ${rect(".result-region")}]`);
+  if (JSON.stringify(after) !== JSON.stringify(region)) throw new Error(`el panel inferior cambio: ${region} -> ${after}`);
+  if (Math.abs(view[0] - tabs[1]) > 1 || Math.abs(view[1] - region[1]) > 1)
+    throw new Error(`la terminal no ocupa el lugar del grid: ${view} (pestañas ${tabs}, panel ${region})`);
+  if ((await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`)) !== separators)
+    throw new Error("la terminal agrego un splitter");
+  await toggleTerminal(page);
+  await waitFor(page, "el grid de vuelta", `!${terminalShown} && ${gridText}.includes("tres") && document.querySelector('.result-tabs [aria-selected="true"]')?.textContent.includes("victim")`);
+  await toggleTerminal(page);
+  await waitFor(page, "la terminal de vuelta", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
+
+  // Cambiar de consola con la terminal a la vista: sigue la terminal.
+  await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true }, "body");
+  await waitFor(page, "la segunda consola", `document.querySelectorAll(".console-tab").length === 2`);
+  await page.evaluate(`document.querySelector(".console-tab").click(), true`);
+  await sleep(300);
+  if (!(await page.evaluate(`${terminalShown} && ${terminalText}.includes("RWA${first}")`))) throw new Error("cambiar de consola oculto la terminal");
+
+  // +: otra sesion con su shell; x: cierra solo esa.
+  await addSession(page, 2);
+  const second = await shellPid(page, "RWB");
+  if (second === first) throw new Error("la segunda sesion tiene el mismo shell");
+  await closeSession(page, 0, 1);
+  await reaped([first]);
+  if (!alive(second)) throw new Error("cerrar la primera sesion cerro la segunda");
+  if (!(await page.evaluate(`${terminalText}.includes("RWB${second}")`))) throw new Error("no quedo a la vista la sesion que sigue");
+
+  // La ultima: la pestaña Terminal queda; + abre otra.
+  await closeSession(page, 0, 0);
+  await reaped([second]);
+  if (!(await page.evaluate(`!!${terminalTab}`))) throw new Error("cerrar la ultima sesion quito la pestaña Terminal");
+  await addSession(page, 1);
+  console.log(`        sin consola, cambio de consola, Alt+F12 ida y vuelta, + y x por sesion; panel ${region}, terminal ${view}`);
+});
+
+cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin procesos ni memoria detras`, async (page, app) => {
+  await seedProfiles(page, [MYSQL_PROFILE]);
+  await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  await openTerminal(page);
   const baseThreads = threads(app.pid);
   const shells = [];
   const samples = [];
   for (let index = 1; index <= TERMINAL_CYCLES; index += 1) {
-    await openTerminal(page, index);
-    await typeInTerminal(page, "echo RW$$ \r");
+    await addSession(page, 2);
     shells.push(await shellPid(page, "RW"));
-    // Cerrar con el boton de la cabecera: termina el shell y desmonta el panel.
-    await page.evaluate(`document.querySelectorAll(".terminal-action")[1].click(), true`);
-    await waitFor(page, `cerrar la terminal ${index}`, `!${terminalPanel}`);
+    await closeSession(page, 1, 1);
     if (index === Math.min(WARMUP, TERMINAL_CYCLES) || (index > WARMUP && index % 50 === 0) || index === TERMINAL_CYCLES)
       samples.push(await sample(page, app, index));
   }
   console.log(samples.map((s) => `        ${format(s)}`).join("\n"));
-  // Cada shell se recogio (ni vivo ni zombi) y el backend volvio a sus hilos:
-  // dos por terminal mientras esta abierta.
-  const deadline = Date.now() + 5000;
-  let alive = shells;
-  while (Date.now() < deadline && (alive = shells.filter((pid) => existsSync(`/proc/${pid}`))).length > 0) await sleep(100);
-  if (alive.length > 0) throw new Error(`quedaron ${alive.length} shells: ${alive.slice(0, 5).join(", ")}`);
+  // Cada shell se recogio y el backend volvio a sus hilos: dos por sesion
+  // mientras esta abierta.
+  await reaped(shells);
   console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
-  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; antes de las terminales, ${baseThreads}`);
+  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; con una sesion, ${baseThreads}`);
   assertStable(samples);
 });
 
-cycle(`${IDLE_SECONDS} s de reposo con la terminal abierta: sin trabajo, llamadas al backend ni memoria que crezca`, async (page, app) => {
+// 1, 5 y 10 sesiones en reposo (la primera, IDLE_SECONDS; las demas, 60 s),
+// la terminal oculta y, al cerrarlas, el backend con los hilos de antes.
+cycle(`1, 5 y 10 sesiones de terminal en reposo, ocultas y cerradas: sin trabajo ni llamadas al backend, memoria por sesion acotada`, async (page, app) => {
   await seedProfiles(page, [MYSQL_PROFILE]);
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
+  const baseThreads = threads(app.pid);
   await openTerminal(page);
-  await typeInTerminal(page, "echo listo\r");
-  await waitFor(page, "el eco", `${terminalText}.includes("listo\\n")`);
-  await idleFor(page, app);
+  const shells = [await shellPid(page, "RW")];
+  const total = (pss) => Object.values(pss.anonymousByName).reduce((sum, mb) => sum + mb, 0);
+  const rows = [];
+  for (const count of [1, 5, 10]) {
+    while (shells.length < count) {
+      await addSession(page, shells.length + 1);
+      shells.push(await shellPid(page, "RW"));
+    }
+    const { cpu, pss } = await idleFor(page, app, count === 1 ? IDLE_SECONDS : 60);
+    rows.push({ count, cpu, memory: total(pss) });
+  }
+  await toggleTerminal(page);
+  await waitFor(page, "la terminal oculta", `!${terminalShown}`);
+  const hidden = await idleFor(page, app, 60);
+  const perSession = (rows[2].memory - rows[0].memory) / 9;
+  console.log(
+    `        memoria propia: ${rows.map((row) => `${row.count} sesiones ${row.memory.toFixed(1)} MB, CPU ${(row.cpu * 100).toFixed(2)} %`).join("; ")}; ` +
+      `${perSession.toFixed(1)} MB por sesion; oculta CPU ${(hidden.cpu * 100).toFixed(2)} %`,
+  );
+  // El presupuesto de una terminal idle (sin el shell): 15 MB.
+  if (perSession > 15) throw new Error(`cada sesion suma ${perSession.toFixed(1)} MB`);
+  await toggleTerminal(page);
+  await waitFor(page, "la terminal", terminalShown);
+  for (let count = shells.length - 1; count >= 0; count -= 1) await closeSession(page, count, count);
+  await reaped(shells);
+  console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
+  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; sin terminales, ${baseThreads}`);
 });
 
 // P4: salida grande. Durante la rafaga la pagina sigue respondiendo (se mide

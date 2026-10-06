@@ -22,33 +22,157 @@
  "control": "terminal-pre es de otra instalacion (Omarchy, kernel 7.2.5, enchufada). Para comparar en igualdad, af33348 se compilo y midio tambien en esta maquina, en la misma sesion: archivos *.pre-local.json. Su binario release mide 15449776 bytes, 24 mas que el de terminal-pre.",
  "build": {
   "command": "cd app && npx tauri build --bundles deb rpm",
-  "binary_bytes": { "post": 15730096, "pre_local": 15449776, "delta": 280320 },
+  "binary_bytes": {
+   "post": 15730096,
+   "pre_local": 15449776,
+   "delta": 280320
+  },
   "packages_bytes": {
-   "deb": { "post": 7079982, "pre_local": 6921356, "delta": 158626 },
-   "rpm": { "post": 7081044, "pre_local": 6921665, "delta": 159379 },
-   "appimage": { "post": 85170680, "pre": 85027320, "delta": 143360, "where": "CI ubuntu-22.04 (appimage-*.json): el strip de linuxdeploy no funciona en Arch" }
+   "deb": {
+    "post": 7079836,
+    "pre_local": 6921356,
+    "delta": 158480
+   },
+   "rpm": {
+    "post": 7080830,
+    "pre_local": 6921665,
+    "delta": 159165
+   },
+   "appimage": {
+    "post": 85170680,
+    "pre": 85027320,
+    "delta": 143360,
+    "where": "CI ubuntu-22.04 (appimage-*.json): el strip de linuxdeploy no funciona en Arch"
+   }
   }
  },
  "budgets": [
-  { "metric": "JS inicial (bundle.py)", "budget": "+0, dentro de 1 KB", "pre_local_gzip_kb": 444.3, "post_gzip_kb": 445.2, "closure_gzip_bytes_delta": 984, "result": "ok", "note": "El componente Lucide Terminal sumaba 303 B (+1228 B en total); el boton usa el Icon base con los datos del icono" },
-  { "metric": "Chunk de la terminal", "budget": "<= 90 KB gzip", "js_gzip_kb": 86.2, "css_gzip_kb": 1.0, "parts_gzip_bytes": { "xterm": 82292, "panel": 3395, "fit": 494 }, "result": "ok" },
-  { "metric": "Binario release", "budget": "<= +300 KB", "delta_kb": 273.8, "result": "ok" },
-  { "metric": "Arranque caliente x20 (desktop.py)", "budget": "<= 5 % sobre la mediana", "window_ms_median": { "pre_local": 124, "post": 125 }, "pss_mb_median": { "pre_local": 261.3, "post": 263.2 }, "threads_median": { "pre_local": 72, "post": 72 }, "result": "ok (+0,8 % ventana, +0,7 % PSS)", "note": "settle_ms es ruidoso (pre_local 888, post 570 de mediana) y no es compuerta" },
-  { "metric": "PSS con 0 terminales (reposo 300 s, desktop.py)", "budget": "dentro de la dispersion de la base", "pss_first_last_mb": { "pre_local": [259.2, 258.6], "post": [258.3, 258.3] }, "cpu_pct_of_one_core": { "pre_local": 0.01, "post": 0.01 }, "result": "ok" },
-  { "metric": "PSS con 1 terminal idle (sin el shell)", "budget": "<= +15 MB", "value": "+2,9 MB: reposo con terminal 354,7 MB (zsh 4,0) contra reposo con conexion 347,8 MB, en la misma corrida de resources.mjs (build debug)", "result": "ok" },
-  { "metric": "Tras los ciclos", "budget": "heap vivo +-10 % o 2 MB; backend Anonymous +-5 % o 2 MB", "value": "300 ciclos de terminal: heap 15,0 -> 12,2 MB, backend 49,4 -> 54,7 MB entre los ciclos 50 y 100 y plano despues (55,1 -> 54,7); 300 shells recogidos, hilos 35 -> 34", "result": "ok (compuerta de resources.mjs)" },
-  { "metric": "CPU en reposo con la terminal", "budget": "ningun setInterval ni llamada al backend", "value": "1,20 % de un nucleo bajo Xvfb, 0 llamadas, 0 setInterval, sin animaciones", "result": "ok" },
-  { "metric": "Primer byte del shell (fuera de la app)", "budget": "<= 150 ms", "ms_median": { "pre": 62.3, "post": 58.9 }, "result": "ok" },
-  { "metric": "Primera carga del chunk", "budget": "<= 100 ms", "value": "no medido aparte. En la AppImage de CI, de Alt+F12 a la primera salida (chunk + xterm + bash de login): 257 y 350 ms", "result": "sin medir por separado" },
-  { "metric": "Salida grande (P4)", "budget": "termina; ninguna tarea larga > 200 ms; yes se aplana", "value": "50 MB en 10,3 s, retraso maximo 67 ms, 0 de 142 ticks > 200 ms; yes 30 s: backend 49,2 -> 49,6 MB, 0 de 441 ticks > 200 ms", "result": "ok" }
+  {
+   "metric": "JS inicial (bundle.py)",
+   "budget": "+0, dentro de 1 KB",
+   "pre_local_gzip_kb": 444.3,
+   "post_gzip_kb": 445.3,
+   "closure_gzip_bytes_delta": 1024,
+   "result": "ok, en el limite (1024 B)",
+   "note": "Medido con el cierre de imports de bundle.py en bytes. Con la terminal como pestaña: ToolbarButton en el chunk de la terminal sacaba un chunk compartido del JS inicial (+1,2 KB); el + usa la pieza de las pestañas y el tooltip del shell va en cada sesion (lazy)"
+  },
+  {
+   "metric": "Chunk de la terminal",
+   "budget": "<= 90 KB gzip",
+   "js_gzip_kb": 83.5,
+   "css_gzip_kb": 1.0,
+   "parts_gzip_bytes": {
+    "xterm": 82292,
+    "terminal y sesiones": 2711,
+    "fit": 494
+   },
+   "result": "ok"
+  },
+  {
+   "metric": "Binario release",
+   "budget": "<= +300 KB",
+   "delta_kb": 273.8,
+   "result": "ok"
+  },
+  {
+   "metric": "Arranque caliente x20 (desktop.py)",
+   "budget": "<= 5 % sobre la mediana",
+   "window_ms_median": {
+    "pre_local": 124,
+    "post": 125
+   },
+   "pss_mb_median": {
+    "pre_local": 261.3,
+    "post": 263.2
+   },
+   "threads_median": {
+    "pre_local": 72,
+    "post": 72
+   },
+   "result": "ok (+0,8 % ventana, +0,7 % PSS)",
+   "note": "settle_ms es ruidoso (pre_local 888, post 570 de mediana) y no es compuerta"
+  },
+  {
+   "metric": "PSS con 0 terminales (reposo 300 s, desktop.py)",
+   "budget": "dentro de la dispersion de la base",
+   "pss_first_last_mb": {
+    "pre_local": [
+     259.2,
+     258.6
+    ],
+    "post": [
+     258.3,
+     258.3
+    ]
+   },
+   "cpu_pct_of_one_core": {
+    "pre_local": 0.01,
+    "post": 0.01
+   },
+   "result": "ok"
+  },
+  {
+   "metric": "PSS con 1 terminal idle (sin el shell)",
+   "budget": "<= +15 MB",
+   "value": "5,8 MB por sesion con su shell (1, 5 y 10 sesiones: 159,9 / 180,5 / 212,1 MB de memoria propia), resources.mjs, build debug",
+   "result": "ok"
+  },
+  {
+   "metric": "Tras los ciclos",
+   "budget": "heap vivo +-10 % o 2 MB; backend Anonymous +-5 % o 2 MB",
+   "value": "300 sesiones abiertas con + y cerradas con x: heap y backend planos tras calentar; 300 shells recogidos, hilos 37 -> 36",
+   "result": "ok (compuerta de resources.mjs)"
+  },
+  {
+   "metric": "CPU en reposo con la terminal",
+   "budget": "ningun setInterval ni llamada al backend",
+   "value": "1, 5 y 10 sesiones: 0,99 / 0,93 / 0,97 % de un nucleo bajo Xvfb; oculta, 0,78 %; 0 llamadas, 0 setInterval; al cerrarlas, hilos 36 -> 34",
+   "result": "ok"
+  },
+  {
+   "metric": "Primer byte del shell (fuera de la app)",
+   "budget": "<= 150 ms",
+   "ms_median": {
+    "pre": 62.3,
+    "post": 58.9
+   },
+   "result": "ok"
+  },
+  {
+   "metric": "Primera carga del chunk",
+   "budget": "<= 100 ms",
+   "value": "no medido aparte. En la AppImage de CI, de Alt+F12 a la primera salida (chunk + xterm + bash de login): 257 y 350 ms",
+   "result": "sin medir por separado"
+  },
+  {
+   "metric": "Salida grande (P4)",
+   "budget": "termina; ninguna tarea larga > 200 ms; yes se aplana",
+   "value": "50 MB en 6,1 s, retraso maximo 44 ms, 0 ticks > 200 ms; yes 30 s: backend plano",
+   "result": "ok"
+  }
  ],
  "resources": {
   "command": "env -u WAYLAND_DISPLAY GDK_BACKEND=x11 E2E_MYSQL_PORT=33306 E2E_PG_PORT=55432 E2E_PG_USER=rowly E2E_MYSQL_CLI=<docker exec mysql> xvfb-run --auto-servernum dbus-run-session --config-file=<bus sin servicedir> -- node tests/e2e/resources.mjs --app <binario debug>",
-  "result": "6/6 ok: 300 reconexiones, 300 consolas, reposo con conexion, 300 terminales, reposo con terminal, salida grande"
+  "result": "7/7 ok: 300 reconexiones, 300 consolas, reposo con conexion, pestaña Terminal (mismo lugar que el grid, sin consola, al cambiar de consola, Alt+F12, varias sesiones), 300 sesiones, 1/5/10 sesiones en reposo, salida grande"
  },
  "appimage": {
   "where": "CI, ubuntu-22.04, MySQL 8.4.11 (appimage-pre.json, appimage-post.json)",
-  "starts_ms": { "pre": [2012, 499, 1050, 991, 988], "post": [1620, 956, 462, 948, 947] },
+  "starts_ms": {
+   "pre": [
+    2012,
+    499,
+    1050,
+    991,
+    988
+   ],
+   "post": [
+    1620,
+    956,
+    462,
+    948,
+    947
+   ]
+  },
   "environment": "Con el entorno de AppRun, python3 fallaba (PYTHONHOME). terminal.rs quita del shell las entradas que apuntan a la AppImage; con eso git, python3, curl, openssl, ssh, perl, mysql, gzip y tar responden. gio help da rc=1 tambien con el entorno limpio (glib 2.72)."
  }
 }

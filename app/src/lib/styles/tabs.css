@@ -1,0 +1,104 @@
+/* Las pestañas del panel inferior: las del resultado (Salida, resultados) y
+   las sesiones de la terminal. Una sola pieza: .result-tab, y en las que se
+   cierran, .closable con .tab-select y .tab-close. */
+
+/* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
+   con un relleno tenue y su icono en acento. Sin bordes. */
+.result-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.75rem;
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.result-tab:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  color: var(--text-primary);
+}
+
+.result-tab.active {
+  background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  color: var(--text-primary);
+}
+
+.result-tab svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.result-tab.active svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.result-tab .tab-close svg {
+  color: inherit;
+  opacity: 1;
+}
+
+.result-tab.closable.reorder-dragging {
+  /* Sin fondo propio, al arrastrarla se veria vacia. */
+  background: var(--surface-elevated);
+  position: relative;
+  z-index: 2;
+  box-shadow: var(--shadow-elevated);
+  cursor: grabbing;
+}
+
+.result-tab.closable {
+  gap: var(--space-1);
+  padding: 0 var(--space-1) 0 var(--space-3);
+  cursor: default;
+}
+
+.tab-select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.tab-close:hover {
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  color: var(--text-primary);
+}
+
+.result-tab:focus-visible,
+.tab-select:focus-visible,
+.tab-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

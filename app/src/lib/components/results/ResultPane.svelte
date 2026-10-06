@@ -22,6 +22,7 @@
     PinOff,
     Search,
     Filter,
+    Icon,
   } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
@@ -54,6 +55,7 @@
   import { registerCommands } from "$lib/workspace/commands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
+  import type { IconNode } from "@lucide/svelte";
   import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
   import {
     columnValueCounts,
@@ -107,6 +109,9 @@
     tableView = false,
     filterCount = 0,
     filterError = false,
+    terminal,
+    terminalActive = false,
+    onterminal = () => {},
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -176,7 +181,18 @@
     // si el ultimo filtro fallo (el boton se marca y la barra se abre).
     filterCount?: number;
     filterError?: boolean;
+    // La terminal de la ventana (Workspace la carga la primera vez que se
+    // abre): pestaña fija a la izquierda de Salida y, activa, ocupa el lugar
+    // de la barra y el cuerpo del resultado, que quedan montados y ocultos.
+    terminal?: Snippet;
+    terminalActive?: boolean;
+    onterminal?: () => void;
   } = $props();
+
+  // El ">_" de Lucide (Terminal), distinto del SquareTerminal de la Salida.
+  // Con el Icon base y sus datos: el componente del icono sumaba 303 B al JS
+  // inicial.
+  const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
 
   // --- Pestañas ----------------------------------------------------------
   // Que pestaña se ve lo decide Workspace (cada ejecucion elige: con filas,
@@ -184,7 +200,10 @@
   const activeResultTab = $derived(tabs.find((tab) => tab.key === activeTab) ?? null);
   const hasResultTab = $derived(tabs.length > 0);
   const showingResult = $derived(activeResultTab !== null && result?.type === "resultSet");
-  const showingOutput = $derived(!showingResult);
+  // La pestaña marcada: ninguna del resultado con la Terminal activa.
+  const showingOutput = $derived(!showingResult && !terminalActive);
+  const selectedKey = $derived(terminalActive ? null : activeResultTab?.key);
+  const hasActivity = $derived(consoleRunning || isExecuting || tabs.length > 0 || outputLog.length > 0);
 
   // --- Edicion ---------------------------------------------------------
   let grid = $state<ReturnType<typeof DataGrid>>();
@@ -532,15 +551,30 @@
 {/snippet}
 
 <div class="result-pane">
-  {#if consoleRunning || isExecuting || tabs.length > 0 || outputLog.length > 0}
-    {#if !tableView}
+  {#if terminal || (!tableView && hasActivity)}
     <div
       class="result-tabs"
+      class:joined={terminalActive || (hasActivity && showingResult)}
       role="tablist"
       aria-label={$t("results.tabs")}
       use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
       use:settleTransitions
     >
+      {#if terminal}
+        <button
+          type="button"
+          role="tab"
+          class="result-tab"
+          class:active={terminalActive}
+          aria-selected={terminalActive}
+          use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
+          onclick={() => terminalActive || onterminal()}
+        >
+          <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
+          <span>{$t("workspace.terminal.title")}</span>
+        </button>
+      {/if}
+      {#if !tableView && hasActivity}
       <button
         type="button"
         role="tab"
@@ -553,12 +587,12 @@
         <span>{$t("results.tab.output")}</span>
       </button>
       {#each tabs as tab (tab.key)}
-        <div class="result-tab closable" class:active={activeResultTab?.key === tab.key} animate:flip={{ duration: flipDuration(160) }}>
+        <div class="result-tab closable" class:active={selectedKey === tab.key} animate:flip={{ duration: flipDuration(160) }}>
           <button
             type="button"
             role="tab"
             class="tab-select"
-            aria-selected={activeResultTab?.key === tab.key}
+            aria-selected={selectedKey === tab.key}
             onclick={() => onselecttab(tab.key)}
           >
             {#if tab.pinned}
@@ -573,8 +607,11 @@
           </button>
         </div>
       {/each}
+      {/if}
     </div>
-    {/if}
+  {/if}
+  <div class="pane-view" class:hidden={terminalActive}>
+  {#if hasActivity}
     {#if showingResult}
       <!-- Barra de herramientas del resultado: fila propia debajo de las
            pestañas. Una pestaña fijada es de solo lectura: solo copia y
@@ -889,6 +926,10 @@
       </div>
     </div>
   {/if}
+  </div>
+  {#if terminal}
+    <div class="terminal-view" class:hidden={!terminalActive}>{@render terminal()}</div>
+  {/if}
 </div>
 
 <style>
@@ -975,7 +1016,7 @@
   }
 
   /* Con la barra debajo, la linea pasa al pie de la barra. */
-  .result-tabs:has(+ .result-toolbar) {
+  .result-tabs.joined {
     padding-bottom: 0;
     border-bottom: 0;
   }
@@ -1072,105 +1113,22 @@
 
 
 
-  /* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
-     con un relleno tenue y su icono en acento. Sin bordes. */
-  .result-tab {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-2);
-    min-height: 1.75rem;
-    padding: 0 var(--space-3);
-    box-sizing: border-box;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    font: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition:
-      background-color var(--duration-fast) ease,
-      color var(--duration-fast) ease;
+  /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
+     montado (el grid conserva su estado). */
+  .pane-view {
+    display: contents;
   }
 
-  .result-tab:hover {
-    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-    color: var(--text-primary);
+  .terminal-view {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
-  .result-tab.active {
-    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
-    color: var(--text-primary);
-  }
-
-  .result-tab :global(svg) {
-    flex-shrink: 0;
-    color: var(--text-secondary);
-    opacity: 0.8;
-  }
-
-  .result-tab.active :global(svg) {
-    color: var(--accent);
-    opacity: 1;
-  }
-
-  .result-tab .tab-close :global(svg) {
-    color: inherit;
-    opacity: 1;
-  }
-
-  .result-tab.closable:global(.reorder-dragging) {
-    /* Sin fondo propio, al arrastrarla se veria vacia. */
-    background: var(--surface-elevated);
-    position: relative;
-    z-index: 2;
-    box-shadow: var(--shadow-elevated);
-    cursor: grabbing;
-  }
-
-  .result-tab.closable {
-    gap: var(--space-1);
-    padding: 0 var(--space-1) 0 var(--space-3);
-    cursor: default;
-  }
-
-  .tab-select {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .tab-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.125rem;
-    height: 1.125rem;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-
-  .tab-close:hover {
-    background: color-mix(in srgb, var(--text-primary) 12%, transparent);
-    color: var(--text-primary);
-  }
-
-  .result-tab:focus-visible,
-  .tab-select:focus-visible,
-  .tab-close:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 1px;
+  .pane-view.hidden,
+  .terminal-view.hidden {
+    display: none;
   }
 
   .output-region {

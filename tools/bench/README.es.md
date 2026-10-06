@@ -21,7 +21,7 @@ crates/server-tests/examples/catalog_bench.rs
 | Arranque frío y caliente, 20 repeticiones | Tiempo hasta la ventana, PSS al quedar estable, JS inicial | No más de 5 % sobre la mediana de la referencia; dentro de la dispersión de la máquina, se repite antes de decidir |
 | Cinco minutos sin interacción, sin conexión y con una | CPU, memoria, timers, llamadas al backend | Sin pendiente creciente; sin trabajo ni red de extensiones desactivadas |
 | Escribir con 10 000 líneas y abrir un documento de 1 M | Coste por tecla del índice, análisis, contexto | Dentro de la dispersión de la referencia; los documentos grandes no empeoran más de 10 % ni bloquean la UI |
-| 300 reconexiones, 300 ciclos de consola y 300 de terminal | Heap vivo, objetos, backend, editores y estilos montados | Tras calentar, sin pendiente sostenida; todo crecimiento se explica y se acota (ver [Ciclos de recursos](#ciclos-de-recursos)) |
+| 300 reconexiones, 300 ciclos de consola y 300 de sesiones de terminal | Heap vivo, objetos, backend, editores y estilos montados | Tras calentar, sin pendiente sostenida; todo crecimiento se explica y se acota (ver [Ciclos de recursos](#ciclos-de-recursos)) |
 | MySQL, MariaDB y PostgreSQL con catálogos pequeños y grandes | Conexión, introspección, análisis | Un cambio de UI o una extensión desactivada no suma consultas SQL |
 
 Los porcentajes son compuertas de **regresión**, no promesas de latencia en todo hardware. Un fallo se reproduce en el mismo equipo y se acompaña de un perfil de CPU, memoria o traza de frames.
@@ -76,8 +76,9 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | 300 reconexiones | Alterna un perfil MySQL y uno PostgreSQL volviendo a la lista | Cada una muestra su servidor; el análisis usa el catálogo de la conexión actual |
 | 300 consolas | Abrir (Ctrl+Shift+Q), ejecutar (Ctrl+Enter), cambiar de paleta en Ajustes y cerrar (Ctrl+F4) | Al final queda un solo editor |
 | Reposo con una conexión | 300 s con un resultado en pantalla | Ninguna llamada al backend ni `setInterval`; menos del 10 % de un núcleo |
-| 300 terminales | Abrir con Alt+F12, esperar el shell y cerrar | Ningún shell vivo y el backend con los mismos hilos que antes |
-| Reposo con la terminal | 300 s con la terminal abierta | Como el reposo con una conexión |
+| Pestaña Terminal | Sin consola, cambiando de consola, Alt+F12 ida y vuelta, `+` y `×` por sesión | Ocupa el lugar del grid sin mover el panel ni sumar un splitter; cada lado conserva su estado; `×` cierra solo su shell; la pestaña queda sin sesiones |
+| 300 sesiones | Abrir con `+`, esperar el shell y cerrar con `×` | Ningún shell vivo y el backend con los mismos hilos que antes |
+| Reposo con 1, 5 y 10 sesiones | 300 s con una, 60 s con 5, con 10 y con la terminal oculta; luego se cierran todas | Como el reposo con una conexión; como mucho 15 MB por sesión; al cerrarlas, los hilos de antes |
 | Salida grande | 50 MB en base64 y luego `yes` durante 30 s | Los 50 MB terminan; en la ráfaga y con `yes`, como mucho 2 ticks del bucle de eventos (o el 2 %) pasan de 200 ms; con `yes`, entre los 10 y los 30 s, la memoria propia no crece más de 10 MB en el backend ni de 60 MB en WebKit |
 
 En todos, desde el calentamiento (ciclo 50), no crecen el heap de JavaScript vivo tras recolectar (±10 % o 2 MB), los objetos vivos (±5 %), el piso de la memoria propia del backend (`Anonymous`, ±5 % o 2 MB) ni los editores y estilos montados. Si el heap crece, el error dice qué clases sumaron objetos.

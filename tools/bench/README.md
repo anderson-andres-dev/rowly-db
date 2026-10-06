@@ -21,7 +21,7 @@ crates/server-tests/examples/catalog_bench.rs
 | Cold and warm startup, 20 runs | Time to window, PSS once settled, initial JS | No more than 5 % over the reference median; within the machine's spread, repeat before deciding |
 | Five minutes without interaction, with and without a connection | CPU, memory, timers, backend calls | No growing slope; no work or network from disabled extensions |
 | Typing in 10,000 lines and opening a 1 M-line document | Per-keystroke index, analysis and context cost | Within the reference spread; large documents get no more than 10 % worse and never block the UI |
-| 300 reconnections, 300 console cycles and 300 terminal cycles | Live heap, objects, backend, mounted editors and styles | After warm-up, no sustained slope; any growth is explained and bounded (see [Resource cycles](#resource-cycles)) |
+| 300 reconnections, 300 console cycles and 300 terminal session cycles | Live heap, objects, backend, mounted editors and styles | After warm-up, no sustained slope; any growth is explained and bounded (see [Resource cycles](#resource-cycles)) |
 | MySQL, MariaDB and PostgreSQL with small and large catalogs | Connection, introspection, analysis | A UI change or a disabled extension adds no SQL queries |
 
 The percentages are **regression** gates, not latency promises on every machine. A failure is reproduced on the same machine and comes with a CPU, memory or frame trace.
@@ -76,8 +76,9 @@ Compare only against a reference taken on the same machine and system:
 | 300 reconnections | Alternates a MySQL and a PostgreSQL profile, going back to the list each time | Each one shows its own server; analysis uses the current connection's catalog |
 | 300 consoles | Open (Ctrl+Shift+Q), run (Ctrl+Enter), switch palette in Settings, close (Ctrl+F4) | A single editor is left at the end |
 | Idle with a connection | 300 s with a result on screen | No backend call or `setInterval`; under 10 % of one core |
-| 300 terminals | Open with Alt+F12, wait for the shell, close | No shell left alive and the backend back to its thread count |
-| Idle with the terminal | 300 s with the terminal open | Same as idle with a connection |
+| Terminal tab | With no console, switching consoles, Alt+F12 there and back, `+` and `×` per session | Takes the grid's place without moving the panel or adding a splitter; each side keeps its state; `×` closes only its shell; the tab stays with no sessions |
+| 300 sessions | Open with `+`, wait for the shell, close with `×` | No shell left alive and the backend back to its thread count |
+| Idle with 1, 5 and 10 sessions | 300 s with one, 60 s with 5, with 10 and with the terminal hidden; then all are closed | Same as idle with a connection; at most 15 MB per session; once closed, the threads from before |
 | Large output | 50 MB of base64, then `yes` for 30 s | The 50 MB finish; during the burst and under `yes`, at most 2 event-loop ticks (or 2 %) wait over 200 ms; under `yes`, between 10 s and 30 s, own memory grows no more than 10 MB in the backend and 60 MB in WebKit |
 
 In all of them, from the warm-up (cycle 50) on, nothing grows: the live JavaScript heap after collecting (±10 % or 2 MB), live objects (±5 %), the floor of the backend's own memory (`Anonymous`, ±5 % or 2 MB), mounted editors and styles. If the heap grows, the error names the classes that added objects.
