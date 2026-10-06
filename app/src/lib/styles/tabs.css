@@ -94,11 +94,13 @@
    --tab-curve es el radio de esas curvas. */
 .result-tab.active::after {
   --tab-curve: var(--radius-sm);
+  /* Transiciones de menos de un pixel: un degradado de corte seco no se
+     suaviza (antialias) y el arco se veia escalonado. */
   --tab-arc:
-    transparent calc(var(--tab-curve) - 1px),
-    var(--tab-glow) calc(var(--tab-curve) - 1px),
-    var(--tab-glow) var(--tab-curve),
-    var(--tab-active, var(--surface)) var(--tab-curve);
+    transparent calc(var(--tab-curve) - 1.6px),
+    var(--tab-glow) calc(var(--tab-curve) - 0.9px),
+    var(--tab-glow) calc(var(--tab-curve) - 0.3px),
+    var(--tab-active, var(--surface)) calc(var(--tab-curve) + 0.5px);
   position: absolute;
   right: calc(-1px - var(--tab-reach));
   bottom: 0;
