@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
@@ -21,40 +21,67 @@
     onerror: (message: string) => void;
   } = $props();
 
-  type Session = { key: number; label: string; info: TerminalInfo | null };
+  // closing: la pestaña se esta yendo (fade) y su shell sigue hasta quitarla.
+  type Session = { key: number; label: string; info: TerminalInfo | null; closing?: boolean };
 
   let sessions = $state<Session[]>([]);
+  let row: HTMLDivElement;
+  const open = $derived(sessions.filter((session) => !session.closing));
   let active = $state(0);
   // "Local", "Local (2)"...; vuelve a empezar cuando no queda ninguna.
   let opened = 0;
   let nextKey = 1;
 
   function add() {
-    opened = sessions.length === 0 ? 1 : opened + 1;
+    opened = open.length === 0 ? 1 : opened + 1;
     const label = opened === 1 ? $t("workspace.terminal.local") : `${$t("workspace.terminal.local")} (${opened})`;
     const key = nextKey++;
     sessions = [...sessions, { key, label, info: null }];
     active = key;
   }
 
+  // Cerrar: la elegida pasa a la vecina ya; la pestaña se desvanece y se
+  // quita al terminar (animationend), con su shell.
   function close(key: number) {
-    const index = sessions.findIndex((session) => session.key === key);
+    const index = open.findIndex((session) => session.key === key);
     if (index < 0) return;
+    open[index].closing = true;
+    if (active === key) active = (open[index] ?? open[index - 1])?.key ?? 0;
+  }
+
+  // Las pestañas que quedan se deslizan a su lugar, como el flip de las
+  // consolas (svelte/animate y svelte/transition, compartidos con la pagina,
+  // sacaban un chunk aparte del JS inicial).
+  async function remove(key: number) {
+    const tabs = () => [...row.querySelectorAll<HTMLElement>("[data-flip]")];
+    const before = new Map(tabs().map((tab) => [tab.dataset.flip, tab.getBoundingClientRect().left]));
     sessions = sessions.filter((session) => session.key !== key);
-    if (active === key) active = (sessions[index] ?? sessions[index - 1])?.key ?? 0;
+    await tick();
+    for (const tab of tabs()) {
+      const dx = (before.get(tab.dataset.flip) ?? 0) - tab.getBoundingClientRect().left;
+      if (dx) tab.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { duration: 150, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
+    }
   }
 
   // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
   // ultima), abre una. Cerrar la ultima con la pestaña a la vista no la
   // reabre sola: queda el +.
   $effect(() => {
-    if (visible) untrack(() => sessions.length === 0 && add());
+    if (visible) untrack(() => open.length === 0 && add());
   });
 </script>
 
-<div class="terminal-sessions" role="tablist" aria-label={$t("workspace.terminal.title")}>
+<div class="terminal-sessions" role="tablist" aria-label={$t("workspace.terminal.title")} bind:this={row}>
   {#each sessions as session (session.key)}
-    <div class="result-tab closable" class:active={session.key === active}>
+    <!-- Las mismas transiciones que las pestañas de las consolas: entra
+         como fly (x -8, 150 ms) y sale como fade (120 ms). -->
+    <div
+      class="result-tab closable"
+      class:active={session.key === active}
+      class:closing={session.closing}
+      data-flip={session.key}
+      onanimationend={() => session.closing && remove(session.key)}
+    >
       <button
         type="button"
         role="tab"
@@ -77,7 +104,7 @@
   {/each}
   <!-- La misma pieza que las pestañas: ToolbarButton, compartido con la
        pagina, sacaba un chunk aparte del JS inicial (+1,2 KB). -->
-  <button type="button" class="result-tab" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
+  <button type="button" class="result-tab" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
     <Plus size={14} aria-hidden="true" />
   </button>
 </div>
@@ -103,5 +130,27 @@
     box-sizing: border-box;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+  }
+
+  .result-tab {
+    animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .result-tab.closing {
+    animation: session-out 120ms linear forwards;
+    pointer-events: none;
+  }
+
+  @keyframes session-in {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+  }
+
+  @keyframes session-out {
+    to {
+      opacity: 0;
+    }
   }
 </style>
