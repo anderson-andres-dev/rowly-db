@@ -101,6 +101,7 @@ pub fn run() {
             terminal::create_terminal,
             terminal::write_terminal,
             terminal::resize_terminal,
+            terminal::ack_terminal,
             terminal::close_terminal
         ])
         .build(tauri::generate_context!())

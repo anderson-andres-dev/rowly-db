@@ -900,7 +900,7 @@
     selectCell(row, col, event.shiftKey);
   }
 
-  // Con el foco en el grid y no en una celda (al llegar con Ctrl+W, o tras
+  // Con el foco en el grid y no en una celda (al llegar con Ctrl+Shift+W, o tras
   // un clic en el encabezado), las teclas siguen como si estuviera en la
   // celda activa. Sin seleccion, la primera flecha elige la primera celda a
   // la vista.

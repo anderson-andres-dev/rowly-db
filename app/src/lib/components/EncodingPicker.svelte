@@ -5,8 +5,9 @@
 
   // El encoding del archivo, discreto en la esquina de la barra de abajo:
   // el nombre y, al hacer clic, la lista (hacia arriba). Elegir otro deja la
-  // pestaña con cambios y se aplica al guardar (text_encoding.rs).
-  let { value, onchange }: { value: TextEncoding; onchange: (encoding: TextEncoding) => void } = $props();
+  // pestaña con cambios y se aplica al guardar (text_encoding.rs). Sin
+  // onchange (una pestaña de tabla) solo se muestra, en el mismo lugar.
+  let { value, onchange }: { value: TextEncoding; onchange?: ((encoding: TextEncoding) => void) | null } = $props();
 
   let open = $state(false);
   let trigger = $state<HTMLButtonElement>();
@@ -23,7 +24,7 @@
 
   function choose(encoding: TextEncoding) {
     open = false;
-    if (encoding !== value) onchange(encoding);
+    if (encoding !== value) onchange?.(encoding);
     trigger?.focus();
   }
 
@@ -50,6 +51,9 @@
   });
 </script>
 
+{#if !onchange}
+  <span class="encoding static">{encodingLabel(value)}</span>
+{:else}
 <button
   class="encoding"
   type="button"
@@ -61,6 +65,7 @@
 >
   {encodingLabel(value)}
 </button>
+{/if}
 
 {#if open}
   <div
@@ -98,7 +103,11 @@
     cursor: pointer;
   }
 
-  .encoding:hover,
+  .encoding.static {
+    cursor: default;
+  }
+
+  button.encoding:hover,
   .encoding[aria-expanded="true"] {
     background: var(--surface-hover);
     color: var(--text-primary);

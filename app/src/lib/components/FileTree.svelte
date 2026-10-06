@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
+  import { treeKeys } from "$lib/treeKeys";
   import { tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { ChevronRight, FileCode, FilePlus, Folder, FolderOpen, RefreshCw, TriangleAlert, X } from "@lucide/svelte";
@@ -18,6 +19,7 @@
   import { notifyError } from "$lib/stores/notifications";
   import { fileNameFromPath, isQueryConsoleDirty, queryConsoles } from "$lib/stores/queryConsoles";
   import { closeSqlFolder, setFilePanelCollapsed, setSqlFolderExpanded, sqlFolders } from "$lib/stores/sqlFolders";
+  import { registerCommands } from "$lib/workspace/commands";
 
   let { profileId, folder }: { profileId: string; folder: string } = $props();
 
@@ -102,6 +104,29 @@
     await tick();
     editInput?.focus();
   }
+
+  // Ctrl+N y Ctrl+Shift+R con el foco en el arbol (zona "files"): crear un
+  // archivo junto al elemento enfocado y renombrar el archivo enfocado. Sin
+  // un elemento enfocado, la tecla sigue con las consolas.
+  function focusedEntry(): { path: string; isDir: boolean } | null {
+    const row = document.activeElement?.closest<HTMLElement>("[data-entry-path]");
+    return row ? { path: row.dataset.entryPath as string, isDir: row.dataset.entryDir === "true" } : null;
+  }
+
+  $effect(() =>
+    registerCommands("files", {
+      "new-query-console": () => {
+        const entry = focusedEntry();
+        if (!entry) return false;
+        void startCreate(entry.isDir ? entry.path : parentOf(entry.path));
+      },
+      "rename-query-console": () => {
+        const entry = focusedEntry();
+        if (!entry || entry.isDir) return false;
+        void startRename(entry.path);
+      },
+    }),
+  );
 
   async function startRename(path: string) {
     menu = null;
@@ -219,7 +244,9 @@
             type="button"
             class="row"
             style:--depth={depth}
-            use:tooltip={entry.path}
+            data-entry-path={entry.path}
+            data-entry-dir="true"
+            use:tooltip={{ label: entry.path, focus: false }}
             onclick={() => toggleDir(entry.path)}
             oncontextmenu={(event) => openMenu(event, folderMenuItems(entry.path))}
           >
@@ -246,7 +273,8 @@
             class="row leaf"
             class:active={entry.path === activeFilePath}
             style:--depth={depth}
-            use:tooltip={entry.path}
+            data-entry-path={entry.path}
+            use:tooltip={{ label: entry.path, focus: false }}
             onclick={() => openFile(entry.path)}
             oncontextmenu={(event) => openMenu(event, fileMenuItems(entry.path))}
             onkeydown={(event) => {
@@ -327,7 +355,7 @@
     inert={collapsed}
     oncontextmenu={(event) => openMenu(event, folderMenuItems(folder))}
   >
-    <ul class="tree" role="tree">
+    <ul class="tree" role="tree" use:treeKeys>
       {@render dirContents(folder, 0)}
     </ul>
   </nav>
@@ -471,9 +499,20 @@
     background: var(--surface-hover);
   }
 
-  .row:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: -2px;
+  /* Seleccion de arbol clasico (treeKeys.ts): la fila con el foco lleva la
+     barra de acento, por encima del gris del mouse; fuera del arbol, la
+     ultima queda en tono suave. Moviendose entre zonas (Ctrl+Shift), nada. */
+  .row:global([data-selected]) {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+
+  .row:focus {
+    outline: none;
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
+  :global(:root.zone-moving) .row:focus {
+    background: transparent;
   }
 
   .row.leaf,

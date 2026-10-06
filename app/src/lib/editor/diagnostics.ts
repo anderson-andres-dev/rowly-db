@@ -23,7 +23,7 @@ import {
 // Diagnosticos de SQL en el editor, al estilo de Error Lens: la linea con
 // error queda con un fondo
 // rojo tenue y el mensaje al final de la misma linea, siempre a la vista; el
-// subrayado ondulado marca el token exacto. F2 / Shift+F2 saltan entre
+// subrayado ondulado marca el token exacto. Alt+N / Alt+P saltan entre
 // errores.
 //
 // Dos fuentes: "server" (al ejecutar: Postgres dice la posicion, en MySQL
@@ -196,7 +196,7 @@ interface Navigated {
   index: number;
   total: number;
 }
-// Navegacion con F2: cual se eligio (muestra el contador n/m).
+// Navegacion con Alt+N: cual se eligio (muestra el contador n/m).
 const setNavigated = StateEffect.define<Navigated | null>();
 
 interface StoredFix {
@@ -237,7 +237,7 @@ function toMark(item: SqlDiagnostic) {
 }
 
 // El mismo objeto mientras el tramo no se mueva: la ventana de detalle y
-// F2 los comparan por identidad.
+// Alt+N los comparan por identidad.
 const materialized = new WeakMap<DiagnosticMark, { at: number; item: SqlDiagnostic }>();
 
 function toDiagnostic(spanFrom: number, mark: DiagnosticMark): SqlDiagnostic {
@@ -380,7 +380,7 @@ export function diagnosticsIn(state: EditorState, from: number, to: number): Sql
     .sort(byPosition);
 }
 
-// Cuantos errores se ven en el documento: los mismos que recorre F2.
+// Cuantos errores se ven en el documento: los mismos que recorre Alt+N.
 export function visibleDiagnosticCount(state: EditorState): number {
   return diagnosticsIn(state, 0, state.doc.length).length;
 }
@@ -494,7 +494,7 @@ function diagnosticDecorations(view: EditorView): DecorationSet {
           range.to,
         ),
       );
-      // Por linea: el mensaje del primer error (o del elegido con F2). El
+      // Por linea: el mensaje del primer error (o del elegido con Alt+N). El
       // fondo lo pinta lensBands.
       const line = state.doc.lineAt(item.from).number;
       byLine.set(line, [...(byLine.get(line) ?? []), item]);
@@ -567,7 +567,7 @@ const lensBands = layer({
   },
 });
 
-// F2 / Shift+F2: al siguiente o anterior error, dando la vuelta. false sin
+// Alt+N / Alt+P: al siguiente o anterior error, dando la vuelta. false sin
 // errores.
 export function jumpToDiagnostic(view: EditorView, direction: 1 | -1): boolean {
   // Buscar errores a proposito: se ven todos, tambien los de la sentencia que

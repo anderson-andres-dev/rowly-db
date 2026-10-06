@@ -3,7 +3,7 @@
  "label": "terminal-pre",
  "date": "2026-10-05",
  "commit": "af33348 (develop = origin/develop, v0.4.0)",
- "purpose": "Linea base antes de la terminal integrada (docs/specs/terminal-integrada.md §14)",
+ "purpose": "Linea base antes de la terminal integrada; la comparacion con sus presupuestos esta en baseline/terminal-post/summary.json",
  "machine": {
   "os": "Omarchy",
   "kernel": "7.2.5-3-omarchy",

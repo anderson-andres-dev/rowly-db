@@ -70,7 +70,7 @@ export function stopTypingIn(view: EditorView): void {
   view.dispatch({ effects: stopTyping.of(null) });
 }
 
-// F2 sin errores: un aviso breve en vez de no hacer nada.
+// Alt+N sin errores: un aviso breve en vez de no hacer nada.
 export function jump(view: EditorView, direction: 1 | -1, noErrors: () => void): boolean {
   if (!jumpToDiagnostic(view, direction)) noErrors();
   return true;

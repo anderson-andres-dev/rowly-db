@@ -9,7 +9,7 @@
   import { THEME_FAMILIES, palettes, themeVariant, type ThemeFamily } from "$lib/theming/palettes";
   import { requestedScheme, themeChoice, type SchemePreference } from "$lib/theming/theme";
   import { commandsCollide, type CommandGroup } from "$lib/workspace/commands";
-  import { formatShortcutEvent, resetAllShortcuts, resetShortcutKeys, setShortcutKeys, shortcuts } from "$lib/stores/shortcuts";
+  import { formatShortcutEvent, resetAllShortcuts, resetShortcutKeys, setShortcutKeys, shortcutKeyParts, shortcutUses, shortcuts } from "$lib/stores/shortcuts";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import {
     DEFAULT_FORMATTER_LINE_WIDTH,
@@ -138,7 +138,6 @@
   // El nombre basta; solo lleva una segunda linea el atajo que la necesita
   // para no confundirse.
   const SHORTCUT_HINTS: Record<string, MessageKey> = {
-    "focus-zone-prefix": "settings.shortcuts.hint.focus",
     "execute-query": "settings.shortcuts.hint.execute",
     "submit-result-changes": "settings.shortcuts.hint.submit",
   };
@@ -169,10 +168,7 @@
             ...shortcut,
             conflict: $shortcuts.find(
               (other) =>
-                other.id !== shortcut.id &&
-                other.keys !== "" &&
-                other.keys === shortcut.keys &&
-                commandsCollide(other.zone, shortcut.zone),
+                other.id !== shortcut.id && shortcutUses(other, shortcut.keys) && commandsCollide(other.zone, shortcut.zone),
             ),
           })),
       };
@@ -199,7 +195,7 @@
 
 {#snippet keys(value: string)}
   <span class="ui-keys">
-    {#each value.split("+") as key, index (index)}<kbd>{key}</kbd>{/each}
+    {#each shortcutKeyParts(value) as key, index (index)}<kbd>{key}</kbd>{/each}
   </span>
 {/snippet}
 

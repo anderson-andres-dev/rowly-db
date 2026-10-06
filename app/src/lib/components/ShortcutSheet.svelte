@@ -2,9 +2,9 @@
   import { Search } from "@lucide/svelte";
   import { t, type MessageKey } from "$lib/i18n";
   import type { CommandGroup } from "$lib/workspace/commands";
-  import { shortcuts } from "$lib/stores/shortcuts";
+  import { shortcutKeyParts, shortcuts } from "$lib/stores/shortcuts";
 
-  // Hoja de atajos (F1): los vigentes, con los que el usuario reasigno, en
+  // Hoja de atajos (Ctrl+?): los vigentes, con los que el usuario reasigno, en
   // una capa flotante como el historial. Esc la cierra y devuelve el foco a
   // donde estaba; "Personalizar" abre Ajustes > Atajos.
   let {
@@ -16,8 +16,6 @@
   } = $props();
 
   const GROUPS: CommandGroup[] = ["general", "editor", "results"];
-  // La unica que necesita una segunda linea para entenderse.
-  const HINTS: Record<string, MessageKey> = { "focus-zone-prefix": "settings.shortcuts.hint.focus" };
 
   let query = $state("");
   let root = $state<HTMLElement>();
@@ -85,10 +83,9 @@
           <div class="row">
             <span class="text">
               <span>{label(shortcut.id)}</span>
-              {#if HINTS[shortcut.id]}<span class="hint">{$t(HINTS[shortcut.id])}</span>{/if}
             </span>
             <span class="ui-keys">
-              {#each shortcut.keys.split("+") as key, index (index)}<kbd>{key}</kbd>{/each}
+              {#each shortcutKeyParts(shortcut.keys) as key, index (index)}<kbd>{key}</kbd>{/each}
             </span>
           </div>
         {/each}
@@ -147,11 +144,6 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-  }
-
-  .hint {
-    color: var(--text-secondary);
-    font-size: 0.75rem;
   }
 
   .ui-keys {

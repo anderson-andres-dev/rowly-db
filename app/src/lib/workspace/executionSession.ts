@@ -258,7 +258,7 @@ export function createExecutionFlow(
   // `key` es la pestaña de resultado que recibe el resultado (la normal de
   // la consola o una fijada); la Salida es siempre la de su consola. Con
   // filas, se muestra esa pestaña; con error o sin filas, la Salida.
-  // `record`: ejecucion nueva desde el editor, queda en el historial (Ctrl+E).
+  // `record`: ejecucion nueva desde el editor, queda en el historial (Ctrl+H).
   async function run(
     key: string,
     sql: string,

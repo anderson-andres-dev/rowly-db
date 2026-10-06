@@ -1,325 +1,351 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
-  import { get } from "svelte/store";
-  import type { Terminal as Xterm, ITheme } from "@xterm/xterm";
-  import type { FitAddon } from "@xterm/addon-fit";
-  import { ChevronDown, Terminal as TerminalIcon, X } from "@lucide/svelte";
+  import { tick, untrack } from "svelte";
+  import { Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
-  import { onePerFrame } from "$lib/onePerFrame";
   import { editorPalette } from "$lib/theming/theme";
-  import { sqlFolders } from "$lib/stores/sqlFolders";
-  import type { EditorPalette } from "$lib/theming/palettes";
-  import { backendText } from "$lib/backend";
-  import { closeTerminal, createTerminal, resizeTerminal, writeTerminal, type TerminalInfo } from "$lib/terminal";
+  import TerminalSession from "$lib/components/TerminalSession.svelte";
+  import type { TerminalInfo } from "$lib/terminal";
+  import { registerCommands } from "$lib/workspace/commands";
+  import { registerTabCommands } from "$lib/workspace/tabCommands";
 
-  // El panel de la terminal integrada: una por ventana, debajo del editor y
-  // los resultados. Ocultarlo (visible = false) deja el shell y el buffer
-  // como estan; desmontarlo cierra el shell. El buffer es el de xterm: la
-  // salida no pasa por ningun store.
+  // La terminal de la ventana, dentro del panel inferior (la pestaña
+  // Terminal de ResultPane): una fila con las sesiones en el lugar de la
+  // barra del resultado y, debajo, la sesion elegida. Cada sesion es un
+  // shell con su xterm; las ocultas siguen vivas. Se monta la primera vez
+  // que se abre la pestaña y queda montada: cerrarla desmonta solo sesiones.
   let {
     visible,
     profileId,
-    onhide,
-    onclose,
     onerror,
   }: {
     visible: boolean;
-    // El shell arranca en la carpeta SQL de este perfil; sin ella, en HOME.
     profileId: string;
-    onhide: () => void;
-    // El shell termino (exit o el boton cerrar): el dueño desmonta el panel.
-    onclose: () => void;
     onerror: (message: string) => void;
   } = $props();
 
-  const HEIGHT_KEY = "khipu:terminal-height:v1";
-  const MIN_HEIGHT = 96;
-  const DEFAULT_HEIGHT = 240;
-  // La misma pila monoespaciada que el resto de la app.
-  const FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace';
+  // closing: la pestaña se esta yendo (fade) y su shell sigue hasta quitarla.
+  type Session = { key: number; label: string; info: TerminalInfo | null; closing?: boolean };
 
-  function storedHeight(): number {
-    try {
-      const value = Number(localStorage.getItem(HEIGHT_KEY));
-      return Number.isFinite(value) && value >= MIN_HEIGHT ? value : DEFAULT_HEIGHT;
-    } catch {
-      return DEFAULT_HEIGHT;
+  let sessions = $state<Session[]>([]);
+  let row: HTMLDivElement;
+  // La sesion que se esta renombrando (0: ninguna), como las consolas.
+  let renaming = $state(0);
+  let renameValue = $state("");
+  let renameInput = $state<HTMLInputElement>();
+  const open = $derived(sessions.filter((session) => !session.closing));
+  let active = $state(0);
+  // "Local", "Local (2)"...; vuelve a empezar cuando no queda ninguna.
+  let opened = 0;
+  let nextKey = 1;
+
+  function add() {
+    opened = open.length === 0 ? 1 : opened + 1;
+    const label = opened === 1 ? $t("workspace.terminal.local") : `${$t("workspace.terminal.local")} (${opened})`;
+    const key = nextKey++;
+    sessions = [...sessions, { key, label, info: null }];
+    active = key;
+  }
+
+  // Cerrar: la elegida pasa a la vecina ya; la pestaña se desvanece y se
+  // quita al terminar (animationend), con su shell.
+  function close(key: number) {
+    const index = open.findIndex((session) => session.key === key);
+    if (index < 0) return;
+    open[index].closing = true;
+    if (active === key) active = (open[index] ?? open[index - 1])?.key ?? 0;
+  }
+
+  // Las pestañas que quedan se deslizan a su lugar, como el flip de las
+  // consolas (svelte/animate y svelte/transition, compartidos con la pagina,
+  // sacaban un chunk aparte del JS inicial).
+  async function remove(key: number) {
+    const tabs = () => [...row.querySelectorAll<HTMLElement>("[data-flip]")];
+    const before = new Map(tabs().map((tab) => [tab.dataset.flip, tab.getBoundingClientRect().left]));
+    sessions = sessions.filter((session) => session.key !== key);
+    await tick();
+    for (const tab of tabs()) {
+      const dx = (before.get(tab.dataset.flip) ?? 0) - tab.getBoundingClientRect().left;
+      if (dx) tab.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { duration: 150, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
     }
   }
 
-  let height = $state(storedHeight());
-  let panel: HTMLElement;
-  let host: HTMLDivElement;
-  let info = $state<TerminalInfo | null>(null);
-  let term: Xterm | null = null;
-  let fit: FitAddon | null = null;
-  let observer: ResizeObserver | null = null;
-  let unsubscribeTheme: (() => void) | null = null;
-  let destroyed = false;
-
-  function themeOf(palette: EditorPalette): ITheme {
-    return {
-      background: palette.background,
-      foreground: palette.foreground,
-      cursor: palette.caret,
-      cursorAccent: palette.background,
-      selectionBackground: palette.selection,
-    };
+  async function startRename(session: Session) {
+    renaming = session.key;
+    renameValue = session.label;
+    await tick();
+    renameInput?.focus();
+    renameInput?.select();
   }
 
-  // Un cambio de tamaño por cuadro, y al backend solo si cambia la
-  // cuadricula (no cada pixel).
-  const refit = onePerFrame(() => {
-    if (!term || !fit || !info || host.clientWidth === 0) return;
-    const proposed = fit.proposeDimensions();
-    if (!proposed || (proposed.cols === term.cols && proposed.rows === term.rows)) return;
-    fit.fit();
-    void resizeTerminal(info.id, term.cols, term.rows).catch(() => {});
-  });
-
-  // Ctrl+Shift+C y Ctrl+Shift+V: lo unico que no va al shell. Con el
-  // portapapeles del WebView, como el editor SQL.
-  function clipboardKeys(event: KeyboardEvent): boolean {
-    if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) return true;
-    if (event.code === "KeyC") {
-      event.preventDefault();
-      const selection = term?.getSelection();
-      if (selection) void navigator.clipboard.writeText(selection).catch(() => {});
-      return false;
-    }
-    if (event.code === "KeyV") {
-      event.preventDefault();
-      void navigator.clipboard
-        .readText()
-        .then((text) => text && term?.paste(text))
-        .catch(() => {});
-      return false;
-    }
-    return true;
+  function finishRename(save: boolean) {
+    const session = sessions.find((item) => item.key === renaming);
+    renaming = 0;
+    const name = renameValue.trim();
+    if (save && session && name) session.label = name;
   }
 
-  onMount(async () => {
-    const [{ Terminal }, { FitAddon }] = await Promise.all([
-      import("@xterm/xterm"),
-      import("@xterm/addon-fit"),
-      import("@xterm/xterm/css/xterm.css"),
-    ]);
-    if (destroyed) return;
-    term = new Terminal({
-      scrollback: 5000,
-      cursorBlink: false,
-      fontFamily: FONT_FAMILY,
-      fontSize: 13,
-    });
-    fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(host);
-    fit.fit();
-    unsubscribeTheme = editorPalette.subscribe((palette) => {
-      if (term) term.options.theme = themeOf(palette);
-    });
-    const opened = term;
-    try {
-      info = await createTerminal(opened.cols, opened.rows, get(sqlFolders).folderByProfile[profileId] ?? null, {
-        output: (bytes) => opened.write(bytes),
-        exit: () => onclose(),
-      });
-    } catch (error) {
-      onerror(backendText(error));
-      onclose();
-      return;
-    }
-    if (destroyed) {
-      void closeTerminal(info.id).catch(() => {});
-      return;
-    }
-    const id = info.id;
-    opened.onData((data) => void writeTerminal(id, data).catch(() => {}));
-    opened.onBinary((data) => void writeTerminal(id, data, true).catch(() => {}));
-    opened.attachCustomKeyEventHandler(clipboardKeys);
-    observer = new ResizeObserver(() => refit.set(undefined));
-    observer.observe(host);
-    if (visible) opened.focus();
-  });
+  // Como las pestañas de las consolas: se desplazan por debajo del + (fijo a
+  // la derecha), con un desvanecido en el borde que tiene mas, la rueda
+  // vertical las mueve en horizontal y la elegida se pone a la vista.
+  let scroller: HTMLDivElement;
+  let overflow = $state({ start: false, end: false });
 
-  onDestroy(() => {
-    destroyed = true;
-    observer?.disconnect();
-    refit.cancel();
-    unsubscribeTheme?.();
-    // Si el shell ya termino, el backend ya no la tiene: no hay nada que
-    // decir.
-    if (info) void closeTerminal(info.id).catch(() => {});
-    term?.dispose();
-    term = null;
-    fit = null;
-  });
+  function updateOverflow() {
+    const start = scroller.scrollLeft > 1;
+    const end = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+    if (start !== overflow.start || end !== overflow.end) overflow = { start, end };
+  }
 
-  // Al volver a mostrarse, el foco va al shell.
+  function onWheel(event: WheelEvent) {
+    if (scroller.scrollWidth <= scroller.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    scroller.scrollLeft += event.deltaY;
+  }
+
   $effect(() => {
-    if (visible) term?.focus();
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(scroller);
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("wheel", onWheel);
+    };
   });
 
-  // --- Altura -------------------------------------------------------------
+  // Tras la entrada (150 ms), para medir el ancho final.
+  $effect(() => {
+    const key = active;
+    sessions.length;
+    const timer = setTimeout(() => {
+      scroller.querySelector(`[data-flip="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      updateOverflow();
+    }, 160);
+    return () => clearTimeout(timer);
+  });
 
-  function setHeight(next: number) {
-    const available = (panel.parentElement?.clientHeight ?? 0) - 120;
-    height = Math.round(Math.max(MIN_HEIGHT, Math.min(next, Math.max(MIN_HEIGHT, available))));
-  }
+  // Atajos de las sesiones (lib/workspace/commands.ts), solo con el foco en
+  // la terminal: Ctrl+Tab y Ctrl+1..9 entre sesiones, Ctrl+Shift+T nueva,
+  // Ctrl+Shift+W cerrar y Ctrl+Shift+R renombrar. Fuera de ella, la tecla
+  // sigue con las consolas o el panel inferior.
+  let body: HTMLDivElement;
+  const focused = () => {
+    const element = document.activeElement;
+    return visible && !!element && (row.contains(element) || body.contains(element));
+  };
 
-  function saveHeight() {
-    try {
-      localStorage.setItem(HEIGHT_KEY, String(height));
-    } catch {
-      // Sin almacenamiento, la altura dura lo que la ventana.
-    }
-  }
+  $effect(() => {
+    const cleanupTabs = registerTabCommands("results", {
+      keys: () => open.map((session) => String(session.key)),
+      current: () => String(active),
+      select: (key) => (active = Number(key)),
+      applies: focused,
+    });
+    const cleanupRename = registerCommands("results", {
+      "rename-query-console": () => {
+        const session = focused() && open.find((item) => item.key === active);
+        if (!session) return false;
+        void startRename(session);
+      },
+    });
+    const cleanupSessions = registerCommands("global", {
+      "new-terminal-session": () => focused() && (add(), true),
+      "close-terminal-session": () => focused() && active !== 0 && (close(active), true),
+    });
+    return () => {
+      cleanupTabs();
+      cleanupRename();
+      cleanupSessions();
+    };
+  });
 
-  function startResize(event: PointerEvent) {
-    event.preventDefault();
-    const handle = event.currentTarget as HTMLElement;
-    handle.setPointerCapture(event.pointerId);
-    const bottom = panel.getBoundingClientRect().bottom;
-    const live = onePerFrame((y: number) => setHeight(bottom - y));
-
-    function onMove(moveEvent: PointerEvent) {
-      live.set(moveEvent.clientY);
-    }
-
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      live.flush();
-      saveHeight();
-    }
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }
-
-  function onSplitterKeydown(event: KeyboardEvent) {
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-    event.preventDefault();
-    setHeight(height + (event.key === "ArrowUp" ? 24 : -24));
-    saveHeight();
-  }
+  // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
+  // ultima), abre una. Cerrar la ultima con la pestaña a la vista no la
+  // reabre sola: queda el +.
+  $effect(() => {
+    if (visible) untrack(() => open.length === 0 && add());
+  });
 </script>
 
-<section
-  class="terminal-panel"
-  class:hidden={!visible}
-  bind:this={panel}
-  style={`height: ${height}px`}
-  aria-label={$t("workspace.terminal.title")}
->
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- Dentro de la terminal, las sesiones como las pestañas de las consolas:
+     la elegida con un relleno suave, sobre el fondo de la terminal. -->
+<div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
   <div
-    class="terminal-splitter"
-    role="separator"
-    aria-orientation="horizontal"
-    aria-valuenow={height}
-    aria-valuemin={MIN_HEIGHT}
-    tabindex="0"
-    onpointerdown={startResize}
-    onkeydown={onSplitterKeydown}
-  ></div>
-  <header class="terminal-header">
-    <TerminalIcon size={13} class="terminal-icon" aria-hidden="true" />
-    <span class="terminal-title">{$t("workspace.terminal.title")}</span>
-    {#if info}
-      <span class="terminal-shell">{info.shell}</span>
-      <span class="terminal-cwd" title={info.cwd}>{info.cwd}</span>
-    {/if}
-    <span class="terminal-actions">
-      <button type="button" class="terminal-action" aria-label={$t("shortcuts.toggle-terminal.label")} use:tooltip={$t("shortcuts.toggle-terminal.label")} onclick={onhide}>
-        <ChevronDown size={14} aria-hidden="true" />
+    class="sessions-scroll"
+    class:fade-start={overflow.start}
+    class:fade-end={overflow.end}
+    role="tablist"
+    aria-label={$t("workspace.terminal.title")}
+    bind:this={scroller}
+    onscroll={updateOverflow}
+  >
+  {#each sessions as session (session.key)}
+    <!-- Las mismas transiciones que las pestañas de las consolas: entra
+         como fly (x -8, 150 ms) y sale como fade (120 ms). -->
+    <div
+      class="session"
+      class:active={session.key === active}
+      class:closing={session.closing}
+      data-flip={session.key}
+      onanimationend={() => session.closing && remove(session.key)}
+    >
+      {#if renaming === session.key}
+        <input
+          class="rename-input"
+          aria-label={$t("workspace.terminal.renameAria")}
+          bind:this={renameInput}
+          bind:value={renameValue}
+          onkeydown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") finishRename(true);
+            if (event.key === "Escape") finishRename(false);
+          }}
+          onblur={() => finishRename(true)}
+        />
+      {:else}
+        <!-- Doble clic, F2 o Ctrl+Shift+R: renombrar. -->
+        <button
+          type="button"
+          role="tab"
+          class="tab-select"
+          aria-selected={session.key === active}
+          use:tooltip={session.info ? `${session.info.shell} · ${session.info.cwd}` : session.label}
+          onclick={() => (active = session.key)}
+          ondblclick={() => startRename(session)}
+          onkeydown={(event) => event.key === "F2" && startRename(session)}
+        >
+          <span>{session.label}</span>
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="tab-close"
+        aria-label={$t("results.tab.close", { name: session.label })}
+        onclick={() => close(session.key)}
+      >
+        <X size={11} aria-hidden="true" />
       </button>
-      <button type="button" class="terminal-action" aria-label={$t("common.close")} use:tooltip={$t("common.close")} onclick={onclose}>
-        <X size={14} aria-hidden="true" />
-      </button>
-    </span>
-  </header>
-  <div class="terminal-host" data-terminal bind:this={host} style:background={$editorPalette.background}></div>
-</section>
+    </div>
+  {/each}
+  </div>
+  <button type="button" class="session-add" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
+    <Plus size={13} aria-hidden="true" />
+  </button>
+</div>
+<!-- Las sesiones, apiladas en el mismo lugar: cambiar de una a otra solo
+     cambia cual se ve, sin desmontar ni redimensionar xterm. -->
+<div class="sessions-body" style:background={$editorPalette.background} bind:this={body}>
+  {#each sessions as session (session.key)}
+    <TerminalSession
+      visible={visible && session.key === active}
+      {profileId}
+      oninfo={(info) => (session.info = info)}
+      onexit={() => close(session.key)}
+      {onerror}
+    />
+  {/each}
+</div>
 
 <style>
-  .terminal-panel {
+  /* Alta como la barra del resultado, en su lugar, y con el fondo de la
+     terminal. */
+  .terminal-sessions {
     display: flex;
-    min-height: 0;
     flex-shrink: 0;
-    flex-direction: column;
-    border-top: 1px solid var(--border);
-    background: var(--surface-content);
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 var(--space-2);
+    box-sizing: border-box;
   }
 
-  .terminal-panel.hidden {
+  /* Como las pestañas de las consolas. */
+  .session {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 1.75rem;
+    padding: 0 var(--space-1) 0 var(--space-3);
+    box-sizing: border-box;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
+  }
+
+  .session:hover {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    color: var(--text-primary);
+  }
+
+  .session.active {
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+    color: var(--text-primary);
+  }
+
+  /* Con el teclado, el foco es el borde de la propia pestaña. */
+  .session:has(> .tab-select:focus-visible) {
+    box-shadow: inset 0 0 0 1px var(--focus-ring);
+  }
+
+  .session.closing {
+    animation: session-out 120ms linear forwards;
+    pointer-events: none;
+  }
+
+  /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
+  .sessions-scroll {
+    --fade: 2rem;
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-padding-inline: var(--fade);
+  }
+
+  .sessions-scroll::-webkit-scrollbar {
     display: none;
   }
 
-  .terminal-splitter {
-    position: relative;
-    flex-shrink: 0;
-    height: 6px;
-    margin-top: -4px;
-    margin-bottom: -2px;
-    z-index: 1;
-    cursor: row-resize;
-    touch-action: none;
+  .sessions-scroll.fade-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
   }
 
-  .terminal-splitter:hover,
-  .terminal-splitter:focus-visible {
+  .sessions-scroll.fade-start {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+  }
+
+  .sessions-scroll.fade-start.fade-end {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
+  }
+
+  /* Como el de las pestañas de las consolas. */
+  .rename-input {
+    width: 7rem;
+    min-width: 0;
+    padding: 2px var(--space-1);
+    border: 1px solid var(--focus-ring);
+    border-radius: calc(var(--radius-sm) - 2px);
     outline: none;
-    background: linear-gradient(var(--accent), var(--accent)) center / 100% 1px no-repeat;
-  }
-
-  .terminal-header {
-    display: flex;
-    min-width: 0;
-    height: 1.75rem;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-2) 0 var(--space-3);
-    border-bottom: 1px solid var(--border);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-  }
-
-  .terminal-header :global(.terminal-icon) {
-    flex-shrink: 0;
-  }
-
-  .terminal-title {
+    background: var(--surface);
     color: var(--text-primary);
-    font-weight: 600;
+    font: inherit;
   }
 
-  .terminal-shell,
-  .terminal-cwd {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
-  }
-
-  .terminal-cwd {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .terminal-actions {
-    display: flex;
-    margin-left: auto;
-    gap: 2px;
-  }
-
-  .terminal-action {
+  .session-add {
     display: grid;
     width: 1.5rem;
     height: 1.5rem;
+    flex-shrink: 0;
+    margin-left: var(--space-1);
     place-items: center;
+    padding: 0;
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -327,18 +353,32 @@
     cursor: pointer;
   }
 
-  .terminal-action:hover {
-    background: var(--surface-hover);
+  .session-add:hover {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
     color: var(--text-primary);
   }
 
-  .terminal-host {
-    min-height: 0;
-    flex: 1;
-    padding: var(--space-1) 0 0 var(--space-2);
+  .session-add:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
-  .terminal-host :global(.xterm) {
-    height: 100%;
+  .sessions-body {
+    position: relative;
+    min-height: 0;
+    flex: 1;
+  }
+
+  @keyframes session-in {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+  }
+
+  @keyframes session-out {
+    to {
+      opacity: 0;
+    }
   }
 </style>

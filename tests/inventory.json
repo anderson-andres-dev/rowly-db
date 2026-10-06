@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 141,
-    "tests": 1477,
+    "files": 143,
+    "tests": 1495,
     "ignored": 31,
     "byDecision": {
-      "keep": 141,
+      "keep": 143,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 135,
+      "pr": 137,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -328,13 +328,13 @@
       "path": "app/src-tauri/src/terminal.rs",
       "domain": "desktop",
       "owner": "app/src-tauri/src/terminal.rs",
-      "property": "Terminal integrada: el shell abre y responde, cerrar no deja el shell ni sus trabajos vivos (100 ciclos), el tamano llega al shell, un caracter UTF-8 partido entre lecturas llega en bytes, una ventana no opera la terminal de otra, salir del shell la quita del registro y avisa; en Windows pwsh antes que powershell y si no ComSpec",
+      "property": "Terminal integrada: el shell abre y responde, cerrar no deja el shell ni sus trabajos vivos (100 ciclos), el tamano llega al shell, un caracter UTF-8 partido entre lecturas llega en bytes, una ventana no opera la terminal de otra, salir del shell la quita del registro y avisa, sin confirmar la salida el lector se detiene en 1 MiB y al confirmar llega todo, cerrar con el lector detenido no deja nada; en Windows pwsh antes que powershell y si no ComSpec",
       "risk": "P1",
       "gate": "pr",
       "decision": "keep",
       "kind": "rust",
       "crate": "app/src-tauri",
-      "tests": 9,
+      "tests": 12,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -1433,12 +1433,12 @@
       "path": "app/src/lib/focusZones.keys.test.ts",
       "domain": "platform",
       "owner": "app/src/lib/focusZones.ts",
-      "property": "Modo mover (Ctrl+W): el foco salta entre zonas con el teclado",
+      "property": "Ctrl+Shift+flechas mueve el foco entre zonas y la terminal solo cede su capa Ctrl+Shift",
       "risk": "P2",
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 8,
+      "tests": 10,
       "ignored": 0,
       "environment": "node",
       "dependencies": [],
@@ -2235,6 +2235,26 @@
       "durationMs": 27
     },
     {
+      "path": "app/src/lib/treeKeys.dom.test.ts",
+      "domain": "platform",
+      "owner": "app/src/lib/treeKeys.ts",
+      "property": "Los arboles del sidebar se recorren con flechas, Inicio y Fin, y abren o cierran carpetas con → y ←",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 5,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "treeKeys"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
       "path": "app/src/lib/workspace/commands.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/commands.ts",
@@ -2428,6 +2448,27 @@
       "durationMs": null
     },
     {
+      "path": "app/src/lib/workspace/tabCommands.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/tabCommands.ts",
+      "property": "Ctrl+Tab y Ctrl+1..9 recorren la fila de pestañas del foco, con la vuelta en los bordes",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "commands",
+        "tabCommands"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
       "path": "app/src/lib/workspace/tableQueries.test.ts",
       "domain": "workspace",
       "owner": "app/src/lib/workspace/tableQueries.ts",
@@ -2458,7 +2499,7 @@
       "path": "app/tests/e2e/resources.mjs",
       "domain": "connections",
       "owner": "app/tests/e2e/resources.mjs",
-      "property": "Ciclos de recursos en la app real (reconexiones alternando motores, 300 consolas con ejecucion y cambio de tema, reposo con una conexion): sin mezclar servidores ni catalogos, sin crecer el heap JS vivo, el backend o el DOM, sin trabajo en reposo",
+      "property": "Ciclos de recursos en la app real (reconexiones alternando motores, 300 consolas con ejecucion y cambio de tema, 300 aperturas y cierres de la terminal, reposo con una conexion y con la terminal abierta, 50 MB y yes en la terminal): sin mezclar servidores ni catalogos, sin crecer el heap JS vivo, el backend o el DOM, sin shells vivos, sin trabajo en reposo, con la interfaz respondiendo y la memoria acotada",
       "risk": "P1",
       "gate": "pr",
       "decision": "keep",
@@ -2466,7 +2507,7 @@
         "D9"
       ],
       "kind": "e2e",
-      "tests": 3,
+      "tests": 7,
       "ignored": 0,
       "environment": "app+inspector+mysql+postgres",
       "durationMs": null

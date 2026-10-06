@@ -5,7 +5,7 @@
   import { highlightSql } from "$lib/editor/highlight";
   import { filterHistory, groupHistoryByDay, type HistoryDay, type HistoryEntry } from "$lib/stores/queryHistory";
 
-  // Historial de la conexion activa (Ctrl+E): capa flotante sobre el editor,
+  // Historial de la conexion activa (Ctrl+H): capa flotante sobre el editor,
   // bajo demanda. Todo con el teclado desde el filtro: flechas para elegir,
   // Enter inserta en el cursor, Ctrl+Enter ejecuta, Esc cierra. `onclose`
   // dice si hay que devolver el foco al editor (no, si se cerro porque el

@@ -10,6 +10,7 @@
   import "$lib/styles/tokens.css";
   import "$lib/styles/buttons.css";
   import "$lib/styles/controls.css";
+  import "$lib/styles/tabs.css";
   import "$lib/styles/alert-dialog.css";
   import "$lib/styles/review-dialog.css";
   import "$lib/styles/tooltip.css";
@@ -63,7 +64,8 @@
   let settingsOpen = $state(false);
   let settingsSection = $state<"general" | "shortcuts">("general");
 
-  // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
+  // Hoja de atajos (Ctrl+?): al cerrarla con Esc, el foco vuelve a donde
+  // estaba.
   let sheetOpen = $state(false);
   let focusBeforeSheet: HTMLElement | null = null;
 
@@ -213,13 +215,23 @@
     return !!row;
   }
 
+  // La primera vez en el explorador: la primera tabla, no la fila de la
+  // conexion (que solo pliega todo).
+  function focusFirstTable(zone: HTMLElement): boolean {
+    const row = zone.querySelector<HTMLElement>('[role="tree"] .row-wrap.relation > .row');
+    if (!row) return focusFirstTreeRow(zone);
+    row.focus({ preventScroll: true });
+    row.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
   function toggleSidebar(): boolean {
     if (!$connection.connected) return false;
     sidebarCollapsed = !sidebarCollapsed;
     return true;
   }
 
-  // El colapso usa la misma transicion de width que Alt+1: al soltar por
+  // El colapso usa la misma transicion de width que Ctrl+E: al soltar por
   // debajo del minimo, .resizing (que la apaga) se quita en el mismo frame
   // en que el width pasa a 0, asi que el panel anima lo que le falta desde
   // donde lo dejo el mouse. $sidebarWidth no se toca: al reabrir vuelve al
@@ -306,12 +318,17 @@
     // Antes que todo: el teclado numerico que llega como flechas no puede
     // mover zonas ni disparar atajos.
     cleanupNumpadFix = installNumpadFix();
-    // Primero las zonas: sus flechas del modo mover van antes que los atajos.
+    // Primero las zonas: el modo mover (Ctrl+Shift sostenidos) va antes que
+    // los atajos.
     cleanupFocusZones = installFocusZones(shortcutsBlocked);
     cleanupKeybindings = installKeybindings(shortcutsBlocked);
     const cleanupSidebarCommands = registerCommands("global", {
       "toggle-sidebar": toggleSidebar,
       "shortcut-sheet": toggleShortcutSheet,
+      "open-settings": () => {
+        settingsSection = "general";
+        settingsOpen = true;
+      },
     });
     const cleanupExplorerFind = registerCommands("explorer", { find: findInSidebar });
     const cleanupFilesFind = registerCommands("files", { find: findInSidebar });
@@ -459,7 +476,7 @@
         bind:this={sidebarContent}
         style:width={`${Math.max(liveSidebarWidth, MIN_SIDEBAR_WIDTH)}px`}
       >
-        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTreeRow }}>
+        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTable }}>
         <SchemaTree
           explorer={$databaseExplorer}
           {connectionLabel}

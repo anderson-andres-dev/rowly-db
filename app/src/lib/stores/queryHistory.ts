@@ -1,7 +1,7 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
 
-// Historial de consultas por conexion (Ctrl+E, QueryHistory.svelte). A
+// Historial de consultas por conexion (Ctrl+H, QueryHistory.svelte). A
 // diferencia de la Salida (executionLog.ts), persiste entre sesiones. Se
 // guarda al ejecutar desde el editor; se borra junto con el perfil.
 

@@ -1,6 +1,6 @@
 import { defineMessages } from "../define";
 
-// Historial de consultas (QueryHistory.svelte, Ctrl+E).
+// Historial de consultas (QueryHistory.svelte, Ctrl+H).
 export default defineMessages({
   es: {
     label: "Historial de consultas",

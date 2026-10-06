@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "scenario": "bundle",
+  "label": "pre-local",
+  "initialJs": {
+    "files": 10,
+    "kb": 1445.3,
+    "gzip_kb": 444.3
+  },
+  "allJs": {
+    "files": 13,
+    "kb": 1703.4,
+    "gzip_kb": 516.9
+  },
+  "allCss": {
+    "files": 2,
+    "kb": 45.8,
+    "gzip_kb": 7.3
+  }
+}
