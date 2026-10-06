@@ -45,11 +45,11 @@
     color var(--duration-fast) ease;
 }
 
-/* Al pasar por encima, un adelanto suave de la elegida: el contorno tenue
-   arriba que se desvanece hacia los lados, y un relleno que se apaga hacia
-   abajo (sin borde recto en la base). */
+/* Al pasar por encima, un adelanto suave de la elegida, en gris: el
+   contorno tenue arriba que se desvanece hacia los lados, y un relleno que
+   se apaga hacia abajo (sin borde recto en la base). */
 .result-tab:hover {
-  --tab-ring-top: color-mix(in srgb, var(--accent) 35%, transparent);
+  --tab-ring-top: color-mix(in srgb, var(--text-primary) 22%, transparent);
   --tab-ring-side: transparent;
   position: relative;
   background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 6%, transparent), transparent);
