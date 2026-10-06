@@ -130,9 +130,9 @@
   });
 </script>
 
-<!-- Las mismas pestañas que las del resultado (styles/tabs.css): la elegida
-     con el fondo de la terminal, unida a ella. -->
-<div class="terminal-sessions tab-strip" style:--tab-active={$editorPalette.background} bind:this={row}>
+<!-- Dentro de la terminal, las sesiones como las pestañas de las consolas:
+     la elegida con un relleno suave, sobre el fondo de la terminal. -->
+<div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
   <div
     class="sessions-scroll"
     class:fade-start={overflow.start}
@@ -146,7 +146,7 @@
     <!-- Las mismas transiciones que las pestañas de las consolas: entra
          como fly (x -8, 150 ms) y sale como fade (120 ms). -->
     <div
-      class="result-tab closable session"
+      class="session"
       class:active={session.key === active}
       class:closing={session.closing}
       data-flip={session.key}
@@ -210,39 +210,61 @@
 </div>
 
 <style>
+  /* Alta como la barra del resultado, en su lugar, y con el fondo de la
+     terminal. */
+  .terminal-sessions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 var(--space-2);
+    box-sizing: border-box;
+  }
+
+  /* Como las pestañas de las consolas. */
+  .session {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 1.75rem;
+    padding: 0 var(--space-1) 0 var(--space-3);
+    box-sizing: border-box;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
+  }
+
+  .session:hover {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    color: var(--text-primary);
+  }
+
+  .session.active {
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+    color: var(--text-primary);
+  }
+
+  .session.closing {
+    animation: session-out 120ms linear forwards;
+    pointer-events: none;
+  }
+
   /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
   .sessions-scroll {
     --fade: 2rem;
     display: flex;
     min-width: 0;
     flex: 0 1 auto;
-    align-self: stretch;
-    align-items: flex-end;
+    align-items: center;
     gap: 2px;
     overflow-x: auto;
-    overflow-y: hidden;
     scrollbar-width: none;
     scroll-padding-inline: var(--fade);
-  }
-
-  /* La franja baja sobre la linea base (su scroll recorta lo que sale):
-     asi la pestaña elegida la tapa. */
-  .sessions-scroll {
-    margin-bottom: -1px;
-  }
-
-  /* Lugar al final para el contorno que sigue por la linea base desde la
-     ultima pestaña: sin el, contaba como desborde y la franja se desplazaba.
-     El margen negativo deja el + junto a las pestañas. */
-  .sessions-scroll {
-    margin-right: calc(-1 * var(--tab-reach));
-    margin-left: calc(-1 * var(--tab-curve));
-    padding-right: var(--tab-reach);
-    padding-left: var(--tab-curve);
-  }
-
-  .sessions-scroll :global(.result-tab) {
-    margin-bottom: 0;
   }
 
   .sessions-scroll::-webkit-scrollbar {
@@ -259,15 +281,6 @@
 
   .sessions-scroll.fade-start.fade-end {
     mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
-  }
-
-  .session {
-    animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
-  }
-
-  .session.closing {
-    animation: session-out 120ms linear forwards;
-    pointer-events: none;
   }
 
   /* Como el de las pestañas de las consolas. */
@@ -288,9 +301,7 @@
     width: 1.5rem;
     height: 1.5rem;
     flex-shrink: 0;
-    /* Abajo, centrado con el texto de las pestañas (2rem de alto). */
-    align-self: flex-end;
-    margin: 0 0 0.25rem var(--space-1);
+    margin-left: var(--space-1);
     place-items: center;
     padding: 0;
     border: 0;

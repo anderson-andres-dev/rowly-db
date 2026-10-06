@@ -488,7 +488,7 @@ const terminalHost = `document.querySelector(".terminal-host:not(.hidden)")`;
 const terminalText = `(${terminalHost}?.querySelector(".xterm-rows")?.innerText ?? "")`;
 const terminalShown = `!!document.querySelector(".terminal-view:not(.hidden)")`;
 const sessionCount = `document.querySelectorAll(".terminal-sessions .session").length`;
-const terminalTab = `document.querySelector(".result-tabs .terminal-toggle")`;
+const terminalTab = `document.querySelector(".result-tabs .terminal-tab")`;
 
 // Ctrl+T, como lo recibe el despachador de atajos.
 const toggleTerminal = (page) => press(page, { key: "t", code: "KeyT", ctrl: true }, "body");
@@ -615,7 +615,7 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   // La ultima: la pestaña Terminal queda; + abre otra.
   await closeSession(page, 0, 0);
   await reaped([second]);
-  if (!(await page.evaluate(`!!${terminalTab}`))) throw new Error("cerrar la ultima sesion quito el boton de la terminal");
+  if (!(await page.evaluate(`!!${terminalTab}`))) throw new Error("cerrar la ultima sesion quito la pestaña Terminal");
   await addSession(page, 1);
   console.log(`        sin consola, cambio de consola, Ctrl+T ida y vuelta, + y x por sesion; panel ${region}, terminal ${view}`);
 });

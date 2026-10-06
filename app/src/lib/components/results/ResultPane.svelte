@@ -55,6 +55,7 @@
   import { registerCommands } from "$lib/workspace/commands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
+  import { editorPalette } from "$lib/theming/theme";
   import type { IconNode } from "@lucide/svelte";
   import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
   import {
@@ -597,16 +598,20 @@
         </div>
       {/each}
       {/if}
+      <!-- La terminal es de la ventana: su pestaña va aparte, a la derecha,
+           y abierta se une a ella (el fondo de la terminal). -->
       <button
         type="button"
-        class="terminal-toggle"
+        role="tab"
+        class="result-tab terminal-tab"
         class:active={terminalActive}
-        aria-pressed={terminalActive}
-        aria-label={$t("workspace.terminal.title")}
+        aria-selected={terminalActive}
+        style:--tab-active={$editorPalette.background}
         use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
-        onclick={onterminal}
+        onclick={() => terminalActive || onterminal()}
       >
-        <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
+        <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
+        <span>{$t("workspace.terminal.title")}</span>
       </button>
     </div>
   {/if}
@@ -1098,36 +1103,8 @@
 
 
 
-  /* La terminal, a la derecha de la fila: como el + de las consolas, en
-     acento mientras se ve. */
-  .terminal-toggle {
-    display: grid;
-    /* Abajo, a la altura del texto de las pestañas. */
-    align-self: flex-end;
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
+  .terminal-tab {
     margin-left: auto;
-    place-items: center;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-
-  .terminal-toggle:hover {
-    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-    color: var(--text-primary);
-  }
-
-  .terminal-toggle.active {
-    color: var(--accent);
-  }
-
-  .terminal-toggle:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: -2px;
   }
 
   /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
