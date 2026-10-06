@@ -6,6 +6,9 @@
 // ancho; tras la entrada, 150 ms, para medir el ancho final).
 export function tabScroll(node: HTMLElement, _changed: unknown) {
   function update() {
+    // Sin desborde (p. ej. tras cerrar pestañas), vuelve al principio aunque
+    // un desplazamiento quedara a medias.
+    if (node.scrollWidth <= node.clientWidth) node.scrollLeft = 0;
     node.classList.toggle("fade-start", node.scrollLeft > 1);
     node.classList.toggle("fade-end", node.scrollLeft + node.clientWidth < node.scrollWidth - 1);
   }
@@ -28,6 +31,9 @@ export function tabScroll(node: HTMLElement, _changed: unknown) {
   // Al cambiar de ancho, la elegida vuelve a quedar a la vista.
   const observer = new ResizeObserver(reveal);
   observer.observe(node);
+  // Al quitar o agregar pestañas, se reacomoda al instante.
+  const children = new MutationObserver(update);
+  children.observe(node, { childList: true });
   node.addEventListener("scroll", update, { passive: true });
   // No pasivo a proposito: preventDefault evita que la rueda desplace la
   // pagina.
@@ -39,6 +45,7 @@ export function tabScroll(node: HTMLElement, _changed: unknown) {
     destroy() {
       clearTimeout(timer);
       observer.disconnect();
+      children.disconnect();
       node.removeEventListener("scroll", update);
       node.removeEventListener("wheel", onWheel);
     },
