@@ -76,7 +76,7 @@ Compare only against a reference taken on the same machine and system:
 | 300 reconnections | Alternates a MySQL and a PostgreSQL profile, going back to the list each time | Each one shows its own server; analysis uses the current connection's catalog |
 | 300 consoles | Open (Ctrl+Shift+Q), run (Ctrl+Enter), switch palette in Settings, close (Ctrl+F4) | A single editor is left at the end |
 | Idle with a connection | 300 s with a result on screen | No backend call or `setInterval`; under 10 % of one core |
-| Terminal tab | With no console, switching consoles, Alt+F12 there and back, `+` and `×` per session | Takes the grid's place without moving the panel or adding a splitter; each side keeps its state; `×` closes only its shell; the tab stays with no sessions |
+| Terminal tab | With no console, switching consoles, Ctrl+T there and back, `+` and `×` per session | Takes the grid's place without moving the panel or adding a splitter; each side keeps its state; `×` closes only its shell; the tab stays with no sessions |
 | 300 sessions | Open with `+`, wait for the shell, close with `×` | No shell left alive and the backend back to its thread count |
 | Idle with 1, 5 and 10 sessions | 300 s with one, 60 s with 5, with 10 and with the terminal hidden; then all are closed | Same as idle with a connection; at most 15 MB per session; once closed, the threads from before |
 | Large output | 50 MB of base64, then `yes` for 30 s | The 50 MB finish; during the burst and under `yes`, at most 2 event-loop ticks (or 2 %) wait over 200 ms; under `yes`, between 10 s and 30 s, own memory grows no more than 10 MB in the backend and 60 MB in WebKit |

@@ -76,7 +76,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | 300 reconexiones | Alterna un perfil MySQL y uno PostgreSQL volviendo a la lista | Cada una muestra su servidor; el análisis usa el catálogo de la conexión actual |
 | 300 consolas | Abrir (Ctrl+Shift+Q), ejecutar (Ctrl+Enter), cambiar de paleta en Ajustes y cerrar (Ctrl+F4) | Al final queda un solo editor |
 | Reposo con una conexión | 300 s con un resultado en pantalla | Ninguna llamada al backend ni `setInterval`; menos del 10 % de un núcleo |
-| Pestaña Terminal | Sin consola, cambiando de consola, Alt+F12 ida y vuelta, `+` y `×` por sesión | Ocupa el lugar del grid sin mover el panel ni sumar un splitter; cada lado conserva su estado; `×` cierra solo su shell; la pestaña queda sin sesiones |
+| Pestaña Terminal | Sin consola, cambiando de consola, Ctrl+T ida y vuelta, `+` y `×` por sesión | Ocupa el lugar del grid sin mover el panel ni sumar un splitter; cada lado conserva su estado; `×` cierra solo su shell; la pestaña queda sin sesiones |
 | 300 sesiones | Abrir con `+`, esperar el shell y cerrar con `×` | Ningún shell vivo y el backend con los mismos hilos que antes |
 | Reposo con 1, 5 y 10 sesiones | 300 s con una, 60 s con 5, con 10 y con la terminal oculta; luego se cierran todas | Como el reposo con una conexión; como mucho 15 MB por sesión; al cerrarlas, los hilos de antes |
 | Salida grande | 50 MB en base64 y luego `yes` durante 30 s | Los 50 MB terminan; en la ráfaga y con `yes`, como mucho 2 ticks del bucle de eventos (o el 2 %) pasan de 200 ms; con `yes`, entre los 10 y los 30 s, la memoria propia no crece más de 10 MB en el backend ni de 60 MB en WebKit |

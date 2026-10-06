@@ -487,11 +487,11 @@ const TERMINAL_CYCLES = Number(process.env.E2E_TERMINAL_CYCLES ?? 300);
 const terminalHost = `document.querySelector(".terminal-host:not(.hidden)")`;
 const terminalText = `(${terminalHost}?.querySelector(".xterm-rows")?.innerText ?? "")`;
 const terminalShown = `!!document.querySelector(".terminal-view:not(.hidden)")`;
-const sessionCount = `document.querySelectorAll(".terminal-sessions .result-tab.closable").length`;
-const terminalTab = `[...document.querySelectorAll(".result-tabs [role=tab]")].find((tab) => tab.textContent.trim() === "Terminal")`;
+const sessionCount = `document.querySelectorAll(".terminal-sessions .session").length`;
+const terminalTab = `document.querySelector(".result-tabs .terminal-toggle")`;
 
-// Alt+F12, como lo recibe el despachador de atajos.
-const toggleTerminal = (page) => press(page, { key: "F12", code: "F12", alt: true }, "body");
+// Ctrl+T, como lo recibe el despachador de atajos.
+const toggleTerminal = (page) => press(page, { key: "t", code: "KeyT", ctrl: true }, "body");
 
 // Escribir en el shell: lo que xterm recibe de un metodo de entrada
 // (insertText) lo manda tal cual por onData, \r incluido.
@@ -557,12 +557,12 @@ async function closeConsoles(page) {
 
 const rect = (selector) => `(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r ? [r.top, r.bottom, r.left, r.right].map(Math.round) : null; })()`;
 
-cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin consola, al cambiar de consola, con Alt+F12 y con varias sesiones", async (page) => {
+cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin consola, al cambiar de consola, con Ctrl+T y con varias sesiones", async (page) => {
   await seedProfiles(page, [MYSQL_PROFILE]);
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
   const separators = await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`);
 
-  // Sin consola: Alt+F12 la abre igual, sin crear una consola.
+  // Sin consola: Ctrl+T la abre igual, sin crear una consola.
   await closeConsoles(page);
   await openTerminal(page);
   if (await page.evaluate(`document.querySelectorAll(".console-tab").length`)) throw new Error("abrir la terminal creo una consola");
@@ -581,7 +581,7 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   await waitFor(page, "el resultado", `!${terminalShown} && ${gridText}.includes("tres")`);
   const region = await page.evaluate(rect(".result-region"));
 
-  // Alt+F12: la terminal en el mismo lugar del grid, sin otro panel ni otro
+  // Ctrl+T: la terminal en el mismo lugar del grid, sin otro panel ni otro
   // splitter; y otra vez, de vuelta a la pestaña que estaba.
   await toggleTerminal(page);
   await waitFor(page, "la terminal sobre el grid", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
@@ -615,9 +615,9 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   // La ultima: la pestaña Terminal queda; + abre otra.
   await closeSession(page, 0, 0);
   await reaped([second]);
-  if (!(await page.evaluate(`!!${terminalTab}`))) throw new Error("cerrar la ultima sesion quito la pestaña Terminal");
+  if (!(await page.evaluate(`!!${terminalTab}`))) throw new Error("cerrar la ultima sesion quito el boton de la terminal");
   await addSession(page, 1);
-  console.log(`        sin consola, cambio de consola, Alt+F12 ida y vuelta, + y x por sesion; panel ${region}, terminal ${view}`);
+  console.log(`        sin consola, cambio de consola, Ctrl+T ida y vuelta, + y x por sesion; panel ${region}, terminal ${view}`);
 });
 
 cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin procesos ni memoria detras`, async (page, app) => {

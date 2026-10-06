@@ -441,7 +441,7 @@
   // Terminal.svelte (y con el, xterm) se carga la primera vez que se abre:
   // quien no la usa no los descarga ni crea un shell.
   let TerminalDock = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
-  // Donde estaba el foco al abrirla: ahi vuelve con Alt+F12.
+  // Donde estaba el foco al abrirla: ahi vuelve con el atajo (Ctrl+T).
   let terminalReturnFocus: HTMLElement | null = null;
 
   function toggleTerminal() {

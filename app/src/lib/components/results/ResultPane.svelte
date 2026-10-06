@@ -551,29 +551,18 @@
 {/snippet}
 
 <div class="result-pane">
-  {#if terminal || (!tableView && hasActivity)}
+  <!-- La fila sale siempre (salvo en una tabla sin la terminal abierta): a la
+       derecha, el boton de la terminal, que es de la ventana y no un
+       resultado mas. -->
+  {#if !tableView || terminal}
     <div
       class="result-tabs"
-      class:joined={terminalActive || (hasActivity && showingResult)}
+      class:joined={!terminalActive && hasActivity && showingResult}
       role="tablist"
       aria-label={$t("results.tabs")}
       use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
       use:settleTransitions
     >
-      {#if terminal}
-        <button
-          type="button"
-          role="tab"
-          class="result-tab"
-          class:active={terminalActive}
-          aria-selected={terminalActive}
-          use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
-          onclick={() => terminalActive || onterminal()}
-        >
-          <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
-          <span>{$t("workspace.terminal.title")}</span>
-        </button>
-      {/if}
       {#if !tableView && hasActivity}
       <button
         type="button"
@@ -608,6 +597,17 @@
         </div>
       {/each}
       {/if}
+      <button
+        type="button"
+        class="terminal-toggle"
+        class:active={terminalActive}
+        aria-pressed={terminalActive}
+        aria-label={$t("workspace.terminal.title")}
+        use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
+        onclick={onterminal}
+      >
+        <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
+      </button>
     </div>
   {/if}
   <div class="pane-view" class:hidden={terminalActive}>
@@ -1112,6 +1112,36 @@
   }
 
 
+
+  /* La terminal, a la derecha de la fila: como el + de las consolas, en
+     acento mientras se ve. */
+  .terminal-toggle {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    place-items: center;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .terminal-toggle:hover {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    color: var(--text-primary);
+  }
+
+  .terminal-toggle.active {
+    color: var(--accent);
+  }
+
+  .terminal-toggle:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
 
   /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
      montado (el grid conserva su estado). */

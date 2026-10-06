@@ -3,6 +3,7 @@
   import { Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
+  import { editorPalette } from "$lib/theming/theme";
   import TerminalSession from "$lib/components/TerminalSession.svelte";
   import type { TerminalInfo } from "$lib/terminal";
 
@@ -26,6 +27,10 @@
 
   let sessions = $state<Session[]>([]);
   let row: HTMLDivElement;
+  // La sesion que se esta renombrando (0: ninguna), como las consolas.
+  let renaming = $state(0);
+  let renameValue = $state("");
+  let renameInput = $state<HTMLInputElement>();
   const open = $derived(sessions.filter((session) => !session.closing));
   let active = $state(0);
   // "Local", "Local (2)"...; vuelve a empezar cuando no queda ninguna.
@@ -63,6 +68,21 @@
     }
   }
 
+  async function startRename(session: Session) {
+    renaming = session.key;
+    renameValue = session.label;
+    await tick();
+    renameInput?.focus();
+    renameInput?.select();
+  }
+
+  function finishRename(save: boolean) {
+    const session = sessions.find((item) => item.key === renaming);
+    renaming = 0;
+    const name = renameValue.trim();
+    if (save && session && name) session.label = name;
+  }
+
   // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
   // ultima), abre una. Cerrar la ultima con la pestaña a la vista no la
   // reabre sola: queda el +.
@@ -71,27 +91,53 @@
   });
 </script>
 
-<div class="terminal-sessions" role="tablist" aria-label={$t("workspace.terminal.title")} bind:this={row}>
+<!-- Pestañas de herramienta, con el fondo de la terminal: la elegida con
+     una linea de acento abajo, sin relleno. -->
+<div
+  class="terminal-sessions"
+  role="tablist"
+  aria-label={$t("workspace.terminal.title")}
+  style:background={$editorPalette.background}
+  bind:this={row}
+>
   {#each sessions as session (session.key)}
     <!-- Las mismas transiciones que las pestañas de las consolas: entra
          como fly (x -8, 150 ms) y sale como fade (120 ms). -->
     <div
-      class="result-tab closable"
+      class="session"
       class:active={session.key === active}
       class:closing={session.closing}
       data-flip={session.key}
       onanimationend={() => session.closing && remove(session.key)}
     >
-      <button
-        type="button"
-        role="tab"
-        class="tab-select"
-        aria-selected={session.key === active}
-        use:tooltip={session.info ? `${session.info.shell} · ${session.info.cwd}` : session.label}
-        onclick={() => (active = session.key)}
-      >
-        <span>{session.label}</span>
-      </button>
+      {#if renaming === session.key}
+        <input
+          class="rename-input"
+          aria-label={$t("workspace.terminal.renameAria")}
+          bind:this={renameInput}
+          bind:value={renameValue}
+          onkeydown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") finishRename(true);
+            if (event.key === "Escape") finishRename(false);
+          }}
+          onblur={() => finishRename(true)}
+        />
+      {:else}
+        <!-- Doble clic o F2: renombrar. -->
+        <button
+          type="button"
+          role="tab"
+          class="tab-select"
+          aria-selected={session.key === active}
+          use:tooltip={session.info ? `${session.info.shell} · ${session.info.cwd}` : session.label}
+          onclick={() => (active = session.key)}
+          ondblclick={() => startRename(session)}
+          onkeydown={(event) => event.key === "F2" && startRename(session)}
+        >
+          <span>{session.label}</span>
+        </button>
+      {/if}
       <button
         type="button"
         class="tab-close"
@@ -102,43 +148,122 @@
       </button>
     </div>
   {/each}
-  <!-- La misma pieza que las pestañas: ToolbarButton, compartido con la
-       pagina, sacaba un chunk aparte del JS inicial (+1,2 KB). -->
-  <button type="button" class="result-tab" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
-    <Plus size={14} aria-hidden="true" />
+  <button type="button" class="session-add" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
+    <Plus size={13} aria-hidden="true" />
   </button>
 </div>
-{#each sessions as session (session.key)}
-  <TerminalSession
-    visible={visible && session.key === active}
-    {profileId}
-    oninfo={(info) => (session.info = info)}
-    onexit={() => close(session.key)}
-    {onerror}
-  />
-{/each}
+<!-- Las sesiones, apiladas en el mismo lugar: cambiar de una a otra solo
+     cambia cual se ve, sin desmontar ni redimensionar xterm. -->
+<div class="sessions-body" style:background={$editorPalette.background}>
+  {#each sessions as session (session.key)}
+    <TerminalSession
+      visible={visible && session.key === active}
+      {profileId}
+      oninfo={(info) => (session.info = info)}
+      onexit={() => close(session.key)}
+      {onerror}
+    />
+  {/each}
+</div>
 
 <style>
-  /* La misma fila que la barra del resultado, en su lugar. */
+  /* Alta como la barra del resultado, en su lugar. */
   .terminal-sessions {
     display: flex;
     flex-shrink: 0;
-    align-items: center;
-    gap: 2px;
+    align-items: stretch;
     min-height: 2.5rem;
     padding: 0 var(--space-2);
     box-sizing: border-box;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
   }
 
-  .result-tab {
+  .session {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-1) 0 var(--space-3);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
     animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
   }
 
-  .result-tab.closing {
+  .session:hover,
+  .session.active {
+    color: var(--text-primary);
+  }
+
+  .session.active::after {
+    position: absolute;
+    right: var(--space-2);
+    bottom: 0;
+    left: var(--space-2);
+    height: 2px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--accent) 75%, transparent);
+    content: "";
+  }
+
+  /* La x: en la elegida y al pasar por encima. */
+  .session :global(.tab-close) {
+    visibility: hidden;
+  }
+
+  .session.active :global(.tab-close),
+  .session:hover :global(.tab-close),
+  .session :global(.tab-close:focus-visible) {
+    visibility: visible;
+  }
+
+  .session.closing {
     animation: session-out 120ms linear forwards;
     pointer-events: none;
+  }
+
+  /* Como el de las pestañas de las consolas. */
+  .rename-input {
+    width: 7rem;
+    min-width: 0;
+    padding: 2px var(--space-1);
+    border: 1px solid var(--focus-ring);
+    border-radius: calc(var(--radius-sm) - 2px);
+    outline: none;
+    background: var(--surface);
+    color: var(--text-primary);
+    font: inherit;
+  }
+
+  .session-add {
+    display: grid;
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: var(--space-1);
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .session-add:hover {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+    color: var(--text-primary);
+  }
+
+  .session-add:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .sessions-body {
+    position: relative;
+    min-height: 0;
+    flex: 1;
   }
 
   @keyframes session-in {

@@ -156,17 +156,21 @@
   });
 </script>
 
-<div class="terminal-host" class:hidden={!visible} data-terminal bind:this={host} style:background={$editorPalette.background}></div>
+<div class="terminal-host" class:hidden={!visible} data-terminal bind:this={host}></div>
 
 <style>
+  /* Todas en el mismo lugar; las ocultas con visibility, no display: none,
+     para que xterm no se re-mida ni re-pinte al volver a mostrarse. */
   .terminal-host {
-    min-height: 0;
-    flex: 1;
-    padding: var(--space-1) 0 0 var(--space-2);
+    position: absolute;
+    inset: 0;
+    /* Aire bajo la fila de sesiones: la primera linea no va pegada. */
+    padding: var(--space-3) 0 0 var(--space-3);
   }
 
   .terminal-host.hidden {
-    display: none;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .terminal-host :global(.xterm) {
