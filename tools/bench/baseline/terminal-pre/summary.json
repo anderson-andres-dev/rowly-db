@@ -1,0 +1,135 @@
+{
+ "format": 1,
+ "label": "terminal-pre",
+ "date": "2026-10-05",
+ "commit": "af33348 (develop = origin/develop, v0.4.0)",
+ "purpose": "Linea base antes de la terminal integrada (docs/specs/terminal-integrada.md §14)",
+ "machine": {
+  "os": "Omarchy",
+  "kernel": "7.2.5-3-omarchy",
+  "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+  "cores": 16,
+  "memory_gb": 15.3,
+  "governor": "powersave",
+  "platform_profile": "performance",
+  "power_supply": {
+   "ADP0": "1",
+   "ucsi-source-psy-USBC000:001": "0",
+   "BAT0": "Not charging"
+  },
+  "gpu": "00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-P [UHD Graphics] (rev 04)",
+  "nvidia_mitigation": "no aplica: sin GPU NVIDIA",
+  "compositor": "Hyprland v0.56.2",
+  "session": "wayland",
+  "webkitgtk": "webkit2gtk-4.1 2.52.6-1",
+  "workspace": "special:rowlybench (silent, fuera de pantalla)"
+ },
+ "machine_load": "contenedores Docker de otros proyectos activos (api-core, web-panel) y las bases de tools/test-dbs; carga media 0,5-1,3 durante la corrida",
+ "build": {
+  "command": "cd app && npx tauri build",
+  "binary_bytes": 15449752,
+  "packages_bytes": {
+   "deb": 6921342,
+   "rpm": 6921641,
+   "appimage": "no generado en esta maquina: el strip de linuxdeploy no reconoce .relr.dyn de las bibliotecas de Arch (tambien con NO_STRIP=true); la AppImage de release la genera CI"
+  }
+ },
+ "bundle_chunks_gzip_kb": {
+  "chunks/DYuB1eZ2.js (CodeMirror y editor)": 230.0,
+  "nodes/2 (pagina /)": 149.9,
+  "chunks/CAvIxqxX.js": 73.5,
+  "nodes/0 (layout)": 37.1,
+  "chunks/tEtKOiKm.js": 23.2,
+  "chunks/C6j8U8kb.js": 10.2,
+  "assets/0.css (layout)": 3.6,
+  "assets/2.css (pagina /)": 3.9
+ },
+ "resources": {
+  "command": "env -u WAYLAND_DISPLAY GDK_BACKEND=x11 E2E_MYSQL_PORT=33306 E2E_PG_PORT=55432 E2E_PG_USER=rowly xvfb-run --auto-servernum dbus-run-session --config-file=<bus sin servicedir> -- node tests/e2e/resources.mjs --app <binario>",
+  "result": "3/3 ok",
+  "reconnections_300": {
+   "heap_live_mb": {
+    "50": 18.8,
+    "300": 18.1
+   },
+   "objects": {
+    "50": 74823,
+    "300": 73902
+   },
+   "backend_anonymous_mb": {
+    "50": 41.2,
+    "300": 41.8
+   },
+   "pss_mb": {
+    "50": 361.3,
+    "300": 431.5
+   },
+   "pss_webkitwebprocess_mb": {
+    "50": 242.9,
+    "300": 312.4
+   }
+  },
+  "console_cycles_300": {
+   "heap_live_mb": {
+    "50": 18.2,
+    "300": 18.3
+   },
+   "objects": {
+    "50": 85722,
+    "300": 85886
+   },
+   "backend_anonymous_mb": {
+    "50": 37.2,
+    "300": 43.7
+   },
+   "pss_mb": {
+    "50": 436.2,
+    "300": 496.4
+   },
+   "pss_webkitwebprocess_mb": {
+    "50": 321.1,
+    "300": 375.1
+   }
+  },
+  "idle_300s_with_mysql_connection": {
+   "start": {
+    "heap_live_mb": 12.0,
+    "heap_without_compiled_code_mb": 4.2,
+    "objects": 87634,
+    "backend_anonymous_mb": 42.1,
+    "pss_total_mb": 297.7,
+    "pss_by_process_mb": {
+     "rowly-db": 90.5,
+     "WebKitNetworkProcess": 29.5,
+     "WebKitWebProcess": 177.7
+    }
+   },
+   "end": {
+    "heap_live_mb": 8.4,
+    "heap_without_compiled_code_mb": 4.2,
+    "objects": 86231,
+    "backend_anonymous_mb": 42.4,
+    "pss_total_mb": 290.1,
+    "pss_by_process_mb": {
+     "rowly-db": 91.0,
+     "WebKitNetworkProcess": 29.5,
+     "WebKitWebProcess": 169.5
+    }
+   },
+   "anonymous_every_30s_mb": {
+    "rowly-db": "109.0 en t=0 (recoleccion previa), luego 42.5 -> 42.4 plano",
+    "WebKitWebProcess": "147.4 en t=0, luego 89.5 plano"
+   },
+   "cpu_seconds": 3.13,
+   "cpu_pct_of_one_core": 1.04,
+   "backend_calls": 0,
+   "setTimeout": 1,
+   "setInterval": 0,
+   "requestAnimationFrame": 1,
+   "running_animations": [
+    "cm-blink2 (cursor de CodeMirror enfocado)"
+   ],
+   "note": "Bajo Xvfb sin GPU; el cursor que parpadea y el compositor de GTK explican la CPU"
+  }
+ }
+}

@@ -347,6 +347,9 @@ pub(crate) struct AppState {
     /// Queries running now that `cancel_query` can interrupt, by the
     /// execution id the frontend gave them.
     pub(crate) running: Mutex<HashMap<String, Arc<QueryCancel>>>,
+    /// Las terminales integradas abiertas, cada una de su ventana
+    /// (terminal.rs).
+    pub(crate) terminals: crate::terminal::Registry,
 }
 
 /// Removes a running query from `AppState::running` when it ends, however

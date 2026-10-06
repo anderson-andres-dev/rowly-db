@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "scenario": "shell-first-byte",
+  "shell": "/usr/bin/bash",
+  "login": true,
+  "term": "xterm-256color",
+  "size": "80x24",
+  "runs": 30,
+  "warmup": 3,
+  "method": "python3 pty.fork + execv(shell, ['-<nombre>']); fork -> primer byte legible en el master",
+  "ms": {
+    "median": 62.3,
+    "p95": 72.7,
+    "min": 56.7,
+    "max": 82.1,
+    "stdev": 5.3
+  }
+}

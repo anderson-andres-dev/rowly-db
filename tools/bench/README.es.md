@@ -62,6 +62,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | `baseline/v0.3.0-cachyos` | `v0.3.0` compilado desde su etiqueta (`npx tauri build --no-bundle`), igual que la rama con la que se compara | CachyOS, kernel 7.1.8, perfil `balanced` (misma CPU) |
 | `baseline/c5-cachyos` | El cierre de la consolidación, medido alternado con `v0.3.0-cachyos` en la misma sesión; `node-editor.json` es la mediana de 5 corridas | CachyOS, kernel 7.1.8, perfil `balanced` |
 | `baseline/hardening-cachyos` | Tecla a pintado y cuadros del grid (`linux-rowly-latency.json`), la primera vez que se midieron: mediana de 3 corridas del binario release bajo Xvfb, cada corrida guardada en `runs` | CachyOS, kernel 7.1.8, perfil `balanced` |
+| `baseline/terminal-pre` | `develop` en `af33348` (v0.4.0) antes de la terminal integrada: bundle, arranque caliente, reposo, ciclos de `resources.mjs` y el primer byte del shell de login fuera de la app; tamaños del binario y de los paquetes en `summary.json` | Omarchy, kernel 7.2.5, perfil `performance` |
 
 `node-editor.json` no guarda su dispersión, así que una corrida suelta contra otra puede marcar como regresión el ruido de microsegundos. Antes de llamarlo regresión, repite los dos lados (cinco corridas alternadas) y compara las medianas.
 

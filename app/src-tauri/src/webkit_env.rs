@@ -8,7 +8,14 @@
 //! puesta —en cualquier valor— se respeta: `WEBKIT_DISABLE_DMABUF_RENDERER=0`
 //! la deja activa.
 
-const DMABUF_VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
+pub(crate) const DMABUF_VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
+
+/// La puso Rowly, no el usuario: la terminal integrada no se la pasa al shell.
+static SET_BY_ROWLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn dmabuf_set_by_rowly() -> bool {
+    SET_BY_ROWLY.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 fn should_disable_dmabuf(nvidia_driver: bool, already_set: bool) -> bool {
     nvidia_driver && !already_set
@@ -24,6 +31,7 @@ pub fn apply() {
     if should_disable_dmabuf(nvidia_driver, already_set) {
         // SAFETY: todavía no hay otros hilos que lean el entorno.
         unsafe { std::env::set_var(DMABUF_VAR, "1") };
+        SET_BY_ROWLY.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
