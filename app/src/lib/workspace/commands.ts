@@ -27,7 +27,7 @@ export interface CommandDefinition {
 export const commandDefinitions: CommandDefinition[] = [
   // Prefijo: despues, una flecha mueve el foco a la zona vecina
   // (focusZones.ts).
-  { id: "focus-zone-prefix", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
+  { id: "focus-zone-prefix", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+W" },
   { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Alt+1" },
   // Como en DataGrip; no depende de la distribucion del teclado.
   { id: "toggle-terminal", zone: "global", group: "general", defaultKeys: "Ctrl+T" },

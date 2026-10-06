@@ -5,7 +5,7 @@ import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.
 //
 //   ┌──────────┬────────────┐
-//   │ explorer │   editor   │    Ctrl+W y despues una flecha lleva el
+//   │ explorer │   editor   │    Ctrl+Shift+W y despues una flecha lleva el
 //   │          ├────────────┤    foco a la zona vecina en esa direccion.
 //   │  files   │  results   │    Con Ctrl apretado, cada pulsacion de
 //   └──────────┴────────────┘    flecha mueve una zona (y en los bordes
@@ -183,9 +183,10 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   // flecha (dentro del plazo) mueve una vez y termina. Cualquier otra tecla
   // lo termina y sigue su camino normal.
   //
-  // Las repeticiones de teclado no cuentan: mantener Ctrl+W no reinicia el
-  // modo en cada repeticion de la W (dejaba huecos en los que la flecha iba
-  // al texto) y mantener una flecha no recorre las zonas sin control.
+  // Las repeticiones de teclado no cuentan: mantener Ctrl+Shift+W no
+  // reinicia el modo en cada repeticion de la W (dejaba huecos en los que la
+  // flecha iba al texto) y mantener una flecha no recorre las zonas sin
+  // control.
 
   let moving = false;
   let moved = false;

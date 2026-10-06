@@ -11,10 +11,13 @@ import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 // toma la tecla, nadie mas la ve. Si ninguno aplica, sigue su camino normal
 // (p. ej. Ctrl+A en un input fuera del editor).
 //
-// Con el foco en la terminal integrada solo pasa su propio atajo.
+// Con el foco en la terminal integrada solo pasan su propio atajo y el del
+// modo mover.
 //
 // Esc hacia el editor y las flechas del modo mover siguen en focusZones.ts:
 // dependen de lo que la zona haga con la tecla, no son acciones.
+
+const TERMINAL_COMMANDS = new Set(["toggle-terminal", "focus-zone-prefix"]);
 
 let installed = false;
 
@@ -31,8 +34,9 @@ export function installKeybindings(isBlocked: () => boolean): () => void {
       .map((shortcut) => shortcut.id);
     if (ids.length === 0) return;
     // En la terminal las teclas son del shell (Ctrl+R, Ctrl+W, Ctrl+Enter...):
-    // solo se despacha la que la muestra u oculta.
-    if ((event.target as Element).closest?.("[data-terminal]") && !ids.includes("toggle-terminal")) return;
+    // solo se despachan la que la muestra u oculta y el modo mover, para
+    // poder salir de ella con el teclado.
+    if ((event.target as Element).closest?.("[data-terminal]") && !ids.some((id) => TERMINAL_COMMANDS.has(id))) return;
     if (runFirstCommand(ids, get(activeZone)) === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();
