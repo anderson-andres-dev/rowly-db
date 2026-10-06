@@ -440,7 +440,7 @@ cycle(`${CONSOLE_CYCLES} ciclos de consola: abrir, ejecutar, cambiar de tema y c
   const samples = [];
   for (let index = 1; index <= CONSOLE_CYCLES; index += 1) {
     // Abrir: una consola nueva, activa, con su editor.
-    await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true });
+    await press(page, { key: "n", code: "KeyN", ctrl: true });
     await waitFor(page, `la consola ${index}`, `${tabs} === ${baseTabs + 1}`);
     // Ejecutar en ella.
     await writeSql(page, `SELECT id, name, ${index} AS ciclo FROM victim ORDER BY id`);
@@ -455,7 +455,7 @@ cycle(`${CONSOLE_CYCLES} ciclos de consola: abrir, ejecutar, cambiar de tema y c
     await page.evaluate(`${settingsButton}.click(), true`);
     await waitFor(page, "Ajustes cerrado", `${settingsButton}.getAttribute("aria-expanded") === "false"`);
     // Cerrar: si pregunta por el texto, se descarta.
-    await press(page, { key: "F4", code: "F4", ctrl: true }, ".cm-content");
+    await press(page, { key: "w", code: "KeyW", ctrl: true }, ".cm-content");
     await waitFor(page, `cerrar la consola ${index}`, `${tabs} === ${baseTabs} || !!document.querySelector("dialog[open] .danger-soft")`);
     if (await page.evaluate(`!!document.querySelector("dialog[open] .danger-soft")`)) {
       await page.evaluate(`document.querySelector("dialog[open] .danger-soft").click(), true`);
@@ -573,7 +573,7 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   await waitFor(page, "la misma sesion", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
 
   // Una consola nueva no la tapa; ejecutar si muestra el resultado.
-  await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true }, "body");
+  await press(page, { key: "n", code: "KeyN", ctrl: true }, "body");
   await waitFor(page, "la consola", `document.querySelectorAll(".console-tab").length === 1 && !!document.querySelector(".cm-content")`);
   if (!(await page.evaluate(terminalShown))) throw new Error("crear una consola oculto la terminal");
   await writeSql(page, "SELECT id, name FROM victim ORDER BY id");
@@ -597,7 +597,7 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   await waitFor(page, "la terminal de vuelta", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
 
   // Cambiar de consola con la terminal a la vista: sigue la terminal.
-  await press(page, { key: "Q", code: "KeyQ", ctrl: true, shift: true }, "body");
+  await press(page, { key: "n", code: "KeyN", ctrl: true }, "body");
   await waitFor(page, "la segunda consola", `document.querySelectorAll(".console-tab").length === 2`);
   await page.evaluate(`document.querySelector(".console-tab").click(), true`);
   await sleep(300);

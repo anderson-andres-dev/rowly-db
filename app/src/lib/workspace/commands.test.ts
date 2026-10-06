@@ -43,10 +43,11 @@ describe("registro de comandos", () => {
     expect(commandsCollide("global", "results")).toBe(true);
   });
 
-  it("las teclas de fabrica no chocan entre si", () => {
+  it("las teclas de fabrica, alias incluidos, no chocan entre si", () => {
+    const keysOf = (definition: (typeof commandDefinitions)[number]) => [definition.defaultKeys, ...(definition.aliasKeys ?? [])];
     for (const a of commandDefinitions) {
       for (const b of commandDefinitions) {
-        if (a.id === b.id || a.defaultKeys !== b.defaultKeys) continue;
+        if (a.id === b.id || !keysOf(a).some((keys) => keysOf(b).includes(keys))) continue;
         expect(commandsCollide(a.zone, b.zone), `${a.id} / ${b.id}`).toBe(false);
       }
     }

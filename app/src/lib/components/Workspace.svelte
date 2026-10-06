@@ -3,6 +3,7 @@
   import { get } from "svelte/store";
   import { focusZoneAction } from "$lib/focusZones";
   import { registerCommand, registerCommands } from "$lib/workspace/commands";
+  import { registerTabCommands } from "$lib/workspace/tabCommands";
   import { tooltip } from "$lib/tooltip";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
@@ -458,6 +459,17 @@
 
   $effect(() => registerCommands("global", { "toggle-terminal": toggleTerminal }));
 
+  // Ctrl+Tab y Ctrl+1..9 fuera del panel inferior y de la terminal: las
+  // consolas (workspace/tabCommands.ts).
+  $effect(() =>
+    registerTabCommands("global", {
+      keys: () => consoles.map((item) => item.id),
+      current: () => activeId,
+      select: (id) => activateQueryConsole(profileId, id),
+      applies: () => $pendingClose === null,
+    }),
+  );
+
   // Comandos de las pestañas (lib/workspace/commands.ts); la tecla la pone
   // keybindings.ts. Con el modal de cerrar pendiente, ninguno aplica.
   $effect(() => {
@@ -588,7 +600,7 @@
 
   const formatMs = (elapsedMs: number) => formatDuration(elapsedMs, (value) => $numberFormat.format(value));
 
-  // --- Historial (Ctrl+E) ---------------------------------------------------
+  // --- Historial (Ctrl+H) ---------------------------------------------------
   // Capa flotante sobre el editor; al cerrarla, el foco vuelve al editor en
   // la posicion exacta del cursor.
   let historyOpen = $state(false);
@@ -703,7 +715,7 @@
     notifySuccess($t(one ? "workspace.notify.exportedOne" : "workspace.notify.exportedOther", params));
   }
 
-  // Ctrl+Alt+Abajo / Ctrl+Alt+Arriba.
+  // Alt+→ / Alt+←.
   function stepPage(direction: 1 | -1): boolean {
     if (!activeConsole || execution.isExecuting) return false;
     const { page, result } = execution;

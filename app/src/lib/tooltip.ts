@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import { t } from "$lib/i18n";
+import { shortcutKeyParts } from "$lib/stores/shortcuts";
 
 // Tooltip propio de la app: el unico que se usa. El `title` nativo sale con
 // el estilo del sistema (distinto en cada motor) y tarda; este se ve igual
@@ -52,7 +53,7 @@ interface Resolved {
   placement: "below" | "above";
 }
 
-// Atajo al final del texto: "(Shift+Enter)", "(F2)", "(Ctrl+Alt+Z)".
+// Atajo al final del texto: "(Shift+Enter)", "(Alt+N)", "(Ctrl+Z)".
 const TRAILING_SHORTCUT = /^(.*\S)\s+\(((?:[A-Za-z0-9]+\+)+[A-Za-z0-9]+|F\d{1,2})\)$/;
 
 function resolve(params: TooltipParams): Resolved | null {
@@ -74,11 +75,9 @@ function resolve(params: TooltipParams): Resolved | null {
 
 function prettyShortcut(keys: string): string {
   if (!keys) return "";
-  const translate = get(t);
-  return keys
-    .replace("ArrowDown", translate("results.key.down"))
-    .replace("ArrowUp", translate("results.key.up"))
-    .replace("Insert", translate("results.key.insert"));
+  return shortcutKeyParts(keys)
+    .map((key) => (key === "Insert" ? get(t)("results.key.insert") : key))
+    .join("+");
 }
 
 function place(anchor: HTMLElement, tip: HTMLDivElement, placement: "below" | "above") {

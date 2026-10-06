@@ -64,7 +64,8 @@
   let settingsOpen = $state(false);
   let settingsSection = $state<"general" | "shortcuts">("general");
 
-  // Hoja de atajos (F1): al cerrarla con Esc, el foco vuelve a donde estaba.
+  // Hoja de atajos (Ctrl+?): al cerrarla con Esc, el foco vuelve a donde
+  // estaba.
   let sheetOpen = $state(false);
   let focusBeforeSheet: HTMLElement | null = null;
 
@@ -220,7 +221,7 @@
     return true;
   }
 
-  // El colapso usa la misma transicion de width que Alt+1: al soltar por
+  // El colapso usa la misma transicion de width que Ctrl+E: al soltar por
   // debajo del minimo, .resizing (que la apaga) se quita en el mismo frame
   // en que el width pasa a 0, asi que el panel anima lo que le falta desde
   // donde lo dejo el mouse. $sidebarWidth no se toca: al reabrir vuelve al
@@ -307,12 +308,15 @@
     // Antes que todo: el teclado numerico que llega como flechas no puede
     // mover zonas ni disparar atajos.
     cleanupNumpadFix = installNumpadFix();
-    // Primero las zonas: sus flechas del modo mover van antes que los atajos.
     cleanupFocusZones = installFocusZones(shortcutsBlocked);
     cleanupKeybindings = installKeybindings(shortcutsBlocked);
     const cleanupSidebarCommands = registerCommands("global", {
       "toggle-sidebar": toggleSidebar,
       "shortcut-sheet": toggleShortcutSheet,
+      "open-settings": () => {
+        settingsSection = "general";
+        settingsOpen = true;
+      },
     });
     const cleanupExplorerFind = registerCommands("explorer", { find: findInSidebar });
     const cleanupFilesFind = registerCommands("files", { find: findInSidebar });

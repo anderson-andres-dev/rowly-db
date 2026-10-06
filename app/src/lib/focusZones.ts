@@ -1,15 +1,13 @@
 import { get, writable } from "svelte/store";
 import { registerCommand } from "$lib/workspace/commands";
-import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.
 //
 //   ┌──────────┬────────────┐
-//   │ explorer │   editor   │    Ctrl+Shift+W y despues una flecha lleva el
-//   │          ├────────────┤    foco a la zona vecina en esa direccion.
-//   │  files   │  results   │    Con Ctrl apretado, cada pulsacion de
-//   └──────────┴────────────┘    flecha mueve una zona (y en los bordes
-//                                da la vuelta) hasta soltar Ctrl.
+//   │ explorer │   editor   │    Ctrl+Shift+flecha lleva el foco a la
+//   │          ├────────────┤    zona vecina en esa direccion (en los
+//   │  files   │  results   │    bordes da la vuelta), tambien desde la
+//   └──────────┴────────────┘    terminal.
 //
 // La zona activa la deciden solo el foco real y el clic, nunca el mouse
 // encima: WebKit no enfoca un boton al hacer clic, asi que el clic tambien
@@ -72,14 +70,12 @@ function isUsable(element: HTMLElement | undefined, zone: HTMLElement): element 
 }
 
 // Al llegar con el teclado, la zona destella y queda marcada con un
-// contorno tenue mientras se sigue moviendo (Ctrl apretado); un segundo
-// despues de dejar de moverse se desvanece solo, para no estorbar. Un clic
-// la quita al instante. Ambos van en una capa encima del contenido
+// contorno tenue; un segundo despues de la ultima pulsacion se desvanece
+// solo, para no estorbar. Un clic la quita al instante. Ambos van en una capa encima del contenido
 // (controls.css), para que el editor o los encabezados del grid no los
 // tapen.
 let marked: HTMLElement | null = null;
 let fadeTimer: ReturnType<typeof setTimeout> | null = null;
-let stillMoving = () => false;
 
 const MARK_LINGER_MS = 1000;
 
@@ -87,8 +83,6 @@ function scheduleFade() {
   if (fadeTimer) clearTimeout(fadeTimer);
   fadeTimer = setTimeout(() => {
     fadeTimer = null;
-    // Con Ctrl todavia apretado se sigue moviendo: la marca espera.
-    if (stillMoving()) return;
     marked?.classList.add("zone-fading");
   }, MARK_LINGER_MS);
 }
@@ -159,101 +153,24 @@ export function focusZoneAction(node: HTMLElement, params: { zone: Zone; focusDe
 
 // --- Teclado ---------------------------------------------------------------
 
-const DIRECTIONS: Record<string, Direction> = {
-  ArrowLeft: "left",
-  ArrowRight: "right",
-  ArrowUp: "up",
-  ArrowDown: "down",
+// Cada direccion es un comando (lib/workspace/commands.ts); la tecla la pone
+// el despachador (keybindings.ts).
+const DIRECTION_COMMANDS: Record<string, Direction> = {
+  "focus-zone-left": "left",
+  "focus-zone-right": "right",
+  "focus-zone-up": "up",
+  "focus-zone-down": "down",
 };
-
-// Tras el prefijo hay este tiempo para la direccion.
-const CHORD_TIMEOUT_MS = 1500;
 
 let installed = false;
 
-// Se instala una vez desde el layout, antes que keybindings.ts: en captura,
-// las flechas del modo mover tienen que llegar antes que el despachador, el
-// editor (CodeMirror) y el grid.
 export function installFocusZones(isBlocked: () => boolean): () => void {
   if (installed) return () => {};
   installed = true;
-  // Modo mover: empieza con el comando focus-zone-prefix. Mientras Ctrl siga
-  // apretado, las flechas solo mueven entre zonas (nunca el texto ni el
-  // grid) y el modo dura hasta soltar Ctrl. Con Ctrl suelto, la primera
-  // flecha (dentro del plazo) mueve una vez y termina. Cualquier otra tecla
-  // lo termina y sigue su camino normal.
-  //
-  // Las repeticiones de teclado no cuentan: mantener Ctrl+Shift+W no
-  // reinicia el modo en cada repeticion de la W (dejaba huecos en los que la
-  // flecha iba al texto) y mantener una flecha no recorre las zonas sin
-  // control.
 
-  let moving = false;
-  let moved = false;
-  let deadline = 0;
-  // Ctrl apretado segun sus propios keydown/keyup, no event.ctrlKey solo.
-  let ctrlHeld = false;
-
-  function stopMoving() {
-    const wasMoving = moving && moved;
-    moving = false;
-    moved = false;
-    if (wasMoving) scheduleFade();
-  }
-  stillMoving = () => moving;
-
-  const unregisterPrefix = registerCommand("focus-zone-prefix", "global", () => {
-    moving = true;
-    moved = false;
-    deadline = Date.now() + CHORD_TIMEOUT_MS;
-  });
-
-  function isPrefix(event: KeyboardEvent): boolean {
-    const keys = formatShortcutEvent(event);
-    return !!keys && get(shortcuts).some((shortcut) => shortcut.id === "focus-zone-prefix" && shortcut.keys === keys);
-  }
-
-  function swallow(event: KeyboardEvent) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === "Control") ctrlHeld = true;
-    if (isBlocked() || !moving) return;
-    if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
-    const ctrl = event.ctrlKey || ctrlHeld;
-    // La W que se repite (o el prefijo otra vez) sigue en el mismo modo.
-    if (isPrefix(event)) {
-      swallow(event);
-      if (!ctrl) deadline = Date.now() + CHORD_TIMEOUT_MS;
-      return;
-    }
-    const direction = !event.altKey && !event.metaKey ? DIRECTIONS[event.key] : undefined;
-    if (!direction || (!ctrl && Date.now() > deadline)) {
-      stopMoving();
-      return;
-    }
-    swallow(event);
-    if (event.repeat) return;
-    moveFocus(direction);
-    moved = true;
-    if (!ctrl) stopMoving();
-  }
-
-  // Soltar Ctrl despues de moverse termina el modo. Si todavia no hubo
-  // flecha, queda la espera normal de la primera.
-  function onKeyup(event: KeyboardEvent) {
-    if (event.key !== "Control") return;
-    ctrlHeld = false;
-    if (moving && moved) stopMoving();
-  }
-
-  // Al perder la ventana el foco no llega el keyup de Ctrl.
-  function onWindowBlur() {
-    ctrlHeld = false;
-    stopMoving();
-  }
+  const unregisterDirections = Object.entries(DIRECTION_COMMANDS).map(([id, direction]) =>
+    registerCommand(id, "global", () => moveFocus(direction)),
+  );
 
   // Esc desde el explorador, los archivos o el resultado vuelve al editor,
   // al punto exacto donde estaba el cursor. Va en burbuja: si la zona usa
@@ -282,18 +199,12 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     markActive(zone, target);
   }
 
-  window.addEventListener("keydown", onKeydown, true);
-  window.addEventListener("keyup", onKeyup, true);
-  window.addEventListener("blur", onWindowBlur);
   window.addEventListener("keydown", onEscape);
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("pointerdown", onPointerDown, true);
   return () => {
     installed = false;
-    unregisterPrefix();
-    window.removeEventListener("keydown", onKeydown, true);
-    window.removeEventListener("keyup", onKeyup, true);
-    window.removeEventListener("blur", onWindowBlur);
+    unregisterDirections.forEach((unregister) => unregister());
     window.removeEventListener("keydown", onEscape);
     document.removeEventListener("focusin", onFocusIn);
     document.removeEventListener("pointerdown", onPointerDown, true);

@@ -6,6 +6,8 @@
   import { editorPalette } from "$lib/theming/theme";
   import TerminalSession from "$lib/components/TerminalSession.svelte";
   import type { TerminalInfo } from "$lib/terminal";
+  import { registerCommands } from "$lib/workspace/commands";
+  import { registerTabCommands } from "$lib/workspace/tabCommands";
 
   // La terminal de la ventana, dentro del panel inferior (la pestaña
   // Terminal de ResultPane): una fila con las sesiones en el lugar de la
@@ -122,6 +124,41 @@
     return () => clearTimeout(timer);
   });
 
+  // Atajos de las sesiones (lib/workspace/commands.ts), solo con el foco en
+  // la terminal: Ctrl+Tab y Ctrl+1..9 entre sesiones, Ctrl+Shift+T nueva,
+  // Ctrl+Shift+W cerrar y Ctrl+Shift+R renombrar. Fuera de ella, la tecla
+  // sigue con las consolas o el panel inferior.
+  let body: HTMLDivElement;
+  const focused = () => {
+    const element = document.activeElement;
+    return visible && !!element && (row.contains(element) || body.contains(element));
+  };
+
+  $effect(() => {
+    const cleanupTabs = registerTabCommands("results", {
+      keys: () => open.map((session) => String(session.key)),
+      current: () => String(active),
+      select: (key) => (active = Number(key)),
+      applies: focused,
+    });
+    const cleanupRename = registerCommands("results", {
+      "rename-query-console": () => {
+        const session = focused() && open.find((item) => item.key === active);
+        if (!session) return false;
+        void startRename(session);
+      },
+    });
+    const cleanupSessions = registerCommands("global", {
+      "new-terminal-session": () => focused() && (add(), true),
+      "close-terminal-session": () => focused() && active !== 0 && (close(active), true),
+    });
+    return () => {
+      cleanupTabs();
+      cleanupRename();
+      cleanupSessions();
+    };
+  });
+
   // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
   // ultima), abre una. Cerrar la ultima con la pestaña a la vista no la
   // reabre sola: queda el +.
@@ -166,7 +203,7 @@
           onblur={() => finishRename(true)}
         />
       {:else}
-        <!-- Doble clic o F2: renombrar. -->
+        <!-- Doble clic, F2 o Ctrl+Shift+R: renombrar. -->
         <button
           type="button"
           role="tab"
@@ -197,7 +234,7 @@
 </div>
 <!-- Las sesiones, apiladas en el mismo lugar: cambiar de una a otra solo
      cambia cual se ve, sin desmontar ni redimensionar xterm. -->
-<div class="sessions-body" style:background={$editorPalette.background}>
+<div class="sessions-body" style:background={$editorPalette.background} bind:this={body}>
   {#each sessions as session (session.key)}
     <TerminalSession
       visible={visible && session.key === active}

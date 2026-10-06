@@ -74,7 +74,7 @@ Compara solo con una referencia tomada en la misma máquina y el mismo sistema:
 | Ciclo | Qué hace | Compuerta |
 |---|---|---|
 | 300 reconexiones | Alterna un perfil MySQL y uno PostgreSQL volviendo a la lista | Cada una muestra su servidor; el análisis usa el catálogo de la conexión actual |
-| 300 consolas | Abrir (Ctrl+Shift+Q), ejecutar (Ctrl+Enter), cambiar de paleta en Ajustes y cerrar (Ctrl+F4) | Al final queda un solo editor |
+| 300 consolas | Abrir (Ctrl+N), ejecutar (Ctrl+Enter), cambiar de paleta en Ajustes y cerrar (Ctrl+W) | Al final queda un solo editor |
 | Reposo con una conexión | 300 s con un resultado en pantalla | Ninguna llamada al backend ni `setInterval`; menos del 10 % de un núcleo |
 | Pestaña Terminal | Sin consola, cambiando de consola, Ctrl+T ida y vuelta, `+` y `×` por sesión | Ocupa el lugar del grid sin mover el panel ni sumar un splitter; cada lado conserva su estado; `×` cierra solo su shell; la pestaña queda sin sesiones |
 | 300 sesiones | Abrir con `+`, esperar el shell y cerrar con `×` | Ningún shell vivo y el backend con los mismos hilos que antes |

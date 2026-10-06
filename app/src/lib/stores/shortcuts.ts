@@ -46,20 +46,29 @@ if (browser) {
 
 export interface ResolvedShortcut extends ShortcutDefinition {
   keys: string;
+  // Los alias de fabrica; se pierden al reasignar el comando.
+  aliases: string[];
   isCustom: boolean;
 }
 
 // Lista lista para pintar en Ajustes > Atajos: cada definicion con su tecla
 // vigente (override si existe, si no la de fabrica).
 export const shortcuts = derived(shortcutOverrides, (overrides) =>
-  shortcutDefinitions.map(
-    (definition): ResolvedShortcut => ({
+  shortcutDefinitions.map((definition): ResolvedShortcut => {
+    const isCustom = definition.id in overrides;
+    return {
       ...definition,
       keys: overrides[definition.id] ?? definition.defaultKeys,
-      isCustom: definition.id in overrides,
-    }),
-  ),
+      aliases: isCustom ? [] : (definition.aliasKeys ?? []),
+      isCustom,
+    };
+  }),
 );
+
+// La tecla vigente o uno de sus alias.
+export function shortcutUses(shortcut: ResolvedShortcut, keys: string): boolean {
+  return keys !== "" && (shortcut.keys === keys || shortcut.aliases.includes(keys));
+}
 
 export function setShortcutKeys(id: string, keys: string): void {
   shortcutOverrides.update((overrides) => ({ ...overrides, [id]: keys }));
@@ -95,4 +104,12 @@ export function formatShortcutEvent
   parts.push(key.length === 1 ? key.toUpperCase() : key);
 
   return parts.join("+");
+}
+
+const KEY_SYMBOLS: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" };
+
+// Las teclas de un atajo para pintarlas una por una (<kbd>), con las flechas
+// como simbolo.
+export function shortcutKeyParts(keys: string): string[] {
+  return keys.split("+").map((key) => KEY_SYMBOLS[key] ?? key);
 }

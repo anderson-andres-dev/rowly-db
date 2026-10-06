@@ -54,6 +54,7 @@
   } from "$lib/results/resultEditing";
   import { shortcuts } from "$lib/stores/shortcuts";
   import { registerCommands } from "$lib/workspace/commands";
+  import { registerTabCommands } from "$lib/workspace/tabCommands";
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
   import { editorPalette } from "$lib/theming/theme";
@@ -526,6 +527,34 @@
       "submit-result-changes": inGrid(() => {
         if (pending > 0) onsubmit();
       }),
+      // Ctrl+S en el grid con cambios pendientes: aplicarlos. Sin cambios,
+      // sigue el guardar de siempre.
+      "save-query-console": () => pending > 0 && inGrid(onsubmit)() !== false,
+    }),
+  );
+
+  // Ctrl+Tab y Ctrl+1..9 en el panel: Salida, los resultados y Terminal, en
+  // el orden de la fila. La terminal registra las suyas para sus sesiones.
+  let tabStrip = $state<HTMLElement>();
+  const showsResultTabs = $derived(!tableView && hasActivity);
+  const stripKeys = $derived([
+    ...(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []),
+    ...(!tableView || terminal ? ["terminal"] : []),
+  ]);
+
+  $effect(() =>
+    registerTabCommands("results", {
+      keys: () => stripKeys,
+      current: () => (terminalActive ? "terminal" : showingOutput ? "output" : (selectedKey ?? null)),
+      select: (key) => {
+        if (key === "terminal") {
+          if (!terminalActive) onterminal();
+          return;
+        }
+        onselecttab(key);
+        // El foco va a la pestaña elegida, como al hacer clic.
+        void tick().then(() => tabStrip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
+      },
     }),
   );
 
@@ -561,9 +590,10 @@
       class="result-tabs tab-strip"
       role="tablist"
       aria-label={$t("results.tabs")}
+      bind:this={tabStrip}
       use:settleTransitions
     >
-      {#if !tableView && hasActivity}
+      {#if showsResultTabs}
       <button
         type="button"
         role="tab"

@@ -18,6 +18,7 @@
   import { notifyError } from "$lib/stores/notifications";
   import { fileNameFromPath, isQueryConsoleDirty, queryConsoles } from "$lib/stores/queryConsoles";
   import { closeSqlFolder, setFilePanelCollapsed, setSqlFolderExpanded, sqlFolders } from "$lib/stores/sqlFolders";
+  import { registerCommands } from "$lib/workspace/commands";
 
   let { profileId, folder }: { profileId: string; folder: string } = $props();
 
@@ -102,6 +103,29 @@
     await tick();
     editInput?.focus();
   }
+
+  // Ctrl+N y Ctrl+Shift+R con el foco en el arbol (zona "files"): crear un
+  // archivo junto al elemento enfocado y renombrar el archivo enfocado. Sin
+  // un elemento enfocado, la tecla sigue con las consolas.
+  function focusedEntry(): { path: string; isDir: boolean } | null {
+    const row = document.activeElement?.closest<HTMLElement>("[data-entry-path]");
+    return row ? { path: row.dataset.entryPath as string, isDir: row.dataset.entryDir === "true" } : null;
+  }
+
+  $effect(() =>
+    registerCommands("files", {
+      "new-query-console": () => {
+        const entry = focusedEntry();
+        if (!entry) return false;
+        void startCreate(entry.isDir ? entry.path : parentOf(entry.path));
+      },
+      "rename-query-console": () => {
+        const entry = focusedEntry();
+        if (!entry || entry.isDir) return false;
+        void startRename(entry.path);
+      },
+    }),
+  );
 
   async function startRename(path: string) {
     menu = null;
@@ -219,6 +243,8 @@
             type="button"
             class="row"
             style:--depth={depth}
+            data-entry-path={entry.path}
+            data-entry-dir="true"
             use:tooltip={entry.path}
             onclick={() => toggleDir(entry.path)}
             oncontextmenu={(event) => openMenu(event, folderMenuItems(entry.path))}
@@ -246,6 +272,7 @@
             class="row leaf"
             class:active={entry.path === activeFilePath}
             style:--depth={depth}
+            data-entry-path={entry.path}
             use:tooltip={entry.path}
             onclick={() => openFile(entry.path)}
             oncontextmenu={(event) => openMenu(event, fileMenuItems(entry.path))}

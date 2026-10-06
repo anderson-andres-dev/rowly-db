@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
-import { runFirstCommand } from "$lib/workspace/commands";
+import { runFirstCommand, TAB_NUMBERS } from "$lib/workspace/commands";
 import { activeZone } from "$lib/focusZones";
-import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
+import { formatShortcutEvent, shortcutUses, shortcuts } from "$lib/stores/shortcuts";
 
 // Despachador unico de atajos: traduce la tecla a los comandos que la usan
 // (stores/shortcuts.ts) y los ejecuta en la zona activa (lib/workspace/commands.ts).
@@ -11,13 +11,26 @@ import { formatShortcutEvent, shortcuts } from "$lib/stores/shortcuts";
 // toma la tecla, nadie mas la ve. Si ninguno aplica, sigue su camino normal
 // (p. ej. Ctrl+A en un input fuera del editor).
 //
-// Con el foco en la terminal integrada solo pasan su propio atajo y el del
-// modo mover.
-//
-// Esc hacia el editor y las flechas del modo mover siguen en focusZones.ts:
-// dependen de lo que la zona haga con la tecla, no son acciones.
+// Esc hacia el editor sigue en focusZones.ts: depende de lo que la zona haga
+// con la tecla, no es una accion.
 
-const TERMINAL_COMMANDS = new Set(["toggle-terminal", "focus-zone-prefix"]);
+// En la terminal las teclas son del shell y de las IA (Ctrl+R, Ctrl+W,
+// Ctrl+Enter...): solo pasan moverse entre zonas, mostrarla u ocultarla, la
+// capa Ctrl+Shift de sus sesiones, Ctrl+Tab y Ctrl+1..9.
+const TERMINAL_COMMANDS = new Set([
+  "focus-zone-left",
+  "focus-zone-right",
+  "focus-zone-up",
+  "focus-zone-down",
+  "toggle-terminal",
+  "next-tab",
+  "previous-tab",
+  ...TAB_NUMBERS.map((n) => `go-to-tab-${n}`),
+  "new-terminal-session",
+  "close-terminal-session",
+  "rename-query-console",
+  "shortcut-sheet",
+]);
 
 let installed = false;
 
@@ -29,14 +42,11 @@ export function installKeybindings(isBlocked: () => boolean): () => void {
     if (event.defaultPrevented || event.isComposing || isBlocked()) return;
     const keys = formatShortcutEvent(event);
     if (!keys) return;
-    const ids = get(shortcuts)
-      .filter((shortcut) => shortcut.keys === keys)
+    let ids = get(shortcuts)
+      .filter((shortcut) => shortcutUses(shortcut, keys))
       .map((shortcut) => shortcut.id);
+    if ((event.target as Element).closest?.("[data-terminal]")) ids = ids.filter((id) => TERMINAL_COMMANDS.has(id));
     if (ids.length === 0) return;
-    // En la terminal las teclas son del shell (Ctrl+R, Ctrl+W, Ctrl+Enter...):
-    // solo se despachan la que la muestra u oculta y el modo mover, para
-    // poder salir de ella con el teclado.
-    if ((event.target as Element).closest?.("[data-terminal]") && !ids.some((id) => TERMINAL_COMMANDS.has(id))) return;
     if (runFirstCommand(ids, get(activeZone)) === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();

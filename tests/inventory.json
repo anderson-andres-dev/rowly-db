@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 141,
-    "tests": 1484,
+    "files": 142,
+    "tests": 1486,
     "ignored": 31,
     "byDecision": {
-      "keep": 141,
+      "keep": 142,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 135,
+      "pr": 136,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -1433,12 +1433,12 @@
       "path": "app/src/lib/focusZones.keys.test.ts",
       "domain": "platform",
       "owner": "app/src/lib/focusZones.ts",
-      "property": "Modo mover (Ctrl+Shift+W): el foco salta entre zonas con el teclado",
+      "property": "Ctrl+Shift+flechas mueve el foco entre zonas y la terminal solo cede su capa Ctrl+Shift",
       "risk": "P2",
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 10,
+      "tests": 6,
       "ignored": 0,
       "environment": "node",
       "dependencies": [],
@@ -2423,6 +2423,27 @@
       "external": [
         "Orders",
         "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/workspace/tabCommands.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/tabCommands.ts",
+      "property": "Ctrl+Tab y Ctrl+1..9 recorren la fila de pestañas del foco, con la vuelta en los bordes",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "commands",
+        "tabCommands"
+      ],
+      "external": [
         "vitest"
       ],
       "durationMs": null
