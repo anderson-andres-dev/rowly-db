@@ -236,7 +236,9 @@
      El margen negativo deja el + junto a las pestañas. */
   .sessions-scroll {
     margin-right: calc(-1 * var(--tab-reach));
+    margin-left: calc(-1 * var(--radius-sm));
     padding-right: var(--tab-reach);
+    padding-left: var(--radius-sm);
   }
 
   .sessions-scroll :global(.result-tab) {
