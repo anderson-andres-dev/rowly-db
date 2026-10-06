@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { Plus, Terminal as TerminalIcon, X } from "@lucide/svelte";
+  import { Plus, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { editorPalette } from "$lib/theming/theme";
@@ -130,8 +130,8 @@
   });
 </script>
 
-<!-- Pestañas de herramienta, con el fondo de la terminal: la elegida con el
-     icono en acento y el texto pleno, sin relleno ni linea. -->
+<!-- Las mismas pestañas que las del resultado (styles/tabs.css), con el
+     fondo de la terminal. -->
 <div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
   <div
     class="sessions-scroll"
@@ -146,7 +146,7 @@
     <!-- Las mismas transiciones que las pestañas de las consolas: entra
          como fly (x -8, 150 ms) y sale como fade (120 ms). -->
     <div
-      class="session"
+      class="result-tab closable session"
       class:active={session.key === active}
       class:closing={session.closing}
       data-flip={session.key}
@@ -177,7 +177,6 @@
           ondblclick={() => startRename(session)}
           onkeydown={(event) => event.key === "F2" && startRename(session)}
         >
-          <TerminalIcon size={12} aria-hidden="true" />
           <span>{session.label}</span>
         </button>
       {/if}
@@ -222,86 +221,7 @@
   }
 
   .session {
-    position: relative;
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 0 var(--space-1) 0 var(--space-3);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
     animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
-  }
-
-  .session:hover,
-  .session.active {
-    color: var(--text-primary);
-  }
-
-  .session :global(.tab-select svg) {
-    color: var(--text-secondary);
-    opacity: 0.8;
-  }
-
-  .session.active :global(.tab-select svg) {
-    color: var(--accent);
-    opacity: 1;
-  }
-
-  /* La elegida en negrita, con una linea fina en acento bajo el icono y el
-     nombre. */
-  .session.active :global(.tab-select) {
-    position: relative;
-    font-weight: 600;
-  }
-
-  .session.active :global(.tab-select)::after {
-    position: absolute;
-    right: 0;
-    bottom: -6px;
-    left: 0;
-    height: 1px;
-    background: var(--accent);
-    content: "";
-  }
-
-  /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
-  .sessions-scroll {
-    --fade: 2rem;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    align-items: stretch;
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-padding-inline: var(--fade);
-  }
-
-  .sessions-scroll::-webkit-scrollbar {
-    display: none;
-  }
-
-  .sessions-scroll.fade-end {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
-  }
-
-  .sessions-scroll.fade-start {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
-  }
-
-  .sessions-scroll.fade-start.fade-end {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
-  }
-
-  /* La x: en la elegida y al pasar por encima. */
-  .session :global(.tab-close) {
-    visibility: hidden;
-  }
-
-  .session.active :global(.tab-close),
-  .session:hover :global(.tab-close),
-  .session :global(.tab-close:focus-visible) {
-    visibility: visible;
   }
 
   .session.closing {
