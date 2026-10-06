@@ -16,6 +16,8 @@
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--text-primary) 4%, var(--surface));
+  /* Hasta donde llega, por la linea base, el contorno de la elegida. */
+  --tab-reach: 5rem;
 }
 
 
@@ -53,6 +55,7 @@
    contenido; dentro, un degradado muy suave del acento que termina en el
    color del contenido (la union sigue sin linea). */
 .result-tab.active {
+  --tab-glow: color-mix(in srgb, var(--accent) 55%, transparent);
   position: relative;
   background: linear-gradient(
     to bottom,
@@ -67,7 +70,13 @@
   inset: -1px -1px 0;
   padding: 1px 1px 0;
   border-radius: inherit;
-  background: radial-gradient(130% 160% at 50% 0%, var(--accent) 0%, color-mix(in srgb, var(--accent) 35%, transparent) 45%, transparent 75%);
+  /* --tab-glow: el acento tenue con que el contorno llega a las esquinas de
+     abajo y sigue por la linea base (::after). */
+  background: radial-gradient(
+    140% 220% at 50% 0%,
+    color-mix(in srgb, var(--accent) 85%, transparent) 0%,
+    var(--tab-glow) 70%
+  );
   content: "";
   pointer-events: none;
   -webkit-mask:
@@ -75,6 +84,27 @@
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+}
+
+/* El contorno sigue por la linea base hacia afuera de la pestaña y se apaga
+   a --tab-reach de cada esquina; bajo la pestaña no hay linea. */
+.result-tab.active::after {
+  position: absolute;
+  right: calc(-1px - var(--tab-reach));
+  bottom: 0;
+  left: calc(-1px - var(--tab-reach));
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--tab-glow) var(--tab-reach),
+    transparent var(--tab-reach),
+    transparent calc(100% - var(--tab-reach)),
+    var(--tab-glow) calc(100% - var(--tab-reach)),
+    transparent
+  );
+  content: "";
+  pointer-events: none;
 }
 
 .result-tab svg {

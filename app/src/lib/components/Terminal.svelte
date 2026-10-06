@@ -231,6 +231,14 @@
     margin-bottom: -1px;
   }
 
+  /* Lugar al final para el contorno que sigue por la linea base desde la
+     ultima pestaña: sin el, contaba como desborde y la franja se desplazaba.
+     El margen negativo deja el + junto a las pestañas. */
+  .sessions-scroll {
+    margin-right: calc(-1 * var(--tab-reach));
+    padding-right: var(--tab-reach);
+  }
+
   .sessions-scroll :global(.result-tab) {
     margin-bottom: 0;
   }
