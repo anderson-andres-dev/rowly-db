@@ -61,13 +61,13 @@
    contenido; dentro, un degradado muy suave del acento que termina en el
    color del contenido (la union sigue sin linea). */
 .result-tab.active {
-  --tab-glow: color-mix(in srgb, var(--accent) 55%, transparent);
-  --tab-ring-top: color-mix(in srgb, var(--accent) 85%, transparent);
+  --tab-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+  --tab-ring-top: color-mix(in srgb, var(--accent) 70%, transparent);
   --tab-ring-side: var(--tab-glow);
   position: relative;
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--accent) 4%, var(--tab-active, var(--surface))),
+    color-mix(in srgb, var(--accent) 3%, var(--tab-active, var(--surface))),
     var(--tab-active, var(--surface)) 85%
   );
   color: var(--text-primary);
