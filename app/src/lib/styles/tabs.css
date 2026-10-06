@@ -16,8 +16,10 @@
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--text-primary) 4%, var(--surface));
-  /* Hasta donde llega, por la linea base, el contorno de la elegida. */
+  /* Hasta donde llega, por la linea base, el contorno de la elegida, y el
+     radio de sus curvas (arriba y abajo). */
   --tab-reach: 5rem;
+  --tab-curve: 8px;
 }
 
 
@@ -34,7 +36,7 @@
   box-sizing: border-box;
   border: 1px solid transparent;
   border-bottom: 0;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--tab-curve, var(--radius-sm)) var(--tab-curve, var(--radius-sm)) 0 0;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -49,8 +51,8 @@
    contorno tenue arriba que se desvanece hacia los lados, y un relleno que
    se apaga hacia abajo (sin borde recto en la base). */
 .result-tab:hover {
-  --tab-ring-top: color-mix(in srgb, var(--text-primary) 10%, transparent);
-  --tab-ring-side: transparent;
+  --tab-ring: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  --tab-ring-fade: 0;
   position: relative;
   background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent);
   color: var(--text-primary);
@@ -62,8 +64,9 @@
    color del contenido (la union sigue sin linea). */
 .result-tab.active {
   --tab-glow: color-mix(in srgb, var(--accent) 45%, transparent);
-  --tab-ring-top: color-mix(in srgb, var(--accent) 70%, transparent);
-  --tab-ring-side: var(--tab-glow);
+  --tab-ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  /* En los lados, abajo, queda en --tab-glow (45 de 70). */
+  --tab-ring-fade: 0.64;
   position: relative;
   background: linear-gradient(
     to bottom,
@@ -75,26 +78,18 @@
 
 .result-tab:hover::before,
 .result-tab.active::before {
+  /* Un borde real (el motor lo suaviza bien en las esquinas) que se
+     desvanece hacia los lados con una mascara de transparencia. Los lados
+     terminan donde empieza la curva de abajo (::after), que los continua. */
   position: absolute;
-  /* Los lados terminan donde empieza la curva de abajo (::after), que los
-     continua. */
-  inset: -1px -1px var(--radius-sm);
-  padding: 1px 1px 0;
-  border-radius: inherit;
-  /* --tab-glow: el acento tenue con que el contorno llega a las esquinas de
-     abajo y sigue por la linea base (::after). */
-  background: radial-gradient(
-    140% 220% at 50% 0%,
-    var(--tab-ring-top) 0%,
-    var(--tab-ring-side) 70%
-  );
+  inset: -1px -1px var(--tab-curve);
+  border: 1px solid var(--tab-ring);
+  border-bottom: 0;
+  border-radius: var(--tab-curve) var(--tab-curve) 0 0;
   content: "";
   pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  -webkit-mask-image: radial-gradient(140% 220% at 50% 0%, #000 0%, rgb(0 0 0 / var(--tab-ring-fade)) 70%);
+  mask-image: radial-gradient(140% 220% at 50% 0%, #000 0%, rgb(0 0 0 / var(--tab-ring-fade)) 70%);
 }
 
 /* Abajo, la pestaña se abre en una curva hacia afuera (como una carpeta)
@@ -102,14 +97,12 @@
    la linea base hasta apagarse a --tab-reach; bajo la pestaña no hay linea.
    --tab-curve es el radio de esas curvas. */
 .result-tab.active::after {
-  --tab-curve: var(--radius-sm);
-  /* Transiciones de menos de un pixel: un degradado de corte seco no se
-     suaviza (antialias) y el arco se veia escalonado. */
+  /* El arco de 1 px suavizado a mano (un degradado de corte seco no tiene
+     antialias): sube hasta el acento y pasa al relleno en menos de un pixel. */
   --tab-arc:
-    transparent calc(var(--tab-curve) - 1.6px),
-    var(--tab-glow) calc(var(--tab-curve) - 0.9px),
-    var(--tab-glow) calc(var(--tab-curve) - 0.3px),
-    var(--tab-active, var(--surface)) calc(var(--tab-curve) + 0.5px);
+    transparent calc(var(--tab-curve) - 1.4px),
+    var(--tab-glow) calc(var(--tab-curve) - 0.6px),
+    var(--tab-active, var(--surface)) calc(var(--tab-curve) + 0.2px);
   position: absolute;
   right: calc(-1px - var(--tab-reach));
   bottom: 0;
