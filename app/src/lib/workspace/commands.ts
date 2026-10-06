@@ -29,6 +29,8 @@ export const commandDefinitions: CommandDefinition[] = [
   // (focusZones.ts).
   { id: "focus-zone-prefix", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
   { id: "toggle-sidebar", zone: "global", group: "general", defaultKeys: "Alt+1" },
+  // Como en DataGrip; no depende de la distribucion del teclado.
+  { id: "toggle-terminal", zone: "global", group: "general", defaultKeys: "Alt+F12" },
   // Busca en la zona activa: cada zona registra su propio handler.
   { id: "find", zone: "global", group: "general", defaultKeys: "Ctrl+F" },
   // Como en DataGrip: buscar y reemplazar son atajos separados, no un
