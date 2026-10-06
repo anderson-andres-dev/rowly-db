@@ -4,17 +4,17 @@
   "label": "terminal-post",
   "initialJs": {
     "files": 10,
-    "kb": 1448.3,
-    "gzip_kb": 445.3
+    "kb": 1450.9,
+    "gzip_kb": 446.2
   },
   "allJs": {
     "files": 16,
-    "kb": 2036.4,
-    "gzip_kb": 601.4
+    "kb": 2043.9,
+    "gzip_kb": 604.0
   },
   "allCss": {
     "files": 3,
-    "kb": 51.2,
-    "gzip_kb": 8.5
+    "kb": 53.5,
+    "gzip_kb": 8.9
   }
 }

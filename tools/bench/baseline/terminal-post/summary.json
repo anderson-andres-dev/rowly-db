@@ -51,21 +51,16 @@
    "metric": "JS inicial (bundle.py)",
    "budget": "+0, dentro de 1 KB",
    "pre_local_gzip_kb": 444.3,
-   "post_gzip_kb": 445.3,
-   "closure_gzip_bytes_delta": 1024,
-   "result": "ok, en el limite (1024 B)",
-   "note": "Medido con el cierre de imports de bundle.py en bytes. Con la terminal como pestaña: ToolbarButton en el chunk de la terminal sacaba un chunk compartido del JS inicial (+1,2 KB); el + usa la pieza de las pestañas y el tooltip del shell va en cada sesion (lazy)"
+   "post_gzip_kb": 446.2,
+   "closure_gzip_bytes_delta": 1979,
+   "result": "excedido (+1979 B), aceptado y explicado",
+   "note": "Con el panel como en T1-T3 quedaba en +984 B. La pasada visual final suma al arranque la pestaña Terminal fija con el fondo de la terminal y la franja de resultados desplazable entre Salida y Terminal (tabScroll); el resto de la terminal sigue en el chunk lazy. El usuario aceptó el exceso (0,4 % del JS inicial) el 2026-10-06; el presupuesto no se cambia."
   },
   {
    "metric": "Chunk de la terminal",
    "budget": "<= 90 KB gzip",
-   "js_gzip_kb": 83.5,
+   "js_gzip_kb": 85.2,
    "css_gzip_kb": 1.0,
-   "parts_gzip_bytes": {
-    "xterm": 82292,
-    "terminal y sesiones": 2711,
-    "fit": 494
-   },
    "result": "ok"
   },
   {
