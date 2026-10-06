@@ -215,6 +215,16 @@
     return !!row;
   }
 
+  // La primera vez en el explorador: la primera tabla, no la fila de la
+  // conexion (que solo pliega todo).
+  function focusFirstTable(zone: HTMLElement): boolean {
+    const row = zone.querySelector<HTMLElement>('[role="tree"] .row-wrap.relation > .row');
+    if (!row) return focusFirstTreeRow(zone);
+    row.focus({ preventScroll: true });
+    row.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
   function toggleSidebar(): boolean {
     if (!$connection.connected) return false;
     sidebarCollapsed = !sidebarCollapsed;
@@ -308,6 +318,8 @@
     // Antes que todo: el teclado numerico que llega como flechas no puede
     // mover zonas ni disparar atajos.
     cleanupNumpadFix = installNumpadFix();
+    // Primero las zonas: el modo mover (Ctrl+Shift sostenidos) va antes que
+    // los atajos.
     cleanupFocusZones = installFocusZones(shortcutsBlocked);
     cleanupKeybindings = installKeybindings(shortcutsBlocked);
     const cleanupSidebarCommands = registerCommands("global", {
@@ -464,7 +476,7 @@
         bind:this={sidebarContent}
         style:width={`${Math.max(liveSidebarWidth, MIN_SIDEBAR_WIDTH)}px`}
       >
-        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTreeRow }}>
+        <div class="schema-pane" use:focusZoneAction={{ zone: "explorer", focusDefault: focusFirstTable }}>
         <SchemaTree
           explorer={$databaseExplorer}
           {connectionLabel}

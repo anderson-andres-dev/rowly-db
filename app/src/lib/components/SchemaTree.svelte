@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
+  import { treeKeys } from "$lib/treeKeys";
   import {
     CalendarClock,
     Check,
@@ -252,7 +253,7 @@
         type="button"
         class="row"
         style:--depth={depth}
-        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={{ label: node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label), focus: false }}
         onclick={() => toggle(node.key, open)}
         onkeydown={(event) => onRowKeydown(event, node)}
         ondblclick={() => {
@@ -270,7 +271,7 @@
       <div
         class="row leaf"
         style:--depth={depth}
-        use:tooltip={node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label)}
+        use:tooltip={{ label: node.title ?? (node.detail ? `${node.label} ${node.detail}` : node.label), focus: false }}
         ondblclick={() => node.relation && onopentable(node.relation.schema, node.relation.name)}
       >
         {@render nodeContent(node, Icon)}
@@ -386,14 +387,14 @@
   </div>
 
   <nav class="tree-scroll" aria-label={$t("explorer.tree.label")} use:scrollFade>
-    <ul class="tree" role="tree">
+    <ul class="tree" role="tree" use:treeKeys>
       <li role="treeitem" aria-expanded={isConnectionOpen()} aria-selected="false">
         <div class="connection-row">
           <button
             type="button"
             class="row"
             style:--depth={0}
-            use:tooltip={connectionTitle}
+            use:tooltip={{ label: connectionTitle, focus: false }}
             onclick={() => toggle(CONNECTION_KEY, isConnectionOpen())}
           >
             {@render chevron(isConnectionOpen())}

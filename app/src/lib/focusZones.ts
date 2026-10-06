@@ -1,5 +1,7 @@
 import { get, writable } from "svelte/store";
-import { registerCommand } from "$lib/workspace/commands";
+import { registerCommand, runFirstCommand } from "$lib/workspace/commands";
+import { shortcutUses, shortcuts } from "$lib/stores/shortcuts";
+import { inTerminal, TERMINAL_COMMANDS } from "$lib/keybindings";
 
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.
 //
@@ -60,7 +62,9 @@ function markActive(zone: Zone | null, target: HTMLElement | null) {
   if (!zone) return;
   if (zone === "explorer" || zone === "files") lastLeft = zone;
   else lastRight = zone;
-  if (target) lastFocused.set(zone, target);
+  // Lo marcado con data-no-zone-focus (la pestaña Terminal, que tiene su
+  // atajo) no es a donde se vuelve al llegar a la zona.
+  if (target && !target.closest("[data-no-zone-focus]")) lastFocused.set(zone, target);
 }
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex="0"], .cm-content, [role="grid"]';
@@ -70,12 +74,14 @@ function isUsable(element: HTMLElement | undefined, zone: HTMLElement): element 
 }
 
 // Al llegar con el teclado, la zona destella y queda marcada con un
-// contorno tenue; un segundo despues de la ultima pulsacion se desvanece
-// solo, para no estorbar. Un clic la quita al instante. Ambos van en una capa encima del contenido
-// (controls.css), para que el editor o los encabezados del grid no los
-// tapen.
+// contorno tenue. Mientras se sostienen Ctrl+Shift (modo mover) la marca no
+// se va; un segundo despues de soltarlos, o de la ultima pulsacion, se
+// desvanece sola, para no estorbar. Un clic la quita al instante. Ambos van
+// en una capa encima del contenido (controls.css), para que el editor o los
+// encabezados del grid no los tapen.
 let marked: HTMLElement | null = null;
 let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+let holding = () => false;
 
 const MARK_LINGER_MS = 1000;
 
@@ -83,20 +89,44 @@ function scheduleFade() {
   if (fadeTimer) clearTimeout(fadeTimer);
   fadeTimer = setTimeout(() => {
     fadeTimer = null;
+    // Con Ctrl+Shift todavia apretados, la marca espera a que se suelten.
+    if (holding()) return;
     marked?.classList.add("zone-fading");
   }, MARK_LINGER_MS);
 }
 
-function flash(element: HTMLElement) {
-  marked?.classList.remove("zone-current", "zone-fading");
+// La zona actual, marcada sin destello: al sostener Ctrl+Shift.
+function showMark(element: HTMLElement) {
+  if (fadeTimer) clearTimeout(fadeTimer);
+  fadeTimer = null;
+  if (marked !== element) marked?.classList.remove("zone-current", "zone-fading");
   marked = element;
+  element.classList.remove("zone-fading");
+  element.classList.add("zone-current");
+}
+
+// El que quita el destello de cada zona: uno por zona, para que el de un
+// destello anterior no borre uno nuevo apenas empieza (volver a una zona
+// antes de los 600 ms dejaba la llegada sin animacion).
+const flashTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+// "zone-flash" al llegar; "zone-nudge", mas suave y corto, cuando no hay
+// zona en esa direccion: la tecla llego y se sigue en el mismo lugar.
+function flash(element: HTMLElement, kind: "zone-flash" | "zone-nudge" = "zone-flash") {
+  if (marked !== element) marked?.classList.remove("zone-current", "zone-fading");
+  marked = element;
+  element.classList.remove("zone-fading");
   element.classList.add("zone-current");
   scheduleFade();
-  element.classList.remove("zone-flash");
+  element.classList.remove("zone-flash", "zone-nudge");
   // Reinicia la animacion aunque se vuelva a la misma zona enseguida.
   void element.offsetWidth;
-  element.classList.add("zone-flash");
-  setTimeout(() => element.classList.remove("zone-flash"), 600);
+  element.classList.add(kind);
+  clearTimeout(flashTimers.get(element));
+  flashTimers.set(
+    element,
+    setTimeout(() => element.classList.remove(kind), 600),
+  );
 }
 
 function clearMark() {
@@ -113,23 +143,42 @@ export async function focusZone(zone: Zone): Promise<boolean> {
   const entry = zones.get(zone);
   if (!entry || entry.element.getClientRects().length === 0) return false;
 
+  // La zona misma no es un lugar al que volver: se enfoca entera solo cuando
+  // no tiene otra cosa (la seccion de abajo sin resultado); al volver, va a
+  // lo que tenga ahora (el grid, la terminal).
   const previous = lastFocused.get(zone);
-  if (isUsable(previous, entry.element)) {
+  if (previous !== entry.element && isUsable(previous, entry.element)) {
     previous.focus({ preventScroll: true });
   } else if (!entry.focusDefault?.(entry.element)) {
     entry.element.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
   }
+  // Una zona sin nada que enfocar (el panel de archivos plegado) no cuenta:
+  // marcarla dejaba el foco en una y la zona activa en otra, y las flechas
+  // siguientes salian de la equivocada.
+  if (!entry.element.contains(document.activeElement)) return false;
   markActive(zone, null);
   flash(entry.element);
   return true;
 }
 
+// La otra zona de la misma columna: si la ultima usada de un lado no esta,
+// se cruza a la que haya.
+const SAME_COLUMN: Record<Zone, Zone> = { explorer: "files", files: "explorer", editor: "results", results: "editor" };
+
 export function moveFocus(direction: Direction): void {
-  const from = get(activeZone) ?? "editor";
+  // Desde donde esta el foco de verdad; la zona activa, si el foco no esta
+  // en ninguna (un menu, el body).
+  const from = zoneOf(document.activeElement) ?? get(activeZone) ?? "editor";
   const target = neighborZone(from, direction, lastLeft, lastRight);
+  const crossing = direction === "left" || direction === "right";
+  const stay = () => {
+    const element = zones.get(from)?.element;
+    if (element) flash(element, "zone-nudge");
+  };
   void focusZone(target).then((moved) => {
-    // Sin panel de archivos, bajar desde el explorador no tiene a donde ir.
-    if (!moved && target === "files") lastLeft = "explorer";
+    if (moved) return;
+    if (!crossing) return stay();
+    void focusZone(SAME_COLUMN[target]).then((crossed) => crossed || stay());
   });
 }
 
@@ -172,6 +221,103 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     registerCommand(id, "global", () => moveFocus(direction)),
   );
 
+  // Modo mover: una capa encima de la app mientras Ctrl y Shift estan
+  // apretados. Las flechas solo cambian de zona (nunca llegan al arbol, al
+  // texto ni al grid) y la zona actual queda marcada hasta soltarlos; al
+  // soltar, se interactua con lo que quedo enfocado. La marca espera
+  // HOLD_MARK_MS para que un atajo rapido (Ctrl+Shift+T, Ctrl+Shift+Enter)
+  // no la haga parpadear.
+  //
+  // Solo cuentan el pulsar y soltar de las teclas fisicas Ctrl y Shift
+  // (event.code), nunca ctrlKey/shiftKey de las demas: medido con el teclado
+  // real en WebKitGTK, al pasar el foco al explorador las flechas siguientes
+  // llegan sin Ctrl ni Shift aunque sigan apretados, y soltar Shift llega a
+  // veces como key "CapsLock".
+  const held = { Control: false, Shift: false };
+  holding = () => held.Control && held.Shift;
+  let markTimer: ReturnType<typeof setTimeout> | null = null;
+  const HOLD_MARK_MS = 200;
+
+  function cancelMarkTimer() {
+    if (markTimer) clearTimeout(markTimer);
+    markTimer = null;
+  }
+
+  function markCurrent() {
+    markTimer = null;
+    const zone = zoneOf(document.activeElement) ?? get(activeZone);
+    const element = zone ? zones.get(zone)?.element : undefined;
+    if (element && !isBlocked()) showMark(element);
+  }
+
+  // Mientras dura, ningun elemento dibuja su anillo de foco (controls.css):
+  // solo se ve la marca de la zona. Al soltar, aparece donde quedo el foco.
+  function setHeld(key: "Control" | "Shift", down: boolean) {
+    const was = holding();
+    held[key] = down;
+    if (!was && holding()) {
+      cancelMarkTimer();
+      markTimer = setTimeout(markCurrent, HOLD_MARK_MS);
+      document.documentElement?.classList.add("zone-moving");
+    } else if (was && !holding()) {
+      cancelMarkTimer();
+      document.documentElement?.classList.remove("zone-moving");
+      if (marked) scheduleFade();
+    }
+  }
+
+  function modifierOf(event: KeyboardEvent): "Control" | "Shift" | null {
+    const code = event.code ?? "";
+    if (code.startsWith("Control") || event.key === "Control") return "Control";
+    if (code.startsWith("Shift") || event.key === "Shift") return "Shift";
+    // Soltar Shift que llega como CapsLock (ver arriba).
+    if (event.type === "keyup" && event.key === "CapsLock" && held.Shift) return "Shift";
+    return null;
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    const modifier = modifierOf(event);
+    if (modifier) {
+      setHeld(modifier, true);
+      return;
+    }
+    if (!holding() || event.altKey || event.metaKey || isBlocked()) return;
+    // La misma tecla que veria el despachador, con Ctrl y Shift aunque el
+    // evento no los traiga.
+    const keys = `Ctrl+Shift+${event.key.length === 1 ? event.key.toUpperCase() : event.key}`;
+    const direction = get(shortcuts).find((shortcut) => shortcut.id in DIRECTION_COMMANDS && shortcutUses(shortcut, keys));
+    cancelMarkTimer();
+    if (direction) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) moveFocus(DIRECTION_COMMANDS[direction.id]);
+      return;
+    }
+    // Otro atajo con Ctrl+Shift (Ctrl+Shift+T, Ctrl+Shift+Enter): con sus
+    // modificadores sigue su camino normal. Si llega sin ellos, se ejecuta
+    // aqui como Ctrl+Shift+tecla; nunca llega suelta (una "t") al elemento
+    // enfocado.
+    if (event.ctrlKey && event.shiftKey) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const ids = get(shortcuts)
+      .filter((shortcut) => shortcutUses(shortcut, keys))
+      .map((shortcut) => shortcut.id)
+      .filter((id) => !inTerminal(event.target) || TERMINAL_COMMANDS.has(id));
+    if (ids.length > 0) runFirstCommand(ids, get(activeZone));
+  }
+
+  function onKeyup(event: KeyboardEvent) {
+    const modifier = modifierOf(event);
+    if (modifier) setHeld(modifier, false);
+  }
+
+  // Al perder la ventana el foco no llegan los keyup.
+  function onWindowBlur() {
+    setHeld("Control", false);
+    setHeld("Shift", false);
+  }
+
   // Esc desde el explorador, los archivos o el resultado vuelve al editor,
   // al punto exacto donde estaba el cursor. Va en burbuja: si la zona usa
   // Esc para algo propio (cerrar una busqueda, cancelar una edicion), gana.
@@ -199,12 +345,21 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     markActive(zone, target);
   }
 
+  window.addEventListener("keydown", onKeydown, true);
+  window.addEventListener("keyup", onKeyup, true);
+  window.addEventListener("blur", onWindowBlur);
   window.addEventListener("keydown", onEscape);
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("pointerdown", onPointerDown, true);
   return () => {
     installed = false;
     unregisterDirections.forEach((unregister) => unregister());
+    cancelMarkTimer();
+    holding = () => false;
+    document.documentElement?.classList.remove("zone-moving");
+    window.removeEventListener("keydown", onKeydown, true);
+    window.removeEventListener("keyup", onKeyup, true);
+    window.removeEventListener("blur", onWindowBlur);
     window.removeEventListener("keydown", onEscape);
     document.removeEventListener("focusin", onFocusIn);
     document.removeEventListener("pointerdown", onPointerDown, true);

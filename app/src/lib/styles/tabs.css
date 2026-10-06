@@ -77,7 +77,9 @@
 }
 
 .result-tab:hover::before,
-.result-tab.active::before {
+.result-tab.active::before,
+.result-tab:focus-visible::before,
+.result-tab:has(> .tab-select:focus-visible)::before {
   /* Un borde real (el motor lo suaviza bien en las esquinas) que se
      desvanece hacia los lados con una mascara de transparencia. Los lados
      terminan donde empieza la curva de abajo (::after), que los continua. */
@@ -187,8 +189,21 @@
   color: var(--text-primary);
 }
 
+/* Con el teclado, el foco es el mismo contorno de la pestaña (::before), en
+   el color del foco y sin desvanecerse: sigue la forma de carpeta, no un
+   rectangulo encima. */
 .result-tab:focus-visible,
-.tab-select:focus-visible,
+.result-tab:has(> .tab-select:focus-visible) {
+  --tab-ring: var(--focus-ring);
+  --tab-ring-fade: 1;
+  position: relative;
+}
+
+.result-tab:focus-visible,
+.tab-select:focus-visible {
+  outline: none;
+}
+
 .tab-close:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;

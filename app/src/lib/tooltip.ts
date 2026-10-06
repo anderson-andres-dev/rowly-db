@@ -8,6 +8,7 @@ import { shortcutKeyParts } from "$lib/stores/shortcuts";
 //
 //   <button use:tooltip={$t("x")}>                     solo texto
 //   <button use:tooltip={{ label, shortcut: "Ctrl+F" }}> texto + atajo
+//   <button use:tooltip={{ label, focus: false }}>     solo con el mouse
 //
 // Un texto que termina en "(Ctrl+X)" muestra ese atajo como atajo. Sin
 // texto (null / undefined / "") no hay tooltip. Sale abajo del elemento, o
@@ -19,7 +20,9 @@ export type TooltipParams =
   | string
   | null
   | undefined
-  | { label: string | null | undefined; shortcut?: string; placement?: "below" | "above" };
+  // focus: false, solo al pasar el mouse: las filas de un arbol, que se
+  // recorren con las flechas y ya muestran su nombre.
+  | { label: string | null | undefined; shortcut?: string; placement?: "below" | "above"; focus?: boolean };
 
 const SHOW_DELAY_MS = 350;
 const GAP_PX = 6;
@@ -137,8 +140,11 @@ export function hideTooltipFor(anchor: HTMLElement) {
   hide(anchor);
 }
 
+const showsOnFocus = (params: TooltipParams) => typeof params !== "object" || params === null || params.focus !== false;
+
 export function tooltip(node: HTMLElement, params: TooltipParams) {
   let resolved = resolve(params);
+  let onFocusToo = showsOnFocus(params);
   let ownAriaLabel = false;
 
   // Un boton de solo icono se quedaba sin nombre accesible al quitar el
@@ -163,7 +169,7 @@ export function tooltip(node: HTMLElement, params: TooltipParams) {
   }
 
   function onFocus() {
-    if (node.matches(":focus-visible")) schedule();
+    if (onFocusToo && node.matches(":focus-visible")) schedule();
   }
 
   function onLeave() {
@@ -182,6 +188,7 @@ export function tooltip(node: HTMLElement, params: TooltipParams) {
   return {
     update(next: TooltipParams) {
       resolved = resolve(next);
+      onFocusToo = showsOnFocus(next);
       syncAriaLabel();
       if (owner === node) {
         if (resolved) show(node, resolved);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tooltip } from "$lib/tooltip";
+  import { treeKeys } from "$lib/treeKeys";
   import { tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { ChevronRight, FileCode, FilePlus, Folder, FolderOpen, RefreshCw, TriangleAlert, X } from "@lucide/svelte";
@@ -245,7 +246,7 @@
             style:--depth={depth}
             data-entry-path={entry.path}
             data-entry-dir="true"
-            use:tooltip={entry.path}
+            use:tooltip={{ label: entry.path, focus: false }}
             onclick={() => toggleDir(entry.path)}
             oncontextmenu={(event) => openMenu(event, folderMenuItems(entry.path))}
           >
@@ -273,7 +274,7 @@
             class:active={entry.path === activeFilePath}
             style:--depth={depth}
             data-entry-path={entry.path}
-            use:tooltip={entry.path}
+            use:tooltip={{ label: entry.path, focus: false }}
             onclick={() => openFile(entry.path)}
             oncontextmenu={(event) => openMenu(event, fileMenuItems(entry.path))}
             onkeydown={(event) => {
@@ -354,7 +355,7 @@
     inert={collapsed}
     oncontextmenu={(event) => openMenu(event, folderMenuItems(folder))}
   >
-    <ul class="tree" role="tree">
+    <ul class="tree" role="tree" use:treeKeys>
       {@render dirContents(folder, 0)}
     </ul>
   </nav>

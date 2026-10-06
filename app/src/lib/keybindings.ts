@@ -17,7 +17,7 @@ import { formatShortcutEvent, shortcutUses, shortcuts } from "$lib/stores/shortc
 // En la terminal las teclas son del shell y de las IA (Ctrl+R, Ctrl+W,
 // Ctrl+Enter...): solo pasan moverse entre zonas, mostrarla u ocultarla, la
 // capa Ctrl+Shift de sus sesiones, Ctrl+Tab y Ctrl+1..9.
-const TERMINAL_COMMANDS = new Set([
+export const TERMINAL_COMMANDS = new Set([
   "focus-zone-left",
   "focus-zone-right",
   "focus-zone-up",
@@ -32,6 +32,10 @@ const TERMINAL_COMMANDS = new Set([
   "shortcut-sheet",
 ]);
 
+export function inTerminal(target: EventTarget | null): boolean {
+  return !!(target as Element | null)?.closest?.("[data-terminal]");
+}
+
 let installed = false;
 
 export function installKeybindings(isBlocked: () => boolean): () => void {
@@ -45,7 +49,7 @@ export function installKeybindings(isBlocked: () => boolean): () => void {
     let ids = get(shortcuts)
       .filter((shortcut) => shortcutUses(shortcut, keys))
       .map((shortcut) => shortcut.id);
-    if ((event.target as Element).closest?.("[data-terminal]")) ids = ids.filter((id) => TERMINAL_COMMANDS.has(id));
+    if (inTerminal(event.target)) ids = ids.filter((id) => TERMINAL_COMMANDS.has(id));
     if (ids.length === 0) return;
     if (runFirstCommand(ids, get(activeZone)) === null) return;
     event.preventDefault();

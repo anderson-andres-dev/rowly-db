@@ -286,6 +286,11 @@
     color: var(--text-primary);
   }
 
+  /* Con el teclado, el foco es el borde de la propia pestaña. */
+  .session:has(> .tab-select:focus-visible) {
+    box-shadow: inset 0 0 0 1px var(--focus-ring);
+  }
+
   .session.closing {
     animation: session-out 120ms linear forwards;
     pointer-events: none;

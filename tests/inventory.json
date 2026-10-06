@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 142,
-    "tests": 1486,
+    "files": 143,
+    "tests": 1494,
     "ignored": 31,
     "byDecision": {
-      "keep": 142,
+      "keep": 143,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 136,
+      "pr": 137,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -1438,7 +1438,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 6,
+      "tests": 10,
       "ignored": 0,
       "environment": "node",
       "dependencies": [],
@@ -2233,6 +2233,26 @@
         "vitest"
       ],
       "durationMs": 27
+    },
+    {
+      "path": "app/src/lib/treeKeys.dom.test.ts",
+      "domain": "platform",
+      "owner": "app/src/lib/treeKeys.ts",
+      "property": "Los arboles del sidebar se recorren con flechas, Inicio y Fin, y abren o cierran carpetas con → y ←",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "treeKeys"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/workspace/commands.test.ts",

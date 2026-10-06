@@ -445,7 +445,13 @@
   // Donde estaba el foco al abrirla: ahi vuelve con el atajo (Ctrl+T).
   let terminalReturnFocus: HTMLElement | null = null;
 
+  // Ctrl+T: abierta pero con el foco en otro lado, lleva a ella; con el foco
+  // dentro, la oculta.
   function toggleTerminal() {
+    if (terminalActive && !document.activeElement?.closest("[data-terminal]")) {
+      resultRegion?.querySelector<HTMLElement>("[data-terminal]:not(.hidden) textarea")?.focus({ preventScroll: true });
+      return;
+    }
     if (terminalActive) {
       terminalActive = false;
       if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
@@ -571,6 +577,12 @@
     const target = zone.querySelector<HTMLElement>(selector);
     target?.focus({ preventScroll: true });
     return !!target;
+  }
+  // Sin grid, la seccion de abajo se enfoca entera: ningun boton (la pestaña
+  // Terminal tiene su atajo) queda con el anillo de foco.
+  function focusSelf(zone: HTMLElement): boolean {
+    zone.focus({ preventScroll: true });
+    return true;
   }
   let resultPane = $state<ReturnType<typeof ResultPane>>();
   let editorPane = $state<HTMLElement>();
@@ -965,7 +977,8 @@
     <div
       class="result-region"
       bind:this={resultRegion}
-      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') }}
+      tabindex="-1"
+      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') || focusSelf(zone) }}
     >
       <ResultPane
         bind:this={resultPane}
@@ -1500,6 +1513,11 @@
     flex: 1;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  /* Enfocada entera (sin grid), la marca es el destello de la zona. */
+  .result-region:focus {
+    outline: none;
   }
 
   .notice {

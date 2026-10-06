@@ -71,6 +71,10 @@ function press(key: string, init: KeyInit = {}): boolean {
   return event.defaultPrevented;
 }
 
+function release(key: string) {
+  (g.window as EventTarget).dispatchEvent(new FakeKey("keyup", key));
+}
+
 describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
   it("cada flecha con Ctrl+Shift mueve a su zona, sin prefijo", () => {
     expect(press("ArrowLeft", { ctrl: true, shift: true })).toBe(true);
@@ -90,6 +94,52 @@ describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
   it("tambien desde la terminal", () => {
     expect(press("ArrowUp", { ctrl: true, shift: true, inTerminal: true })).toBe(true);
     expect(moves).toEqual(["up"]);
+  });
+});
+
+describe("modo mover (Ctrl+Shift sostenidos)", () => {
+  it("la flecha cambia de zona aunque el evento llegue sin Ctrl ni Shift, y no sigue al arbol", () => {
+    press("Control", { ctrl: true });
+    press("Shift", { ctrl: true, shift: true });
+    expect(press("ArrowDown")).toBe(true);
+    expect(press("ArrowLeft", { ctrl: true })).toBe(true);
+    release("Shift");
+    expect(press("ArrowDown", { ctrl: true })).toBe(false);
+    release("Control");
+    expect(press("ArrowDown")).toBe(false);
+  });
+
+  it("otro atajo con Ctrl+Shift sigue su camino", () => {
+    const calls: string[] = [];
+    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
+    press("Control", { ctrl: true });
+    press("Shift", { ctrl: true, shift: true });
+    expect(press("T", { ctrl: true, shift: true })).toBe(true);
+    expect(calls).toEqual(["nueva"]);
+    release("Shift");
+    release("Control");
+    done();
+  });
+
+  it("con el foco movido, las teclas llegan sin Ctrl ni Shift: la capa las toma igual", () => {
+    const calls: string[] = [];
+    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
+    press("Control", { ctrl: true });
+    press("Shift", { ctrl: true, shift: true });
+    expect(press("T")).toBe(true);
+    expect(press("x")).toBe(true);
+    expect(calls).toEqual(["nueva"]);
+    release("Shift");
+    release("Control");
+    expect(press("x")).toBe(false);
+    done();
+  });
+
+  it("perder la ventana suelta los modificadores", () => {
+    press("Control", { ctrl: true });
+    press("Shift", { ctrl: true, shift: true });
+    (g.window as EventTarget).dispatchEvent(new Event("blur"));
+    expect(press("ArrowDown")).toBe(false);
   });
 });
 

@@ -533,24 +533,18 @@
     }),
   );
 
-  // Ctrl+Tab y Ctrl+1..9 en el panel: Salida, los resultados y Terminal, en
-  // el orden de la fila. La terminal registra las suyas para sus sesiones.
+  // Ctrl+Tab y Ctrl+1..9 en el panel: Salida y los resultados, en el orden
+  // de la fila. La terminal no entra (tiene su atajo, Ctrl+T); dentro de
+  // ella, las mismas teclas recorren sus sesiones.
   let tabStrip = $state<HTMLElement>();
   const showsResultTabs = $derived(!tableView && hasActivity);
-  const stripKeys = $derived([
-    ...(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []),
-    ...(!tableView || terminal ? ["terminal"] : []),
-  ]);
+  const stripKeys = $derived(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []);
 
   $effect(() =>
     registerTabCommands("results", {
       keys: () => stripKeys,
-      current: () => (terminalActive ? "terminal" : showingOutput ? "output" : (selectedKey ?? null)),
+      current: () => (terminalActive ? null : showingOutput ? "output" : (selectedKey ?? null)),
       select: (key) => {
-        if (key === "terminal") {
-          if (!terminalActive) onterminal();
-          return;
-        }
         onselecttab(key);
         // El foco va a la pestaña elegida, como al hacer clic.
         void tick().then(() => tabStrip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
@@ -644,6 +638,8 @@
         class="result-tab terminal-tab"
         class:active={terminalActive}
         aria-selected={terminalActive}
+        tabindex="-1"
+        data-no-zone-focus
         style:--tab-active={$editorPalette.background}
         use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
         onclick={() => terminalActive || onterminal()}
