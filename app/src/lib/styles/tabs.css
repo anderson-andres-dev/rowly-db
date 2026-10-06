@@ -67,7 +67,9 @@
 
 .result-tab.active::before {
   position: absolute;
-  inset: -1px -1px 0;
+  /* Los lados terminan donde empieza la curva de abajo (::after), que los
+     continua. */
+  inset: -1px -1px var(--radius-sm);
   padding: 1px 1px 0;
   border-radius: inherit;
   /* --tab-glow: el acento tenue con que el contorno llega a las esquinas de
