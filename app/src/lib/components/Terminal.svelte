@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { Plus, X } from "@lucide/svelte";
+  import { Plus, Terminal as TerminalIcon, X } from "@lucide/svelte";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { editorPalette } from "$lib/theming/theme";
@@ -83,6 +83,45 @@
     if (save && session && name) session.label = name;
   }
 
+  // Como las pestañas de las consolas: se desplazan por debajo del + (fijo a
+  // la derecha), con un desvanecido en el borde que tiene mas, la rueda
+  // vertical las mueve en horizontal y la elegida se pone a la vista.
+  let scroller: HTMLDivElement;
+  let overflow = $state({ start: false, end: false });
+
+  function updateOverflow() {
+    const start = scroller.scrollLeft > 1;
+    const end = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+    if (start !== overflow.start || end !== overflow.end) overflow = { start, end };
+  }
+
+  function onWheel(event: WheelEvent) {
+    if (scroller.scrollWidth <= scroller.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    scroller.scrollLeft += event.deltaY;
+  }
+
+  $effect(() => {
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(scroller);
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("wheel", onWheel);
+    };
+  });
+
+  // Tras la entrada (150 ms), para medir el ancho final.
+  $effect(() => {
+    const key = active;
+    sessions.length;
+    const timer = setTimeout(() => {
+      scroller.querySelector(`[data-flip="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      updateOverflow();
+    }, 160);
+    return () => clearTimeout(timer);
+  });
+
   // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
   // ultima), abre una. Cerrar la ultima con la pestaña a la vista no la
   // reabre sola: queda el +.
@@ -91,15 +130,18 @@
   });
 </script>
 
-<!-- Pestañas de herramienta, con el fondo de la terminal: la elegida con
-     una linea de acento abajo, sin relleno. -->
-<div
-  class="terminal-sessions"
-  role="tablist"
-  aria-label={$t("workspace.terminal.title")}
-  style:background={$editorPalette.background}
-  bind:this={row}
->
+<!-- Pestañas de herramienta, con el fondo de la terminal: la elegida con el
+     icono en acento y el texto pleno, sin relleno ni linea. -->
+<div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
+  <div
+    class="sessions-scroll"
+    class:fade-start={overflow.start}
+    class:fade-end={overflow.end}
+    role="tablist"
+    aria-label={$t("workspace.terminal.title")}
+    bind:this={scroller}
+    onscroll={updateOverflow}
+  >
   {#each sessions as session (session.key)}
     <!-- Las mismas transiciones que las pestañas de las consolas: entra
          como fly (x -8, 150 ms) y sale como fade (120 ms). -->
@@ -135,6 +177,7 @@
           ondblclick={() => startRename(session)}
           onkeydown={(event) => event.key === "F2" && startRename(session)}
         >
+          <TerminalIcon size={12} aria-hidden="true" />
           <span>{session.label}</span>
         </button>
       {/if}
@@ -148,6 +191,7 @@
       </button>
     </div>
   {/each}
+  </div>
   <button type="button" class="session-add" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
     <Plus size={13} aria-hidden="true" />
   </button>
@@ -194,15 +238,42 @@
     color: var(--text-primary);
   }
 
-  .session.active::after {
-    position: absolute;
-    right: var(--space-2);
-    bottom: 0;
-    left: var(--space-2);
-    height: 2px;
-    border-radius: 1px;
-    background: color-mix(in srgb, var(--accent) 75%, transparent);
-    content: "";
+  .session :global(.tab-select svg) {
+    color: var(--text-secondary);
+    opacity: 0.8;
+  }
+
+  .session.active :global(.tab-select svg) {
+    color: var(--accent);
+    opacity: 1;
+  }
+
+  /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
+  .sessions-scroll {
+    --fade: 2rem;
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    align-items: stretch;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-padding-inline: var(--fade);
+  }
+
+  .sessions-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sessions-scroll.fade-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .sessions-scroll.fade-start {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+  }
+
+  .sessions-scroll.fade-start.fade-end {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
   }
 
   /* La x: en la elegida y al pasar por encima. */
