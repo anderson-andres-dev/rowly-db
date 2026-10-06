@@ -248,6 +248,13 @@
     opacity: 1;
   }
 
+  /* La elegida en negrita, subrayada fino y cerca del texto. */
+  .session.active :global(.tab-select span) {
+    font-weight: 600;
+    text-decoration: underline 1px var(--accent);
+    text-underline-offset: 4px;
+  }
+
   /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
   .sessions-scroll {
     --fade: 2rem;
