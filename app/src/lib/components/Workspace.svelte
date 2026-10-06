@@ -1448,10 +1448,15 @@
     display: none;
   }
 
+  /* Encima de sus vecinos, sin ocupar alto: la linea queda justo en el
+     borde y no deja franjas a los lados (con la franja de pestañas debajo se
+     veia doble). */
   .splitter {
     position: relative;
+    z-index: 2;
     flex-shrink: 0;
     height: 6px;
+    margin: -3px 0;
     background: transparent;
     cursor: row-resize;
     touch-action: none;

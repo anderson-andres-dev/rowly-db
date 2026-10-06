@@ -210,11 +210,6 @@
 </div>
 
 <style>
-  /* La franja de pestañas (tabs.css), alta como la barra del resultado. */
-  .terminal-sessions {
-    min-height: 2.5rem;
-  }
-
   /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
   .sessions-scroll {
     --fade: 2rem;

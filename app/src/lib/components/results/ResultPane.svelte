@@ -1102,7 +1102,8 @@
      acento mientras se ve. */
   .terminal-toggle {
     display: grid;
-    align-self: center;
+    /* Abajo, a la altura del texto de las pestañas. */
+    align-self: flex-end;
     width: 1.75rem;
     height: 1.75rem;
     flex-shrink: 0;

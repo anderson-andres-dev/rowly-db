@@ -10,7 +10,8 @@
   flex-shrink: 0;
   align-items: flex-end;
   gap: 2px;
-  min-height: 2.25rem;
+  /* Tan alta como las pestañas mas el aire de la carpeta: sin una elegida,
+     el texto no queda descuadrado. */
   padding: var(--space-1) var(--space-2) 0;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
