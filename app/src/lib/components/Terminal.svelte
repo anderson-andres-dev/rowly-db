@@ -278,9 +278,9 @@
     width: 1.5rem;
     height: 1.5rem;
     flex-shrink: 0;
-    /* Abajo, centrado con el texto de las pestañas (1,75rem de alto). */
+    /* Abajo, centrado con el texto de las pestañas (2rem de alto). */
     align-self: flex-end;
-    margin: 0 0 0.125rem var(--space-1);
+    margin: 0 0 0.25rem var(--space-1);
     place-items: center;
     padding: 0;
     border: 0;

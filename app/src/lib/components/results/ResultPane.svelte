@@ -1104,8 +1104,8 @@
     display: grid;
     /* Abajo, a la altura del texto de las pestañas. */
     align-self: flex-end;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 2rem;
+    height: 2rem;
     flex-shrink: 0;
     margin-left: auto;
     place-items: center;
