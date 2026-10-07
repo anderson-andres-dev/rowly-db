@@ -186,3 +186,27 @@ describe("alias de fabrica", () => {
     done();
   });
 });
+
+describe("zonas con piezas (consolas en mosaico)", () => {
+  it("el navegador de la zona va primero; en el borde, la zona vecina", async () => {
+    const { moveFocus, setZoneNavigator } = await import("./focusZones");
+    const classes = new Set<string>();
+    const piece = { classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) }, offsetWidth: 0 };
+    const asked: string[] = [];
+    let edge = false;
+    const done = setZoneNavigator("editor", (direction) => {
+      asked.push(direction);
+      return edge ? null : (piece as unknown as HTMLElement);
+    });
+    // Sin foco en ninguna zona se parte del editor.
+    moveFocus("left");
+    expect(asked).toEqual(["left"]);
+    expect(classes.has("zone-flash")).toBe(true);
+    edge = true;
+    moveFocus("right");
+    expect(asked).toEqual(["left", "right"]);
+    done();
+    moveFocus("left");
+    expect(asked).toEqual(["left", "right"]);
+  });
+});

@@ -413,13 +413,14 @@
 /* Capa encima del contenido de la zona (focusZones.ts): el editor y los
    encabezados del grid llegan de borde a borde y taparian un contorno
    propio del contenedor. */
-/* Ancla de la marca de cada zona. :where() no suma especificidad: si una
-   zona tuviera su propio position, gana el de su clase. */
-:where([data-focus-zone]) {
+/* Ancla de la marca de cada zona y de cada pieza de una zona (un mosaico
+   del editor, focusZones.ts). :where() no suma especificidad: si una zona
+   tuviera su propio position, gana el de su clase. */
+:where([data-focus-zone], [data-zone-piece]) {
   position: relative;
 }
 
-[data-focus-zone].zone-current::after {
+:is([data-focus-zone], [data-zone-piece]).zone-current::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -430,12 +431,12 @@
 }
 
 /* Un segundo despues de dejar de moverse, la marca se desvanece sola. */
-[data-focus-zone].zone-fading::after {
+:is([data-focus-zone], [data-zone-piece]).zone-fading::after {
   opacity: 0;
 }
 
 /* Al llegar: un destello mas marcado que se asienta en la marca tenue. */
-[data-focus-zone].zone-flash::after {
+:is([data-focus-zone], [data-zone-piece]).zone-flash::after {
   animation: zone-flash 560ms ease-out;
 }
 
@@ -447,7 +448,7 @@
   }
 }
 
-/* Moviendose entre zonas (Ctrl+Shift sostenidos): solo la marca de la zona;
+/* Moviendose entre zonas (Ctrl+Shift+Alt sostenidos): solo la marca de la zona;
    el anillo del elemento enfocado (una fila del arbol, una celda) sale al
    soltar. */
 :root.zone-moving [data-focus-zone] :focus-visible {
@@ -456,7 +457,7 @@
 
 /* Sin zona en esa direccion: un pulso breve del mismo borde, sin el
    resplandor de la llegada. */
-[data-focus-zone].zone-nudge::after {
+:is([data-focus-zone], [data-zone-piece]).zone-nudge::after {
   animation: zone-nudge 320ms ease-out;
 }
 
@@ -467,8 +468,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-focus-zone].zone-flash::after,
-  [data-focus-zone].zone-nudge::after {
+  :is([data-focus-zone], [data-zone-piece]).zone-flash::after,
+  :is([data-focus-zone], [data-zone-piece]).zone-nudge::after {
     animation: none;
   }
 }

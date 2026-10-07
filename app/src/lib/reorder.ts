@@ -22,9 +22,16 @@ export interface ReorderParams {
   // Selector de los elementos reordenables, hijos del contenedor.
   items: string;
   onmove: (from: number, to: number) => void;
+  // Sacar la pestaña de la fila: al alejarse el puntero en vertical, el
+  // reordenar se suelta (todo vuelve a su lugar) y el arrastre sigue a cargo
+  // de quien la recibe (el mosaico de consolas, Workspace.svelte), con los
+  // mismos eventos de puntero (y anula el click al soltar: swallowNextClick).
+  // Devuelve false si esa pestaña no se puede sacar.
+  detach?: (item: HTMLElement, event: PointerEvent) => boolean;
 }
 
 const DRAG_THRESHOLD = 4;
+const DETACH_THRESHOLD = 24;
 const EASE = "cubic-bezier(0.2, 0.9, 0.3, 1)";
 const SHIFT_MS = 170;
 const SETTLE_MS = 200;
@@ -35,6 +42,15 @@ let settling = 0;
 // soltar hace su propio acomodo. Svelte evalua los parametros al animar.
 export function flipDuration(duration: number): number {
   return settling > 0 ? 0 : duration;
+}
+
+// El click que sigue a soltar un arrastre no debe activar la pestaña ni
+// cerrarla. Caduca enseguida: si no llega ningun click (se solto fuera), no
+// puede quedar esperando y tragarse el siguiente click real del usuario.
+export function swallowNextClick(): void {
+  const swallow = (clickEvent: MouseEvent) => clickEvent.stopPropagation();
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 80);
 }
 
 const prefersReducedMotion = () =>
@@ -57,6 +73,7 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
     if (from < 0 || items.length < 2) return;
 
     const startX = event.clientX;
+    const startY = event.clientY;
     const rects = items.map((element) => element.getBoundingClientRect());
     const gap = rects.length > 1 ? Math.max(0, rects[1].left - rects[0].right) : 0;
     const shift = rects[from].width + gap;
@@ -86,6 +103,10 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
 
     function onMove(moveEvent: PointerEvent) {
       const dx = moveEvent.clientX - startX;
+      if (params.detach && Math.abs(moveEvent.clientY - startY) > DETACH_THRESHOLD && params.detach(item, moveEvent)) {
+        detach();
+        return;
+      }
       if (!dragging) {
         if (Math.abs(dx) < DRAG_THRESHOLD) return;
         startDrag();
@@ -153,15 +174,17 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
       }, SETTLE_MS + 20);
     }
 
+    function detach() {
+      cleanup();
+      if (dragging && item.hasPointerCapture(event.pointerId)) item.releasePointerCapture(event.pointerId);
+      item.classList.remove("reorder-dragging");
+      resetStyles();
+    }
+
     function onUp() {
       cleanup();
       if (!dragging) return;
-      // El click que sigue a soltar no debe activar la pestaña ni cerrarla.
-      // Caduca enseguida: si no llega ningun click (se solto fuera), no puede
-      // quedar esperando y tragarse el siguiente click real del usuario.
-      const swallow = (clickEvent: MouseEvent) => clickEvent.stopPropagation();
-      window.addEventListener("click", swallow, { capture: true, once: true });
-      setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 80);
+      swallowNextClick();
       item.classList.remove("reorder-dragging");
 
       if (to === from || prefersReducedMotion()) {

@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 143,
-    "tests": 1495,
+    "files": 144,
+    "tests": 1511,
     "ignored": 31,
     "byDecision": {
-      "keep": 143,
+      "keep": 144,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 137,
+      "pr": 138,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -2344,6 +2344,26 @@
       ],
       "external": [
         "svelte",
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/workspace/mosaic.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/mosaic.ts",
+      "property": "Mosaico de consolas: poner, mover, intercambiar, sacar y podar sin duplicar; tamaños acotados; vecino por geometría; lado al soltar; lo guardado bien formado",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 16,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "mosaic"
+      ],
+      "external": [
         "vitest"
       ],
       "durationMs": null

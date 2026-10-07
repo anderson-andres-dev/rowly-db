@@ -9,7 +9,8 @@ import { inTerminal, TERMINAL_COMMANDS } from "$lib/keybindings";
 //   │ explorer │   editor   │    Ctrl+Shift+Alt+flecha lleva el foco a la
 //   │          ├────────────┤    zona vecina en esa direccion (en los
 //   │  files   │  results   │    bordes da la vuelta), tambien desde la
-//   └──────────┴────────────┘    terminal.
+//   └──────────┴────────────┘    terminal. Dentro del editor, primero
+//                                 recorre las consolas en mosaico.
 //
 // La zona activa la deciden solo el foco real y el clic, nunca el mouse
 // encima: WebKit no enfoca un boton al hacer clic, asi que el clic tambien
@@ -165,10 +166,28 @@ export async function focusZone(zone: Zone): Promise<boolean> {
 // se cruza a la que haya.
 const SAME_COLUMN: Record<Zone, Zone> = { explorer: "files", files: "explorer", editor: "results", results: "editor" };
 
+// Una zona con varias piezas lado a lado (los mosaicos del editor) se
+// recorre por dentro antes de saltar a la vecina: su navegador enfoca la
+// pieza de esa direccion y la devuelve, o null en el borde.
+type ZoneNavigator = (direction: Direction) => HTMLElement | null;
+const navigators = new Map<Zone, ZoneNavigator>();
+
+export function setZoneNavigator(zone: Zone, navigator: ZoneNavigator): () => void {
+  navigators.set(zone, navigator);
+  return () => {
+    if (navigators.get(zone) === navigator) navigators.delete(zone);
+  };
+}
+
 export function moveFocus(direction: Direction): void {
   // Desde donde esta el foco de verdad; la zona activa, si el foco no esta
   // en ninguna (un menu, el body).
   const from = zoneOf(document.activeElement) ?? get(activeZone) ?? "editor";
+  const inside = navigators.get(from)?.(direction);
+  if (inside) {
+    flash(inside);
+    return;
+  }
   const target = neighborZone(from, direction, lastLeft, lastRight);
   const crossing = direction === "left" || direction === "right";
   const stay = () => {

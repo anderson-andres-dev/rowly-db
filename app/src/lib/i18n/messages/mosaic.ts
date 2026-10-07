@@ -1,0 +1,55 @@
+import { defineMessages } from "../define";
+
+// Consolas en mosaico (Workspace.svelte, ConsolePicker.svelte).
+export default defineMessages({
+  es: {
+    "picker.label": "Poner una consola en mosaico",
+    "picker.search": "Buscar consola",
+    "picker.new": "Consola nueva",
+    "picker.right": "a la derecha",
+    "picker.below": "debajo",
+    "tile.untile": "Quitar del mosaico",
+    "tile.untileWithKeys": "Quitar del mosaico ({keys}); la consola sigue abierta",
+    "tile.aria": "Consola {title}",
+  },
+  en: {
+    "picker.label": "Tile a console",
+    "picker.search": "Search consoles",
+    "picker.new": "New console",
+    "picker.right": "to the right",
+    "picker.below": "below",
+    "tile.untile": "Remove from tiling",
+    "tile.untileWithKeys": "Remove from tiling ({keys}); the console stays open",
+    "tile.aria": "Console {title}",
+  },
+  "pt-BR": {
+    "picker.label": "Colocar um console em mosaico",
+    "picker.search": "Buscar console",
+    "picker.new": "Novo console",
+    "picker.right": "à direita",
+    "picker.below": "abaixo",
+    "tile.untile": "Tirar do mosaico",
+    "tile.untileWithKeys": "Tirar do mosaico ({keys}); o console continua aberto",
+    "tile.aria": "Console {title}",
+  },
+  fr: {
+    "picker.label": "Mettre une console en mosaïque",
+    "picker.search": "Rechercher une console",
+    "picker.new": "Nouvelle console",
+    "picker.right": "à droite",
+    "picker.below": "en dessous",
+    "tile.untile": "Retirer de la mosaïque",
+    "tile.untileWithKeys": "Retirer de la mosaïque ({keys}) ; la console reste ouverte",
+    "tile.aria": "Console {title}",
+  },
+  de: {
+    "picker.label": "Konsole kacheln",
+    "picker.search": "Konsole suchen",
+    "picker.new": "Neue Konsole",
+    "picker.right": "rechts",
+    "picker.below": "darunter",
+    "tile.untile": "Aus der Kachelung nehmen",
+    "tile.untileWithKeys": "Aus der Kachelung nehmen ({keys}); die Konsole bleibt offen",
+    "tile.aria": "Konsole {title}",
+  },
+});

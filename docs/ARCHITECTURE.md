@@ -277,6 +277,7 @@ Each fact has one owner. Where a copy is unavoidable, a test keeps it equal.
 | Catalog | `ActiveConnection.catalog`; `catalogTables` and `databaseExplorer` in the frontend | Every schema change bumps `schemaEpoch` |
 | Analysis cache | `editor/analysisSession.ts`, one at a time | Another generation, `schemaEpoch`, engine or set of tables the document creates; `analyze_sql` rejects requests made under another context |
 | Consoles and their text | `stores/queryConsoles.ts` | When the console is closed |
+| Tiled consoles | `stores/consoleMosaic.ts`, per connection | When the console is closed or taken out of the tiling; consoles that no longer exist are pruned on mount |
 | Grid drafts | `stores/resultEdits.ts` | On apply, revert or closing the tab |
 | Terminal: PTY and shell | `AppState.terminals` in the backend; the output buffer is xterm's | On closing the session, `exit` in the shell, closing the window or quitting the app |
 
@@ -285,6 +286,16 @@ Each backend command has a single frontend module that invokes it, pinned by `ap
 ### Resources
 
 Whatever repeats leaves nothing behind: 300 reconnections alternating engines, 300 cycles of opening, running and closing consoles with a theme switch, the terminal in the grid's place (with no console, across console switches, with `Ctrl+T` and with several sessions), 300 cycles of opening and closing a session (every shell reaped, the backend back to its threads), idling with an open connection and with 1, 5 and 10 sessions, and 50 MB of terminal output plus `yes` for 30 s with the interface responsive and memory bounded. `app/tests/e2e/resources.mjs` checks it on every PR using the live JavaScript heap, the backend and the DOM ([tools/bench/README.md](../tools/bench/README.md#resource-cycles)).
+
+### Tiled consoles
+
+Several SQL consoles in view at once, as in i3 or bspwm. The model (`workspace/mosaic.ts`) is a binary tree with no DOM: each leaf is an id and each node splits its rectangle across or down by a fraction. It knows nothing about consoles: the next phase uses the same tree for the result tabs.
+
+- **One tab row and one result.** The active console is the one in the focused tile; the bottom panel stays single and shows its result, as always. A console lives in exactly one tile: picking one in the row that is not visible puts it in the focused tile (`reveal`), and moving it elsewhere takes it out of its previous place. A table tab fills the whole body; the tiling is kept and comes back when a console is picked.
+- **Rendering.** `Workspace.svelte` places each tile with absolute positioning from `rects`, in a flat list keyed by console: rearranging the tree never remounts an editor (cursor and undo survive). With a single leaf there is no title bar or border and it looks as before.
+- **Mouse.** Pull a tab down out of the row (`reorderable` with `detach`, `reorder.ts`) or drag a tile's title bar: near an edge it goes on that side, in the middle it takes that tile's place (swapping if it was already visible). Dividers are dragged or moved with the arrow keys, with a minimum size in pixels per tile.
+- **Keyboard.** `Ctrl+Alt+M` opens `ConsolePicker`, which only lists consoles that are not visible plus a new one: `Enter` puts it to the right and `Shift+Enter` below. `Ctrl+Alt+W` takes the focused one out without closing it. `Ctrl+Shift+Alt+arrows` walk the tiles by geometry (`neighbor`) before moving to the neighboring area: `focusZones.ts` asks the area's navigator first (`setZoneNavigator`).
+- **Closing.** Closing a tiled console gives its place to its sibling, which gets the focus, not to the neighboring tab.
 
 ### Integrated terminal
 

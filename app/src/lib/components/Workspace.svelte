@@ -1,16 +1,17 @@
 <script lang="ts">
   import { onePerFrame } from "$lib/onePerFrame";
   import { get } from "svelte/store";
-  import { focusZoneAction } from "$lib/focusZones";
+  import { focusZoneAction, setZoneNavigator } from "$lib/focusZones";
   import { registerCommand, registerCommands } from "$lib/workspace/commands";
   import { registerTabCommands } from "$lib/workspace/tabCommands";
   import { tooltip } from "$lib/tooltip";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
   import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
+  import ConsolePicker from "$lib/components/ConsolePicker.svelte";
   import ExecutionGuard from "$lib/components/ExecutionGuard.svelte";
   import ResultPane from "$lib/components/results/ResultPane.svelte";
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
@@ -74,7 +75,24 @@
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
-  import { flipDuration, moveItem, reorderable } from "$lib/reorder";
+  import { flipDuration, moveItem, reorderable, swallowNextClick } from "$lib/reorder";
+  import { consoleMosaics, setConsoleMosaic } from "$lib/stores/consoleMosaic";
+  import {
+    dividers,
+    dropSide,
+    leaves,
+    neighbor,
+    place,
+    rects,
+    remove,
+    replace,
+    reveal,
+    setRatio,
+    siblingOf,
+    type Divider,
+    type Mosaic,
+    type Side,
+  } from "$lib/workspace/mosaic";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import {
     OUTPUT_TAB,
@@ -581,7 +599,9 @@
   // focusZones.ts), nunca en la que tiene el mouse encima: editor -> su
   // barra de buscar/reemplazar; resultado -> la barra del grid. El sidebar
   // lo resuelve +layout.svelte.
-  let sqlEditor = $state<ReturnType<typeof SqlEditor>>();
+  // Un editor por mosaico; el de la consola activa es el enfocado.
+  let editors = $state<Record<string, ReturnType<typeof SqlEditor> | undefined>>({});
+  const sqlEditor = $derived(activeConsole ? editors[activeConsole.id] : undefined);
 
   // Primer foco de una zona a la que se llega con el teclado (focusZones.ts).
   function focusIn(zone: HTMLElement, selector: string): boolean {
@@ -685,9 +705,7 @@
     dropUnpinned: dropUnpinnedResults,
     newScriptTab: (consoleId) => resultKey(consoleId, addResultTab(consoleId, false)),
     fillParameters,
-    markStatement: (consoleId, index, outcome) => {
-      if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
-    },
+    markStatement: (consoleId, index, outcome) => editors[consoleId]?.markStatement(index, outcome),
     refreshCatalog,
     notifyError,
   });
@@ -776,6 +794,273 @@
     });
   }
 
+  // --- Consolas en mosaico (workspace/mosaic.ts) ---------------------------
+  // Las consolas SQL se ponen una junto a otra como en i3: cada hoja del
+  // arbol es una consola y la activa es la del mosaico enfocado. Una consola
+  // vive en un solo mosaico; elegir en la fila de pestañas una que no se ve
+  // la pone en el enfocado. El resultado de abajo es uno solo y sigue a la
+  // consola activa, como siempre. Una pestaña de tabla ocupa todo el cuerpo
+  // (sin editor): mientras esta activa el mosaico no se ve, pero se conserva.
+  const mosaic = $derived($consoleMosaics[profileId] ?? null);
+  const tileIds = $derived(leaves(mosaic));
+  const tiled = $derived(tileIds.length > 1);
+  const tileRects = $derived(rects(mosaic));
+  const tileDividers = $derived(tiled ? dividers(mosaic) : []);
+  // El ultimo mosaico enfocado de cada conexion: ahi va la consola que se
+  // elige y no se ve.
+  const focusedTile: Record<string, string> = {};
+
+  $effect(() => {
+    const ids = new Set(consoles.filter((item) => !item.table).map((item) => item.id));
+    const active = activeConsole;
+    const profile = profileId;
+    untrack(() => {
+      let tree: Mosaic | null = get(consoleMosaics)[profile] ?? null;
+      // Una consola cerrada deja su lugar a su hermana, que queda enfocada
+      // (como cerrar una ventana en i3), no a la pestaña vecina.
+      let refocus: string | null = null;
+      for (const id of leaves(tree)) {
+        if (ids.has(id)) continue;
+        if (id === focusedTile[profile]) refocus = siblingOf(tree, id);
+        tree = remove(tree, id);
+      }
+      if (refocus && active?.id !== refocus && !active?.table) {
+        setConsoleMosaic(profile, tree);
+        focusedTile[profile] = refocus;
+        activateQueryConsole(profile, refocus);
+        return;
+      }
+      if (active && !active.table) {
+        tree = reveal(tree, active.id, focusedTile[profile] ?? null);
+        focusedTile[profile] = active.id;
+      }
+      setConsoleMosaic(profile, tree);
+    });
+  });
+
+  // Cambiar el mosaico y enfocar una consola en el mismo paso: el efecto de
+  // arriba ya la encuentra en su lugar y no la vuelve a ubicar.
+  async function arrange(tree: Mosaic | null, focus: string) {
+    setConsoleMosaic(profileId, tree);
+    focusedTile[profileId] = focus;
+    activateQueryConsole(profileId, focus);
+    await tick();
+    editors[focus]?.focus();
+  }
+
+  function untile(id: string): boolean {
+    const sibling = siblingOf(mosaic, id);
+    if (!sibling) return false;
+    void arrange(remove(mosaic, id), sibling);
+    return true;
+  }
+
+  // Ctrl+Alt+M: elegir cual va junto a la enfocada (ConsolePicker).
+  let pickerOpen = $state(false);
+  const pickerItems = $derived(
+    consoles
+      .filter((item) => !item.table && !tileIds.includes(item.id))
+      .map((item) => ({ id: item.id, title: consoleDisplayTitle(item.title, $t), file: !!item.filePath })),
+  );
+
+  function pickTile(id: string | null, side: "right" | "bottom") {
+    pickerOpen = false;
+    const target = activeConsole && !activeConsole.table ? activeConsole.id : null;
+    const chosen = id ?? createQueryConsole(profileId);
+    void arrange(target ? place(mosaic, target, chosen, side) : reveal(mosaic, chosen, null), chosen);
+  }
+
+  function closePicker(refocus: boolean) {
+    pickerOpen = false;
+    if (refocus) sqlEditor?.focus();
+  }
+
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
+    return registerCommands("global", {
+      "tile-console": whenIdle(() => {
+        if (!activeConsole || activeConsole.table) return false;
+        historyOpen = false;
+        pickerOpen = true;
+      }),
+      "untile-console": whenIdle(() => !!activeConsole && !activeConsole.table && untile(activeConsole.id)),
+    });
+  });
+
+  // Ctrl+Shift+Alt+flechas recorren los mosaicos antes de salir del editor
+  // (focusZones.ts): en el borde, el foco pasa a la zona vecina.
+  $effect(() =>
+    setZoneNavigator("editor", (direction) => {
+      if (!tiled || !activeConsole || activeConsole.table) return null;
+      const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
+      const next = neighbor(mosaic, activeConsole.id, side);
+      if (!next) return null;
+      focusedTile[profileId] = next;
+      activateQueryConsole(profileId, next);
+      editors[next]?.focus();
+      return editorPane?.querySelector<HTMLElement>(`[data-tile-id="${CSS.escape(next)}"]`) ?? null;
+    }),
+  );
+
+  function focusTile(id: string) {
+    if (id !== activeId) activateQueryConsole(profileId, id);
+  }
+
+  // Divisores entre mosaicos: arrastrar o flechas. Cada mosaico conserva un
+  // minimo en pixeles para que el editor siga siendo usable.
+  const MIN_TILE = { row: 180, column: 90 };
+
+  function clampRatio(divider: Divider, ratio: number): number {
+    const box = editorPane?.getBoundingClientRect();
+    if (!box) return ratio;
+    const size = divider.axis === "row" ? divider.area.width * box.width : divider.area.height * box.height;
+    const min = Math.min(0.5, MIN_TILE[divider.axis] / Math.max(1, size));
+    return Math.min(1 - min, Math.max(min, ratio));
+  }
+
+  function startTileResize(event: PointerEvent, divider: Divider) {
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget as HTMLElement;
+    handle.setPointerCapture(event.pointerId);
+    const box = editorPane?.getBoundingClientRect();
+    const live = onePerFrame((ratio: number) => {
+      const tree = get(consoleMosaics)[profileId];
+      if (tree) setConsoleMosaic(profileId, setRatio(tree, divider.path, ratio));
+    });
+
+    function onMove(moveEvent: PointerEvent) {
+      if (!box) return;
+      const { area, axis } = divider;
+      const ratio =
+        axis === "row"
+          ? ((moveEvent.clientX - box.left) / box.width - area.x) / area.width
+          : ((moveEvent.clientY - box.top) / box.height - area.y) / area.height;
+      live.set(clampRatio(divider, ratio));
+    }
+
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      live.flush();
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  function onTileDividerKeydown(event: KeyboardEvent, divider: Divider) {
+    const back = divider.axis === "row" ? "ArrowLeft" : "ArrowUp";
+    const forward = divider.axis === "row" ? "ArrowRight" : "ArrowDown";
+    if (event.key !== back && event.key !== forward) return;
+    event.preventDefault();
+    const ratio = clampRatio(divider, divider.ratio + (event.key === forward ? 0.02 : -0.02));
+    if (mosaic) setConsoleMosaic(profileId, setRatio(mosaic, divider.path, ratio));
+  }
+
+  // Arrastrar una consola al mosaico: desde su pestaña (al sacarla de la
+  // fila, reorder.ts) o desde la barra de su mosaico. Al soltar cerca del
+  // borde de un mosaico, se pone de ese lado; en el centro, toma su lugar
+  // (si ya estaba en otro, se intercambian). Como en los demas editores.
+  let tileDrag = $state<{
+    id: string;
+    title: string;
+    x: number;
+    y: number;
+    target: string | null;
+    side: Side | "center" | null;
+  } | null>(null);
+
+  function dropTarget(x: number, y: number): { target: string | null; side: Side | "center" | null } {
+    const box = editorPane?.getBoundingClientRect();
+    if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return { target: null, side: null };
+    const fx = (x - box.left) / box.width;
+    const fy = (y - box.top) / box.height;
+    for (const [id, rect] of tileRects) {
+      if (fx < rect.x || fx > rect.x + rect.width || fy < rect.y || fy > rect.y + rect.height) continue;
+      return { target: id, side: dropSide((fx - rect.x) / rect.width, (fy - rect.y) / rect.height) };
+    }
+    return { target: null, side: null };
+  }
+
+  function beginTileDrag(id: string, start: PointerEvent): boolean {
+    const item = consoles.find((candidate) => candidate.id === id);
+    if (!item || item.table || !activeConsole || activeConsole.table) return false;
+    tileDrag = { id, title: consoleDisplayTitle(item.title, $t), x: start.clientX, y: start.clientY, ...dropTarget(start.clientX, start.clientY) };
+
+    function onMove(moveEvent: PointerEvent) {
+      if (!tileDrag) return;
+      tileDrag = { ...tileDrag, x: moveEvent.clientX, y: moveEvent.clientY, ...dropTarget(moveEvent.clientX, moveEvent.clientY) };
+    }
+
+    function finish(apply: boolean) {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onKey, true);
+      const drag = tileDrag;
+      tileDrag = null;
+      swallowNextClick();
+      if (!apply || !drag?.target || !drag.side || drag.target === drag.id) return;
+      const tree = drag.side === "center" ? replace(mosaic, drag.target, drag.id) : place(mosaic, drag.target, drag.id, drag.side);
+      void arrange(tree, drag.id);
+    }
+
+    const onUp = () => finish(true);
+    const onCancel = () => finish(false);
+    // Esc suelta sin cambiar nada.
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finish(false);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("keydown", onKey, true);
+    return true;
+  }
+
+  // La barra de un mosaico: un clic lo enfoca; arrastrar mas de unos px lo
+  // mueve.
+  function onTileHeaderPointerDown(event: PointerEvent, id: string) {
+    if (event.button !== 0 || (event.target as Element).closest("button")) return;
+    event.preventDefault();
+    focusTile(id);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    function onMove(moveEvent: PointerEvent) {
+      if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 4) return;
+      stop();
+      beginTileDrag(id, moveEvent);
+    }
+    function stop() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
+  }
+
+  // La zona que se resalta al soltar: el lado elegido o el mosaico entero.
+  const dropPreview = $derived.by(() => {
+    if (!tileDrag?.target || !tileDrag.side || tileDrag.target === tileDrag.id) return null;
+    const rect = tileRects.get(tileDrag.target);
+    if (!rect) return null;
+    const { side } = tileDrag;
+    if (side === "center") return rect;
+    if (side === "left") return { ...rect, width: rect.width / 2 };
+    if (side === "right") return { ...rect, x: rect.x + rect.width / 2, width: rect.width / 2 };
+    if (side === "top") return { ...rect, height: rect.height / 2 };
+    return { ...rect, y: rect.y + rect.height / 2, height: rect.height / 2 };
+  });
+
+  const percent = (value: number) => `${value * 100}%`;
+  const boxStyle = (rect: { x: number; y: number; width: number; height: number }) =>
+    `left: ${percent(rect.x)}; top: ${percent(rect.y)}; width: ${percent(rect.width)}; height: ${percent(rect.height)}`;
+
   function startResize(event: PointerEvent) {
     event.preventDefault();
     const handle = event.currentTarget as HTMLElement;
@@ -820,7 +1105,11 @@
   <div class="console-tabs">
   <div
     class="tabs-scroll"
-    use:reorderable={{ items: ".console-tab", onmove: (from, to) => reorderQueryConsoles(profileId, from, to) }}
+    use:reorderable={{
+      items: ".console-tab",
+      onmove: (from, to) => reorderQueryConsoles(profileId, from, to),
+      detach: (tab, event) => !!tab.dataset.consoleId && beginTileDrag(tab.dataset.consoleId, event),
+    }}
     class:fade-start={tabsOverflow.start}
     class:fade-end={tabsOverflow.end}
     role="tablist"
@@ -834,6 +1123,7 @@
         class="console-tab"
         data-console-id={item.id}
         class:active={item.id === activeId}
+        class:tiled={tiled && item.id !== activeId && tileIds.includes(item.id)}
         class:dirty
         role="tab"
         tabindex="0"
@@ -923,41 +1213,118 @@
     {#if activeConsole && !activeConsole.table}
     <div
       class="editor-pane"
+      class:tiled
       bind:this={editorPane}
-      use:focusZoneAction={{ zone: "editor", focusDefault: (zone) => focusIn(zone, ".cm-content") }}
+      use:focusZoneAction={{
+        zone: "editor",
+        focusDefault: (zone) => focusIn(zone, `[data-tile-id="${CSS.escape(activeConsole?.id ?? "")}"] .cm-content`) || focusIn(zone, ".cm-content"),
+      }}
       style={`flex-basis: ${editorFraction * 100}%`}
     >
-      <!-- Una consola grande cuyo texto todavia se lee del disco (al
-           arrancar) no monta el editor hasta tenerlo. -->
-      {#if activeConsole && !activeConsole.textPending}
-        <div class="editor-host">
-          {#key activeConsole.id}
-            <SqlEditor
-              bind:this={sqlEditor}
-              value={activeConsole.sql}
-              onchange={(sql) => updateQueryConsoleSql(activeConsole.id, sql)}
-              onexecute={(sql) => {
-                // Ejecutar desde el editor (o el historial) muestra el
-                // resultado; una ejecucion que termina sola no saca de la
-                // terminal.
-                terminalActive = false;
-                void requestExecution(activeConsole.id, sql);
-              }}
-              executing={liveExecution.isExecuting}
-              result={liveExecution.result}
-              onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
-            />
-          {/key}
-        </div>
+      {#each tileIds as id (id)}
+        {@const item = consoles.find((candidate) => candidate.id === id)}
+        {@const box = tileRects.get(id)}
+        {#if item && box}
+          {@const title = consoleDisplayTitle(item.title, $t)}
+          <!-- Enfocar cualquier parte del mosaico lo vuelve la consola activa. -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="tile"
+            class:focused={tiled && id === activeId}
+            class:edge-left={box.x > 0}
+            class:edge-top={box.y > 0}
+            data-tile-id={id}
+            data-zone-piece={tiled ? "" : undefined}
+            role={tiled ? "group" : undefined}
+            aria-label={tiled ? $t("mosaic.tile.aria", { title }) : undefined}
+            style={boxStyle(box)}
+            onfocusin={() => focusTile(id)}
+            onpointerdown={() => focusTile(id)}
+          >
+            {#if tiled}
+              <div class="tile-header" onpointerdown={(event) => onTileHeaderPointerDown(event, id)}>
+                {#if item.filePath}
+                  <FileCode size={12} class="tile-icon" aria-hidden="true" />
+                {:else}
+                  <SquareTerminal size={12} class="tile-icon" aria-hidden="true" />
+                {/if}
+                <span class="tile-title">{title}</span>
+                {#if isQueryConsoleDirty(item)}
+                  <span class="tile-dirty" aria-hidden="true"></span>
+                {/if}
+                <button
+                  type="button"
+                  class="tile-untile"
+                  aria-label={$t("mosaic.tile.untile")}
+                  use:tooltip={$t("mosaic.tile.untileWithKeys", { keys: shortcutKeys("untile-console") })}
+                  onclick={() => untile(id)}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </div>
+            {/if}
+            <!-- Una consola grande cuyo texto todavia se lee del disco (al
+                 arrancar) no monta el editor hasta tenerlo. -->
+            {#if !item.textPending}
+              {@const tileExecution = executionForConsole($queryConsoles, id)}
+              <div class="editor-host">
+                <SqlEditor
+                  bind:this={editors[id]}
+                  value={item.sql}
+                  onchange={(sql) => updateQueryConsoleSql(id, sql)}
+                  onexecute={(sql) => {
+                    // Ejecutar desde el editor (o el historial) muestra el
+                    // resultado; una ejecucion que termina sola no saca de la
+                    // terminal.
+                    terminalActive = false;
+                    void requestExecution(id, sql);
+                  }}
+                  executing={tileExecution.isExecuting}
+                  result={tileExecution.result}
+                  onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
+                />
+              </div>
 
-        {#if historyOpen}
-          <QueryHistory
-            entries={historyEntries}
-            oninsert={insertFromHistory}
-            onexecute={executeFromHistory}
-            onclose={closeHistory}
-          />
+              {#if historyOpen && id === activeId}
+                <QueryHistory
+                  entries={historyEntries}
+                  oninsert={insertFromHistory}
+                  onexecute={executeFromHistory}
+                  onclose={closeHistory}
+                />
+              {/if}
+            {/if}
+          </div>
         {/if}
+      {/each}
+
+      {#each tileDividers as divider (divider.path)}
+        {@const vertical = divider.axis === "row"}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <div
+          class="tile-divider"
+          class:vertical
+          role="separator"
+          aria-orientation={vertical ? "vertical" : "horizontal"}
+          aria-valuenow={Math.round(divider.ratio * 100)}
+          aria-valuemin={10}
+          aria-valuemax={90}
+          tabindex="0"
+          style={vertical
+            ? `left: ${percent(divider.area.x + divider.area.width * divider.ratio)}; top: ${percent(divider.area.y)}; height: ${percent(divider.area.height)}`
+            : `top: ${percent(divider.area.y + divider.area.height * divider.ratio)}; left: ${percent(divider.area.x)}; width: ${percent(divider.area.width)}`}
+          onpointerdown={(event) => startTileResize(event, divider)}
+          onkeydown={(event) => onTileDividerKeydown(event, divider)}
+        ></div>
+      {/each}
+
+      {#if dropPreview}
+        <div class="tile-drop" style={boxStyle(dropPreview)} aria-hidden="true"></div>
+      {/if}
+
+      {#if pickerOpen}
+        <ConsolePicker items={pickerItems} onpick={pickTile} onclose={closePicker} />
       {/if}
     </div>
     {#if liveExecution.pendingConfirmation && activeConsole}
@@ -1073,6 +1440,13 @@
   </section>
   {/if}
 </div>
+
+{#if tileDrag}
+  <div class="tile-ghost" style={`left: ${tileDrag.x}px; top: ${tileDrag.y}px`} aria-hidden="true">
+    <SquareTerminal size={12} aria-hidden="true" />
+    <span>{tileDrag.title}</span>
+  </div>
+{/if}
 
 {#if tableDefinitionRequest}
   <TableDefinitionModal
@@ -1279,6 +1653,11 @@
     color: var(--text-primary);
   }
 
+  /* Visible en otro mosaico, sin el foco: texto pleno, sin relleno. */
+  .console-tab.tiled {
+    color: var(--text-primary);
+  }
+
   .console-tab:focus-visible,
   .new-console:focus-visible,
   .close-tab:focus-visible {
@@ -1474,6 +1853,171 @@
     position: relative;
     min-height: 0;
     flex: 1;
+  }
+
+  /* Cada mosaico, en su lugar del arbol (posiciones absolutas: reacomodar
+     no vuelve a montar el editor). Con una sola consola ocupa todo y no se
+     distingue de lo de siempre. */
+  .tile {
+    position: absolute;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .tile.edge-left {
+    border-left: 1px solid var(--border);
+  }
+
+  .tile.edge-top {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Barra compacta de cada mosaico: de donde se lo arrastra y donde se ve
+     cual tiene el foco. */
+  .tile-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-2);
+    height: 1.375rem;
+    padding: 0 var(--space-1) 0 var(--space-2);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .tile.focused .tile-header {
+    box-shadow: inset 0 2px 0 var(--accent);
+    color: var(--text-primary);
+  }
+
+  .tile-header :global(.tile-icon) {
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+
+  .tile.focused .tile-header :global(.tile-icon) {
+    color: var(--accent);
+    opacity: 1;
+  }
+
+  .tile-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tile-dirty {
+    width: 0.375rem;
+    height: 0.375rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .tile-untile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--duration-fast) ease;
+  }
+
+  .tile-header:hover .tile-untile,
+  .tile-untile:focus-visible {
+    opacity: 1;
+  }
+
+  .tile-untile:hover {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  }
+
+  .tile-untile:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  /* Divisor entre mosaicos: franja de 6px para agarrar, sin pintar (la
+     linea es el borde del mosaico); al pasar el mouse, el acento. */
+  .tile-divider {
+    position: absolute;
+    z-index: 3;
+    height: 6px;
+    transform: translateY(-3px);
+    cursor: row-resize;
+    touch-action: none;
+  }
+
+  .tile-divider.vertical {
+    width: 6px;
+    height: auto;
+    transform: translateX(-3px);
+    cursor: col-resize;
+  }
+
+  .tile-divider:hover,
+  .tile-divider:focus-visible {
+    outline: none;
+    background: linear-gradient(var(--accent), var(--accent)) center / 100% 1px no-repeat;
+  }
+
+  .tile-divider.vertical:hover,
+  .tile-divider.vertical:focus-visible {
+    background: linear-gradient(var(--accent), var(--accent)) center / 1px 100% no-repeat;
+  }
+
+  /* Donde caeria la consola al soltarla. */
+  .tile-drop {
+    position: absolute;
+    z-index: 4;
+    box-sizing: border-box;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    pointer-events: none;
+    transition:
+      left 90ms ease,
+      top 90ms ease,
+      width 90ms ease,
+      height 90ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile-drop {
+      transition: none;
+    }
+  }
+
+  .tile-ghost {
+    position: fixed;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-elevated);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    pointer-events: none;
+    transform: translate(10px, 8px);
   }
 
 
