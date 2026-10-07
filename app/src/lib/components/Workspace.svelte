@@ -6,9 +6,9 @@
   import { registerTabCommands } from "$lib/workspace/tabCommands";
   import { tooltip } from "$lib/tooltip";
   import { tabScroll } from "$lib/tabScroll";
+  import { tabEnter, tabExit } from "$lib/motion";
   import { editorPalette } from "$lib/theming/theme";
   import { tick, untrack } from "svelte";
-  import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
   import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
@@ -78,7 +78,8 @@
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
-  import { flipDuration, moveItem, reorderable } from "$lib/reorder";
+  import { moveItem, reorderable } from "$lib/reorder";
+  import TabOutline from "$lib/components/TabOutline.svelte";
   import { editorGroups, setEditorGroups } from "$lib/stores/consoleMosaic";
   import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
@@ -425,6 +426,7 @@
   // Terminal.svelte (y con el, xterm) se carga la primera vez que se abre:
   // quien no la usa no los descarga ni crea un shell.
   let TerminalDock = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
+  let terminalView = $state<ReturnType<typeof import("$lib/components/Terminal.svelte").default>>();
   // Donde estaba el foco al abrirla: ahi vuelve con el atajo (Ctrl+T).
   let terminalReturnFocus: HTMLElement | null = null;
 
@@ -432,7 +434,7 @@
   // dentro, la oculta.
   function toggleTerminal() {
     if (terminalActive && !document.activeElement?.closest("[data-terminal]")) {
-      resultRegion?.querySelector<HTMLElement>("[data-terminal]:not(.hidden) textarea")?.focus({ preventScroll: true });
+      terminalView?.focus();
       return;
     }
     if (terminalActive) closeTerminal();
@@ -1142,6 +1144,7 @@
 
   $effect(() =>
     setZoneNavigator("results", (direction) => {
+      if (terminalActive) return terminalView?.navigate(direction === "up" ? "top" : direction === "down" ? "bottom" : direction) ?? null;
       if (!resultGrouped || !resultLayout) return null;
       const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
       const next = neighbor(resultLayout.tree, resultLayout.focus, side);
@@ -1286,10 +1289,10 @@
                 role="presentation"
                 style:--tab-active={item.table ? "var(--surface-content)" : $editorPalette.background}
                 oncontextmenu={(event) => openTabMenu(event, item.id)}
-                animate:flip={{ duration: flipDuration(150) }}
-                in:fly={{ x: -8, duration: 150 }}
-                out:fade={{ duration: 120 }}
+                in:tabEnter
+                out:tabExit
               >
+                <TabOutline />
                 {#if renamingId === item.id}
                   <input
                     class="rename-input"
@@ -1612,6 +1615,7 @@
       {#snippet terminalDock()}
         {#if TerminalDock}
           <TerminalDock
+            bind:this={terminalView}
             visible={terminalActive}
             {profileId}
             onerror={notifyError}
@@ -1753,7 +1757,7 @@
     margin-left: var(--space-1);
     padding: 0;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: 50%;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
@@ -1763,7 +1767,7 @@
   }
 
   .new-console:hover {
-    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 4%, transparent);
     color: var(--text-primary);
   }
 
@@ -1854,26 +1858,6 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    animation: content-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  /* Elegir otra consola del grupo (con el mouse o con Ctrl+Tab) monta su
-     editor: entra con un fundido corto, como el resultado (motion.ts). */
-  .editor-host > :global(.editor-frame) {
-    animation: content-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  @keyframes content-in {
-    from {
-      opacity: 0.35;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .table-host,
-    .editor-host > :global(.editor-frame) {
-      animation: none;
-    }
   }
 
   /* Sin pestañas abiertas: accesos directos centrados, al estilo de la

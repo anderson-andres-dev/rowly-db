@@ -96,6 +96,12 @@
     lastShape = shape;
   });
 
+  function stopShapeAnimation() {
+    if (animateTimer) clearTimeout(animateTimer);
+    animateTimer = null;
+    animating = false;
+  }
+
   const ids = $derived(leaves(tree));
   const tiled = $derived(ids.length > 1);
   const boxes = $derived(rects(tree));
@@ -131,6 +137,9 @@
   function startResize(event: PointerEvent, divider: Divider) {
     event.preventDefault();
     event.stopPropagation();
+    // Si el usuario toma un divisor justo despues de partir o mover grupos,
+    // cortar el deslizamiento de las hojas: desde aqui el borde sigue al mouse.
+    stopShapeAnimation();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     const box = area?.getBoundingClientRect();
     const live = onePerFrame((ratio: number) => {
@@ -162,6 +171,7 @@
     const forward = divider.axis === "row" ? "ArrowRight" : "ArrowDown";
     if (event.key !== back && event.key !== forward || !tree) return;
     event.preventDefault();
+    stopShapeAnimation();
     onresize(setRatio(tree, divider.path, clampRatio(divider, divider.ratio + (event.key === forward ? 0.02 : -0.02))));
   }
 
@@ -319,6 +329,13 @@
   const percent = (value: number) => `${value * 100}%`;
   const boxStyle = (rect: Rect) =>
     `left: ${percent(rect.x)}; top: ${percent(rect.y)}; width: ${percent(rect.width)}; height: ${percent(rect.height)}`;
+
+  // Al pulsar una pestaña, su propio click cambia la seleccion y el foco del
+  // grupo en un solo paso. No dejes que el foco del boton active antes la
+  // pestaña que ya estaba seleccionada: ese orden producia un parpadeo al
+  // volver a un mosaico que estaba sin foco.
+  const isTabControl = (event: Event) =>
+    event.target instanceof Element && !!event.target.closest(".tab-select");
 </script>
 
 <div class="mosaic" class:tiled class:animating bind:this={area}>
@@ -340,8 +357,8 @@
         aria-label={tiled ? label(id) : undefined}
         style={boxStyle(box)}
         in:fade={{ duration: tiled ? 160 : 0 }}
-        onfocusin={() => onfocus(id)}
-        onpointerdown={() => onfocus(id)}
+        onfocusin={(event) => !isTabControl(event) && onfocus(id)}
+        onpointerdown={(event) => !isTabControl(event) && onfocus(id)}
       >
         {@render tile(id)}
       </div>

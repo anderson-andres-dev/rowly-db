@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 148,
-    "tests": 1533,
+    "files": 152,
+    "tests": 1597,
     "ignored": 32,
     "byDecision": {
-      "keep": 148,
+      "keep": 152,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 141,
+      "pr": 145,
       "engine-pr": 7,
       "manual": 0,
       "release": 0
@@ -400,7 +400,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 2,
+      "tests": 4,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -596,7 +596,7 @@
         "A4"
       ],
       "kind": "ts",
-      "tests": 6,
+      "tests": 9,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -621,7 +621,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 4,
+      "tests": 6,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -1427,7 +1427,7 @@
         "G6"
       ],
       "kind": "ts",
-      "tests": 53,
+      "tests": 58,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -1458,7 +1458,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 10,
+      "tests": 15,
       "ignored": 0,
       "environment": "node",
       "dependencies": [],
@@ -1518,7 +1518,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 68,
+      "tests": 73,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -1530,6 +1530,26 @@
         "vitest"
       ],
       "durationMs": 205
+    },
+    {
+      "path": "app/src/lib/motion.dom.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/motion.ts",
+      "property": "El cierre reduce el hueco completo de la pestaña y respeta reducir movimiento",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "motion"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/numpadKeys.test.ts",
@@ -1572,6 +1592,26 @@
       "durationMs": 5
     },
     {
+      "path": "app/src/lib/reorder.dom.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/reorder.ts",
+      "property": "El arrastre cambia el orden, desplaza la fila y respeta cierre y cancelación",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 4,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "reorder"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
       "path": "app/src/lib/results/cellTypes.test.ts",
       "domain": "results",
       "owner": "app/src/lib/results/cellTypes.ts",
@@ -1601,7 +1641,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 10,
+      "tests": 12,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -1625,7 +1665,7 @@
         "G7"
       ],
       "kind": "ts",
-      "tests": 8,
+      "tests": 10,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -1824,6 +1864,26 @@
       "durationMs": 7
     },
     {
+      "path": "app/src/lib/sessionMount.dom.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/sessionMount.ts",
+      "property": "Mover una sesión de mosaico conserva el DOM, buffer y eventos sin remontar",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 2,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "sessionMount"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
       "path": "app/src/lib/sqlComments.test.ts",
       "domain": "engines",
       "owner": "app/src/lib/sqlComments.ts",
@@ -1934,7 +1994,7 @@
         "D9"
       ],
       "kind": "ts",
-      "tests": 3,
+      "tests": 6,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -2203,7 +2263,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 5,
+      "tests": 8,
       "ignored": 0,
       "environment": "node",
       "dependencies": [],
@@ -2212,6 +2272,26 @@
         "vitest"
       ],
       "durationMs": 10
+    },
+    {
+      "path": "app/src/lib/tabScroll.dom.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/tabScroll.ts",
+      "property": "Al mostrar la activa en un mosaico angosto no queda un fragmento de la anterior",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 1,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "tabScroll"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/terminal.test.ts",
@@ -2370,7 +2450,7 @@
         "S7"
       ],
       "kind": "ts",
-      "tests": 5,
+      "tests": 23,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -2399,7 +2479,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 16,
+      "tests": 17,
       "ignored": 0,
       "environment": "node",
       "dependencies": [
@@ -2493,7 +2573,7 @@
       "gate": "pr",
       "decision": "keep",
       "kind": "ts",
-      "tests": 10,
+      "tests": 14,
       "ignored": 0,
       "environment": "node",
       "dependencies": [

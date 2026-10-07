@@ -33,18 +33,43 @@ a {
   cursor: grabbing !important;
 }
 
-/* Lo que se arrastra, despegado de su lugar como una pestaña del navegador:
-   una copia que sigue al puntero desde donde se la tomo. El original queda
-   tenue hasta soltar. */
-.drag-ghost {
+/* Una pestaña elevada: conserva el icono y el titulo, sin boton de cierre ni
+   las curvas que la unian al panel. El original queda como hueco tenue. */
+.drag-ghost.result-tab {
   z-index: 1000;
+  display: inline-flex;
+  align-items: center;
   box-sizing: border-box;
-  border-radius: var(--radius-sm);
-  background: var(--surface-elevated);
-  box-shadow: var(--shadow-elevated);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-top-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 2%, var(--surface-elevated));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.2);
   color: var(--text-primary);
   pointer-events: none;
   will-change: transform, opacity;
+}
+
+.drag-ghost.result-tab::before,
+.drag-ghost.result-tab::after {
+  content: none;
+}
+
+.drag-ghost .tab-select {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.drag-ghost .tab-select > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drag-ghost.result-tab svg {
+  color: var(--accent);
+  opacity: 1;
 }
 
 .drag-source {

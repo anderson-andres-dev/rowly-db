@@ -15,10 +15,10 @@ afterEach(() => {
 
 function tab(): HTMLElement {
   const element = document.createElement("div");
-  element.className = "console-tab active";
+  element.className = "result-tab closable console-tab active";
   element.id = "t1";
   element.setAttribute("role", "tab");
-  element.innerHTML = '<span id="inner">consola_1</span>';
+  element.innerHTML = '<svg class="tab-outline"></svg><button class="tab-select"><span id="inner">consola_1</span></button><button class="tab-close">×</button>';
   document.body.append(element);
   return element;
 }
@@ -36,6 +36,9 @@ describe("arrastrar como una pestaña del navegador", () => {
     expect(copy.id).toBe("");
     expect(copy.querySelector("[id]")).toBeNull();
     expect(copy.getAttribute("aria-hidden")).toBe("true");
+    expect(copy.classList.contains("result-tab")).toBe(true);
+    expect(copy.querySelector(".tab-close")).toBeNull();
+    expect(copy.querySelector(".tab-outline")).toBeNull();
     expect(source.classList.contains("drag-source")).toBe(true);
     ghost.move({ x: 130, y: 70 });
     expect(copy.style.transform).toBe("translate(120px, 65px)");

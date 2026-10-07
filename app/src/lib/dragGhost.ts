@@ -55,6 +55,10 @@ export function liftGhost(source: HTMLElement, grab: Point, at: Point): Ghost {
   ghost.removeAttribute("role");
   ghost.setAttribute("aria-hidden", "true");
   ghost.classList.add("drag-ghost");
+  // La copia representa la pestaña, no un segundo control para cerrarla.
+  ghost.querySelector(".tab-close")?.remove();
+  ghost.querySelector(".tab-outline")?.remove();
+  for (const button of ghost.querySelectorAll("button")) button.tabIndex = -1;
   Object.assign(ghost.style, {
     position: "fixed",
     left: "0",

@@ -29,6 +29,8 @@ export const TERMINAL_COMMANDS = new Set([
   "new-terminal-session",
   "close-terminal-session",
   "rename-query-console",
+  "tile-console",
+  "untile-console",
   "shortcut-sheet",
 ]);
 

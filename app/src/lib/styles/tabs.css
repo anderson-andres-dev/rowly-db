@@ -9,7 +9,7 @@
   display: flex;
   flex-shrink: 0;
   align-items: flex-end;
-  gap: 2px;
+  gap: 6px;
   /* Tan alta como las pestañas mas el aire de la carpeta: sin una elegida,
      el texto no queda descuadrado; y sin ninguna (una consola sin
      ejecutar), la fila no se encoge a una franja entre dos lineas. */
@@ -17,17 +17,19 @@
   padding: 6px var(--space-2) 0;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--text-primary) 4%, var(--surface));
-  /* Hasta donde llega, por la linea base, el contorno de la elegida, y el
-     radio de sus curvas (arriba y abajo). */
-  --tab-reach: 5rem;
+  --tab-strip-bg: color-mix(in srgb, var(--text-primary) 4%, var(--surface));
+  background: var(--tab-strip-bg);
+  /* El contorno activo incluye las curvas inferiores fuera de la pestaña. */
+  --tab-reach: 1rem;
   --tab-curve: 8px;
 }
 
 
-/* Pestañas livianas: en reposo solo texto e icono; la activa se asienta
-   con un relleno tenue y su icono en acento. Sin bordes. */
+/* Incluso en reposo se ve el borde superior. El mismo SVG se acentúa al
+   pasar el puntero y al seleccionar, sin cambiar la silueta de pestaña. */
 .result-tab {
+  --tab-line: color-mix(in srgb, var(--text-secondary) 24%, transparent);
+  --tab-line-mid: 0.18;
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -39,6 +41,7 @@
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: var(--tab-curve, var(--radius-sm)) var(--tab-curve, var(--radius-sm)) 0 0;
+  position: relative;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -49,94 +52,47 @@
     color var(--duration-fast) ease;
 }
 
-/* Al pasar por encima, un adelanto suave de la elegida, en gris: el
-   contorno tenue arriba que se desvanece hacia los lados, y un relleno que
-   se apaga hacia abajo (sin borde recto en la base). */
-.result-tab:hover {
-  --tab-ring: color-mix(in srgb, var(--text-primary) 10%, transparent);
-  --tab-ring-fade: 0;
-  position: relative;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent);
+/* En hover conserva los cuatro arcos de la pestaña y un brillo neutro que
+   se apaga hacia la base. */
+.result-tab:hover:not(.active),
+.tab-strip.dimmed .result-tab.active:hover {
+  --tab-line: color-mix(in srgb, var(--text-secondary) 42%, transparent);
+  --tab-line-mid: 0.38;
+  --tab-corner-fill: var(--tab-strip-bg);
+  z-index: 1;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 3%, var(--tab-strip-bg)), var(--tab-strip-bg) 90%);
   color: var(--text-primary);
 }
 
-/* La elegida: el contorno en acento, intenso arriba al centro y
-   desvanecido hacia las esquinas y hacia abajo, donde se une con su
-   contenido; dentro, un degradado muy suave del acento que termina en el
-   color del contenido (la union sigue sin linea). */
+/* La elegida tiene un solo trazo vectorial continuo (TabOutline.svelte),
+   brillante arriba y desvanecido al llegar al panel. */
 .result-tab.active {
-  --tab-glow: color-mix(in srgb, var(--accent) 45%, transparent);
-  --tab-ring: color-mix(in srgb, var(--accent) 70%, transparent);
-  /* En los lados, abajo, queda en --tab-glow (45 de 70). */
-  --tab-ring-fade: 0.64;
-  position: relative;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--accent) 3%, var(--tab-active, var(--surface))),
-    var(--tab-active, var(--surface)) 85%
-  );
+  --tab-line: color-mix(in srgb, var(--accent) 58%, transparent);
+  --tab-line-mid: 0.56;
+  --tab-corner-fill: var(--tab-active, var(--surface));
+  z-index: 2;
+  background:
+    radial-gradient(ellipse 60% 12px at 50% 0, color-mix(in srgb, var(--accent) 4%, transparent), transparent),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent) 2%, var(--tab-active, var(--surface))),
+      var(--tab-active, var(--surface)) 85%
+    );
   color: var(--text-primary);
 }
 
-.result-tab:hover::before,
-.result-tab.active::before,
-.result-tab:focus-visible::before,
-.result-tab:has(> .tab-select:focus-visible)::before {
-  /* Un borde real (el motor lo suaviza bien en las esquinas) que se
-     desvanece hacia los lados con una mascara de transparencia. Los lados
-     terminan donde empieza la curva de abajo (::after), que los continua. */
-  position: absolute;
-  inset: -1px -1px var(--tab-curve);
-  border: 1px solid var(--tab-ring);
-  border-bottom: 0;
-  border-radius: var(--tab-curve) var(--tab-curve) 0 0;
-  content: "";
-  pointer-events: none;
-  -webkit-mask-image: radial-gradient(140% 220% at 50% 0%, #000 0%, rgb(0 0 0 / var(--tab-ring-fade)) 70%);
-  mask-image: radial-gradient(140% 220% at 50% 0%, #000 0%, rgb(0 0 0 / var(--tab-ring-fade)) 70%);
-}
-
-/* Abajo, la pestaña se abre en una curva hacia afuera (como una carpeta)
-   rellena con el color del contenido, y el contorno la sigue y continua por
-   la linea base hasta apagarse a --tab-reach; bajo la pestaña no hay linea.
-   --tab-curve es el radio de esas curvas. */
-.result-tab.active::after {
-  /* El arco de 1 px suavizado a mano (un degradado de corte seco no tiene
-     antialias): sube hasta el acento y pasa al relleno en menos de un pixel. */
-  --tab-arc:
-    transparent calc(var(--tab-curve) - 1.4px),
-    var(--tab-glow) calc(var(--tab-curve) - 0.6px),
-    var(--tab-active, var(--surface)) calc(var(--tab-curve) + 0.2px);
-  position: absolute;
-  right: calc(-1px - var(--tab-reach));
-  bottom: 0;
-  left: calc(-1px - var(--tab-reach));
-  height: var(--tab-curve);
-  background:
-    radial-gradient(circle at 0 0, var(--tab-arc)) left calc(var(--tab-reach) - var(--tab-curve)) top 0 / var(--tab-curve) var(--tab-curve) no-repeat,
-    radial-gradient(circle at 100% 0, var(--tab-arc)) right calc(var(--tab-reach) - var(--tab-curve)) top 0 / var(--tab-curve) var(--tab-curve) no-repeat,
-    linear-gradient(
-        to right,
-        transparent,
-        var(--tab-glow) calc(var(--tab-reach) - var(--tab-curve)),
-        transparent calc(var(--tab-reach) - var(--tab-curve)),
-        transparent calc(100% - var(--tab-reach) + var(--tab-curve)),
-        var(--tab-glow) calc(100% - var(--tab-reach) + var(--tab-curve)),
-        transparent
-      )
-      left 0 bottom 0 / 100% 1px no-repeat;
-  content: "";
-  pointer-events: none;
-}
-
-.result-tab svg {
+.result-tab svg:not(.tab-outline) {
   flex-shrink: 0;
   color: var(--text-secondary);
   opacity: 0.8;
 }
 
-.result-tab.active svg {
+.result-tab.active svg:not(.tab-outline) {
   color: var(--accent);
+  opacity: 1;
+}
+
+.result-tab .tab-outline {
   opacity: 1;
 }
 
@@ -146,12 +102,15 @@
 }
 
 .result-tab.closable.reorder-dragging {
-  /* Sin fondo propio, al arrastrarla se veria vacia. */
-  background: var(--surface-elevated);
-  position: relative;
-  z-index: 2;
-  box-shadow: var(--shadow-elevated);
+  z-index: 3;
   cursor: grabbing;
+}
+
+.result-tab.closable.reorder-dragging:not(.active) {
+  --tab-line: color-mix(in srgb, var(--text-secondary) 42%, transparent);
+  --tab-line-mid: 0.38;
+  --tab-corner-fill: var(--tab-strip-bg);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--text-primary) 3%, var(--tab-strip-bg)), var(--tab-strip-bg) 90%);
 }
 
 .result-tab.closable {
@@ -172,7 +131,33 @@
   cursor: pointer;
 }
 
+.result-tab.closable .tab-select {
+  flex: 1;
+  align-self: stretch;
+  cursor: grab;
+}
+
+/* Todo el interior selecciona, incluido el espacio alrededor del icono.
+   El cierre queda por encima, con su tamaño original. */
+.result-tab.closable .tab-select::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.tab-select > svg {
+  pointer-events: none;
+}
+
+/* El titulo conserva sus eventos (tooltip) sobre el area ampliada. */
+.tab-select > span {
+  position: relative;
+}
+
 .tab-close {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -191,14 +176,15 @@
   color: var(--text-primary);
 }
 
-/* Con el teclado, el foco es el mismo contorno de la pestaña (::before), en
-   el color del foco y sin desvanecerse: sigue la forma de carpeta, no un
-   rectangulo encima. */
-.result-tab:focus-visible,
-.result-tab:has(> .tab-select:focus-visible) {
-  --tab-ring: var(--focus-ring);
-  --tab-ring-fade: 1;
-  position: relative;
+/* El foco conserva la forma correspondiente a cada estado. */
+.result-tab:not(.active):focus-visible,
+.result-tab:not(.active):has(> .tab-select:focus-visible) {
+  --tab-line: var(--focus-ring);
+}
+
+.result-tab.active:focus-visible,
+.result-tab.active:has(> .tab-select:focus-visible) {
+  --tab-line: var(--focus-ring);
 }
 
 .result-tab:focus-visible,
@@ -211,30 +197,37 @@
   outline-offset: 1px;
 }
 
-/* Con el resultado en grupos, la carpeta elegida de un grupo sin el foco va
-   en gris: el acento queda solo donde esta el foco. */
-.tab-strip.dimmed .result-tab.active {
-  --tab-glow: color-mix(in srgb, var(--text-secondary) 28%, transparent);
-  --tab-ring: color-mix(in srgb, var(--text-secondary) 45%, transparent);
-  background: var(--tab-active, var(--surface));
+/* Un mosaico sin foco no conserva la iluminacion de su pestaña elegida:
+   visualmente queda como cualquier pestaña en reposo. */
+.tab-strip.dimmed .result-tab.active:not(:hover) {
+  --tab-line: color-mix(in srgb, var(--text-secondary) 24%, transparent);
+  --tab-line-mid: 0.18;
+  --tab-corner-fill: transparent;
+  background: transparent;
+  color: var(--text-secondary);
 }
 
-.tab-strip.dimmed .result-tab.active svg {
+.tab-strip.dimmed .result-tab.active svg:not(.tab-outline) {
   color: var(--text-secondary);
   opacity: 0.8;
+}
+
+.tab-strip.dimmed .result-tab.active:focus-visible,
+.tab-strip.dimmed .result-tab.active:has(> .tab-select:focus-visible) {
+  --tab-line: var(--focus-ring);
 }
 
 /* Las pestañas que se desplazan entre lo fijo de la fila (la Salida y la
    Terminal en el resultado, el + en las consolas): scroll nativo sin barra
    y un desvanecido en el borde que tiene mas (tabScroll.ts). */
 .result-tabs-scroll {
-  --fade: 2rem;
+  --fade: 0.75rem;
   display: flex;
   min-width: 0;
   flex: 0 1 auto;
   align-self: stretch;
   align-items: flex-end;
-  gap: 2px;
+  gap: 6px;
   /* 1px de aire arriba: el contorno de la pestaña elegida se dibuja 1px
      por encima de ella (tabs.css) y overflow-y lo recortaba, despuntando
      sus esquinas. */
@@ -244,7 +237,9 @@
   overflow-y: hidden;
   pointer-events: none;
   scrollbar-width: none;
-  scroll-padding-inline: calc(var(--tab-curve) + var(--fade)) calc(var(--tab-reach) + var(--fade));
+  /* En una fila estrecha la activa queda a 6px del borde. Así una pestaña
+     anterior no deja un fragmento sin su curva superior a la vista. */
+  scroll-padding-inline: 6px calc(var(--tab-reach) + var(--fade));
 }
 
 .result-tabs-scroll::-webkit-scrollbar {
@@ -261,14 +256,14 @@
 }
 
 .result-tabs-scroll.fade-start {
-  mask-image: linear-gradient(to right, transparent var(--tab-curve), #000 calc(var(--tab-curve) + var(--fade)));
+  mask-image: linear-gradient(to right, transparent, #000 6px);
 }
 
 .result-tabs-scroll.fade-start.fade-end {
   mask-image: linear-gradient(
     to right,
-    transparent var(--tab-curve),
-    #000 calc(var(--tab-curve) + var(--fade)),
+    transparent,
+    #000 6px,
     #000 calc(100% - var(--tab-reach) - var(--fade)),
     transparent calc(100% - var(--tab-reach))
   );
@@ -295,31 +290,4 @@
 
 .result-tabs-scroll > .result-tab.closable > .tab-close {
   flex-shrink: 0;
-}
-
-/* Al elegir una pestaña (con el mouse o con Ctrl+Tab), la carpeta se
-   enciende con un fundido corto en vez de saltar: el contorno y la union con
-   lo de abajo aparecen, y el texto pasa a pleno. */
-.result-tab {
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.result-tab.active::before,
-.result-tab.active::after {
-  animation: tab-light 170ms ease-out;
-}
-
-@keyframes tab-light {
-  from {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .result-tab.active::before,
-  .result-tab.active::after {
-    animation: none;
-  }
 }

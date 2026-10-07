@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 // Las suites que corre cada job de version y cada job de lineas (sql-engine.yml).
-export const SUITES = ["safety", "analysis", "generated", "contract"];
+export const SUITES = ["safety", "analysis", "generated", "contract", "filters"];
 export const LINE_SUITES = ["version_lines"];
 const ENGINE = { mysql: "MySql", mariadb: "MariaDb", postgres: "Postgres" };
 

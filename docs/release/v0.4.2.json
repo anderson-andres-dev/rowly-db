@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "badge": {
+    "es": "Nuevo",
+    "en": "New"
+  },
+  "title": {
+    "es": "Organiza tus consultas y terminales en mosaicos",
+    "en": "Arrange queries and terminals in split panes"
+  },
+  "items": [
+    {
+      "icon": "table",
+      "title": {
+        "es": "Tu espacio, a tu medida",
+        "en": "Arrange your workspace"
+      },
+      "text": {
+        "es": "Separa y reúne pestañas de consolas, resultados y terminales. Las sesiones de terminal siguen vivas al moverlas.",
+        "en": "Split and merge console, result and terminal tabs. Terminal sessions stay alive when moved."
+      }
+    },
+    {
+      "icon": "search",
+      "title": {
+        "es": "Filtros por columna",
+        "en": "Column filters"
+      },
+      "text": {
+        "es": "Filtra en la base de datos y conserva los filtros al cambiar de pestaña; la paginación y el total respetan la selección.",
+        "en": "Filter in the database and keep filters when switching tabs; pagination and totals follow the selection."
+      }
+    },
+    {
+      "icon": "keyboard",
+      "title": {
+        "es": "Pestañas y foco más precisos",
+        "en": "More consistent tabs and focus"
+      },
+      "text": {
+        "es": "Arrastra, reordena y cambia de pestaña con el teclado, con bordes continuos y transiciones suaves.",
+        "en": "Drag, reorder and switch tabs with the keyboard, with continuous borders and subtle transitions."
+      }
+    }
+  ]
+}

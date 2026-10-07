@@ -147,10 +147,18 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: release-verification
       - run: gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber verification.json
+      - name: Novedades de esta version para el aviso de actualizacion
+        run: |
+          highlight="docs/release/${GITHUB_REF_NAME}.json"
+          if [ -f "$highlight" ]; then
+            cp "$highlight" highlight.json
+            gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber highlight.json
+          fi
 
   arch:
     needs: release

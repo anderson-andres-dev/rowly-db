@@ -27,8 +27,8 @@
   } from "@lucide/svelte";
   import type { IconNode } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
-  import { flip } from "svelte/animate";
-  import { flipDuration, reorderable } from "$lib/reorder";
+  import { reorderable } from "$lib/reorder";
+  import TabOutline from "$lib/components/TabOutline.svelte";
   import { findInPage, type FindOptions, type FindResult } from "$lib/results/gridFind";
 
   import { COPY_FORMATS, type PasteBlock } from "$lib/results/gridClipboard";
@@ -235,17 +235,24 @@
   // y sus datos: el componente del icono sumaba bytes al JS inicial.
   const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
 
-  // Al elegir otra pestaña, su contenido entra con un fundido corto (la fila
-  // ya anima la carpeta, tabs.css). No al montar ni al llegar un resultado
-  // nuevo en la misma pestaña.
+  // Al elegir otra pestaña con otro contenido, este entra con un fundido
+  // corto. Fijar/desfijar cambia la clave, pero mueve el MISMO resultado:
+  // el grid ya esta pintado y no debe parpadear.
   let paneRoot = $state<HTMLElement>();
   let shownTab: string | null = null;
+  let shownContent: QueryExecutionResult | null = null;
   $effect(() => {
     const tab = activeTab;
+    const content = result?.type === "resultSet" && tabs.some((item) => item.key === tab) ? result : null;
     untrack(() => {
-      const changed = shownTab !== null && shownTab !== tab;
+      const changed = shownTab !== null && shownTab !== tab && shownContent !== content;
       shownTab = tab;
-      if (changed) void tick().then(() => paneRoot && softSwap(paneRoot.querySelectorAll(":scope > .pane-view > :is(.result-toolbar, .grid-region, .output-region, .centered)")));
+      shownContent = content;
+      if (changed) void tick().then(() => {
+        if (paneRoot && shownTab === tab && shownContent === content) {
+          softSwap(paneRoot.querySelectorAll(":scope > .pane-view > :is(.result-toolbar, .grid-region, .output-region, .centered)"));
+        }
+      });
     });
   });
 
@@ -688,6 +695,7 @@
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
       >
+        <TabOutline />
         <SquareArrowRightExit size={12} aria-hidden="true" />
         <span>{$t("results.tab.output")}</span>
       </button>
@@ -708,8 +716,8 @@
           class="result-tab closable"
           class:active={selectedKey === tab.key}
           data-result-key={tab.key}
-          animate:flip={{ duration: flipDuration(160) }}
         >
+          <TabOutline />
           <button
             type="button"
             role="tab"

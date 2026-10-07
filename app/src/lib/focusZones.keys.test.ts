@@ -154,6 +154,16 @@ describe("modo mover (Ctrl+Shift+Alt sostenidos)", () => {
 });
 
 describe("la terminal", () => {
+  it("permite separar y reunir mosaicos sin enviar los atajos al shell", () => {
+    const calls: string[] = [];
+    const cleanups = ["tile-console", "untile-console"].map(id =>
+      registerCommand(id, "global", () => void calls.push(id)),
+    );
+    expect(press("m", { ctrl: true, alt: true, inTerminal: true })).toBe(true);
+    expect(press("w", { ctrl: true, alt: true, inTerminal: true })).toBe(true);
+    expect(calls).toEqual(["tile-console", "untile-console"]);
+    cleanups.forEach(done => done());
+  });
   it("las teclas del shell y de las IA siguen siendo suyas", () => {
     const calls: string[] = [];
     const cleanups = ["close-query-console", "query-history", "replace", "toggle-sidebar"].map((id) =>
