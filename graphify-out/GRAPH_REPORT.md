@@ -1,27 +1,27 @@
 # Graph Report - khipu  (2026-10-07)
 
 ## Corpus Check
-- 501 files · ~549,827 words
+- 501 files · ~550,038 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 32 file(s) not represented in the graph (top: (none) 10, .css 9, .sig 8)
 
 ## Summary
-- 4809 nodes · 11343 edges · 204 communities (177 shown, 27 thin omitted)
+- 4807 nodes · 11344 edges · 204 communities (178 shown, 26 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 429 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f4eb9d58`
+- Built from commit: `147cb7c2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - execution_guard.rs
 - support.rs
-- run.mjs
+- webdriver.mjs
 - postgres/src/lib.rs
 - consoleFiles.ts
-- executionSession.ts
+- createExecutionFlow
 - driver-core/src/lib.rs
 - queryConsoles.ts
 - docs/ARCHITECTURE.md
@@ -30,7 +30,7 @@
 - tauri.conf.json
 - mysql/src/lib.rs
 - DefinitionLinkPlugin
-- installFocusZones
+- focusZones.ts
 - KhipuLanguageServer
 - Product
 - connection.ts
@@ -39,8 +39,8 @@
 - engine_context.rs
 - Arquitectura
 - compilerOptions
-- result_editing.rs
-- mysql/src/introspect.rs
+- drivers.rs
+- text
 - devDependencies
 - credentials.rs
 - completionSource.ts
@@ -48,7 +48,7 @@
 - khipu-desktop
 - postgres/src/introspect.rs
 - sql_path
-- @codemirror/state
+- release_highlight.rs
 - app-environment.ts
 - ssr
 - mysql/src/version.rs
@@ -73,7 +73,7 @@
 - ConnectionEngineContext
 - Añadir un motor de base de datos
 - parameterTypes.ts
-- vitest
+- codemirrorTheme.ts
 - executionMarker.ts
 - assembly.rs
 - terminal.rs
@@ -86,18 +86,18 @@
 - commentStyle.ts
 - svelte
 - resultEditing.ts
-- lib/types.ts
-- services/catalog.rs
+- @codemirror/state
+- src/catalog.rs
 - super
 - queryHistory.ts
 - desktop.py
 - findBar.ts
 - console_texts.rs
 - version_lines.rs
-- Result
+- Workspace.svelte
 - analysisSession.ts
 - TablePlus UX & Architecture Analysis (design reference for Khipu)
-- resultEdits.ts
+- resultChanges.ts
 - Dialect
 - QueryCancel
 - results.rs
@@ -105,13 +105,13 @@
 - resultTabs.ts
 - theme.ts
 - tests.mjs
-- filterBuilder.ts
-- resultChanges.ts
+- lib/types.ts
+- ChangesView
 - connectionTest.ts
 - i18n/index.ts
 - mysql/src/tls.rs
 - engines/index.ts
-- line
+- DestructiveClassification
 - graph.mjs
 - scripts
 - main.js
@@ -119,28 +119,28 @@
 - Quality CI Workflow
 - TilePicker.svelte
 - cellTypes.ts
-- executionSession.test.ts
+- executionSession.ts
 - catalog_bench.rs
 - Option
 - SQL engine quality contract
 - ExportDialog.svelte
-- AppState
+- state.rs
 - Contrato de calidad de los motores SQL
-- sql_files.rs
+- run.mjs
 - connection.rs
 - createSearchPanel
 - postgres/src/tls.rs
-- SchemaTree.svelte
-- TableDefinitionModal.svelte
+- pinnedTables.ts
+- ExecutionFlow
 - ref_node_fs
 - FileTree.svelte
 - console.rs
-- text_encoding.rs
-- Workspace.svelte
+- sql_files.rs
+- ChangesPreview.svelte
 - replaceBar.ts
 - Diagnostic
 - publish.mjs
-- focusZones.ts
+- serde
 - RawStatement<'q>
 - +layout.svelte
 - Extensiones opcionales y futura tienda — límites antes del runtime
@@ -149,7 +149,7 @@
 - explorerTree.ts
 - NewlineMarker
 - corpus.rs
-- stores/shortcuts.ts
+- workspace/commands.ts
 - sqlPreviewFormat.ts
 - new.mjs
 - invoke
@@ -158,47 +158,47 @@
 - analysis.rs
 - Adding a database engine
 - ResultTabActions
-- DestructiveClassification
+- ParserError
 - svelte
-- context.ts
+- vitest
 - tests/lines.rs
 - lib/backend.ts
-- workspace/commands.ts
+- result_editing.rs
 - connection_error.rs
 - desktop_portal.rs
 - parser.rs
 - DiagnosticPopup
-- DiagnosticPopup.svelte
+- SchemaTree.svelte
 - EditorConfiguration
 - unused.mjs
 - fetch.sh
-- commands/catalog.rs
+- AppState
 - TerminalSession.svelte
 - gridSelectionSummary.ts
 - AnalysisRunner
 - ARCHITECTURE.es.md
 - status.mjs
 - search.dom.test.ts
-- diagnosticPresentation.ts
+- diagnostics.ts
 - coverage.mjs
 - Engine
-- .execute_query_cancellable
+- DbConnector
 - mysqlconnector
 - postgresconnector
 - RawStatement<'q>
 - window.mjs
 - lines.sh
-- focusZones.keys.test.ts
-- apply
+- formatLayout.ts
+- executionSession.test.ts
 - DataGrid.svelte
 - gridNavigation.ts
 - gridWindow.test.ts
 - error_position.rs
-- apply
+- mysql/src/introspect.rs
 - gridFind.ts
 - Performance measurements
 - EditorCommands
-- createdTables
+- palettes.test.ts
 - Mediciones de rendimiento
 - SqlEditor.svelte
 - columnFilters.ts
@@ -209,7 +209,9 @@
 - crates_engine_tests_corpus_mixed_postgres
 - closest_names
 - Test databases
-- queryParameters.ts
+- ConnectionConfig
+- ResultChangesController
+- palettes.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `Dialect` - 113 edges
@@ -224,16 +226,16 @@
 10. `selected()` - 33 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `1. Identity: engine, dialect, driver` --references--> `ConnectionDriver`  [INFERRED]
-  ENGINE_GUIDE.md → app/src/lib/connections.ts
-- `1. Identidad: motor, dialecto, driver` --references--> `ConnectionDriver`  [INFERRED]
-  ENGINE_GUIDE.es.md → app/src/lib/connections.ts
 - `Frontend (`app/src/lib`)` --references--> `engineForContext()`  [INFERRED]
   docs/ARCHITECTURE.es.md → app/src/lib/engines/index.ts
 - `2. Principles` --references--> `SqlProfile`  [INFERRED]
   SQL_ENGINE.md → app/src/lib/engines/types.ts
 - `6.5 Capabilities (current state)` --references--> `SqlProfile`  [INFERRED]
   SQL_ENGINE.md → app/src/lib/engines/types.ts
+- `2. Principios` --references--> `SqlProfile`  [INFERRED]
+  SQL_ENGINE.es.md → app/src/lib/engines/types.ts
+- `6.5 Capacidades (estado actual)` --references--> `SqlProfile`  [INFERRED]
+  SQL_ENGINE.es.md → app/src/lib/engines/types.ts
 
 ## Import Cycles
 - 1-file cycle: `app/src-tauri/src/drivers.rs -> app/src-tauri/src/drivers.rs`
@@ -243,7 +245,7 @@
 - **Branch protection to tagged-release pipeline flow** — contributing_branch_flow, _github_workflows_quality_workflow, _github_workflows_release_workflow [EXTRACTED 1.00]
 - **TablePlus edit-review-commit UX pattern group** — docs_design_tableplus_ux_arquitectura_explore_inspect_modify_review_commit, docs_design_tableplus_ux_arquitectura_pending_changes_commit, docs_design_tableplus_ux_arquitectura_application_shell [INFERRED 0.85]
 
-## Communities (204 total, 27 thin omitted)
+## Communities (204 total, 26 thin omitted)
 
 ### Community 0 - "execution_guard.rs"
 Cohesion: 0.07
@@ -253,41 +255,41 @@ Nodes (50): Cow, a_versioned_comment_is_read_both_ways_and_the_stricter_wins(), 
 Cohesion: 0.07
 Nodes (88): a_a_signed_index_and_its_packages_are_accepted(), a_closed_port_says_the_server_does_not_respond_not_what_reqwest_says(), a_server_that_never_answers_is_a_timeout(), activate_installed(), ACTIVATION, an_http_error_says_its_status(), an_index_with_two_entries_for_a_line_a_path_or_an_unknown_field_is_rejected(), an_unresolvable_host_says_there_is_no_network() (+80 more)
 
-### Community 2 - "run.mjs"
-Cohesion: 0.08
-Nodes (24): APP, args, count(), flows, PORT, resetData(), run(), seedProfiles() (+16 more)
+### Community 2 - "webdriver.mjs"
+Cohesion: 0.14
+Nodes (10): DOM_KEYS, Element, elementId(), KEYS, request(), Session, X11_KEYS, x11Chord() (+2 more)
 
 ### Community 3 - "postgres/src/lib.rs"
-Cohesion: 0.14
-Nodes (22): async_trait, QueryExecutionOptions, cancelled_before_start(), CONNECT_TIMEOUT, execute_on_connection(), ExecutionOutcome, MAX_ROWS_TO_DRAIN, postgres_error_to_result() (+14 more)
+Cohesion: 0.15
+Nodes (21): async_trait, QueryExecutionOptions, cancelled_before_start(), CONNECT_TIMEOUT, execute_on_connection(), ExecutionOutcome, MAX_ROWS_TO_DRAIN, postgres_error_to_result() (+13 more)
 
 ### Community 4 - "consoleFiles.ts"
 Cohesion: 0.08
-Nodes (18): forgetLog(), closeQueryConsole(), isQueryConsoleDirty(), QueryConsole, queryConsoles, renameQueryConsole(), withoutExecution(), forgetResultEdits() (+10 more)
+Nodes (17): forgetLog(), closeQueryConsole(), currentQueryConsole(), isQueryConsoleDirty(), QueryConsole, renameQueryConsole(), forgetResultEdits(), TextEncoding (+9 more)
 
-### Community 5 - "executionSession.ts"
-Cohesion: 0.10
-Nodes (30): nextSort(), appendLog(), beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation() (+22 more)
+### Community 5 - "createExecutionFlow"
+Cohesion: 0.11
+Nodes (27): appendLog(), beginQueryExecution(), cancelQueryConfirmation(), clearQueryResult(), executionForConsole(), finishQueryExecution(), requireQueryConfirmation(), setQueryCounting() (+19 more)
 
 ### Community 6 - "driver-core/src/lib.rs"
-Cohesion: 0.11
-Nodes (27): CheckInfo, ColumnInfo, EventInfo, ForeignKeyInfo, IndexInfo, KeyInfo, ParameterMode, QueryColumn (+19 more)
+Cohesion: 0.09
+Nodes (31): CheckInfo, ColumnInfo, ConnectionConfig, DriverError, EventInfo, ForeignKeyInfo, IndexInfo, KeyInfo (+23 more)
 
 ### Community 7 - "queryConsoles.ts"
 Cohesion: 0.07
 Nodes (39): isFilterOperator(), activateQueryConsole(), appendConsole(), consoleTitle(), createId(), createQueryConsole(), diskTexts, EMPTY_EXECUTION_STATE (+31 more)
 
 ### Community 8 - "docs/ARCHITECTURE.md"
-Cohesion: 0.18
-Nodes (16): DbConnector trait (contributor guidance), Dialect enum (crates/engine), Driver contract tests (#[ignore = "requires database"] pattern), Driver factory branch in app/src-tauri/src/drivers.rs, Cómo sumar un motor de base de datos nuevo (procedure), app/src-tauri shell layer, DbConnector trait (crates/driver-core), Dialect enum (MySql/Postgres, crates/engine/src/lib.rs) (+8 more)
+Cohesion: 0.17
+Nodes (17): app/README.md (Tauri + SvelteKit + TypeScript template note), DbConnector trait (contributor guidance), Dialect enum (crates/engine), Driver contract tests (#[ignore = "requires database"] pattern), Driver factory branch in app/src-tauri/src/drivers.rs, Cómo sumar un motor de base de datos nuevo (procedure), app/src-tauri shell layer, DbConnector trait (crates/driver-core) (+9 more)
 
 ### Community 9 - "sqlStatements.ts"
 Cohesion: 0.04
-Nodes (89): LEXICALS, ONE_QUERY, scanInChunks(), SEVERAL, texts(), currentSqlRange(), mounted(), Selection (+81 more)
+Nodes (84): LEXICALS, ONE_QUERY, scanInChunks(), SEVERAL, texts(), executionRequest, commentAwareWrap(), slice() (+76 more)
 
 ### Community 10 - "completion_calls"
-Cohesion: 0.36
-Nodes (8): call_arguments(), completion_calls(), completion_calls_run_on_the_real_servers(), completion_fixtures(), Option, SchemaObjects, String, Vec
+Cohesion: 0.31
+Nodes (9): call_arguments(), completion_calls(), completion_calls_run_on_the_real_servers(), completion_fixtures(), Option, SchemaObjects, String, Vec (+1 more)
 
 ### Community 11 - "tauri.conf.json"
 Cohesion: 0.06
@@ -301,9 +303,9 @@ Nodes (27): cancelled_before_start(), CONNECT_TIMEOUT, ER_UNSUPPORTED_PS, execut
 Cohesion: 0.27
 Nodes (3): definitionLinkExtension(), DefinitionLinkPlugin, isModifierHeld()
 
-### Community 14 - "installFocusZones"
-Cohesion: 0.20
-Nodes (21): clearMark(), flash(), focusZone(), holding(), installFocusZones(), cancelMarkTimer(), markCurrent(), modifierOf() (+13 more)
+### Community 14 - "focusZones.ts"
+Cohesion: 0.12
+Nodes (32): clearMark(), Direction, DIRECTION_COMMANDS, flash(), flashTimers, focusZone(), holding(), installFocusZones() (+24 more)
 
 ### Community 15 - "KhipuLanguageServer"
 Cohesion: 0.15
@@ -315,11 +317,11 @@ Nodes (11): Accessibility & Inclusion, Brand Commitments, Capabilities and Const
 
 ### Community 17 - "connection.ts"
 Cohesion: 0.08
-Nodes (39): indexOf(), select(), toConnectionFailure(), getDriver(), forgetConnectionPassword(), loadConnectionPassword(), runtimePasswords, saveConnectionPassword() (+31 more)
+Nodes (38): indexOf(), select(), toConnectionFailure(), getDriver(), forgetConnectionPassword(), loadConnectionPassword(), activeEngine, activeProfile (+30 more)
 
 ### Community 18 - "package.json"
-Cohesion: 0.09
-Nodes (21): description, license, name, type, version, config, codemirror, devicon (+13 more)
+Cohesion: 0.06
+Nodes (37): description, license, name, type, version, blockClosingAt(), ENCLOSING, reaches() (+29 more)
 
 ### Community 19 - "dependencies"
 Cohesion: 0.10
@@ -330,20 +332,20 @@ Cohesion: 0.14
 Nodes (25): civil_date(), dotted(), effective_line(), identity(), line_support(), LineIdentity, Lines, one_year_after() (+17 more)
 
 ### Community 21 - "Arquitectura"
-Cohesion: 0.15
-Nodes (13): if(), Arquitectura, Capas y dependencias, Cómo fluye el SQL, Dónde puede vivir el código de un motor, Fronteras que se comprueban solas, `khipu-lsp`, La idea (+5 more)
+Cohesion: 0.10
+Nodes (21): if(), query(), Arquitectura, Backend (`app/src-tauri/src`), Capas y dependencias, Cinco cosas que no son lo mismo, Cómo fluye el SQL, Dónde puede vivir el código de un motor (+13 more)
 
 ### Community 22 - "compilerOptions"
 Cohesion: 0.15
 Nodes (12): compilerOptions, allowJs, checkJs, esModuleInterop, forceConsistentCasingInFileNames, moduleResolution, resolveJsonModule, skipLibCheck (+4 more)
 
-### Community 23 - "result_editing.rs"
-Cohesion: 0.06
-Nodes (52): connect(), ConnectedDatabase, DatabaseKind, open(), report(), Arc, C, ConnectionConfig (+44 more)
+### Community 23 - "drivers.rs"
+Cohesion: 0.17
+Nodes (18): connect(), ConnectedDatabase, DatabaseKind, open(), report(), Arc, C, ConnectionConfig (+10 more)
 
-### Community 24 - "mysql/src/introspect.rs"
-Cohesion: 0.14
-Nodes (36): COLUMNS_SQL, event_row(), EVENTS_SQL, fetch(), foreign_key_row(), FOREIGN_KEYS_SQL, format_parameter(), format_schedule() (+28 more)
+### Community 24 - "text"
+Cohesion: 0.28
+Nodes (22): event_row(), fetch(), foreign_key_row(), index_row(), introspect_schema(), key_row(), opt_text(), read_checks() (+14 more)
 
 ### Community 25 - "devDependencies"
 Cohesion: 0.18
@@ -354,8 +356,8 @@ Cohesion: 0.29
 Nodes (12): delete(), entry(), existing_entry(), load(), nothing_stored(), Error, Option, Result (+4 more)
 
 ### Community 27 - "completionSource.ts"
-Cohesion: 0.06
-Nodes (69): argumentsSnippet(), buildCatalogCompletions(), catalogPosition, COMMON_FUNCTIONS, Entry, option(), prefixStartForNames(), schemaOption() (+61 more)
+Cohesion: 0.05
+Nodes (71): afterCompleteCondition(), buildCompletionSource(), buildFkIndex(), buildKeywordCompletion(), catalogTable(), COLUMN_TYPES, currentStatement(), dialectCache (+63 more)
 
 ### Community 28 - "default.json"
 Cohesion: 0.33
@@ -369,21 +371,21 @@ Nodes (7): khipu-desktop, khipu-driver-core, khipu-driver-mysql, khipu-driver-po
 Cohesion: 0.10
 Nodes (46): build_parameters, balanced(), build_parameters(), check_expression(), COLUMNS_SQL, constraint_column_row(), CONSTRAINT_COLUMNS_SQL, ConstraintColumnRow (+38 more)
 
-### Community 32 - "@codemirror/state"
-Cohesion: 0.07
-Nodes (39): activeStatementHighlight, autoUppercaseSqlKeywords, lineColumns(), measureStatementLines(), statementDecorations(), editFor(), uppercaseKeywordEdit, RoutineIndex (+31 more)
+### Community 32 - "release_highlight.rs"
+Cohesion: 0.13
+Nodes (33): a_broken_or_unexpected_highlight_is_refused(), a_missing_file_or_image_falls_back_to_the_classic_prompt(), a_valid_highlight_is_read(), data_url(), fetch(), FORMAT, Highlight, HIGHLIGHT_FILE (+25 more)
 
 ### Community 37 - "mysql/src/version.rs"
 Cohesion: 0.11
 Nodes (14): Capabilities, check_constraints_depend_on_flavor_and_version(), CheckConstraints, COMPATIBILITY_FLOOR_MARIADB, COMPATIBILITY_FLOOR_MYSQL, Flavor, Capabilities, Self (+6 more)
 
 ### Community 41 - "connectionProfiles.ts"
-Cohesion: 0.11
-Nodes (20): openInNewWindow(), Icon, icons, openConnectionWindow(), PasswordPolicy, CONNECTION_ENVIRONMENTS, ConnectionEnvironment, ConnectionProfile (+12 more)
+Cohesion: 0.06
+Nodes (29): neutral, openInNewWindow(), Icon, icons, colorLabel(), CONNECTION_COLORS, NEUTRAL_IDENTITY_COLOR, connectionDrivers (+21 more)
 
 ### Community 42 - "stores/updates.ts"
-Cohesion: 0.08
-Nodes (27): CachedCheck, checkForUpdates(), checking, checkOnStartup(), DEFAULT_PREFS, errorCode(), InstallKind, installRelease() (+19 more)
+Cohesion: 0.06
+Nodes (31): CachedCheck, checkForUpdates(), checking, checkOnStartup(), DEFAULT_PREFS, errorCode(), InstallKind, installRelease() (+23 more)
 
 ### Community 43 - "export.rs"
 Cohesion: 0.13
@@ -398,20 +400,20 @@ Cohesion: 0.19
 Nodes (16): shortcutKeyParts(), ensureElement(), hide(), hideTooltipFor(), place(), prettyShortcut(), resolve(), Resolved (+8 more)
 
 ### Community 47 - "ResultPager.svelte"
-Cohesion: 0.11
-Nodes (12): applyCustom(), changePageSize(), goLast(), lastOffsetFor(), navButton(), $t(), clampPageSize(), defaultPageSize (+4 more)
+Cohesion: 0.08
+Nodes (18): applyCustom(), changePageSize(), goLast(), lastOffsetFor(), navButton(), $t(), load(), parse() (+10 more)
 
 ### Community 48 - "resources.mjs"
 Cohesion: 0.06
 Nodes (53): shown(), connectInspector(), liveHeap(), pageSocket(), sleep(), addSession(), alive(), APP (+45 more)
 
 ### Community 49 - "sqlFiles.ts"
-Cohesion: 0.15
-Nodes (23): confirmTrash(), finishEdit(), onEditKeydown(), createSqlFile(), openSqlFileAtPath(), openSqlFileWithDialog(), renameConsoleFile(), renameSqlFile() (+15 more)
+Cohesion: 0.16
+Nodes (22): confirmTrash(), finishEdit(), onEditKeydown(), createSqlFile(), openSqlFileAtPath(), openSqlFileWithDialog(), renameConsoleFile(), renameSqlFile() (+14 more)
 
 ### Community 50 - "pagination.rs"
 Cohesion: 0.13
-Nodes (29): GuardOptions, statement_is_read_only(), con_no_backslash_escapes_y_barras_no_se_reescribe(), count_sql(), guarded(), is_read_only_query(), literal_limit(), literal_u64() (+21 more)
+Nodes (29): GuardOptions, con_no_backslash_escapes_y_barras_no_se_reescribe(), count_sql(), guarded(), is_read_only_query(), literal_limit(), literal_u64(), lo_que_se_ejecuta_es_una_lectura_con_las_mismas_cadenas() (+21 more)
 
 ### Community 51 - "postgres/src/version.rs"
 Cohesion: 0.12
@@ -430,8 +432,8 @@ Cohesion: 0.11
 Nodes (33): ast, analyze_editable_query(), build_change_statements(), CellValue, ColumnValue, distingue_columnas_alias_y_expresiones(), EditableQuery, escapa_valores_e_identificadores_por_dialecto() (+25 more)
 
 ### Community 55 - "updates.rs"
-Cohesion: 0.05
-Nodes (84): a_broken_or_unexpected_highlight_is_refused(), a_missing_file_or_image_falls_back_to_the_classic_prompt(), a_valid_highlight_is_read(), data_url(), fetch(), FORMAT, Highlight, HIGHLIGHT_FILE (+76 more)
+Cohesion: 0.09
+Nodes (51): command_succeeds(), current_version(), detect_install_kind(), download_base(), DOWNLOAD_BASE_ENV, GithubAsset, GithubRelease, http_client() (+43 more)
 
 ### Community 56 - "MySqlConnector"
 Cohesion: 0.14
@@ -447,15 +449,15 @@ Nodes (8): a_request_from_another_generation_or_epoch_is_no_longer_current(), Co
 
 ### Community 59 - "Añadir un motor de base de datos"
 Cohesion: 0.09
-Nodes (26): ConnectionConfig, TlsMode, TlsStatus, Límites conocidos, Limitaciones conocidas, SSL/TLS por conexión, Embedded engines, 12. Harness, corpus y servidores de prueba (+18 more)
+Nodes (24): reservedWords(), 10. Generated SQL, 6. Version lines, 10. SQL generado, 12. Harness, corpus y servidores de prueba, 13. Cobertura, 14. Matriz, evidencia y CI, 15. Documentación (+16 more)
 
 ### Community 60 - "parameterTypes.ts"
 Cohesion: 0.10
 Nodes (33): BETWEEN_FIRST, BETWEEN_SECOND, COLUMN, columnNextTo(), LEFT, NAME, NOT_COLUMNS, OPERATOR (+25 more)
 
-### Community 61 - "vitest"
-Cohesion: 0.06
-Nodes (36): analyzedWords(), context(), highlightedKeywords(), highlightedStrings(), blockClosingAt(), commentEditing, editor(), views (+28 more)
+### Community 61 - "codemirrorTheme.ts"
+Cohesion: 0.18
+Nodes (10): buildCmTheme(), BUILTIN_FUNCTIONS, builtinCallMark, createCmTheme(), themes, TOKEN_CHROME, WORD_OPERATORS, wordClassHighlight (+2 more)
 
 ### Community 62 - "executionMarker.ts"
 Cohesion: 0.08
@@ -478,48 +480,48 @@ Cohesion: 0.26
 Nodes (3): defineMessages(), OtherLocale, Namespaces
 
 ### Community 67 - "selected"
-Cohesion: 0.15
-Nodes (32): DbConnector, Sync, declared_tls(), IntoIterator, selected(), a_result_set_keeps_values_and_nulls(), a_server_error_keeps_its_code_and_position(), connector() (+24 more)
+Cohesion: 0.18
+Nodes (30): declared_tls(), IntoIterator, selected(), a_result_set_keeps_values_and_nulls(), a_server_error_keeps_its_code_and_position(), connector(), connects_and_lists_schemas_and_tables(), ddl_returns_a_command() (+22 more)
 
 ### Community 68 - "Contribuir"
-Cohesion: 0.15
-Nodes (15): Agregar un motor de base de datos, Contribuir, Estilo, Flujo de trabajo, Nombres, Novedad de la versión, Primeros pasos, Pruebas contra una base real (+7 more)
+Cohesion: 0.20
+Nodes (10): Agregar un motor de base de datos, Contribuir, Estilo, Flujo de trabajo, Nombres, Novedad de la versión, Primeros pasos, Publicar una versión (+2 more)
 
 ### Community 69 - "gridClipboard.ts"
-Cohesion: 0.14
-Nodes (20): writeClipboard(), COPY_FORMATS, CopyFormat, CopyOptions, csvField(), externalValue(), jsonValue(), markdownField() (+12 more)
+Cohesion: 0.17
+Nodes (18): CopyColumn, CopyOptions, csvField(), externalValue(), jsonValue(), markdownField(), normalizeNewlines(), parseClipboard() (+10 more)
 
 ### Community 70 - "workspace/mosaic.ts"
-Cohesion: 0.07
-Nodes (52): query(), setZoneNavigator(), prefersReducedMotion(), reorderable(), onPointerDown(), cleanup(), detach(), onMove() (+44 more)
+Cohesion: 0.14
+Nodes (30): consoleMosaics, load(), setConsoleMosaic(), at(), contains(), Direction, Divider, dividers() (+22 more)
 
 ### Community 71 - "commentStyle.ts"
-Cohesion: 0.18
-Nodes (13): blockText(), commentDecorations(), commentMarks(), commentStyle, commentStylePlugin, commentStyleTheme, styled(), views (+5 more)
+Cohesion: 0.19
+Nodes (12): blockText(), commentDecorations(), commentMarks(), commentStyle, commentStylePlugin, commentStyleTheme, styled(), views (+4 more)
 
 ### Community 72 - "svelte"
-Cohesion: 0.11
-Nodes (16): executionLog, LogEntry, LogKind, MAX_LOG_ENTRIES, MAX_LOG_TEXT, GRID_ROW_STYLES, GridRowStyle, gridSettings (+8 more)
+Cohesion: 0.20
+Nodes (11): COPY_FORMATS, CopyFormat, copySettings, DEFAULTS, GRID_ROW_STYLES, GridRowStyle, gridSettings, loadGridSettings() (+3 more)
 
 ### Community 73 - "resultEditing.ts"
-Cohesion: 0.12
-Nodes (23): CopyColumn, rememberCopy(), columns, NULL, options, addRow(), applyChanges(), ColumnValue (+15 more)
+Cohesion: 0.22
+Nodes (16): addRow(), buildChanges(), ColumnValue, deleteRows(), EMPTY_EDITS, fillCells(), newRowValues(), originalValue() (+8 more)
 
-### Community 74 - "lib/types.ts"
-Cohesion: 0.06
-Nodes (40): buildRoutineIndex(), CallArgument, callHints(), CatalogRoutine, findCalls(), isName(), labelsFor(), Name (+32 more)
+### Community 74 - "@codemirror/state"
+Cohesion: 0.05
+Nodes (57): buildRoutineIndex(), CallArgument, callHints(), CatalogRoutine, findCalls(), isName(), labelsFor(), Name (+49 more)
 
-### Community 75 - "services/catalog.rs"
-Cohesion: 0.15
-Nodes (15): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, tables_to_catalog(), catalog, CatalogColumn, CatalogForeignKey, CatalogTable (+7 more)
+### Community 75 - "src/catalog.rs"
+Cohesion: 0.27
+Nodes (8): CatalogColumn, CatalogForeignKey, CatalogTable, CatalogColumn, Option, String, Vec, serialize
 
 ### Community 76 - "super"
 Cohesion: 0.11
 Nodes (18): DEFINITION, UNPARSED, DoBlocks, EngineDefinition, InsertDefaults, RoutineBodies, Option, DEFINITION (+10 more)
 
 ### Community 77 - "queryHistory.ts"
-Cohesion: 0.19
-Nodes (15): filterHistory(), flushQueryHistory(), groupHistoryByDay(), HistoryDay, HistoryEntry, HistoryOutcome, isEntry(), load() (+7 more)
+Cohesion: 0.20
+Nodes (14): filterHistory(), flushQueryHistory(), groupHistoryByDay(), HistoryDay, HistoryEntry, HistoryOutcome, isEntry(), load() (+6 more)
 
 ### Community 78 - "desktop.py"
 Cohesion: 0.06
@@ -537,77 +539,77 @@ Nodes (23): frontend_commands(), String, io_failure(), prune(), read(), AppHandl
 Cohesion: 0.19
 Nodes (25): engine_selected(), error_text(), check_version(), engine_named(), entry_since(), every_column_type_a_line_returns_is_read(), every_version_line_is_told_apart_from_the_previous_one(), expected() (+17 more)
 
-### Community 82 - "Result"
-Cohesion: 0.18
-Nodes (7): ConnectionConfig, DriverError, ConnectionErrorKind, Formatter, Result, TlsMode, Debug
+### Community 82 - "Workspace.svelte"
+Cohesion: 0.13
+Nodes (18): #each(), $t(), tabExists(), setZoneNavigator(), prefersReducedMotion(), reorderable(), onPointerDown(), cleanup() (+10 more)
 
 ### Community 83 - "analysisSession.ts"
-Cohesion: 0.11
-Nodes (17): BackendMessage, Region, analysisCacheFor(), AnalysisContext, AnalysisDiagnostic, analysisDiagnostics(), AnalysisPosition, AnalysisSession (+9 more)
+Cohesion: 0.14
+Nodes (17): BackendMessage, analysisCacheFor(), AnalysisContext, AnalysisDiagnostic, analysisDiagnostics(), AnalysisPosition, AnalysisSessionOptions, sameContext() (+9 more)
 
 ### Community 84 - "TablePlus UX & Architecture Analysis (design reference for Khipu)"
 Cohesion: 0.12
 Nodes (17): CSS_VAR_NAMES field-to-CSS-variable mapping, app/src/app.html (SvelteKit shell HTML), SHELL_PALETTES literal (datagrip/vscode x dark/light), palettes.ts palette definitions (external reference, file not read in this chunk), theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk), Theme bootstrap IIFE (pre-paint CSS var injection), Rationale: palette literals duplicated inline to avoid flash-of-unstyled-theme before SvelteKit ES modules load, app/src frontend layer (Svelte + CodeMirror 6) (+9 more)
 
-### Community 85 - "resultEdits.ts"
-Cohesion: 0.20
-Nodes (16): EMPTY_EDITS, PendingEdits, clearResultPendingEdits(), commitResultEdits(), editStateFor(), EditStep, EMPTY_STATE, patch() (+8 more)
+### Community 85 - "resultChanges.ts"
+Cohesion: 0.12
+Nodes (25): applyChanges(), EditTarget, fetchEditInfo(), PendingEdits, previewChanges(), ResultChanges, ResultEditInfo, clearResultPendingEdits() (+17 more)
 
 ### Community 86 - "Dialect"
 Cohesion: 0.09
-Nodes (22): MYSQL, ACTIVE_LINES, ALL, cada_motor_tiene_su_identidad(), coincide_con_el_contrato_compartido_con_el_frontend(), Dialect, .ALL, la_fila_con_valores_por_defecto_es_sql_valido() (+14 more)
+Nodes (21): MYSQL, ACTIVE_LINES, ALL, cada_motor_tiene_su_identidad(), coincide_con_el_contrato_compartido_con_el_frontend(), Dialect, .ALL, la_fila_con_valores_por_defecto_es_sql_valido() (+13 more)
 
 ### Community 87 - "QueryCancel"
 Cohesion: 0.23
 Nodes (5): a_late_cancel_never_touches_the_connection_again(), CancelState, QueryCancel, Mutex, Option
 
 ### Community 88 - "results.rs"
-Cohesion: 0.13
-Nodes (25): apply_result_changes(), export_query_to_file(), ExportRequest, ExportSummary, preview_result_changes(), production_write_allowed(), result_edit_info(), Message (+17 more)
+Cohesion: 0.14
+Nodes (24): apply_result_changes(), export_query_to_file(), ExportRequest, ExportSummary, preview_result_changes(), production_write_allowed(), result_edit_info(), Message (+16 more)
 
 ### Community 89 - "safety.rs"
 Cohesion: 0.14
 Nodes (24): attacks_corpus(), FRAGMENTS_MYSQL, FRAGMENTS_PG, fresh(), fresh_scratch(), fuzzing_the_guard_against_the_real_servers_finds_no_second_statement(), INJECTIONS, Lcg (+16 more)
 
 ### Community 90 - "resultTabs.ts"
-Cohesion: 0.15
-Nodes (24): addPinnedTab(), addResultTab(), consoleOfKey(), forgetPinnedResults(), pinnedResults, PinnedTab, removePinnedTab(), resultKey() (+16 more)
+Cohesion: 0.14
+Nodes (25): addPinnedTab(), addResultTab(), consoleOfKey(), forgetPinnedResults(), pinnedResults, PinnedTab, removePinnedTab(), resultKey() (+17 more)
 
 ### Community 91 - "theme.ts"
-Cohesion: 0.06
-Nodes (44): buildCmTheme(), BUILTIN_FUNCTIONS, builtinCallMark, createCmTheme(), themes, TOKEN_CHROME, WORD_OPERATORS, wordClassHighlight (+36 more)
+Cohesion: 0.16
+Nodes (17): resolveScheme(), ThemeFamily, themeVariant, DEFAULT_THEME_CHOICE, editorPalette, effectiveScheme, initThemeEffects(), isSchemePreference() (+9 more)
 
 ### Community 92 - "tests.mjs"
 Cohesion: 0.08
 Nodes (24): args, byPath, cargo, cargoBinary(), check, DECISIONS, e2eEntry(), GATES (+16 more)
 
-### Community 93 - "filterBuilder.ts"
-Cohesion: 0.13
-Nodes (19): buildWhere(), conditionSql(), FILTER_OPERATORS, FilterCondition, FilterJoin, FilterOperator, listValues(), newCondition() (+11 more)
+### Community 93 - "lib/types.ts"
+Cohesion: 0.07
+Nodes (36): ConnectionDriver, buildWhere(), conditionSql(), FILTER_OPERATORS, FilterCondition, FilterJoin, FilterOperator, listValues() (+28 more)
 
-### Community 94 - "resultChanges.ts"
-Cohesion: 0.11
-Nodes (15): invalidCells(), buildChanges(), ChangeError, EditTarget, ResultChanges, ChangesBackend, ChangesPreview, ChangesView (+7 more)
+### Community 94 - "ChangesView"
+Cohesion: 0.24
+Nodes (5): invalidCells(), ChangesView, blockedByInvalidValues(), currentChanges(), openPreview()
 
 ### Community 95 - "connectionTest.ts"
-Cohesion: 0.14
-Nodes (18): colorLabel(), ConnectionTarget, explainConnectionFailure(), ExplainedFailure, KNOWN_KINDS, target, describeTls(), summarizeError() (+10 more)
+Cohesion: 0.15
+Nodes (17): ConnectionTarget, explainConnectionFailure(), ExplainedFailure, KNOWN_KINDS, target, describeTls(), summarizeError(), summarizeReport() (+9 more)
 
 ### Community 96 - "i18n/index.ts"
 Cohesion: 0.18
 Nodes (17): interpolate(), loadPreference(), locale, localePreference, lookup(), numberFormat, systemLocale(), translator() (+9 more)
 
 ### Community 97 - "mysql/src/tls.rs"
-Cohesion: 0.14
-Nodes (13): connection_error(), io_error(), is_tls_failure(), kind_of(), read_status(), ConnectionErrorKind, DriverError, Error (+5 more)
+Cohesion: 0.10
+Nodes (20): apply(), connection_error(), io_error(), is_tls_failure(), kind_of(), read_status(), ConnectionErrorKind, DriverError (+12 more)
 
 ### Community 98 - "engines/index.ts"
-Cohesion: 0.05
-Nodes (66): ConnectionDriver, SmartEnv, serverDiagnostics(), byAnalyzerLocation(), byNearFragment(), byQuotedName(), byServerPosition(), charToUtf16() (+58 more)
+Cohesion: 0.11
+Nodes (35): byAnalyzerLocation(), byNearFragment(), byServerPosition(), firstLocated(), tokenAt(), ansiString(), caseInsensitiveName(), COMMON_RESERVED (+27 more)
 
-### Community 99 - "line"
-Cohesion: 0.13
-Nodes (16): reservedWords(), 10. Generated SQL, 6. Version lines, 10. SQL generado, 6. Líneas de versión, 11. Version support packs, 5.1 The rule, 5.3 Lines today (+8 more)
+### Community 99 - "DestructiveClassification"
+Cohesion: 0.16
+Nodes (20): AlterTableOperation, classify(), classify_alter_table(), classify_destructive_sql(), classify_drop(), classify_production(), classify_query(), classify_set_expr() (+12 more)
 
 ### Community 100 - "graph.mjs"
 Cohesion: 0.10
@@ -623,7 +625,7 @@ Nodes (4): detected, live, menu, setupTabs()
 
 ### Community 103 - "formatter.ts"
 Cohesion: 0.07
-Nodes (51): alignColumnDefinitions(), alignConditionsPass(), alignJoinsPass(), alignPass(), hasComment(), indentOf(), joinConditionPass(), LayoutOptions (+43 more)
+Nodes (37): FormatSettings, format(), upperOperatorWords(), applyIndentation(), CLAUSES_WITH_INLINE_BODY, compactStructuredLayout(), compactStructuredLayoutPass(), FormatFailure (+29 more)
 
 ### Community 104 - "Quality CI Workflow"
 Cohesion: 0.29
@@ -637,13 +639,13 @@ Nodes (11): active, byId, filtered, move(), onKeydown(), pick(), query, OPTICAL_
 Cohesion: 0.18
 Nodes (16): BOOLEAN, enumValues(), impossibleClock(), impossibleIsoDate(), INTEGER_ALIASES, INTEGER_RANGES, InvalidCell, modifiers() (+8 more)
 
-### Community 107 - "executionSession.test.ts"
-Cohesion: 0.08
-Nodes (25): cancelQuery(), classifyStatements(), countQueryRows(), executeQuery(), PageRequest, StatementCheck, STANDARD_LEXICAL, applySessionContext() (+17 more)
+### Community 107 - "executionSession.ts"
+Cohesion: 0.11
+Nodes (22): cancelQuery(), classifyStatements(), countQueryRows(), executeQuery(), PageRequest, StatementCheck, nextSort(), applySessionContext() (+14 more)
 
 ### Community 108 - "catalog_bench.rs"
-Cohesion: 0.17
-Nodes (16): analyze_statement, classify_sql, corpus(), drop_large(), large_schema_sql(), LARGE_TABLES, main(), ms() (+8 more)
+Cohesion: 0.18
+Nodes (15): analyze_statement, classify_sql, corpus(), drop_large(), large_schema_sql(), LARGE_TABLES, main(), ms() (+7 more)
 
 ### Community 109 - "Option"
 Cohesion: 0.17
@@ -654,56 +656,56 @@ Cohesion: 0.07
 Nodes (28): 10.1 Layout, 10.2 Rules, 10.3 Simulations, 10. Tests, fixtures and simulations, 12.1 New engine, 12.2 New line of an existing engine, 12.3 New exact release within a line, 12. Adding an engine, a line or a release (+20 more)
 
 ### Community 111 - "ExportDialog.svelte"
-Cohesion: 0.20
-Nodes (11): format(), highlightSql(), KEYWORDS, detectJsonColumns(), escapeHtml(), highlightJson(), HTML_ESCAPES, isJsonColumnType() (+3 more)
+Cohesion: 0.17
+Nodes (10): format(), highlightSql(), KEYWORDS, detectJsonColumns(), escapeHtml(), highlightJson(), HTML_ESCAPES, isJsonColumnType() (+2 more)
 
-### Community 112 - "AppState"
-Cohesion: 0.11
-Nodes (28): a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset(), ActiveConnection, AppState, build_catalog(), ConsoleChange, context(), DatabaseExplorer, follow_console() (+20 more)
+### Community 112 - "state.rs"
+Cohesion: 0.10
+Nodes (31): preserves_column_metadata(), preserves_foreign_keys(), IntoIterator, tables_to_catalog(), a_new_mode_is_a_new_generation_and_a_new_connection_is_a_reset(), ActiveConnection, build_catalog(), ConsoleChange (+23 more)
 
 ### Community 113 - "Contrato de calidad de los motores SQL"
 Cohesion: 0.07
 Nodes (28): 10.1 Estructura, 10.2 Reglas, 10.3 Simulaciones, 10. Tests, fixtures y simulaciones, 12.1 Motor nuevo, 12.2 Línea nueva de un motor existente, 12.3 Versión exacta nueva dentro de una línea, 12. Agregar un motor, una línea o una versión (+20 more)
 
-### Community 114 - "sql_files.rs"
-Cohesion: 0.25
-Nodes (22): absolute_dir(), create(), encoding_label(), io_failure(), is_sql_file_name(), list_dir(), read(), rename() (+14 more)
+### Community 114 - "run.mjs"
+Cohesion: 0.13
+Nodes (14): APP, args, count(), flows, PORT, resetData(), run(), seedProfiles() (+6 more)
 
 ### Community 115 - "connection.rs"
-Cohesion: 0.13
-Nodes (23): a_connection_failure_keeps_its_shape(), connect(), ConnectFailure, delete_connection_password(), disconnect(), load_connection_password(), ConnectionConfig, ConnectionErrorKind (+15 more)
+Cohesion: 0.14
+Nodes (22): a_connection_failure_keeps_its_shape(), connect(), ConnectFailure, delete_connection_password(), disconnect(), load_connection_password(), ConnectionConfig, ConnectionErrorKind (+14 more)
 
 ### Community 116 - "createSearchPanel"
 Cohesion: 0.21
 Nodes (11): closeAndFocusEditor(), createSearchPanel(), renderMode(), mount(), dropSelectionPrefill(), editorSearch(), openInMode(), openReplacePanel() (+3 more)
 
 ### Community 117 - "postgres/src/tls.rs"
-Cohesion: 0.15
-Nodes (11): connection_error(), io_error(), is_tls_failure(), kind_of(), read_status(), ConnectionErrorKind, DriverError, Error (+3 more)
+Cohesion: 0.12
+Nodes (17): apply(), connection_error(), io_error(), is_tls_failure(), kind_of(), read_status(), ConnectionErrorKind, DriverError (+9 more)
 
-### Community 118 - "SchemaTree.svelte"
-Cohesion: 0.18
-Nodes (11): destroy(), child(), forgetPinnedTables(), isPinned(), PinnedTable, pinnedTables, togglePinnedTable(), tabScroll() (+3 more)
+### Community 118 - "pinnedTables.ts"
+Cohesion: 0.43
+Nodes (5): forgetPinnedTables(), isPinned(), PinnedTable, pinnedTables, togglePinnedTable()
 
 ### Community 120 - "ref_node_fs"
-Cohesion: 0.08
-Nodes (28): ENGINE_SOURCES, ref_lib, ref_node_assert, ref_node_child_process, ref_node_fs, ref_node_os, ref_node_path, ref_node_test (+20 more)
+Cohesion: 0.07
+Nodes (33): ENGINE_SOURCES, Pruebas contra una base real, ref_lib, ref_node_assert, ref_node_child_process, ref_node_fs, ref_node_os, ref_node_path (+25 more)
 
 ### Community 121 - "FileTree.svelte"
-Cohesion: 0.09
-Nodes (20): active, fileMenuItems(), folderMenuItems(), requestTrash(), startCreate(), startRename(), pickSqlFolder(), entry() (+12 more)
+Cohesion: 0.08
+Nodes (23): active, fileMenuItems(), folderMenuItems(), requestTrash(), startCreate(), startRename(), close(), $t() (+15 more)
 
 ### Community 122 - "console.rs"
 Cohesion: 0.12
 Nodes (18): atomic, a_connection_that_does_not_open_leaves_the_slot_empty(), ConsoleConnection, ConsoleConnection<C>, ConsoleGuard, ConsoleGuard<'_, C>, opening_the_first_connection_loses_no_session_and_closing_one_does(), AtomicU64 (+10 more)
 
-### Community 123 - "text_encoding.rs"
-Cohesion: 0.11
-Nodes (31): create_sql_file(), list_sql_dir(), prune_console_texts(), read_console_text(), read_sql_file(), rename_sql_file(), AppHandle, Message (+23 more)
-
-### Community 124 - "Workspace.svelte"
+### Community 123 - "sql_files.rs"
 Cohesion: 0.08
-Nodes (19): close(), onKeydown(), onKeydownCapture(), $t(), #each(), $t(), tabExists(), ContextMenuItem (+11 more)
+Nodes (53): create_sql_file(), list_sql_dir(), prune_console_texts(), read_console_text(), read_sql_file(), rename_sql_file(), AppHandle, Message (+45 more)
+
+### Community 124 - "ChangesPreview.svelte"
+Cohesion: 0.16
+Nodes (14): onKeydown(), onKeydownCapture(), blocksHeldEnter(), confirmsOnEnter(), moveDialogActionFocus(), Box, installDialogMotion(), isBackdropClick() (+6 more)
 
 ### Community 125 - "replaceBar.ts"
 Cohesion: 0.19
@@ -717,17 +719,17 @@ Nodes (28): at_token(), byte_offset(), check(), Diagnostic, handler_action(), in
 Cohesion: 0.14
 Nodes (21): ref_node_crypto, base, env, mysql, out, r2, ten, valid (+13 more)
 
-### Community 128 - "focusZones.ts"
+### Community 128 - "serde"
 Cohesion: 0.13
-Nodes (13): Direction, DIRECTION_COMMANDS, flashTimers, lastFocused, navigators, neighborZone(), SAME_COLUMN, setSidebarRevealer() (+5 more)
+Nodes (15): app_text_travels_as_key_and_params(), Message, raw_text_travels_as_a_plain_string(), BTreeMap, Formatter, From, Into, Option (+7 more)
 
 ### Community 129 - "RawStatement<'q>"
 Cohesion: 0.18
 Nodes (8): RawStatement<'q>, Arguments, BoxDynError, Execute, Option, Statement, vector_text(), MySql
 
 ### Community 130 - "+layout.svelte"
-Cohesion: 0.07
-Nodes (34): initLocaleEffects(), installNumpadFix(), onKeydown(), isTextTarget(), NUMPAD_TEXT, numpadText(), onePerFrame(), frames (+26 more)
+Cohesion: 0.06
+Nodes (35): setSidebarRevealer(), initLocaleEffects(), installNumpadFix(), onKeydown(), isTextTarget(), NUMPAD_TEXT, numpadText(), onePerFrame() (+27 more)
 
 ### Community 131 - "Extensiones opcionales y futura tienda — límites antes del runtime"
 Cohesion: 0.17
@@ -749,9 +751,9 @@ Nodes (22): buildExplorerTree(), columnList(), expandableKeys(), ExplorerIcon, E
 Cohesion: 0.26
 Nodes (15): catalog(), check(), consolas_mezcladas_no_dan_falsos_positivos(), created(), errores_ordinarios_siguen_detectandose(), lo_comun_no_da_falsos_positivos_en_ningun_motor(), lo_de_mysql_y_mariadb_no_da_falsos_positivos(), lo_de_postgres_no_da_falsos_positivos() (+7 more)
 
-### Community 137 - "stores/shortcuts.ts"
-Cohesion: 0.12
-Nodes (16): handleRecordKeydown(), activeZone, installKeybindings(), onKeydown(), TERMINAL_COMMANDS, formatShortcutEvent(), KEY_SYMBOLS, MODIFIER_KEYS (+8 more)
+### Community 137 - "workspace/commands.ts"
+Cohesion: 0.07
+Nodes (40): handleRecordKeydown(), activeZone, FakeKey, g, hold(), KeyInit, letGo(), press() (+32 more)
 
 ### Community 138 - "sqlPreviewFormat.ts"
 Cohesion: 0.38
@@ -762,8 +764,8 @@ Cohesion: 0.15
 Nodes (13): args, base, contract, contractPath, corpus, dialects, fail(), file (+5 more)
 
 ### Community 140 - "invoke"
-Cohesion: 0.26
-Nodes (13): invoke(), listSqlDir(), checkSupportUpdates(), installSupportPackage(), loadSupportLines(), removeSupportPackage(), run(), setSupportLineEnabled() (+5 more)
+Cohesion: 0.21
+Nodes (15): invoke(), runtimePasswords, saveConnectionPassword(), listSqlDir(), checkSupportUpdates(), installSupportPackage(), loadSupportLines(), removeSupportPackage() (+7 more)
 
 ### Community 141 - ".new"
 Cohesion: 0.22
@@ -779,31 +781,31 @@ Nodes (26): is_error(), routines_corpus(), call_and_show_create_return_their_row
 
 ### Community 144 - "Adding a database engine"
 Cohesion: 0.11
-Nodes (19): ConnectionErrorKind, 12. Harness, corpus and test servers, 13. Coverage, 14. Matrix, evidence and CI, 15. Documentation, 1. Identity: engine, dialect, driver, 3. Parser, 4. Driver and protocol (+11 more)
+Nodes (18): ConnectionErrorKind, 12. Harness, corpus and test servers, 13. Coverage, 14. Matrix, evidence and CI, 15. Documentation, 3. Parser, 4. Driver and protocol, 5. Exact release: `ServerIdentity` (+10 more)
 
-### Community 146 - "DestructiveClassification"
-Cohesion: 0.15
-Nodes (38): AlterTableOperation, after_handler_conditions(), classify(), classify_alter_table(), classify_by_structure(), classify_destructive_sql(), classify_drop(), classify_production() (+30 more)
+### Community 146 - "ParserError"
+Cohesion: 0.31
+Nodes (21): after_handler_conditions(), classify_by_structure(), classify_routine(), classify_text(), classify_unparsed(), expand_executable_comments(), parse_single_statement(), routine_error() (+13 more)
 
 ### Community 147 - "svelte"
-Cohesion: 0.07
-Nodes (14): neutral, shortcutText(), $t(), CONNECTION_COLORS, NEUTRAL_IDENTITY_COLOR, connectionDrivers, initials(), luminance() (+6 more)
+Cohesion: 0.06
+Nodes (13): allState, style, active, danger, submit, shortcutText(), $t(), setFormatterLineWidth() (+5 more)
 
-### Community 148 - "context.ts"
-Cohesion: 0.13
-Nodes (18): completionPolicy, NO_BOOST(), RELATION_TAIL_BASE, RELATION_TAIL_BOOST, relationTailKeywords(), classifyContext(), classifyFrame(), CLAUSE_KEYWORDS (+10 more)
+### Community 148 - "vitest"
+Cohesion: 0.07
+Nodes (37): analyzedWords(), context(), highlightedKeywords(), highlightedStrings(), commentEditing, editor(), views, painted() (+29 more)
 
 ### Community 149 - "tests/lines.rs"
 Cohesion: 0.13
 Nodes (19): a_version_selects_the_closest_line_below_it(), every_registered_engine_declares_its_own_lines_and_the_test_servers_use_them(), every_reserved_word_of_a_line_is_one_its_fixtures_prove(), every_test_server_and_every_verified_version_selects_the_line_it_proves(), fixture(), no_known_consumer_declares_versioned_behavior_by_itself_again(), registry(), removed_in() (+11 more)
 
 ### Community 150 - "lib/backend.ts"
-Cohesion: 0.23
-Nodes (8): backendText(), isKeyed(), OWNERS, rustFiles, sources, translatedRejection(), command(), @tauri-apps/api
+Cohesion: 0.25
+Nodes (7): backendText(), isKeyed(), OWNERS, rustFiles, sources, translatedRejection(), command()
 
-### Community 151 - "workspace/commands.ts"
-Cohesion: 0.21
-Nodes (16): commandDefinitions, CommandGroup, CommandHandler, commandsCollide(), CommandZone, handlerKey(), handlers, registerCommand() (+8 more)
+### Community 151 - "result_editing.rs"
+Cohesion: 0.28
+Nodes (19): edit_info(), EditableColumn, EditTarget, find_table(), names(), ResultEditInfo, BTreeMap, Message (+11 more)
 
 ### Community 152 - "connection_error.rs"
 Cohesion: 0.13
@@ -817,9 +819,9 @@ Nodes (7): report_slow_start(), Duration, Option, String, SLOW_START, slow_start
 Cohesion: 0.25
 Nodes (3): ParserError, Result, validate()
 
-### Community 156 - "DiagnosticPopup.svelte"
-Cohesion: 0.21
-Nodes (8): focused(), mountTree(), focusRow(), itemOf(), rows(), treeKeys(), onClick(), onKeydown()
+### Community 156 - "SchemaTree.svelte"
+Cohesion: 0.11
+Nodes (16): writeClipboard(), destroy(), child(), writeClipboardText(), tabScroll(), onWheel(), reveal(), update() (+8 more)
 
 ### Community 158 - "unused.mjs"
 Cohesion: 0.11
@@ -829,25 +831,25 @@ Nodes (16): commands, configText, dependencies, escape(), exportsWithoutConsumer
 Cohesion: 0.33
 Nodes (6): dataset(), matches(), fetch.sh script, pg(), selected(), up.sh script
 
-### Community 160 - "commands/catalog.rs"
-Cohesion: 0.22
-Nodes (15): database_explorer(), list_tables(), BTreeMap, CatalogTable, DatabaseExplorer, Message, Option, Result (+7 more)
+### Community 160 - "AppState"
+Cohesion: 0.15
+Nodes (21): database_explorer(), list_tables(), BTreeMap, CatalogTable, DatabaseExplorer, Message, Option, Result (+13 more)
 
 ### Community 161 - "TerminalSession.svelte"
-Cohesion: 0.15
-Nodes (7): closeTerminal(), createTerminal(), TerminalCallbacks, TerminalInfo, writeTerminal(), @xterm/addon-fit, @xterm/xterm
+Cohesion: 0.16
+Nodes (7): closeTerminal(), createTerminal(), TerminalCallbacks, TerminalInfo, writeTerminal(), @tauri-apps/api, @xterm/addon-fit
 
 ### Community 162 - "gridSelectionSummary.ts"
-Cohesion: 0.19
-Nodes (14): PasteBlock, DecimalSum, formatDecimal(), isNumericType(), NUMERIC_TYPES, SelectionSummary, summarizeSelection(), SummaryInput (+6 more)
+Cohesion: 0.18
+Nodes (15): PasteBlock, DecimalSum, formatDecimal(), isNumericType(), NUMERIC_TYPES, SelectionSummary, summarizeSelection(), SummaryInput (+7 more)
 
 ### Community 163 - "AnalysisRunner"
-Cohesion: 0.20
-Nodes (4): AnalysisRunner, merge(), subtract(), runner()
+Cohesion: 0.12
+Nodes (6): AnalysisRunner, merge(), Region, subtract(), AnalysisSession, createAnalysisSession()
 
 ### Community 164 - "ARCHITECTURE.es.md"
-Cohesion: 0.27
-Nodes (6): app/README.md (Tauri + SvelteKit + TypeScript template note), README.es.md (Spanish), Bases de datos de prueba, Líneas de versión, Pruebas contra servidor, Uso
+Cohesion: 0.30
+Nodes (5): README.es.md (Spanish), Bases de datos de prueba, Líneas de versión, Pruebas contra servidor, Uso
 
 ### Community 165 - "status.mjs"
 Cohesion: 0.18
@@ -857,21 +859,21 @@ Nodes (16): compare(), connections, coverage, coverageBlock(), DOCS, engines, en
 Cohesion: 0.18
 Nodes (10): click(), findArea(), findRow(), flush(), replaceAll(), replaceArea(), replaceRow(), select() (+2 more)
 
-### Community 167 - "diagnosticPresentation.ts"
-Cohesion: 0.06
-Nodes (40): AnalysisRunnerOptions, create(), typed(), at(), found(), ranges(), createDiagnosticPopup(), applyFix() (+32 more)
+### Community 167 - "diagnostics.ts"
+Cohesion: 0.04
+Nodes (64): AnalysisRunnerOptions, create(), runner(), typed(), at(), found(), ranges(), createDiagnosticPopup() (+56 more)
 
 ### Community 168 - "coverage.mjs"
-Cohesion: 0.14
-Nodes (12): cited, contract, coverage, ENGINES, lines, matrix, problems, rows (+4 more)
+Cohesion: 0.10
+Nodes (19): 11. Version support packs, 11. Paquetes de soporte de versión, 5.1 La regla, 5.3 Las líneas hoy, 5.4 Datos de línea, 5. Líneas de versión, line(), cited (+11 more)
 
 ### Community 169 - "Engine"
 Cohesion: 0.11
-Nodes (17): classification(), classification_with(), Conn, dotted(), Engine, .ALL, NoBackslashEscapes, ConnectionConfig (+9 more)
+Nodes (15): Conn, dotted(), Engine, .ALL, NoBackslashEscapes, ConnectionConfig, DriverError, Drop (+7 more)
 
-### Community 170 - ".execute_query_cancellable"
-Cohesion: 0.44
-Nodes (5): RowSink, Future, Output, Pin, Send
+### Community 170 - "DbConnector"
+Cohesion: 0.23
+Nodes (10): DbConnector, RowSink, Formatter, Future, Message, Output, Pin, Result (+2 more)
 
 ### Community 173 - "RawStatement<'q>"
 Cohesion: 0.20
@@ -885,17 +887,17 @@ Nodes (14): args, compare(), inWindow(), lineOf(), lines, numbers(), prefix(), p
 Cohesion: 0.73
 Nodes (5): down(), name(), probes(), lines.sh script, up()
 
-### Community 176 - "focusZones.keys.test.ts"
-Cohesion: 0.33
-Nodes (7): FakeKey, g, hold(), KeyInit, letGo(), press(), release()
+### Community 176 - "formatLayout.ts"
+Cohesion: 0.34
+Nodes (17): alignColumnDefinitions(), alignConditionsPass(), alignJoinsPass(), alignPass(), hasComment(), indentOf(), joinConditionPass(), LayoutOptions (+9 more)
 
-### Community 177 - "apply"
-Cohesion: 0.40
-Nodes (6): apply(), MySqlConnectOptions, Option, TlsMode, ssl_mode(), MySqlSslMode
+### Community 177 - "executionSession.test.ts"
+Cohesion: 0.14
+Nodes (12): executionLog, LogEntry, LogKind, MAX_LOG_ENTRIES, MAX_LOG_TEXT, queryHistory, createExecutionSession(), Answer (+4 more)
 
 ### Community 178 - "DataGrid.svelte"
-Cohesion: 0.08
-Nodes (12): allState, style, onMove(), onUp(), selectCell(), toggleInSelection(), active, danger (+4 more)
+Cohesion: 0.38
+Nodes (4): onMove(), onUp(), selectCell(), toggleInSelection()
 
 ### Community 180 - "gridNavigation.ts"
 Cohesion: 0.33
@@ -909,33 +911,33 @@ Nodes (6): CHUNK_ROWS, chunkWindow, GROUP_COLS, groupCount(), groupWindow(), row
 Cohesion: 0.24
 Nodes (6): is_word_char(), map_error_position(), Option, Vec, word_starts(), WRAPPER_WORDS
 
-### Community 183 - "apply"
-Cohesion: 0.40
-Nodes (6): apply(), Option, TlsMode, ssl_mode(), PgConnectOptions, PgSslMode
+### Community 183 - "mysql/src/introspect.rs"
+Cohesion: 0.13
+Nodes (14): COLUMNS_SQL, EVENTS_SQL, FOREIGN_KEYS_SQL, format_parameter(), format_schedule(), INDEXES_SQL, KEYS_SQL, parameter_mode() (+6 more)
 
 ### Community 184 - "gridFind.ts"
-Cohesion: 0.22
-Nodes (11): buildMatcher(), cellText(), escapeRegex(), findInPage(), FindMatch, FindOptions, FindResult, MAX_MATCHES (+3 more)
+Cohesion: 0.24
+Nodes (10): buildMatcher(), cellText(), escapeRegex(), findInPage(), FindMatch, FindOptions, FindResult, MAX_MATCHES (+2 more)
 
 ### Community 185 - "Performance measurements"
-Cohesion: 0.33
+Cohesion: 0.29
 Nodes (6): Budget, Keystroke-to-paint and grid frames, Performance measurements, References, Resource cycles, Running
 
-### Community 187 - "createdTables"
-Cohesion: 0.70
-Nodes (3): createdTables(), lastPart(), created()
+### Community 187 - "palettes.test.ts"
+Cohesion: 0.15
+Nodes (12): contrast(), DARK_BEFORE, FAMILIES, LIGHT_COMMENT_MIN, LIGHT_FAMILIES, LIGHT_SYNTAX_MIN, luminance(), PORTED_DARK_FAMILIES (+4 more)
 
 ### Community 188 - "Mediciones de rendimiento"
 Cohesion: 0.33
 Nodes (6): Ciclos de recursos, Cómo se ejecuta, Mediciones de rendimiento, Presupuesto, Referencias, Tecla a pintado y cuadros del grid
 
 ### Community 189 - "SqlEditor.svelte"
-Cohesion: 0.13
-Nodes (15): createEditorCommands(), EditorCommandsOptions, FormatSettings, TextRange, clearDiagnosticsIn, formatSqlText(), codeChar(), IDENTIFIER_CLOSE (+7 more)
+Cohesion: 0.06
+Nodes (30): activeStatementHighlight, autoUppercaseSqlKeywords, lineColumns(), measureStatementLines(), statementDecorations(), editFor(), uppercaseKeywordEdit, createEditorCommands() (+22 more)
 
 ### Community 190 - "columnFilters.ts"
-Cohesion: 0.33
-Nodes (9): collator, ColumnFilters, columnValueCounts(), NULL_KEY, rowsHiddenByFilters(), ROWS, ValueCount, valueKey() (+1 more)
+Cohesion: 0.29
+Nodes (10): collator, ColumnFilters, columnValueCounts(), NULL_KEY, rowsHiddenByFilters(), ROWS, ValueCount, valueKey() (+2 more)
 
 ### Community 191 - "session.ts"
 Cohesion: 0.36
@@ -949,9 +951,13 @@ Nodes (5): closest_keyword(), closest_names(), distance(), max_distance(), Itera
 Cohesion: 0.40
 Nodes (4): Server tests, Test databases, Use, Version lines
 
-### Community 206 - "queryParameters.ts"
-Cohesion: 0.36
-Nodes (5): load(), parse(), queryParameterValues, RememberedParameter, rememberParameterValues()
+### Community 201 - "ConnectionConfig"
+Cohesion: 0.27
+Nodes (10): ConnectionConfig, TlsMode, TlsStatus, Límites conocidos, Limitaciones conocidas, SSL/TLS por conexión, Embedded engines, Motores embebidos (+2 more)
+
+### Community 203 - "palettes.ts"
+Cohesion: 0.29
+Nodes (6): ColorScheme, EditorPalette, palettes, ShellPalette, THEME_FAMILIES, ThemeVariants
 
 ## Ambiguous Edges - Review These
 - `CSS_VAR_NAMES field-to-CSS-variable mapping` → `theme.ts SHELL_PALETTE_CSS_VARS (external reference, file not read in this chunk)`  [AMBIGUOUS]
@@ -961,8 +967,8 @@ Nodes (5): load(), parse(), queryParameterValues, RememberedParameter, rememberP
 
 ## Knowledge Gaps
 - **805 isolated node(s):** `name`, `version`, `description`, `license`, `type` (+800 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1565 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **27 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1563 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -971,11 +977,11 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
 - **What is the exact relationship between `SHELL_PALETTES literal (datagrip/vscode x dark/light)` and `palettes.ts palette definitions (external reference, file not read in this chunk)`?**
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **Why does `vitest` connect `vitest` to `focusZones.ts`, `+layout.svelte`, `consoleFiles.ts`, `executionSession.ts`, `explorerTree.ts`, `queryConsoles.ts`, `sqlStatements.ts`, `sqlPreviewFormat.ts`, `search.ts`, `connection.ts`, `package.json`, `svelte`, `context.ts`, `lib/backend.ts`, `workspace/commands.ts`, `completionSource.ts`, `DiagnosticPopup.svelte`, `@codemirror/state`, `TerminalSession.svelte`, `gridSelectionSummary.ts`, `search.dom.test.ts`, `diagnosticPresentation.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `focusZones.keys.test.ts`, `gridNavigation.ts`, `gridWindow.test.ts`, `gridFind.ts`, `createdTables`, `parameterTypes.ts`, `executionMarker.ts`, `columnFilters.ts`, `workspace/mosaic.ts`, `commentStyle.ts`, `svelte`, `resultEditing.ts`, `lib/types.ts`, `queryHistory.ts`, `queryParameters.ts`, `resultEdits.ts`, `resultTabs.ts`, `theme.ts`, `filterBuilder.ts`, `connectionTest.ts`, `i18n/index.ts`, `engines/index.ts`, `formatter.ts`, `cellTypes.ts`, `executionSession.test.ts`, `ExportDialog.svelte`, `SchemaTree.svelte`, `ref_node_fs`, `Workspace.svelte`?**
+- **Why does `vitest` connect `vitest` to `+layout.svelte`, `consoleFiles.ts`, `explorerTree.ts`, `queryConsoles.ts`, `sqlStatements.ts`, `workspace/commands.ts`, `sqlPreviewFormat.ts`, `search.ts`, `focusZones.ts`, `connection.ts`, `package.json`, `lib/backend.ts`, `completionSource.ts`, `SchemaTree.svelte`, `gridSelectionSummary.ts`, `search.dom.test.ts`, `diagnostics.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `ResultPager.svelte`, `executionSession.test.ts`, `gridNavigation.ts`, `gridWindow.test.ts`, `gridFind.ts`, `palettes.test.ts`, `parameterTypes.ts`, `SqlEditor.svelte`, `executionMarker.ts`, `columnFilters.ts`, `gridClipboard.ts`, `workspace/mosaic.ts`, `commentStyle.ts`, `svelte`, `resultEditing.ts`, `@codemirror/state`, `palettes.ts`, `queryHistory.ts`, `analysisSession.ts`, `resultChanges.ts`, `resultTabs.ts`, `lib/types.ts`, `connectionTest.ts`, `i18n/index.ts`, `engines/index.ts`, `formatter.ts`, `cellTypes.ts`, `executionSession.ts`, `ExportDialog.svelte`, `pinnedTables.ts`, `ref_node_fs`, `ChangesPreview.svelte`?**
   _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **Why does `svelte` connect `svelte` to `focusZones.ts`, `+layout.svelte`, `consoleFiles.ts`, `executionSession.ts`, `queryConsoles.ts`, `stores/shortcuts.ts`, `invoke`, `connection.ts`, `package.json`, `completionSource.ts`, `diagnosticPresentation.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `tooltip.ts`, `ResultPager.svelte`, `sqlFiles.ts`, `gridClipboard.ts`, `workspace/mosaic.ts`, `queryHistory.ts`, `queryParameters.ts`, `findBar.ts`, `resultEdits.ts`, `resultTabs.ts`, `theme.ts`, `resultChanges.ts`, `i18n/index.ts`, `formatter.ts`, `TilePicker.svelte`, `executionSession.test.ts`, `SchemaTree.svelte`, `FileTree.svelte`?**
+- **Why does `svelte` connect `svelte` to `+layout.svelte`, `consoleFiles.ts`, `queryConsoles.ts`, `workspace/commands.ts`, `invoke`, `focusZones.ts`, `connection.ts`, `package.json`, `diagnostics.ts`, `connectionProfiles.ts`, `stores/updates.ts`, `tooltip.ts`, `ResultPager.svelte`, `sqlFiles.ts`, `executionSession.test.ts`, `workspace/mosaic.ts`, `@codemirror/state`, `queryHistory.ts`, `findBar.ts`, `Workspace.svelte`, `resultChanges.ts`, `resultTabs.ts`, `theme.ts`, `i18n/index.ts`, `formatter.ts`, `TilePicker.svelte`, `executionSession.ts`, `pinnedTables.ts`, `FileTree.svelte`?**
   _High betweenness centrality (0.034) - this node is a cross-community bridge._
-- **Why does `Dialect` connect `Dialect` to `execution_guard.rs`, `support.rs`, `corpus.rs`, `.new`, `DestructiveClassification`, `engine_context.rs`, `tests/lines.rs`, `result_editing.rs`, `parser.rs`, `Engine`, `export.rs`, `pagination.rs`, `diagnostics.rs`, `editing.rs`, `server-tests/src/lib.rs`, `ConnectionEngineContext`, `State`, `super`, `Option`, `AppState`, `Diagnostic`?**
+- **Why does `Dialect` connect `Dialect` to `execution_guard.rs`, `support.rs`, `corpus.rs`, `.new`, `ParserError`, `engine_context.rs`, `tests/lines.rs`, `drivers.rs`, `result_editing.rs`, `parser.rs`, `export.rs`, `pagination.rs`, `diagnostics.rs`, `editing.rs`, `server-tests/src/lib.rs`, `ConnectionEngineContext`, `State`, `super`, `DestructiveClassification`, `Option`, `state.rs`, `Diagnostic`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
   _805 weakly-connected nodes found - possible documentation gaps or missing edges._
