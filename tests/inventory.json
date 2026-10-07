@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 146,
-    "tests": 1524,
+    "files": 147,
+    "tests": 1527,
     "ignored": 31,
     "byDecision": {
-      "keep": 146,
+      "keep": 147,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 140,
+      "pr": 141,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -1781,6 +1781,27 @@
         "vitest"
       ],
       "durationMs": 8
+    },
+    {
+      "path": "app/src/lib/results/outputCopy.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/outputCopy.ts",
+      "property": "Copiar la Salida: cada línea como se ve (hora, prompt, continuaciones alineadas), las últimas N o todas, y una cantidad propia válida",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 3,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "outputCopy",
+        "stores/executionLog"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/results/resultEditing.test.ts",
