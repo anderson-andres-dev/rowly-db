@@ -33,6 +33,10 @@ export interface Divider {
 }
 
 export const MIN_RATIO = 0.1;
+
+// Destino "toda el area": no es ninguna hoja, asi que place parte la raiz.
+// Con dos apiladas, la tercera va al lado de las dos, a toda la altura.
+export const WHOLE = "\u0000whole";
 const UNIT: Rect = { x: 0, y: 0, width: 1, height: 1 };
 
 export function leaf(id: string): Mosaic {
