@@ -1,0 +1,52 @@
+/* Como una app de escritorio, no una pagina: con el mouse no se selecciona
+   nada salvo lo que es texto para leer o copiar (campos, el editor, los
+   bloques de SQL y la Salida), y las imagenes y enlaces no se arrastran. Lo
+   que se arrastra lo define cada pieza (reorder.ts, MosaicArea) y se mueve
+   con el puntero (dragGhost.ts). WebKitGTK necesita el prefijo. */
+:root {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable=""],
+pre,
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img,
+svg,
+a {
+  -webkit-user-drag: none;
+}
+
+/* Mientras se arrastra algo, nada se selecciona por debajo y el cursor es
+   el de agarrar en toda la ventana. */
+:root.dragging,
+:root.dragging * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  cursor: grabbing !important;
+}
+
+/* Lo que se arrastra, despegado de su lugar como una pestaña del navegador:
+   una copia que sigue al puntero desde donde se la tomo. El original queda
+   tenue hasta soltar. */
+.drag-ghost {
+  z-index: 1000;
+  box-sizing: border-box;
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.drag-source {
+  opacity: 0.35;
+}

@@ -215,7 +215,7 @@
     tabCommands?: boolean;
     // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
     dimmed?: boolean;
-    ondetach?: (key: string, event: PointerEvent) => boolean;
+    ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
 
   // El ">_" de Lucide (Terminal), distinto del SquareTerminal de la Salida.
@@ -640,7 +640,7 @@
         use:reorderable={{
           items: ".result-tab.closable",
           onmove: (from, to) => onreordertabs(from, to),
-          detach: ondetach ? (item, event) => !!item.dataset.resultKey && ondetach(item.dataset.resultKey, event) : undefined,
+          detach: ondetach ? (item, event, grab) => !!item.dataset.resultKey && ondetach(item.dataset.resultKey, event, item, grab) : undefined,
         }}
       >
       {#each tabs as tab (tab.key)}

@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 144,
-    "tests": 1511,
+    "files": 145,
+    "tests": 1514,
     "ignored": 31,
     "byDecision": {
-      "keep": 144,
+      "keep": 145,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 138,
+      "pr": 139,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -536,6 +536,26 @@
         "vitest"
       ],
       "durationMs": 4
+    },
+    {
+      "path": "app/src/lib/dragGhost.dom.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/dragGhost.ts",
+      "property": "Arrastrar como una pestaña del navegador: la copia sigue al puntero desde el agarre, sin ids ni estado de elegida, y la ventana no selecciona texto mientras dura (bloqueo contado)",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 3,
+      "ignored": 0,
+      "environment": "happy-dom",
+      "dependencies": [
+        "dragGhost"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/editor/analysisRunner.test.ts",

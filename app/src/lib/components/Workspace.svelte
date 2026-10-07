@@ -928,10 +928,10 @@
   // fila, reorder.ts); el resto lo hace MosaicArea.
   let editorMosaic = $state<ReturnType<typeof MosaicArea>>();
 
-  function beginTileDrag(id: string, start: PointerEvent): boolean {
+  function beginTileDrag(id: string, start: PointerEvent, source: HTMLElement, grab: { x: number; y: number }): boolean {
     const item = consoles.find((candidate) => candidate.id === id);
     if (!item || item.table || !activeConsole || activeConsole.table || !editorMosaic) return false;
-    return editorMosaic.beginDrag(id, start);
+    return editorMosaic.beginDrag(id, start, { source, grab });
   }
 
   function consoleLabel(id: string): string {
@@ -959,6 +959,9 @@
   }
 
   const FIRST_GROUP = "g0";
+  // Alto de la fila de carpetas de un grupo (2rem + 6px, tabs.css): soltar
+  // una pestaña ahi la acopla a ese grupo.
+  const GROUP_STRIP_PX = 38;
   let groupCount = 0;
   let resultLayouts = $state<Record<string, ResultLayout>>({});
   let resultMosaicArea = $state<ReturnType<typeof MosaicArea>>();
@@ -1078,12 +1081,12 @@
 
   // Sacar una pestaña de la fila de su grupo: al borde de un grupo, un grupo
   // nuevo de ese lado; en el centro, entra en ese grupo.
-  function beginResultDrag(key: string, start: PointerEvent): boolean {
+  function beginResultDrag(key: string, start: PointerEvent, source: HTMLElement, grab: { x: number; y: number }): boolean {
     if (!activeConsole || activeConsole.table || !resultMosaicArea || !resultLayout) return false;
     const from = resultLayout.member[key];
     const alone = groupTabs(resultLayout, from, [OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]).length === 1;
     pendingDrag = { key, from, alone };
-    return resultMosaicArea.beginDrag(`g${++groupCount}`, start, { title: resultLabel(key), vacate: alone ? from : undefined, merge: true });
+    return resultMosaicArea.beginDrag(`g${++groupCount}`, start, { source, grab, vacate: alone ? from : undefined, origin: from, merge: true });
   }
 
   let pendingDrag: { key: string; from: string; alone: boolean } | null = null;
@@ -1235,7 +1238,7 @@
     use:reorderable={{
       items: ".console-tab",
       onmove: (from, to) => reorderQueryConsoles(profileId, from, to),
-      detach: (tab, event) => !!tab.dataset.consoleId && beginTileDrag(tab.dataset.consoleId, event),
+      detach: (tab, event, grab) => !!tab.dataset.consoleId && beginTileDrag(tab.dataset.consoleId, event, tab, grab),
     }}
     class:fade-start={tabsOverflow.start}
     class:fade-end={tabsOverflow.end}
@@ -1528,6 +1531,7 @@
             onarrange={dropTabInNewGroup}
             onmerge={(target) => dropTabInGroup(target)}
             onfocus={focusGroup}
+            stripHeight={GROUP_STRIP_PX}
           >
             {#snippet tile(group)}
               <div class="result-host">{@render resultGroup(group)}</div>

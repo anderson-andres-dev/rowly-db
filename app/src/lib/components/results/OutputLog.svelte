@@ -73,7 +73,9 @@
         >{#if entry.schema}<span class="prompt">{entry.schema}&gt;</span> {/if}{@html highlightedSql(entry)}</span
       >
     {:else}
-      <span class="text" class:error={entry.kind === "error"}>{entry.text}</span>
+      <!-- Texto para copiar (un error, un aviso): se puede seleccionar
+           (styles/native.css). -->
+      <span class="text selectable" class:error={entry.kind === "error"}>{entry.text}</span>
     {/if}
   {/each}
   {#if running}

@@ -3,6 +3,7 @@
   import { X } from "@lucide/svelte";
   import { onePerFrame } from "$lib/onePerFrame";
   import { swallowNextClick } from "$lib/reorder";
+  import { liftGhost, type Ghost, type Point } from "$lib/dragGhost";
   import { tooltip } from "$lib/tooltip";
   import {
     dividers,
@@ -44,6 +45,7 @@
     onfocus,
     onuntile,
     onmerge,
+    stripHeight = 0,
     chip,
     tile,
     children,
@@ -55,7 +57,7 @@
     minSize: { row: number; column: number };
     untileLabel?: string;
     untileTooltip?: string;
-    // Nombre de una hoja (aria y lo que se arrastra).
+    // Nombre de una hoja (para lectores de pantalla).
     label: (id: string) => string;
     // Un divisor movido: el arbol con su nueva fraccion.
     onresize: (tree: Mosaic) => void;
@@ -66,6 +68,10 @@
     // Soltar en el centro de una hoja algo que entra en ella (una pestaña en
     // un grupo del resultado; beginDrag con `merge`).
     onmerge?: (target: string, id: string) => void;
+    // Alto de la fila de pestañas de cada hoja (los grupos del resultado):
+    // soltar ahi la acopla a esa hoja, como una pestaña del navegador que se
+    // suelta en la fila de otra ventana.
+    stripHeight?: number;
     // Icono y titulo de la etiqueta flotante de una hoja, arriba a la
     // derecha: de ahi se la arrastra y se la quita del mosaico.
     chip?: Snippet<[string]>;
@@ -136,32 +142,47 @@
 
   // --- Arrastrar y soltar ---------------------------------------------------
   // Desde una pestaña (al sacarla de su fila, reorder.ts: quien la usa llama
-  // a beginDrag) o desde la barra de una hoja. Cada tercio junto a un borde
-  // es ese lado y el medio toma su lugar (si ya estaba en otra, se
+  // a beginDrag) o desde la etiqueta de una hoja. Lo tomado se despega y
+  // sigue al puntero (dragGhost.ts, como en el navegador). Cada tercio junto
+  // a un borde es ese lado y el medio toma su lugar (si ya estaba en otra, se
   // intercambian), como en los demas editores.
-  // `vacate`: la hoja que se queda sin nada si lo arrastrado sale de ella (un
-  // grupo con una sola pestaña), y que no cuenta para el resultado. `merge`:
-  // el centro de una hoja no la reemplaza, recibe lo arrastrado.
+  // `source`/`grab`: el elemento tomado y donde se lo tomo. `vacate`: la hoja
+  // que se queda sin nada si lo arrastrado sale de ella (un grupo con una
+  // sola pestaña), y que no cuenta para el resultado. `merge`: el centro de
+  // una hoja no la reemplaza, recibe lo arrastrado. `origin`: la hoja de
+  // donde sale; entrar de nuevo en ella no hace nada.
   interface DragOptions {
-    title?: string;
+    source?: HTMLElement;
+    grab?: Point;
     vacate?: string;
+    origin?: string;
     merge?: boolean;
   }
 
   let drag = $state<{
     id: string;
-    title: string;
     x: number;
     y: number;
     target: string | null;
     side: Side | "center" | null;
     vacate: string | null;
+    origin: string | null;
     merge: boolean;
   } | null>(null);
+  let ghost: Ghost | null = null;
 
-  function dropTarget(x: number, y: number): { target: string | null; side: Side | "center" | null } {
+  function dropTarget(x: number, y: number, merge = false): { target: string | null; side: Side | "center" | null } {
     const box = area?.getBoundingClientRect();
     if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return { target: null, side: null };
+    // Sobre la fila de pestañas de una hoja: entra en ella, antes que el
+    // borde exterior (la fila de arriba toca el borde del area).
+    if (merge && stripHeight > 0) {
+      for (const [id, rect] of boxes) {
+        const left = box.left + rect.x * box.width;
+        const top = box.top + rect.y * box.height;
+        if (x >= left && x <= left + rect.width * box.width && y >= top && y - top < stripHeight) return { target: id, side: "center" };
+      }
+    }
     if (tiled) {
       const edges: [Side, number][] = [
         ["left", x - box.left],
@@ -188,6 +209,7 @@
   function dropResult(current: NonNullable<typeof drag>): Mosaic | null {
     if (!current.target || !current.side || current.target === current.id) return null;
     if (current.vacate === current.target) return null;
+    if (current.merge && current.side === "center" && current.target === current.origin) return null;
     const base = current.vacate ? remove(tree, current.vacate) : tree;
     if (current.side === "center") return current.merge ? base : replace(base, current.target, current.id);
     return place(base, current.target, current.id, current.side);
@@ -206,19 +228,23 @@
   });
 
   export function beginDrag(id: string, start: PointerEvent, options: DragOptions = {}): boolean {
+    const merge = options.merge ?? false;
     drag = {
       id,
-      title: options.title ?? label(id),
       x: start.clientX,
       y: start.clientY,
       vacate: options.vacate ?? null,
-      merge: options.merge ?? false,
-      ...dropTarget(start.clientX, start.clientY),
+      origin: options.origin ?? null,
+      merge,
+      ...dropTarget(start.clientX, start.clientY, merge),
     };
+    const at = { x: start.clientX, y: start.clientY };
+    ghost = options.source ? liftGhost(options.source, options.grab ?? { x: 12, y: 12 }, at) : null;
 
     function onMove(moveEvent: PointerEvent) {
       if (!drag) return;
-      drag = { ...drag, x: moveEvent.clientX, y: moveEvent.clientY, ...dropTarget(moveEvent.clientX, moveEvent.clientY) };
+      ghost?.move({ x: moveEvent.clientX, y: moveEvent.clientY });
+      drag = { ...drag, x: moveEvent.clientX, y: moveEvent.clientY, ...dropTarget(moveEvent.clientX, moveEvent.clientY, merge) };
     }
 
     function finish(apply: boolean) {
@@ -230,6 +256,10 @@
       drag = null;
       swallowNextClick();
       const next = current && apply ? dropResult(current) : null;
+      // Se asienta donde cae; sin destino, vuelve a su lugar.
+      if (next) ghost?.settle();
+      else ghost?.cancel();
+      ghost = null;
       if (!current || !next) return;
       if (current.merge && current.side === "center" && current.target) onmerge?.(current.target, current.id);
       else onarrange(next, current.id);
@@ -253,17 +283,19 @@
   }
 
   // La etiqueta de una hoja: un clic la enfoca; arrastrar mas de unos px la
-  // mueve.
+  // despega y la mueve.
   function onChipPointerDown(event: PointerEvent, id: string) {
     if (event.button !== 0 || (event.target as Element).closest("button")) return;
     event.preventDefault();
     onfocus(id);
+    const chipElement = event.currentTarget as HTMLElement;
     const startX = event.clientX;
     const startY = event.clientY;
+    const box = chipElement.getBoundingClientRect();
     function onMove(moveEvent: PointerEvent) {
       if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 4) return;
       stop();
-      beginDrag(id, moveEvent);
+      beginDrag(id, moveEvent, { source: chipElement, grab: { x: startX - box.left, y: startY - box.top } });
     }
     function stop() {
       window.removeEventListener("pointermove", onMove);
@@ -349,11 +381,7 @@
   {@render children?.()}
 </div>
 
-{#if drag}
-  <div class="tile-ghost" style={`left: ${drag.x}px; top: ${drag.y}px`} aria-hidden="true">
-    <span>{drag.title}</span>
-  </div>
-{/if}
+
 
 <style>
   .mosaic {
@@ -524,19 +552,4 @@
     }
   }
 
-  .tile-ghost {
-    position: fixed;
-    z-index: 100;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-elevated);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    pointer-events: none;
-    transform: translate(10px, 8px);
-  }
 </style>

@@ -1,4 +1,5 @@
 import { tick } from "svelte";
+import { beginDragging, type Point } from "$lib/dragGhost";
 
 // Reordenar pestañas arrastrando con el mouse (accion de Svelte:
 // `use:reorderable`).
@@ -22,12 +23,14 @@ export interface ReorderParams {
   // Selector de los elementos reordenables, hijos del contenedor.
   items: string;
   onmove: (from: number, to: number) => void;
-  // Sacar la pestaña de la fila: al alejarse el puntero en vertical, el
-  // reordenar se suelta (todo vuelve a su lugar) y el arrastre sigue a cargo
-  // de quien la recibe (el mosaico de consolas, Workspace.svelte), con los
-  // mismos eventos de puntero (y anula el click al soltar: swallowNextClick).
-  // Devuelve false si esa pestaña no se puede sacar.
-  detach?: (item: HTMLElement, event: PointerEvent) => boolean;
+  // Sacar la pestaña de la fila, como en el navegador: al alejarse el
+  // puntero en vertical, el reordenar se suelta (todo vuelve a su lugar) y el
+  // arrastre sigue a cargo de quien la recibe (MosaicArea), con los mismos
+  // eventos de puntero (y anula el click al soltar: swallowNextClick).
+  // `grab`: donde se la tomo, relativo a su esquina, para que la copia que
+  // sigue al puntero (dragGhost.ts) no salte. Devuelve false si esa pestaña
+  // no se puede sacar.
+  detach?: (item: HTMLElement, event: PointerEvent, grab: Point) => boolean;
 }
 
 const DRAG_THRESHOLD = 4;
@@ -76,6 +79,8 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
 
     const startX = event.clientX;
     const startY = event.clientY;
+    // La fila entera (la franja de pestañas, no solo las que hay).
+    const row = (node.parentElement ?? node).getBoundingClientRect();
     const rects = items.map((element) => element.getBoundingClientRect());
     const gap = rects.length > 1 ? Math.max(0, rects[1].left - rects[0].right) : 0;
     const shift = rects[from].width + gap;
@@ -93,8 +98,11 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
       return index;
     }
 
+    let stopDragging = () => {};
+
     function startDrag() {
       dragging = true;
+      stopDragging = beginDragging();
       item.setPointerCapture(event.pointerId);
       item.classList.add("reorder-dragging");
       for (const element of items) {
@@ -105,7 +113,14 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
 
     function onMove(moveEvent: PointerEvent) {
       const dx = moveEvent.clientX - startX;
-      if (params.detach && Math.abs(moveEvent.clientY - startY) > DETACH_THRESHOLD && params.detach(item, moveEvent)) {
+      const grab = { x: startX - rects[from].left, y: startY - rects[from].top };
+      // Se despega al alejarse en vertical o al salir por los lados de su
+      // fila (hacia la fila de otro grupo), como en el navegador.
+      const away =
+        Math.abs(moveEvent.clientY - startY) > DETACH_THRESHOLD ||
+        moveEvent.clientX < row.left - DETACH_THRESHOLD ||
+        moveEvent.clientX > row.right + DETACH_THRESHOLD;
+      if (params.detach && away && params.detach(item, moveEvent, grab)) {
         detach();
         return;
       }
@@ -131,6 +146,7 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
     }
 
     function cleanup() {
+      stopDragging();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
