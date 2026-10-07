@@ -403,6 +403,8 @@
     }
   }
 
+  /* clip, no hidden: un hidden se puede desplazar por codigo (un
+     scrollIntoView de adentro lo corria y dejaba una franja vacia). */
   .tile {
     position: absolute;
     display: flex;
@@ -411,6 +413,7 @@
     flex-direction: column;
     box-sizing: border-box;
     overflow: hidden;
+    overflow: clip;
   }
 
   .tile.edge-left {

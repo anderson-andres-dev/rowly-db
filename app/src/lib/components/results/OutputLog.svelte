@@ -146,15 +146,15 @@
       <button
         type="button"
         class="copy-main"
-        use:tooltip={amount === "all" ? $t("results.output.copyAllTitle") : $t("results.output.copyTitle", { count: amount })}
+        aria-label={copied ? $t("results.output.copied") : amount === "all" ? $t("results.output.copyAllTitle") : $t("results.output.copyTitle", { count: amount })}
+        use:tooltip={copied ? $t("results.output.copied") : amount === "all" ? $t("results.output.copyAllTitle") : $t("results.output.copyTitle", { count: amount })}
         onclick={() => void copy()}
       >
+        <!-- Solo el icono; cuantas lineas lo dice el tooltip. -->
         {#if copied}
           <Check size={13} aria-hidden="true" />
-          <span>{$t("results.output.copied")}</span>
         {:else}
           <Copy size={13} aria-hidden="true" />
-          <span>{amount === "all" ? $t("results.output.copyAllShort") : $t("results.output.copy", { count: amount })}</span>
         {/if}
       </button>
       <button
@@ -289,6 +289,14 @@
     color: var(--text-secondary);
     font: inherit;
     cursor: pointer;
+  }
+
+  .copy-main {
+    padding: 0 var(--space-2);
+  }
+
+  .copy-float :global(.lucide-check) {
+    color: var(--accent);
   }
 
   .copy-more {

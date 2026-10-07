@@ -23,7 +23,18 @@ export function tabScroll(node: HTMLElement, _changed: unknown) {
   function reveal() {
     clearTimeout(timer);
     timer = window.setTimeout(() => {
-      node.querySelector(".active")?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      // Solo la fila: scrollIntoView desplazaba tambien a los de arriba,
+      // aunque recorten (un mosaico angosto quedaba corrido y dejaba una
+      // franja vacia).
+      const tab = node.querySelector<HTMLElement>(".active");
+      if (tab) {
+        const box = node.getBoundingClientRect();
+        const rect = tab.getBoundingClientRect();
+        const pad = parseFloat(getComputedStyle(node).scrollPaddingInlineStart) || 0;
+        const padEnd = parseFloat(getComputedStyle(node).scrollPaddingInlineEnd) || 0;
+        if (rect.left < box.left + pad) node.scrollBy({ left: rect.left - box.left - pad, behavior: "smooth" });
+        else if (rect.right > box.right - padEnd) node.scrollBy({ left: rect.right - box.right + padEnd, behavior: "smooth" });
+      }
       update();
     }, 160);
   }
