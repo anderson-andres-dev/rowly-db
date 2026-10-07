@@ -227,16 +227,16 @@ export function neighbor(node: Mosaic | null, id: string, direction: Direction):
 }
 
 // Donde cae algo que se suelta sobre una hoja, por la posicion relativa del
-// puntero (0..1): cerca de un borde, ese lado; en el centro, la hoja misma.
-export function dropSide(x: number, y: number, edge = 0.28): Side | "center" {
-  const distances: [Side, number][] = [
-    ["left", x],
-    ["right", 1 - x],
-    ["top", y],
-    ["bottom", 1 - y],
-  ];
-  const [side, distance] = distances.reduce((a, b) => (b[1] < a[1] ? b : a));
-  return distance < edge ? side : "center";
+// puntero (0..1), como en VS Code: cada tercio de un borde es ese lado y el
+// medio es la hoja misma. En una hoja ancha mandan izquierda y derecha (arriba
+// y abajo solo en el tercio del medio); en una alta, al reves. Medido en
+// fracciones sin esa prioridad, en un mosaico ancho y bajo el borde de abajo
+// quedaba a pocos pixeles y ganaba casi siempre: no habia como ponerla al lado.
+export function dropSide(x: number, y: number, wide: boolean): Side | "center" {
+  const THIRD = 1 / 3;
+  const across: Side | null = x < THIRD ? "left" : x > 1 - THIRD ? "right" : null;
+  const down: Side | null = y < THIRD ? "top" : y > 1 - THIRD ? "bottom" : null;
+  return (wide ? (across ?? down) : (down ?? across)) ?? "center";
 }
 
 // Lo guardado: solo arboles bien formados, con ratios en rango y sin ids

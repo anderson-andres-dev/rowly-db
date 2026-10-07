@@ -129,12 +129,20 @@ describe("mosaico: vecinos con el teclado", () => {
 });
 
 describe("mosaico: soltar y guardar", () => {
-  it("cerca de un borde, ese lado; en el centro, la hoja", () => {
-    expect(dropSide(0.1, 0.5)).toBe("left");
-    expect(dropSide(0.95, 0.5)).toBe("right");
-    expect(dropSide(0.5, 0.05)).toBe("top");
-    expect(dropSide(0.5, 0.9)).toBe("bottom");
-    expect(dropSide(0.5, 0.5)).toBe("center");
+  it("cada tercio de un borde es ese lado; el medio, la hoja", () => {
+    expect(dropSide(0.1, 0.5, true)).toBe("left");
+    expect(dropSide(0.95, 0.5, true)).toBe("right");
+    expect(dropSide(0.5, 0.05, true)).toBe("top");
+    expect(dropSide(0.5, 0.9, true)).toBe("bottom");
+    expect(dropSide(0.5, 0.5, true)).toBe("center");
+  });
+
+  it("en una hoja ancha mandan los lados; en una alta, arriba y abajo", () => {
+    // El caso del mosaico ancho y bajo: a la derecha y cerca de abajo es la derecha.
+    expect(dropSide(0.8, 0.85, true)).toBe("right");
+    expect(dropSide(0.2, 0.1, true)).toBe("left");
+    expect(dropSide(0.8, 0.85, false)).toBe("bottom");
+    expect(dropSide(0.2, 0.1, false)).toBe("top");
   });
 
   it("lee lo guardado solo si esta bien formado", () => {

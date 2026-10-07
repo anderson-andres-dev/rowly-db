@@ -806,6 +806,9 @@
   const tiled = $derived(tileIds.length > 1);
   const tileRects = $derived(rects(mosaic));
   const tileDividers = $derived(tiled ? dividers(mosaic) : []);
+  // Destino "toda el area" (no es ninguna hoja: place parte la raiz). Con dos
+  // apiladas, la tercera va al lado de las dos, a toda la altura.
+  const WHOLE = "\u0000whole";
   // El ultimo mosaico enfocado de cada conexion: ahi va la consola que se
   // elige y no se ve.
   const focusedTile: Record<string, string> = {};
@@ -835,8 +838,19 @@
         focusedTile[profile] = active.id;
       }
       setConsoleMosaic(profile, tree);
+      if (active && !active.table) void followFocus(active.id);
     });
   });
+
+  // Elegir en la fila (o con Ctrl+Tab) una consola que ya se ve en otro
+  // mosaico la activa, pero el foco del teclado seguia en el editor anterior:
+  // se escribia y ejecutaba en uno mientras abajo se veia el resultado del
+  // otro. Si el foco esta en otro mosaico, pasa al de la activa.
+  async function followFocus(id: string) {
+    await tick();
+    const holder = document.activeElement?.closest<HTMLElement>("[data-tile-id]");
+    if (holder && holder.dataset.tileId !== id) editors[id]?.focus();
+  }
 
   // Cambiar el mosaico y enfocar una consola en el mismo paso: el efecto de
   // arriba ya la encuentra en su lugar y no la vuelve a ubicar.
@@ -863,9 +877,9 @@
       .map((item) => ({ id: item.id, title: consoleDisplayTitle(item.title, $t), file: !!item.filePath })),
   );
 
-  function pickTile(id: string | null, side: "right" | "bottom") {
+  function pickTile(id: string | null, side: "right" | "bottom", whole: boolean) {
     pickerOpen = false;
-    const target = activeConsole && !activeConsole.table ? activeConsole.id : null;
+    const target = whole ? WHOLE : activeConsole && !activeConsole.table ? activeConsole.id : null;
     const chosen = id ?? createQueryConsole(profileId);
     void arrange(target ? place(mosaic, target, chosen, side) : reveal(mosaic, chosen, null), chosen);
   }
@@ -971,14 +985,28 @@
     side: Side | "center" | null;
   } | null>(null);
 
+  // Pegado al borde exterior del area, se parte el area entera.
+  const OUTER_EDGE_PX = 24;
+
   function dropTarget(x: number, y: number): { target: string | null; side: Side | "center" | null } {
     const box = editorPane?.getBoundingClientRect();
     if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return { target: null, side: null };
+    if (tiled) {
+      const edges: [Side, number][] = [
+        ["left", x - box.left],
+        ["right", box.right - x],
+        ["top", y - box.top],
+        ["bottom", box.bottom - y],
+      ];
+      const [side, distance] = edges.reduce((a, b) => (b[1] < a[1] ? b : a));
+      if (distance < OUTER_EDGE_PX) return { target: WHOLE, side };
+    }
     const fx = (x - box.left) / box.width;
     const fy = (y - box.top) / box.height;
     for (const [id, rect] of tileRects) {
       if (fx < rect.x || fx > rect.x + rect.width || fy < rect.y || fy > rect.y + rect.height) continue;
-      return { target: id, side: dropSide((fx - rect.x) / rect.width, (fy - rect.y) / rect.height) };
+      const wide = rect.width * box.width >= rect.height * box.height;
+      return { target: id, side: dropSide((fx - rect.x) / rect.width, (fy - rect.y) / rect.height, wide) };
     }
     return { target: null, side: null };
   }
@@ -1002,6 +1030,7 @@
       tileDrag = null;
       swallowNextClick();
       if (!apply || !drag?.target || !drag.side || drag.target === drag.id) return;
+      // WHOLE no es ninguna hoja: place parte la raiz.
       const tree = drag.side === "center" ? replace(mosaic, drag.target, drag.id) : place(mosaic, drag.target, drag.id, drag.side);
       void arrange(tree, drag.id);
     }
@@ -1044,10 +1073,11 @@
     window.addEventListener("pointerup", stop);
   }
 
-  // La zona que se resalta al soltar: el lado elegido o el mosaico entero.
+  // La zona que se resalta al soltar: el lado elegido, el mosaico entero o
+  // la mitad del area.
   const dropPreview = $derived.by(() => {
     if (!tileDrag?.target || !tileDrag.side || tileDrag.target === tileDrag.id) return null;
-    const rect = tileRects.get(tileDrag.target);
+    const rect = tileDrag.target === WHOLE ? { x: 0, y: 0, width: 1, height: 1 } : tileRects.get(tileDrag.target);
     if (!rect) return null;
     const { side } = tileDrag;
     if (side === "center") return rect;

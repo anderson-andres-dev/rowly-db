@@ -4,7 +4,7 @@ import { defineMessages } from "../define";
 export default defineMessages({
   es: {
     "tile-console.label": "Poner consola en mosaico",
-    "tile-console.description": "Elige una consola y la pone junto a la enfocada: Enter a la derecha, Shift+Enter debajo.",
+    "tile-console.description": "Elige una consola y la pone junto a la enfocada: Enter a la derecha, Shift+Enter debajo; con Ctrl, de toda el área.",
     "untile-console.label": "Quitar consola del mosaico",
     "untile-console.description": "Saca del mosaico la consola enfocada; sigue abierta en su pestaña.",
     "diagnostic-details.label": "Detalle del error",
@@ -104,7 +104,7 @@ export default defineMessages({
   },
   en: {
     "tile-console.label": "Tile console",
-    "tile-console.description": "Pick a console and place it next to the focused one: Enter to the right, Shift+Enter below.",
+    "tile-console.description": "Pick a console and place it next to the focused one: Enter to the right, Shift+Enter below; with Ctrl, of the whole area.",
     "untile-console.label": "Remove console from tiling",
     "untile-console.description": "Takes the focused console out of the tiling; it stays open in its tab.",
     "diagnostic-details.label": "Error details",
@@ -204,7 +204,7 @@ export default defineMessages({
   },
   "pt-BR": {
     "tile-console.label": "Colocar console em mosaico",
-    "tile-console.description": "Escolhe um console e o coloca ao lado do focado: Enter à direita, Shift+Enter abaixo.",
+    "tile-console.description": "Escolhe um console e o coloca ao lado do focado: Enter à direita, Shift+Enter abaixo; com Ctrl, de toda a área.",
     "untile-console.label": "Tirar console do mosaico",
     "untile-console.description": "Tira do mosaico o console focado; ele continua aberto na sua aba.",
     "diagnostic-details.label": "Detalhe do erro",
@@ -304,7 +304,7 @@ export default defineMessages({
   },
   fr: {
     "tile-console.label": "Mettre la console en mosaïque",
-    "tile-console.description": "Choisit une console et la place à côté de celle qui a le focus : Entrée à droite, Maj+Entrée en dessous.",
+    "tile-console.description": "Choisit une console et la place à côté de celle qui a le focus : Entrée à droite, Maj+Entrée en dessous ; avec Ctrl, de toute la zone.",
     "untile-console.label": "Retirer la console de la mosaïque",
     "untile-console.description": "Retire de la mosaïque la console qui a le focus ; elle reste ouverte dans son onglet.",
     "diagnostic-details.label": "Détail de l’erreur",
@@ -404,7 +404,7 @@ export default defineMessages({
   },
   de: {
     "tile-console.label": "Konsole kacheln",
-    "tile-console.description": "Wählt eine Konsole und setzt sie neben die fokussierte: Enter rechts, Umschalt+Enter darunter.",
+    "tile-console.description": "Wählt eine Konsole und setzt sie neben die fokussierte: Enter rechts, Umschalt+Enter darunter; mit Strg des ganzen Bereichs.",
     "untile-console.label": "Konsole aus der Kachelung nehmen",
     "untile-console.description": "Nimmt die fokussierte Konsole aus der Kachelung; sie bleibt in ihrem Tab offen.",
     "diagnostic-details.label": "Fehlerdetails",

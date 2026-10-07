@@ -13,7 +13,9 @@
 
   // Elegir que consola se pone en mosaico junto a la enfocada (Ctrl+Alt+M):
   // capa flotante como el historial, todo con el teclado desde el filtro.
-  // Enter la pone a la derecha, Shift+Enter debajo, Esc cierra. Solo lista
+  // Enter la pone a la derecha, Shift+Enter debajo; con Ctrl, de toda el
+  // area (al lado de todas las que se ven, no solo de la enfocada). Esc
+  // cierra. Solo lista
   // las que no se ven: una consola vive en un unico mosaico. La ultima
   // opcion abre una consola nueva ahi.
 
@@ -24,7 +26,7 @@
   }: {
     items: PickerItem[];
     // null: una consola nueva.
-    onpick: (id: string | null, side: "right" | "bottom") => void;
+    onpick: (id: string | null, side: "right" | "bottom", whole: boolean) => void;
     onclose: (refocus: boolean) => void;
   } = $props();
 
@@ -59,18 +61,20 @@
     list?.querySelector(`[data-index="${filtered.indexOf(next)}"]`)?.scrollIntoView({ block: "nearest" });
   }
 
-  function pick(id: string | null | undefined, side: "right" | "bottom") {
+  function pick(id: string | null | undefined, side: "right" | "bottom", whole: boolean) {
     if (id === undefined || id === null) return;
-    onpick(id === NEW ? null : id, side);
+    onpick(id === NEW ? null : id, side, whole);
   }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       void move(event.key === "ArrowDown" ? 1 : -1);
-    } else if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    } else if (event.key === "Enter" && !event.altKey && !event.metaKey) {
       event.preventDefault();
-      pick(active, event.shiftKey ? "bottom" : "right");
+      // Que el despachador de atajos no lo tome tambien (Ctrl+Enter ejecuta).
+      event.stopPropagation();
+      pick(active, event.shiftKey ? "bottom" : "right", event.ctrlKey);
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -117,7 +121,7 @@
         tabindex="-1"
         aria-selected={id === active}
         onmousedown={(event) => event.preventDefault()}
-        onclick={(event) => pick(id, event.shiftKey ? "bottom" : "right")}
+        onclick={(event) => pick(id, event.shiftKey ? "bottom" : "right", event.ctrlKey)}
       >
         {#if !item}
           <Plus size={13} aria-hidden="true" />
@@ -137,6 +141,7 @@
   <div class="hints">
     <span><span class="ui-keys"><kbd>Enter</kbd></span> {$t("mosaic.picker.right")}</span>
     <span><span class="ui-keys"><kbd>Shift</kbd><kbd>Enter</kbd></span> {$t("mosaic.picker.below")}</span>
+    <span><span class="ui-keys"><kbd>Ctrl</kbd></span> {$t("mosaic.picker.whole")}</span>
     <span><span class="ui-keys"><kbd>Esc</kbd></span> {$t("history.close")}</span>
   </div>
 </div>
