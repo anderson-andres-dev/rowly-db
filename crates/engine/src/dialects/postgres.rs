@@ -1,6 +1,6 @@
 //! PostgreSQL.
 
-use super::{DoBlocks, EngineDefinition, InsertDefaults, RoutineBodies};
+use super::{DoBlocks, EngineDefinition, ExactText, InsertDefaults, RoutineBodies};
 
 pub const DEFINITION: EngineDefinition = EngineDefinition {
     id: "postgres",
@@ -22,6 +22,13 @@ pub const DEFINITION: EngineDefinition = EngineDefinition {
     do_blocks: DoBlocks::Anonymous,
     select_into_variable_lists: false,
     sql_mode_query: None,
+    // El texto de su salida con la intercalacion "C" (una no determinista
+    // juntaria valores distintos). Un booleano tal cual: su texto (`true`)
+    // no es el de la salida (`t`), y 't' se lee como verdad.
+    exact_text: ExactText {
+        template: "CAST({} AS TEXT) COLLATE \"C\"",
+        as_is: &["bool", "boolean"],
+    },
     lines: include_str!("../../../../support/postgres.json"),
 };
 

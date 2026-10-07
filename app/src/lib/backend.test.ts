@@ -67,6 +67,7 @@ const OWNERS: Record<string, string> = {
   close_terminal: "lib/terminal.ts",
   connect: "lib/stores/connection.ts",
   count_query_rows: "lib/queryExecution.ts",
+  column_values: "lib/queryExecution.ts",
   create_sql_file: "lib/sqlFiles.ts",
   create_terminal: "lib/terminal.ts",
   database_explorer: "lib/stores/connection.ts",

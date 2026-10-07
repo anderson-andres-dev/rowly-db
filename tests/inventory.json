@@ -3,8 +3,8 @@
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
     "files": 148,
-    "tests": 1530,
-    "ignored": 31,
+    "tests": 1533,
+    "ignored": 32,
     "byDecision": {
       "keep": 148,
       "move": 0,
@@ -12,8 +12,8 @@
       "remove": 0
     },
     "byGate": {
-      "pr": 142,
-      "engine-pr": 6,
+      "pr": 141,
+      "engine-pr": 7,
       "manual": 0,
       "release": 0
     },
@@ -1593,30 +1593,10 @@
       "durationMs": 17
     },
     {
-      "path": "app/src/lib/results/columnFilterMemory.test.ts",
-      "domain": "results",
-      "owner": "app/src/lib/results/columnFilterMemory.ts",
-      "property": "Los filtros por columna de cada pestaña se conservan al ir y volver; otras columnas empiezan sin filtros; cerrar la consola los olvida",
-      "risk": "P3",
-      "gate": "pr",
-      "decision": "keep",
-      "kind": "ts",
-      "tests": 3,
-      "ignored": 0,
-      "environment": "node",
-      "dependencies": [
-        "columnFilterMemory"
-      ],
-      "external": [
-        "vitest"
-      ],
-      "durationMs": null
-    },
-    {
       "path": "app/src/lib/results/columnFilters.test.ts",
       "domain": "results",
       "owner": "app/src/lib/results/columnFilters.ts",
-      "property": "Los filtros por columna ocultan y cuentan filas sin consultar la base",
+      "property": "Los filtros por columna: ocultan y cuentan lo cargado, y cuando y como se le piden a la base",
       "risk": "P2",
       "gate": "pr",
       "decision": "keep",
@@ -2397,6 +2377,7 @@
         "executionSession",
         "queryExecution",
         "resultTabs",
+        "results/columnFilters",
         "sqlStatements",
         "stores/executionLog",
         "stores/queryConsoles",
@@ -3009,7 +2990,7 @@
       ],
       "kind": "rust",
       "crate": "crates/engine",
-      "tests": 10,
+      "tests": 15,
       "ignored": 0,
       "environment": "none",
       "env": [],
@@ -3134,6 +3115,22 @@
       "crate": "crates/server-tests",
       "tests": 15,
       "ignored": 15,
+      "environment": "real-server",
+      "env": [],
+      "durationMs": null
+    },
+    {
+      "path": "crates/server-tests/tests/filters.rs",
+      "domain": "sql-engine",
+      "owner": "crates/engine/src/pagination.rs",
+      "property": "El embudo de cada columna en servidores reales: desmarcar quita exactamente las filas con ese texto (mayusculas, espacios, otro juego de caracteres, NULL), sus valores son los del grid, se ordena, pagina y cuenta sobre lo filtrado y un valor hostil no sale de su cadena",
+      "risk": "P1",
+      "gate": "engine-pr",
+      "decision": "keep",
+      "kind": "rust",
+      "crate": "crates/server-tests",
+      "tests": 1,
+      "ignored": 1,
       "environment": "real-server",
       "env": [],
       "durationMs": null

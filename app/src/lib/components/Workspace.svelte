@@ -80,7 +80,6 @@
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { editorGroups, setEditorGroups } from "$lib/stores/consoleMosaic";
-  import { forgetColumnFilters } from "$lib/results/columnFilterMemory";
   import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
     choose,
@@ -370,7 +369,6 @@
     resultTabOrder = withoutKey(resultTabOrder, consoleId);
     tableFilterError = withoutKey(tableFilterError, consoleId);
     resultLayouts = withoutKey(resultLayouts, consoleId);
-    forgetColumnFilters(consoleId);
     if (lastSqlConsole === consoleId) lastSqlConsole = null;
     tableLoadAttempted.delete(consoleId);
   }
@@ -690,6 +688,7 @@
   const navigatePage = executions.navigate;
   const sortResult = executions.sort;
   const countTotalRows = executions.count;
+  const filterResult = executions.filter;
 
   // --- Exportar datos ---------------------------------------------------
   // Clave de la pestaña que se exporta.
@@ -1407,7 +1406,9 @@
               filterError={!!tableFilterError[item.id]}
               tabCommands={false}
               commandZone="editor"
-              stateKey={item.id}
+              columnFilters={view.columnFilters}
+              onfilterchange={(filters) => void filterResult(item.id, filters)}
+              loadColumnValues={(column) => executions.columnValues(item.id, column)}
             />
             {#snippet tableFiltersBar()}
               {#if $activeEngine}
@@ -1585,11 +1586,10 @@
               selectTab(consoleId, next);
             }}
             onreordertabs={(from, to) => reorderGroupTabs(group, from, to)}
-            onclosetab={(closing) => {
-              forgetColumnFilters(closing);
-              void closeResultTab(closing);
-            }}
-            stateKey={key}
+            onclosetab={(closing) => void closeResultTab(closing)}
+            columnFilters={view.columnFilters}
+            onfilterchange={(filters) => void filterResult(key, filters)}
+            loadColumnValues={(column) => executions.columnValues(key, column)}
             ondetach={beginResultDrag}
             onexport={() => (exportFor = key)}
             onpin={() => pinCurrentResult(consoleId)}

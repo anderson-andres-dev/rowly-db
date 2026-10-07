@@ -8,7 +8,9 @@ import {
   type ExecutionView,
 } from "./executionSession";
 import { OUTPUT_TAB } from "./resultTabs";
-import type { StatementCheck } from "$lib/queryExecution";
+import { NULL_KEY } from "$lib/results/columnFilters";
+import type { PageRequest, StatementCheck } from "$lib/queryExecution";
+import type { ColumnFilterRequest, ServerColumnValues } from "$lib/results/columnFilters";
 import { STANDARD_LEXICAL } from "$lib/sqlStatements";
 import { executionLog } from "$lib/stores/executionLog";
 import { queryHistory } from "$lib/stores/queryHistory";
@@ -145,10 +147,15 @@ let consoleCounter = 0;
 // una consola nueva por prueba.
 function flowFixture(
   answers: Record<string, Answer> = {},
-  options: { classify?: StatementCheck[]; count?: (sql: string) => Promise<number> } = {},
+  options: {
+    classify?: StatementCheck[];
+    count?: (sql: string, filters?: ColumnFilterRequest[]) => Promise<number>;
+    values?: (sql: string, filters: ColumnFilterRequest[], column: ColumnFilterRequest) => Promise<ServerColumnValues>;
+  } = {},
 ) {
   const consoleId = `flow-${++consoleCounter}`;
   const executed: { sql: string; confirmed: unknown }[] = [];
+  const pages: PageRequest[] = [];
   const shown: string[] = [];
   const ready: string[] = [];
   const marks: string[] = [];
@@ -177,8 +184,9 @@ function flowFixture(
     notifyError: () => {},
   };
   const backend: ExecutionBackend = {
-    execute: async (sql, confirmed) => {
+    execute: async (sql, confirmed, page) => {
       executed.push({ sql, confirmed });
+      pages.push(page);
       const answer = answers[sql.trim()] ?? rows(1);
       return typeof answer === "function" ? answer(sql) : answer;
     },
@@ -187,11 +195,13 @@ function flowFixture(
   };
   const classify = async (statements: string[]) => options.classify ?? statements.map(() => ({}));
   const count = options.count ?? (async () => 0);
-  const flow = createExecutionFlow(view, createExecutionSession(backend), classify, count);
+  const values = options.values ?? (async () => ({ values: [], truncated: false }));
+  const flow = createExecutionFlow(view, createExecutionSession(backend), classify, count, values);
   return {
     consoleId,
     flow,
     executed,
+    pages,
     shown,
     ready,
     marks,
@@ -359,5 +369,85 @@ describe("createExecutionFlow", () => {
     expect(fixture.state().result?.type).toBe("resultSet");
     expect(fixture.state().resultSql).toBe("SELECT * FROM t");
     expect(fixture.state().isExecuting).toBe(false);
+  });
+
+  it("a column filter runs in the database from the first page, and paging, sorting and counting keep it", async () => {
+    const filtered = rows(1) as Extract<ExecuteQueryResponse, { type: "completed" }>;
+    const answers: Record<string, Answer> = { "SELECT id FROM t": rows(2) };
+    const counted: (ColumnFilterRequest[] | undefined)[] = [];
+    const fixture = flowFixture(answers, {
+      count: async (_sql, filters) => {
+        counted.push(filters);
+        return 7;
+      },
+    });
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    answers["SELECT id FROM t"] = { ...filtered, page: { ...filtered.page!, filtered: true } };
+    await fixture.flow.navigate(fixture.consoleId, 100, 100);
+    await fixture.flow.filter(fixture.consoleId, new Map([[0, new Set(["1", NULL_KEY])]]));
+    const request = [{ name: "id", dataType: undefined, excluded: ["1", null] }];
+    expect(fixture.pages.at(-1)).toEqual({ offset: 0, pageSize: 100, sort: [], filters: request });
+    expect(fixture.state().totalRows).toBe(1);
+    await fixture.flow.navigate(fixture.consoleId, 100, 100);
+    await fixture.flow.sort(fixture.consoleId, 0, true);
+    await fixture.flow.reload(fixture.consoleId);
+    expect(fixture.pages.slice(-3).map((page) => page.filters)).toEqual([request, request, request]);
+    expect(await fixture.flow.count(fixture.consoleId)).toBe(7);
+    expect(counted).toEqual([request]);
+    expect(fixture.log().at(-2)).toBe("query: SELECT COUNT(*) FROM (SELECT id FROM t) -- workspace.output.filteredSuffix");
+    // Una consulta nueva arranca sin filtros.
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    expect(fixture.state().columnFilters.size).toBe(0);
+    expect(fixture.pages.at(-1)?.filters).toBeUndefined();
+  });
+
+  it("a filter the database cannot apply is logged and the tab filters the loaded rows from then on", async () => {
+    const answers: Record<string, Answer> = { "SELECT id FROM t": rows(2) };
+    const fixture = flowFixture(answers);
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    answers["SELECT id FROM t"] = () => (fixture.pages.at(-1)?.filters ? failure("no such column") : rows(2));
+    await fixture.flow.filter(fixture.consoleId, new Map([[0, new Set(["1"])]]));
+    expect(fixture.pages.slice(-2).map((page) => page.filters?.length ?? 0)).toEqual([1, 0]);
+    expect(fixture.log()).toContain('error: workspace.output.filterFailed {"error":"no such column"}');
+    expect(fixture.state().result?.type).toBe("resultSet");
+    expect(fixture.state().localFilters).toBe(true);
+    expect(fixture.state().columnFilters.get(0)).toEqual(new Set(["1"]));
+    // Lo que sigue ya no lo pide a la base: ni la pagina ni el embudo.
+    const before = fixture.pages.length;
+    await fixture.flow.filter(fixture.consoleId, new Map([[0, new Set(["0"])]]));
+    expect(fixture.pages.length).toBe(before);
+    expect(await fixture.flow.columnValues(fixture.consoleId, 0)).toBeNull();
+  });
+
+  it("a query the database cannot page (or with repeated column names) filters the loaded rows", async () => {
+    const unpaged = rows(2) as Extract<ExecuteQueryResponse, { type: "completed" }>;
+    const fixture = flowFixture({ "SHOW TABLES": { ...unpaged, page: { ...unpaged.page!, pageable: false } } });
+    await fixture.flow.request(fixture.consoleId, "SHOW TABLES");
+    await fixture.flow.filter(fixture.consoleId, new Map([[0, new Set(["1"])]]));
+    expect(fixture.executed).toHaveLength(1);
+    expect(fixture.state().columnFilters.size).toBe(1);
+    expect(await fixture.flow.columnValues(fixture.consoleId, 0)).toBeNull();
+  });
+
+  it("the funnel values come from the whole result, with the other columns' filters", async () => {
+    const asked: { filters: ColumnFilterRequest[]; column: string }[] = [];
+    const fixture = flowFixture(
+      {},
+      {
+        values: async (_sql, filters, column) => {
+          asked.push({ filters, column: column.name });
+          return { values: [{ value: "b", remaining: 2, rows: 3 }, { value: null, remaining: 1, rows: 1 }], truncated: false };
+        },
+      },
+    );
+    await fixture.flow.request(fixture.consoleId, "SELECT id FROM t");
+    await fixture.flow.filter(fixture.consoleId, new Map([[0, new Set(["zz"])]]));
+    expect(await fixture.flow.columnValues(fixture.consoleId, 0)).toEqual([
+      { key: NULL_KEY, value: null, count: 1 },
+      { key: "b", value: "b", count: 2 },
+      // Desmarcado pero fuera de los que vinieron: sigue en la lista.
+      { key: "zz", value: "zz", count: 0 },
+    ]);
+    expect(asked).toEqual([{ filters: [{ name: "id", dataType: undefined, excluded: ["zz"] }], column: "id" }]);
   });
 });

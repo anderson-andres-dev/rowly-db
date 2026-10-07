@@ -65,8 +65,8 @@
     rowsHiddenByFilters,
     withColumnFilter,
     type ColumnFilters,
+    type ValueCount,
   } from "$lib/results/columnFilters";
-  import { recallColumnFilters, rememberColumnFilters } from "$lib/results/columnFilterMemory";
   import { softSwap } from "$lib/motion";
 
   let {
@@ -122,7 +122,9 @@
     onterminal,
     dimmed = false,
     commandZone = "results",
-    stateKey = null,
+    columnFilters = new Map(),
+    onfilterchange = () => {},
+    loadColumnValues,
     ondetach,
   }: {
     isExecuting: boolean;
@@ -218,9 +220,14 @@
     // Donde responden los atajos del grid: una tabla abierta en un grupo del
     // editor esta en la zona "editor".
     commandZone?: "results" | "editor";
-    // La clave de la pestaña que se muestra: sus filtros por columna se
-    // guardan con ella (results/columnFilterMemory.ts) y vuelven al volver.
-    stateKey?: string | null;
+    // Los filtros del embudo de las columnas, del estado de la pestaña
+    // (stores/queryConsoles: se conservan al ir a otra y volver). Con
+    // `page.filtered` ya los aplico la base; si no, se filtra lo cargado.
+    columnFilters?: ColumnFilters;
+    onfilterchange?: (filters: ColumnFilters) => void;
+    // Los valores del embudo en todo el resultado (la base); null: se
+    // cuentan los de las filas cargadas.
+    loadColumnValues?: (column: number) => Promise<ValueCount[] | null>;
     ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
 
@@ -468,30 +475,28 @@
     return hidden;
   });
 
-  // --- Filtro local por columna (results/columnFilters.ts) ----------------------
-  // Sobre las filas cargadas, sin volver a consultar; se suma a "Filtrar
-  // filas". Son de cada pestaña (stateKey): ir a otra y volver los
-  // conserva. Otro resultado (otras columnas) empieza sin filtros; otra
-  // pagina de la misma consulta los conserva.
-  let columnFilters = $state<ColumnFilters>(new Map());
+  // --- Filtro por columna (results/columnFilters.ts) ----------------------
+  // El embudo de cada encabezado. Si la base ya filtro (page.filtered), las
+  // filas son las que pasan y sus valores vienen de todo el resultado; si
+  // no, se ocultan de las cargadas. Se suma a "Filtrar filas", que es
+  // siempre local.
   let filterPopover = $state<{ column: number; position: { left: number; top: number } } | null>(null);
   const columnSignature = $derived(result?.type === "resultSet" ? result.columns.map((column) => column.name).join("\u0000") : "");
+  const filteredOnServer = $derived(page?.filtered === true);
 
+  // Otro resultado (otras columnas): el embudo abierto era de otra columna.
   $effect(() => {
-    const key = stateKey;
-    const signature = columnSignature;
+    void columnSignature;
     untrack(() => {
-      columnFilters = key ? recallColumnFilters(key, signature) : new Map();
       filterPopover = null;
     });
   });
 
   function setColumnFilters(next: ColumnFilters) {
-    columnFilters = next;
-    if (stateKey) rememberColumnFilters(stateKey, columnSignature, next);
+    onfilterchange(next);
   }
 
-  const filterHiddenRows = $derived(rowsHiddenByFilters(rows, columnFilters));
+  const filterHiddenRows = $derived(filteredOnServer ? new Set<number>() : rowsHiddenByFilters(rows, columnFilters));
   const filteredColumns = $derived(new Set(columnFilters.keys()));
 
   const hiddenRows = $derived.by(() => {
@@ -500,10 +505,39 @@
     return new Set([...findHiddenRows, ...filterHiddenRows]);
   });
 
+  // Los valores de la base para el embudo abierto. Se piden al abrirlo y con
+  // cada cambio de filtros; mientras llegan, siguen los anteriores de esa
+  // columna (las casillas cambian al instante, los conteos al llegar).
+  let serverValues = $state<{ column: number; values: ValueCount[] } | null>(null);
+  $effect(() => {
+    const column = filterPopover?.column;
+    void columnFilters;
+    if (column === undefined || !loadColumnValues) {
+      serverValues = null;
+      return;
+    }
+    let stale = false;
+    void loadColumnValues(column).then((values) => {
+      if (!stale) serverValues = values ? { column, values } : null;
+    });
+    return () => {
+      stale = true;
+    };
+  });
+
   // Los conteos solo mientras el filtro de una columna esta abierto.
-  const filterValues = $derived(
-    filterPopover ? columnValueCounts(rows, filterPopover.column, columnFilters, findHiddenRows) : [],
-  );
+  const filterValues = $derived.by(() => {
+    if (!filterPopover) return [];
+    if (serverValues?.column === filterPopover.column) return serverValues.values;
+    return columnValueCounts(rows, filterPopover.column, filteredOnServer ? new Map() : columnFilters, findHiddenRows);
+  });
+  // Filas que quedan con todos los filtros: con los valores de la base, la
+  // suma de los marcados (cada uno ya cuenta los filtros de las otras).
+  const filterMatches = $derived.by(() => {
+    if (!filterPopover || serverValues?.column !== filterPopover.column) return rows.length - (hiddenRows?.size ?? 0);
+    const excluded = columnFilters.get(filterPopover.column);
+    return serverValues.values.reduce((sum, item) => (excluded?.has(item.key) ? sum : sum + item.count), 0);
+  });
 
   function openColumnFilter(column: number, position: { left: number; top: number }) {
     filterPopover = filterPopover?.column === column ? null : { column, position };
@@ -849,7 +883,7 @@
           column={result.columns[column]?.name ?? ""}
           values={filterValues}
           excluded={columnFilters.get(column) ?? new Set()}
-          matches={rows.length - (hiddenRows?.size ?? 0)}
+          matches={filterMatches}
           position={filterPopover.position}
           onchange={(excluded) => setColumnFilters(withColumnFilter(columnFilters, column, excluded))}
           onclose={closeColumnFilter}
@@ -975,12 +1009,19 @@
              tiempo se van cayendo; las filas quedan siempre. -->
         <span class="stats">
           <!-- Con un filtro (por columna o "Filtrar filas"), cuantas se ven de
-               las de esta pagina. -->
+               las de esta pagina. Filtradas en la base, en acento: el total y
+               las paginas ya son las de los filtros. -->
           {#if hiddenRows && hiddenRows.size > 0}
             <span class="filtered">{$t("results.stats.rowsFiltered", {
               visible: $numberFormat.format(result.rows.length - hiddenRows.size),
               count: $numberFormat.format(result.rows.length),
             })}</span>
+          {:else if filteredOnServer && columnFilters.size > 0}
+            <span class="filtered" title={$t("results.stats.filteredOnServer")}
+              >{$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
+                count: $numberFormat.format(result.rows.length),
+              })}</span
+            >
           {:else}
             {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
               count: $numberFormat.format(result.rows.length),

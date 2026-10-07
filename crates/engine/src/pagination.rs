@@ -1,11 +1,14 @@
 //! Paginacion de resultados reescribiendo la consulta, no leyendo y
 //! descartando filas: cada pagina le pide al servidor solo sus filas
 //! (`LIMIT`/`OFFSET`), asi pasar a la pagina 20 cuesta lo mismo que la 1 del
-//! lado de la app. Tambien arma el `SELECT COUNT(*)` para conocer el total.
+//! lado de la app. Tambien arma el `SELECT COUNT(*)` para conocer el total,
+//! y los filtros del embudo de cada columna (`filter_sql`, con sus valores
+//! en `column_values_sql`): filtrar tambien es otra consulta, asi la
+//! paginacion y el total son los de las filas filtradas.
 //!
 //! Solo se reescriben consultas que se pueden paginar con seguridad (un
 //! `SELECT`/`UNION`/`VALUES` sin `FETCH`, `FOR UPDATE` ni `INTO`); para el
-//! resto ambas funciones devuelven `None` y la app muestra solo la primera
+//! resto estas funciones devuelven `None` y la app muestra solo la primera
 //! pagina, como hasta ahora.
 //!
 //! Lo que se ejecuta es el texto reescrito, no el que reviso el guard: por
@@ -132,6 +135,160 @@ pub fn count_sql(sql: &str, dialect: Dialect, options: GuardOptions) -> Option<S
     let query = written(&query, dialect)?;
     guarded(
         format!("SELECT COUNT(*) FROM ({query}) AS khipu_count"),
+        dialect,
+        options,
+    )
+}
+
+/// El filtro del embudo de una columna del grid: los valores DESMARCADOS
+/// (`None` es NULL), tal como los mostro `column_values_sql`. La columna se
+/// nombra por su nombre en el resultado (la UI solo filtra en el servidor si
+/// los nombres no se repiten) y su tipo decide como se compara.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnFilter {
+    pub name: String,
+    #[serde(default)]
+    pub data_type: String,
+    #[serde(default)]
+    pub excluded: Vec<Option<String>>,
+}
+
+/// Lo que mira el filtro de una columna: su texto tal como lo muestra el
+/// grid, comparado byte a byte, sin la intercalacion de la columna
+/// (`EngineDefinition::exact_text`).
+fn filter_operand(dialect: Dialect, column: &ColumnFilter) -> String {
+    let name = dialect.quote_identifier(&column.name);
+    let exact = dialect.definition().exact_text;
+    if exact
+        .as_is
+        .iter()
+        .any(|data_type| data_type.eq_ignore_ascii_case(&column.data_type))
+    {
+        name
+    } else {
+        exact.template.replace("{}", &name)
+    }
+}
+
+/// Condicion con la que una fila pasa el filtro de `column`; `None` si no
+/// desmarca nada. `NOT IN` da NULL con un NULL, por eso el NULL va aparte.
+fn filter_condition(
+    dialect: Dialect,
+    backslash_escapes: bool,
+    column: &ColumnFilter,
+) -> Option<String> {
+    let name = dialect.quote_identifier(&column.name);
+    let null_excluded = column.excluded.iter().any(Option::is_none);
+    let mut values: Vec<&str> = column
+        .excluded
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    values.sort_unstable();
+    values.dedup();
+    if values.is_empty() {
+        return null_excluded.then(|| format!("{name} IS NOT NULL"));
+    }
+    let list = values
+        .iter()
+        .map(|value| dialect.string_literal_with(value, backslash_escapes))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let not_in = format!("{} NOT IN ({list})", filter_operand(dialect, column));
+    Some(if null_excluded {
+        format!("{name} IS NOT NULL AND {not_in}")
+    } else {
+        format!("({name} IS NULL OR {not_in})")
+    })
+}
+
+/// Las condiciones de todos los filtros, unidas con AND (salvo `except`).
+/// `None` si alguno no se puede escribir con seguridad: con
+/// NO_BACKSLASH_ESCAPES, un valor con barras (sqlparser las leeria como
+/// escape y ninguna reescritura de este modulo pasaria).
+fn filter_conditions(
+    dialect: Dialect,
+    options: GuardOptions,
+    filters: &[ColumnFilter],
+    except: Option<&str>,
+) -> Option<Vec<String>> {
+    let no_backslash = options.no_backslash_escapes && dialect.backslash_escapes();
+    let backslash_escapes = dialect.backslash_escapes() && !options.no_backslash_escapes;
+    let mut conditions = Vec::new();
+    for column in filters {
+        if Some(column.name.as_str()) == except {
+            continue;
+        }
+        if no_backslash
+            && column
+                .excluded
+                .iter()
+                .flatten()
+                .any(|value| value.contains('\\'))
+        {
+            return None;
+        }
+        conditions.extend(filter_condition(dialect, backslash_escapes, column));
+    }
+    Some(conditions)
+}
+
+/// `sql` con solo las filas que pasan los filtros del grid, como otra
+/// consulta que se puede ordenar, paginar y contar igual que la original
+/// (`sort_sql`, `paginate_sql`, `count_sql` sobre este texto). `None` si no
+/// hay nada que filtrar o no se puede reescribir: la UI filtra entonces las
+/// filas cargadas.
+pub fn filter_sql(
+    sql: &str,
+    dialect: Dialect,
+    options: GuardOptions,
+    filters: &[ColumnFilter],
+) -> Option<String> {
+    let conditions = filter_conditions(dialect, options, filters, None)?;
+    if conditions.is_empty() {
+        return None;
+    }
+    let query = parse_pageable_query(sql, dialect, options)?;
+    let query = written(&query, dialect)?;
+    guarded(
+        format!(
+            "SELECT * FROM ({query}) AS khipu_filtered WHERE {}",
+            conditions.join(" AND ")
+        ),
+        dialect,
+        options,
+    )
+}
+
+/// Los valores distintos de `column` en TODO el resultado de `sql` (los
+/// mas frecuentes primero, hasta `limit`), cada uno con cuantas filas
+/// quedan con los filtros de las otras columnas: lo que muestra el embudo.
+/// El valor sale como lo compara `filter_sql`, asi lo que se desmarca es
+/// exactamente lo que se filtra. Columnas: valor, filas que quedan, filas.
+pub fn column_values_sql(
+    sql: &str,
+    dialect: Dialect,
+    options: GuardOptions,
+    filters: &[ColumnFilter],
+    column: &ColumnFilter,
+    limit: u64,
+) -> Option<String> {
+    let others = filter_conditions(dialect, options, filters, Some(&column.name))?;
+    let query = parse_pageable_query(sql, dialect, options)?;
+    let query = written(&query, dialect)?;
+    let value = filter_operand(dialect, column);
+    let remaining = if others.is_empty() {
+        "COUNT(*)".to_string()
+    } else {
+        format!("SUM(CASE WHEN {} THEN 1 ELSE 0 END)", others.join(" AND "))
+    };
+    guarded(
+        format!(
+            "SELECT {value} AS khipu_value, {remaining} AS khipu_remaining, COUNT(*) AS khipu_rows \
+             FROM ({query}) AS khipu_values GROUP BY {value} ORDER BY COUNT(*) DESC, 1 LIMIT {limit}"
+        ),
         dialect,
         options,
     )
@@ -540,5 +697,190 @@ mod tests {
         }
         // PostgreSQL no tiene ese modo: la opcion no le cambia nada.
         assert!(paginate_sql(r"SELECT E'\\' AS a", Dialect::Postgres, mode, 0, 101).is_some());
+    }
+
+    fn filter(name: &str, excluded: &[Option<&str>]) -> ColumnFilter {
+        ColumnFilter {
+            name: name.to_string(),
+            data_type: String::new(),
+            excluded: excluded
+                .iter()
+                .map(|value| value.map(str::to_string))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn filtra_por_texto_exacto_con_el_null_aparte() {
+        assert_eq!(
+            filter_sql(
+                "SELECT * FROM t ORDER BY id",
+                MYSQL,
+                PLAIN,
+                &[filter("estado", &[Some("baja"), Some("alta")])]
+            )
+            .unwrap(),
+            "SELECT * FROM (SELECT * FROM t ORDER BY id) AS khipu_filtered WHERE \
+             (`estado` IS NULL OR CAST(CONVERT(`estado` USING utf8mb4) AS BINARY) NOT IN ('alta', 'baja'))"
+        );
+        assert_eq!(
+            filter_sql(
+                "SELECT * FROM t",
+                MYSQL,
+                PLAIN,
+                &[filter("a", &[None, Some("x")]), filter("b", &[None])]
+            )
+            .unwrap(),
+            "SELECT * FROM (SELECT * FROM t) AS khipu_filtered WHERE `a` IS NOT NULL AND \
+             CAST(CONVERT(`a` USING utf8mb4) AS BINARY) NOT IN ('x') AND `b` IS NOT NULL"
+        );
+        let mut active = filter("activo", &[Some("f")]);
+        active.data_type = "BOOL".into();
+        assert_eq!(
+            filter_sql(
+                "SELECT * FROM t",
+                Dialect::Postgres,
+                PLAIN,
+                &[active, filter("Nombre", &[Some("x")])]
+            )
+            .unwrap(),
+            "SELECT * FROM (SELECT * FROM t) AS khipu_filtered WHERE (\"activo\" IS NULL OR \"activo\" NOT IN ('f')) \
+             AND (\"Nombre\" IS NULL OR CAST(\"Nombre\" AS TEXT) COLLATE \"C\" NOT IN ('x'))"
+        );
+    }
+
+    #[test]
+    fn sin_valores_desmarcados_no_hay_filtro() {
+        assert!(filter_sql("SELECT * FROM t", MYSQL, PLAIN, &[]).is_none());
+        assert!(filter_sql("SELECT * FROM t", MYSQL, PLAIN, &[filter("a", &[])]).is_none());
+        assert!(filter_sql("SHOW TABLES", MYSQL, PLAIN, &[filter("a", &[None])]).is_none());
+    }
+
+    #[test]
+    fn el_filtrado_se_ordena_pagina_y_cuenta() {
+        let filtered = filter_sql(
+            "SELECT * FROM t LIMIT 50",
+            MYSQL,
+            PLAIN,
+            &[filter("a", &[None])],
+        )
+        .unwrap();
+        assert_eq!(
+            sort_sql(
+                &filtered,
+                MYSQL,
+                PLAIN,
+                &[SortKey {
+                    column: 1,
+                    descending: true
+                }]
+            )
+            .unwrap(),
+            format!("{filtered} ORDER BY 2 DESC")
+        );
+        assert_eq!(
+            paginate_sql(&filtered, MYSQL, PLAIN, 20, 21).unwrap(),
+            format!("{filtered} LIMIT 21 OFFSET 20")
+        );
+        assert_eq!(
+            count_sql(&filtered, MYSQL, PLAIN).unwrap(),
+            "SELECT COUNT(*) FROM (SELECT 1 FROM (SELECT * FROM t LIMIT 50) AS khipu_filtered \
+             WHERE `a` IS NOT NULL) AS khipu_count"
+        );
+    }
+
+    #[test]
+    fn un_valor_no_puede_salir_de_su_cadena() {
+        // Los valores vienen de la base: cualquier texto, comillas y barras
+        // incluidas, queda dentro de su literal.
+        let hostile = "x'); DROP TABLE t; -- \\";
+        for dialect in Dialect::ALL {
+            let sql = filter_sql(
+                "SELECT * FROM t",
+                dialect,
+                PLAIN,
+                &[filter("a", &[Some(hostile)])],
+            )
+            .unwrap();
+            use sqlparser::tokenizer::{Token, Tokenizer};
+            let literals: Vec<String> = Tokenizer::new(&*dialect.as_sqlparser_dialect(), &sql)
+                .tokenize()
+                .unwrap()
+                .into_iter()
+                .filter_map(|token| match token {
+                    Token::SingleQuotedString(text) => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(literals, [hostile], "{dialect:?}: {sql}");
+        }
+        // Con NO_BACKSLASH_ESCAPES, sin barras se escribe; con barras, no.
+        let mode = GuardOptions {
+            no_backslash_escapes: true,
+        };
+        assert!(
+            filter_sql(
+                "SELECT * FROM t",
+                MYSQL,
+                mode,
+                &[filter("a", &[Some("it's")])]
+            )
+            .is_some()
+        );
+        assert!(
+            filter_sql(
+                "SELECT * FROM t",
+                MYSQL,
+                mode,
+                &[filter("a", &[Some(hostile)])]
+            )
+            .is_none()
+        );
+        assert!(
+            filter_sql(
+                "SELECT * FROM t",
+                Dialect::Postgres,
+                mode,
+                &[filter("a", &[Some(hostile)])]
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn los_valores_cuentan_lo_que_dejan_las_otras_columnas() {
+        let filters = [filter("a", &[Some("x")]), filter("b", &[None])];
+        assert_eq!(
+            column_values_sql(
+                "SELECT * FROM t",
+                MYSQL,
+                PLAIN,
+                &filters,
+                &filter("a", &[]),
+                5001
+            )
+            .unwrap(),
+            "SELECT CAST(CONVERT(`a` USING utf8mb4) AS BINARY) AS khipu_value, \
+             SUM(CASE WHEN `b` IS NOT NULL THEN 1 ELSE 0 END) AS khipu_remaining, COUNT(*) AS khipu_rows \
+             FROM (SELECT * FROM t) AS khipu_values GROUP BY CAST(CONVERT(`a` USING utf8mb4) AS BINARY) \
+             ORDER BY COUNT(*) DESC, 1 LIMIT 5001"
+        );
+        assert_eq!(
+            column_values_sql(
+                "SELECT * FROM t",
+                Dialect::Postgres,
+                PLAIN,
+                &[],
+                &filter("c", &[]),
+                10
+            )
+            .unwrap(),
+            "SELECT CAST(\"c\" AS TEXT) COLLATE \"C\" AS khipu_value, COUNT(*) AS khipu_remaining, \
+             COUNT(*) AS khipu_rows FROM (SELECT * FROM t) AS khipu_values \
+             GROUP BY CAST(\"c\" AS TEXT) COLLATE \"C\" ORDER BY COUNT(*) DESC, 1 LIMIT 10"
+        );
+        assert!(
+            column_values_sql("SHOW TABLES", MYSQL, PLAIN, &[], &filter("c", &[]), 10).is_none()
+        );
     }
 }

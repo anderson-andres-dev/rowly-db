@@ -84,6 +84,7 @@ pub fn run() {
             commands::files::create_sql_file,
             commands::files::trash_sql_file,
             commands::query::count_query_rows,
+            commands::query::column_values,
             commands::results::result_edit_info,
             commands::results::preview_result_changes,
             commands::results::apply_result_changes,

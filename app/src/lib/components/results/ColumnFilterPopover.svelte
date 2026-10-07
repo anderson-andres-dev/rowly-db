@@ -5,8 +5,9 @@
   import { numberFormat } from "$lib/i18n";
   import type { ValueCount } from "$lib/results/columnFilters";
 
-  // Filtro local de una columna (results/columnFilters.ts): sus valores distintos con
-  // cuantas filas quedan de cada uno, para marcar o desmarcar. Se aplica al
+  // El filtro de una columna (results/columnFilters.ts): sus valores distintos
+  // con cuantas filas quedan de cada uno, para marcar o desmarcar (de todo el
+  // resultado si filtra la base, de lo cargado si no). Se aplica al
   // instante; buscar solo acota la lista. Esc o un clic afuera lo cierran.
   let {
     column,
