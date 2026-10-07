@@ -1029,10 +1029,8 @@
       const drag = tileDrag;
       tileDrag = null;
       swallowNextClick();
-      if (!apply || !drag?.target || !drag.side || drag.target === drag.id) return;
-      // WHOLE no es ninguna hoja: place parte la raiz.
-      const tree = drag.side === "center" ? replace(mosaic, drag.target, drag.id) : place(mosaic, drag.target, drag.id, drag.side);
-      void arrange(tree, drag.id);
+      const tree = drag && apply ? dropResult(drag) : null;
+      if (drag && tree) void arrange(tree, drag.id);
     }
 
     const onUp = () => finish(true);
@@ -1073,18 +1071,20 @@
     window.addEventListener("pointerup", stop);
   }
 
-  // La zona que se resalta al soltar: el lado elegido, el mosaico entero o
-  // la mitad del area.
+  // Como queda el mosaico si se suelta ahi; null si no cambia nada. WHOLE no
+  // es ninguna hoja: place parte la raiz.
+  function dropResult(drag: { id: string; target: string | null; side: Side | "center" | null }): Mosaic | null {
+    if (!drag.target || !drag.side || drag.target === drag.id) return null;
+    return drag.side === "center" ? replace(mosaic, drag.target, drag.id) : place(mosaic, drag.target, drag.id, drag.side);
+  }
+
+  // Lo que se resalta al arrastrar es donde quedaria de verdad la consola:
+  // su rectangulo en el mosaico resultante. Mover una que ya se ve libera su
+  // lugar (con dos apiladas, la de abajo a la derecha de la de arriba ocupa
+  // toda la altura), y marcar solo la mitad del destino mentia.
   const dropPreview = $derived.by(() => {
-    if (!tileDrag?.target || !tileDrag.side || tileDrag.target === tileDrag.id) return null;
-    const rect = tileDrag.target === WHOLE ? { x: 0, y: 0, width: 1, height: 1 } : tileRects.get(tileDrag.target);
-    if (!rect) return null;
-    const { side } = tileDrag;
-    if (side === "center") return rect;
-    if (side === "left") return { ...rect, width: rect.width / 2 };
-    if (side === "right") return { ...rect, x: rect.x + rect.width / 2, width: rect.width / 2 };
-    if (side === "top") return { ...rect, height: rect.height / 2 };
-    return { ...rect, y: rect.y + rect.height / 2, height: rect.height / 2 };
+    const tree = tileDrag ? dropResult(tileDrag) : null;
+    return tree && tileDrag ? (rects(tree).get(tileDrag.id) ?? null) : null;
   });
 
   const percent = (value: number) => `${value * 100}%`;
