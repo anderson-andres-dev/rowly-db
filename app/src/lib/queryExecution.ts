@@ -1,6 +1,7 @@
 import { backendText, invoke } from "$lib/backend";
 import { applySessionContext } from "$lib/stores/connection";
 import { notifyError } from "$lib/stores/notifications";
+import type { ColumnFilterRequest, ServerColumnValues } from "$lib/results/columnFilters";
 import type { DestructiveStatement, ExecuteQueryResponse, SortKey } from "$lib/types";
 
 export interface PageRequest {
@@ -8,6 +9,9 @@ export interface PageRequest {
   pageSize: number;
   // Orden de los encabezados (se aplica en la base, antes de paginar).
   sort?: SortKey[];
+  // Filtros del embudo de las columnas (se aplican en la base antes de
+  // ordenar; la respuesta dice en page.filtered si se pudo).
+  filters?: ColumnFilterRequest[];
 }
 
 // Unico punto de invocacion del comando "execute_query": si el transporte de
@@ -75,8 +79,18 @@ export async function classifyStatements(statements: string[]): Promise<Statemen
   }
 }
 
-// Total de filas de la consulta (SELECT COUNT(*) FROM (...)). Lanza un
-// Error con el mensaje del servidor si falla.
-export async function countQueryRows(sql: string): Promise<number> {
-  return await invoke<number>("count_query_rows", { sql });
+// Total de filas de la consulta (SELECT COUNT(*) FROM (...)), con los
+// filtros si los hay. Lanza un Error con el mensaje del servidor si falla.
+export async function countQueryRows(sql: string, filters: ColumnFilterRequest[] = []): Promise<number> {
+  return await invoke<number>("count_query_rows", { sql, filters });
+}
+
+// Los valores distintos de una columna en todo el resultado, con cuantas
+// filas dejan los filtros de las otras (el embudo). Lanza un Error si falla.
+export async function columnValues(
+  sql: string,
+  filters: ColumnFilterRequest[],
+  column: ColumnFilterRequest,
+): Promise<ServerColumnValues> {
+  return await invoke<ServerColumnValues>("column_values", { sql, filters, column });
 }

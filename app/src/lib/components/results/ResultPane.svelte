@@ -11,7 +11,7 @@
     Minus,
     Plus,
     RotateCw,
-    SquareTerminal,
+    SquareArrowRightExit,
     Table,
     TableProperties,
     Undo2,
@@ -25,9 +25,10 @@
     Filter,
     Icon,
   } from "@lucide/svelte";
+  import type { IconNode } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
-  import { flip } from "svelte/animate";
-  import { flipDuration, reorderable } from "$lib/reorder";
+  import { reorderable } from "$lib/reorder";
+  import TabOutline from "$lib/components/TabOutline.svelte";
   import { findInPage, type FindOptions, type FindResult } from "$lib/results/gridFind";
 
   import { COPY_FORMATS, type PasteBlock } from "$lib/results/gridClipboard";
@@ -58,14 +59,15 @@
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
   import { editorPalette } from "$lib/theming/theme";
-  import type { IconNode } from "@lucide/svelte";
   import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
   import {
     columnValueCounts,
     rowsHiddenByFilters,
     withColumnFilter,
     type ColumnFilters,
+    type ValueCount,
   } from "$lib/results/columnFilters";
+  import { softSwap } from "$lib/motion";
 
   let {
     isExecuting,
@@ -114,7 +116,16 @@
     filterError = false,
     terminal,
     terminalActive = false,
-    onterminal = () => {},
+    tiles,
+    showOutputTab = true,
+    tabCommands = true,
+    onterminal,
+    dimmed = false,
+    commandZone = "results",
+    columnFilters = new Map(),
+    onfilterchange = () => {},
+    loadColumnValues,
+    ondetach,
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -187,17 +198,63 @@
     filterCount?: number;
     filterError?: boolean;
     // La terminal de la ventana (Workspace la carga la primera vez que se
-    // abre): pestaña fija a la izquierda de Salida y, activa, ocupa el lugar
-    // de la barra y el cuerpo del resultado, que quedan montados y ocultos.
+    // abre con Ctrl+T): otro espacio en el mismo lugar que los datos, con su
+    // propia fila de sesiones. Abierta, tapa todo el panel (filas incluidas)
+    // y los datos quedan montados debajo, tal como estaban.
     terminal?: Snippet;
     terminalActive?: boolean;
+    // Grupos de pestañas en mosaico (Workspace.svelte, MosaicArea): el panel
+    // de la ventana, sin fila propia, pone los grupos (`tiles`) y la
+    // terminal, que no se vuelve a montar. Cada grupo es otro panel con SU
+    // fila de carpetas: la Salida solo si es suya (`showOutputTab`) y
+    // Ctrl+Tab solo en el enfocado (`tabCommands`). `ondetach`: sacar una
+    // pestaña de la fila hacia los grupos (reorder.ts); false si no se puede.
+    tiles?: Snippet;
+    showOutputTab?: boolean;
+    tabCommands?: boolean;
+    // Con esto, al final de la fila el icono de la terminal (solo el del
+    // grupo de arriba a la derecha): la abre, como Ctrl+T.
     onterminal?: () => void;
+    // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
+    dimmed?: boolean;
+    // Donde responden los atajos del grid: una tabla abierta en un grupo del
+    // editor esta en la zona "editor".
+    commandZone?: "results" | "editor";
+    // Los filtros del embudo de las columnas, del estado de la pestaña
+    // (stores/queryConsoles: se conservan al ir a otra y volver). Con
+    // `page.filtered` ya los aplico la base; si no, se filtra lo cargado.
+    columnFilters?: ColumnFilters;
+    onfilterchange?: (filters: ColumnFilters) => void;
+    // Los valores del embudo en todo el resultado (la base); null: se
+    // cuentan los de las filas cargadas.
+    loadColumnValues?: (column: number) => Promise<ValueCount[] | null>;
+    ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
 
-  // El ">_" de Lucide (Terminal), distinto del SquareTerminal de la Salida.
-  // Con el Icon base y sus datos: el componente del icono sumaba 303 B al JS
-  // inicial.
+  // El ">_" de Lucide (Terminal), distinto del de la Salida. Con el Icon base
+  // y sus datos: el componente del icono sumaba bytes al JS inicial.
   const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
+
+  // Al elegir otra pestaña con otro contenido, este entra con un fundido
+  // corto. Fijar/desfijar cambia la clave, pero mueve el MISMO resultado:
+  // el grid ya esta pintado y no debe parpadear.
+  let paneRoot = $state<HTMLElement>();
+  let shownTab: string | null = null;
+  let shownContent: QueryExecutionResult | null = null;
+  $effect(() => {
+    const tab = activeTab;
+    const content = result?.type === "resultSet" && tabs.some((item) => item.key === tab) ? result : null;
+    untrack(() => {
+      const changed = shownTab !== null && shownTab !== tab && shownContent !== content;
+      shownTab = tab;
+      shownContent = content;
+      if (changed) void tick().then(() => {
+        if (paneRoot && shownTab === tab && shownContent === content) {
+          softSwap(paneRoot.querySelectorAll(":scope > .pane-view > :is(.result-toolbar, .grid-region, .output-region, .centered)"));
+        }
+      });
+    });
+  });
 
   // --- Pestañas ----------------------------------------------------------
   // Que pestaña se ve lo decide Workspace (cada ejecucion elige: con filas,
@@ -425,23 +482,28 @@
     return hidden;
   });
 
-  // --- Filtro local por columna (results/columnFilters.ts) ----------------------
-  // Sobre las filas cargadas, sin volver a consultar; se suma a "Filtrar
-  // filas". Otro resultado (otras columnas) empieza sin filtros; otra
-  // pagina de la misma consulta los conserva.
-  let columnFilters = $state<ColumnFilters>(new Map());
+  // --- Filtro por columna (results/columnFilters.ts) ----------------------
+  // El embudo de cada encabezado. Si la base ya filtro (page.filtered), las
+  // filas son las que pasan y sus valores vienen de todo el resultado; si
+  // no, se ocultan de las cargadas. Se suma a "Filtrar filas", que es
+  // siempre local.
   let filterPopover = $state<{ column: number; position: { left: number; top: number } } | null>(null);
   const columnSignature = $derived(result?.type === "resultSet" ? result.columns.map((column) => column.name).join("\u0000") : "");
+  const filteredOnServer = $derived(page?.filtered === true);
 
+  // Otro resultado (otras columnas): el embudo abierto era de otra columna.
   $effect(() => {
     void columnSignature;
     untrack(() => {
-      columnFilters = new Map();
       filterPopover = null;
     });
   });
 
-  const filterHiddenRows = $derived(rowsHiddenByFilters(rows, columnFilters));
+  function setColumnFilters(next: ColumnFilters) {
+    onfilterchange(next);
+  }
+
+  const filterHiddenRows = $derived(filteredOnServer ? new Set<number>() : rowsHiddenByFilters(rows, columnFilters));
   const filteredColumns = $derived(new Set(columnFilters.keys()));
 
   const hiddenRows = $derived.by(() => {
@@ -450,10 +512,39 @@
     return new Set([...findHiddenRows, ...filterHiddenRows]);
   });
 
+  // Los valores de la base para el embudo abierto. Se piden al abrirlo y con
+  // cada cambio de filtros; mientras llegan, siguen los anteriores de esa
+  // columna (las casillas cambian al instante, los conteos al llegar).
+  let serverValues = $state<{ column: number; values: ValueCount[] } | null>(null);
+  $effect(() => {
+    const column = filterPopover?.column;
+    void columnFilters;
+    if (column === undefined || !loadColumnValues) {
+      serverValues = null;
+      return;
+    }
+    let stale = false;
+    void loadColumnValues(column).then((values) => {
+      if (!stale) serverValues = values ? { column, values } : null;
+    });
+    return () => {
+      stale = true;
+    };
+  });
+
   // Los conteos solo mientras el filtro de una columna esta abierto.
-  const filterValues = $derived(
-    filterPopover ? columnValueCounts(rows, filterPopover.column, columnFilters, findHiddenRows) : [],
-  );
+  const filterValues = $derived.by(() => {
+    if (!filterPopover) return [];
+    if (serverValues?.column === filterPopover.column) return serverValues.values;
+    return columnValueCounts(rows, filterPopover.column, filteredOnServer ? new Map() : columnFilters, findHiddenRows);
+  });
+  // Filas que quedan con todos los filtros: con los valores de la base, la
+  // suma de los marcados (cada uno ya cuenta los filtros de las otras).
+  const filterMatches = $derived.by(() => {
+    if (!filterPopover || serverValues?.column !== filterPopover.column) return rows.length - (hiddenRows?.size ?? 0);
+    const excluded = columnFilters.get(filterPopover.column);
+    return serverValues.values.reduce((sum, item) => (excluded?.has(item.key) ? sum : sum + item.count), 0);
+  });
 
   function openColumnFilter(column: number, position: { left: number; top: number }) {
     filterPopover = filterPopover?.column === column ? null : { column, position };
@@ -520,7 +611,7 @@
   }
 
   $effect(() =>
-    registerCommands("results", {
+    registerCommands(commandZone, {
       "add-result-row": inGrid(addNewRow),
       "delete-result-rows": inGrid(deleteSelectedRows),
       "revert-result-changes": inGrid(() => {
@@ -540,10 +631,13 @@
   // ella, las mismas teclas recorren sus sesiones.
   let tabStrip = $state<HTMLElement>();
   const showsResultTabs = $derived(!tableView && hasActivity);
-  const stripKeys = $derived(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []);
+  const stripKeys = $derived(showsResultTabs ? [...(showOutputTab ? ["output"] : []), ...tabs.map((tab) => tab.key)] : []);
 
-  $effect(() =>
-    registerTabCommands("results", {
+  $effect(() => {
+    // Con grupos, cada uno recorre la suya y solo el enfocado responde.
+    if (tiles) return;
+    return registerTabCommands("results", {
+      applies: () => tabCommands,
       keys: () => stripKeys,
       current: () => (terminalActive ? null : showingOutput ? "output" : (selectedKey ?? null)),
       select: (key) => {
@@ -551,8 +645,8 @@
         // El foco va a la pestaña elegida, como al hacer clic.
         void tick().then(() => tabStrip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
       },
-    }),
-  );
+    });
+  });
 
 </script>
 
@@ -577,19 +671,21 @@
   {/if}
 {/snippet}
 
-<div class="result-pane">
+<div class="result-pane" bind:this={paneRoot}>
   <!-- La fila sale siempre (salvo en una tabla sin la terminal abierta): a la
        derecha, el boton de la terminal, que es de la ventana y no un
        resultado mas. -->
-  {#if !tableView || terminal}
+  {#if !tiles && (!tableView || terminal)}
     <div
       class="result-tabs tab-strip"
+      class:dimmed
       role="tablist"
       aria-label={$t("results.tabs")}
       bind:this={tabStrip}
       use:settleTransitions
     >
       {#if showsResultTabs}
+      {#if showOutputTab}
       <button
         type="button"
         role="tab"
@@ -599,18 +695,29 @@
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
       >
-        <SquareTerminal size={12} aria-hidden="true" />
+        <TabOutline />
+        <SquareArrowRightExit size={12} aria-hidden="true" />
         <span>{$t("results.tab.output")}</span>
       </button>
+      {/if}
       <!-- Salida y Terminal quedan fijas; los resultados se desplazan entre
            ellas, como las pestañas de las consolas. -->
       <div
         class="result-tabs-scroll"
         use:tabScroll={`${selectedKey}|${tabs.length}`}
-        use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
+        use:reorderable={{
+          items: ".result-tab.closable",
+          onmove: (from, to) => onreordertabs(from, to),
+          detach: ondetach ? (item, event, grab) => !!item.dataset.resultKey && ondetach(item.dataset.resultKey, event, item, grab) : undefined,
+        }}
       >
       {#each tabs as tab (tab.key)}
-        <div class="result-tab closable" class:active={selectedKey === tab.key} animate:flip={{ duration: flipDuration(160) }}>
+        <div
+          class="result-tab closable"
+          class:active={selectedKey === tab.key}
+          data-result-key={tab.key}
+        >
+          <TabOutline />
           <button
             type="button"
             role="tab"
@@ -623,7 +730,8 @@
             {:else}
               <Table size={12} aria-hidden="true" />
             {/if}
-            <span>{tab.label}</span>
+            <!-- En una fila angosta el nombre se corta: entero al pasar. -->
+            <span use:tooltip={tab.label}>{tab.label}</span>
           </button>
           <button type="button" class="tab-close" aria-label={$t("results.tab.close", { name: tab.label })} onclick={() => onclosetab(tab.key)}>
             <X size={11} aria-hidden="true" />
@@ -632,26 +740,28 @@
       {/each}
       </div>
       {/if}
-      <!-- La terminal es de la ventana: su pestaña va aparte, a la derecha,
-           y abierta se une a ella (el fondo de la terminal). -->
-      <button
-        type="button"
-        role="tab"
-        class="result-tab terminal-tab"
-        class:active={terminalActive}
-        aria-selected={terminalActive}
-        tabindex="-1"
-        data-no-zone-focus
-        style:--tab-active={$editorPalette.background}
-        use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
-        onclick={() => terminalActive || onterminal()}
-      >
-        <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
-        <span>{$t("workspace.terminal.title")}</span>
-      </button>
+      {#if onterminal}
+        <!-- Solo el icono: la terminal es otro espacio, no una pestaña. -->
+        <button
+          type="button"
+          class="strip-terminal"
+          tabindex="-1"
+          data-no-zone-focus
+          aria-label={$t("workspace.terminal.title")}
+          use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
+          onclick={onterminal}
+        >
+          <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
+        </button>
+      {/if}
     </div>
   {/if}
-  <div class="pane-view" class:hidden={terminalActive}>
+  <!-- Los datos siguen montados debajo de la terminal (grids, scroll,
+       grupos): al volver estan tal como se dejaron. -->
+  <div class="pane-view">
+  {#if tiles}
+    {@render tiles()}
+  {:else}
   {#if hasActivity}
     {#if showingResult}
       <!-- Barra de herramientas del resultado: fila propia debajo de las
@@ -781,9 +891,9 @@
           column={result.columns[column]?.name ?? ""}
           values={filterValues}
           excluded={columnFilters.get(column) ?? new Set()}
-          matches={rows.length - (hiddenRows?.size ?? 0)}
+          matches={filterMatches}
           position={filterPopover.position}
-          onchange={(excluded) => (columnFilters = withColumnFilter(columnFilters, column, excluded))}
+          onchange={(excluded) => setColumnFilters(withColumnFilter(columnFilters, column, excluded))}
           onclose={closeColumnFilter}
         />
       {/if}
@@ -906,9 +1016,25 @@
         <!-- Segun el ancho de la barra (@container, abajo): las columnas y el
              tiempo se van cayendo; las filas quedan siempre. -->
         <span class="stats">
-          {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
-            count: $numberFormat.format(result.rows.length),
-          })}<span class="wide-only">
+          <!-- Con un filtro (por columna o "Filtrar filas"), cuantas se ven de
+               las de esta pagina. Filtradas en la base, en acento: el total y
+               las paginas ya son las de los filtros. -->
+          {#if hiddenRows && hiddenRows.size > 0}
+            <span class="filtered">{$t("results.stats.rowsFiltered", {
+              visible: $numberFormat.format(result.rows.length - hiddenRows.size),
+              count: $numberFormat.format(result.rows.length),
+            })}</span>
+          {:else if filteredOnServer && columnFilters.size > 0}
+            <span class="filtered" title={$t("results.stats.filteredOnServer")}
+              >{$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
+                count: $numberFormat.format(result.rows.length),
+              })}</span
+            >
+          {:else}
+            {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
+              count: $numberFormat.format(result.rows.length),
+            })}
+          {/if}<span class="wide-only">
             · {$t(result.columns.length === 1 ? "results.stats.columnsOne" : "results.stats.columnsOther", {
               count: result.columns.length,
             })}</span
@@ -967,14 +1093,21 @@
       </div>
     </div>
   {/if}
+  {/if}
   </div>
   {#if terminal}
-    <div class="terminal-view" class:hidden={!terminalActive}>{@render terminal()}</div>
+    <div class="terminal-view" class:hidden={!terminalActive}>
+      {@render terminal()}
+    </div>
   {/if}
 </div>
 
 <style>
+  /* Contenedor de sus barras: en un grupo angosto se compactan
+     (@container, abajo). */
   .result-pane {
+    position: relative;
+    container-type: inline-size;
     display: flex;
     min-height: 0;
     height: 100%;
@@ -1057,6 +1190,21 @@
     box-sizing: border-box;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    /* Si aun compacta no cabe, se desplaza: nunca pierde botones. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .result-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* En un grupo angosto, los grupos de botones se juntan. */
+  @container (max-width: 34rem) {
+    .result-toolbar {
+      gap: var(--space-1);
+      padding: 0 var(--space-1);
+    }
   }
 
   /* 4px entre botones: el hover de uno no toca al de al lado y la burbuja
@@ -1139,76 +1287,57 @@
 
 
 
-  .terminal-tab {
-    margin-left: auto;
-  }
-
   /* Scroll nativo sin barra; el desvanecido (tabScroll) indica que hay mas.
      Reserva a los lados el lugar de las curvas y del contorno que sigue por
      la linea base de la elegida (si no, contarian como desborde) y baja
      sobre esa linea para que la elegida la tape; los margenes negativos lo
      compensan. Las zonas reservadas no toman clics. */
-  .result-tabs-scroll {
-    --fade: 2rem;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    align-self: stretch;
-    align-items: flex-end;
-    gap: 2px;
-    /* 1px de aire arriba: el contorno de la pestaña elegida se dibuja 1px
-       por encima de ella (tabs.css) y overflow-y lo recortaba, despuntando
-       sus esquinas. */
-    margin: -1px calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
-    padding: 1px var(--tab-reach) 0 var(--tab-curve);
-    overflow-x: auto;
-    overflow-y: hidden;
-    pointer-events: none;
-    scrollbar-width: none;
-    scroll-padding-inline: calc(var(--tab-curve) + var(--fade)) calc(var(--tab-reach) + var(--fade));
+  /* El icono de la terminal, al final de la fila. */
+  .strip-terminal {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
   }
 
-  .result-tabs-scroll::-webkit-scrollbar {
-    display: none;
+  .strip-terminal:hover {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+    color: var(--text-primary);
   }
 
-  .result-tabs-scroll :global(.result-tab) {
-    margin-bottom: 0;
-    pointer-events: auto;
+  .strip-terminal:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
-  .result-tabs-scroll:global(.fade-end) {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--tab-reach) - var(--fade)), transparent calc(100% - var(--tab-reach)));
-  }
-
-  .result-tabs-scroll:global(.fade-start) {
-    mask-image: linear-gradient(to right, transparent var(--tab-curve), #000 calc(var(--tab-curve) + var(--fade)));
-  }
-
-  .result-tabs-scroll:global(.fade-start.fade-end) {
-    mask-image: linear-gradient(
-      to right,
-      transparent var(--tab-curve),
-      #000 calc(var(--tab-curve) + var(--fade)),
-      #000 calc(100% - var(--tab-reach) - var(--fade)),
-      transparent calc(100% - var(--tab-reach))
-    );
-  }
-
-  /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
-     montado (el grid conserva su estado). */
+  /* Lo del resultado sin caja propia. */
   .pane-view {
     display: contents;
   }
 
+  /* El espacio de la terminal: encima de todo el panel, con su propia fila. */
   .terminal-view {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
     display: flex;
     min-height: 0;
     flex: 1;
     flex-direction: column;
   }
 
-  .pane-view.hidden,
   .terminal-view.hidden {
     display: none;
   }
@@ -1322,6 +1451,10 @@
     .narrow-only {
       display: inline;
     }
+  }
+
+  .stats .filtered {
+    color: var(--accent);
   }
 
   .status-bar.minimal {

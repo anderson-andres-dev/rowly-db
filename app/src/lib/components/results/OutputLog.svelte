@@ -20,12 +20,27 @@
 
 <script lang="ts">
   import { tick, type Snippet } from "svelte";
+  import { Check, ChevronDown, Copy } from "@lucide/svelte";
   import { t } from "$lib/i18n";
+  import { tooltip } from "$lib/tooltip";
+  import { writeClipboard } from "$lib/clipboard";
+  import {
+    COPY_CHOICES,
+    formatTimestamp,
+    lastLines,
+    loadCopyAmount,
+    parseCustomAmount,
+    saveCopyAmount,
+    type CopyAmount,
+  } from "$lib/results/outputCopy";
 
   // Pestaña "Salida": el registro de la consola, al estilo del Output de
-  // DataGrip. Cada entrada con su marca de tiempo; las lineas siguientes de
-  // una sentencia o un mensaje largo quedan alineadas bajo el texto.
-  // `runningAction`: lo que acompaña a "Ejecutando…" (el boton de cancelar).
+  // DataGrip. Cada entrada en su fila, con su marca de tiempo; las lineas
+  // siguientes de una sentencia o un mensaje largo quedan alineadas bajo el
+  // texto. Todo se selecciona con el mouse como texto corrido (de una fila a
+  // otra, con la hora), y arriba a la derecha flota copiar las ultimas N
+  // lineas (results/outputCopy.ts). `runningAction`: lo que acompaña a
+  // "Ejecutando…" (el boton de cancelar).
   let {
     entries,
     running = false,
@@ -36,15 +51,6 @@
   // Sigue al final mientras el usuario este abajo; si subio a leer algo, no
   // se lo mueve.
   let stickToBottom = true;
-
-  function formatTimestamp(epochMs: number): string {
-    const date = new Date(epochMs);
-    const pad = (value: number, length = 2) => String(value).padStart(length, "0");
-    return (
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
-    );
-  }
 
   function onScroll() {
     const el = scroller;
@@ -59,38 +65,155 @@
       if (scroller) scroller.scrollTop = scroller.scrollHeight;
     });
   });
+
+  // --- Copiar ---------------------------------------------------------------
+  let amount = $state<CopyAmount>(loadCopyAmount());
+  let copied = $state(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | null = null;
+  let menuOpen = $state(false);
+  let custom = $state("");
+  let control = $state<HTMLElement>();
+
+  async function copy() {
+    const ok = await writeClipboard(lastLines(entries, amount));
+    if (!ok) return;
+    copied = true;
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = false), 1400);
+  }
+
+  function choose(next: CopyAmount) {
+    amount = next;
+    saveCopyAmount(next);
+    menuOpen = false;
+    void copy();
+  }
+
+  function applyCustom() {
+    const next = parseCustomAmount(custom);
+    if (next !== null) choose(next);
+  }
+
+  function toggleMenu() {
+    menuOpen = !menuOpen;
+    if (menuOpen) custom = typeof amount === "number" && !COPY_CHOICES.includes(amount) ? String(amount) : "";
+  }
+
+  function onWindowPointerDown(event: PointerEvent) {
+    if (menuOpen && control && !control.contains(event.target as Node)) menuOpen = false;
+  }
 </script>
 
-<div class="output-log" role="log" aria-live="polite" bind:this={scroller} onscroll={onScroll}>
-  {#if entries.length === 0 && !running}
-    <p class="empty">{$t("results.output.empty")}</p>
-  {/if}
-  {#each entries as entry (entry.id)}
-    <span class="time">[{formatTimestamp(entry.at)}]</span>
-    {#if entry.kind === "query"}
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <span class="text sql"
-        >{#if entry.schema}<span class="prompt">{entry.schema}&gt;</span> {/if}{@html highlightedSql(entry)}</span
-      >
-    {:else}
-      <span class="text" class:error={entry.kind === "error"}>{entry.text}</span>
+<svelte:window
+  onpointerdown={onWindowPointerDown}
+  onkeydown={(event) => {
+    if (menuOpen && event.key === "Escape") menuOpen = false;
+  }}
+/>
+
+<div class="output">
+  <div class="output-log selectable" role="log" aria-live="polite" bind:this={scroller} onscroll={onScroll}>
+    {#if entries.length === 0 && !running}
+      <p class="empty">{$t("results.output.empty")}</p>
     {/if}
-  {/each}
-  {#if running}
-    <span class="time"></span>
-    <span class="text running"
-      ><span class="dot"></span>{$t("results.output.running")}{#if runningAction}{@render runningAction()}{/if}</span
-    >
+    {#each entries as entry (entry.id)}
+      <div class="entry">
+        <span class="time">[{formatTimestamp(entry.at)}]</span>
+        {#if entry.kind === "query"}
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <span class="text sql"
+            >{#if entry.schema}<span class="prompt">{entry.schema}&gt;</span>{/if}{@html highlightedSql(entry)}</span
+          >
+        {:else}
+          <span class="text" class:error={entry.kind === "error"}>{entry.text}</span>
+        {/if}
+      </div>
+    {/each}
+    {#if running}
+      <div class="entry">
+        <span class="time"></span>
+        <span class="text running"
+          ><span class="dot"></span>{$t("results.output.running")}{#if runningAction}{@render runningAction()}{/if}</span
+        >
+      </div>
+    {/if}
+  </div>
+
+  {#if entries.length > 0}
+    <!-- Copiar: lo que copia es lo que se ve, con la hora. La flecha elige
+         cuantas lineas (se recuerda). -->
+    <div class="copy-float" class:open={menuOpen} bind:this={control}>
+      <button
+        type="button"
+        class="copy-main"
+        aria-label={copied ? $t("results.output.copied") : amount === "all" ? $t("results.output.copyAllTitle") : $t("results.output.copyTitle", { count: amount })}
+        use:tooltip={copied ? $t("results.output.copied") : amount === "all" ? $t("results.output.copyAllTitle") : $t("results.output.copyTitle", { count: amount })}
+        onclick={() => void copy()}
+      >
+        <!-- Solo el icono; cuantas lineas lo dice el tooltip. -->
+        {#if copied}
+          <Check size={13} aria-hidden="true" />
+        {:else}
+          <Copy size={13} aria-hidden="true" />
+        {/if}
+      </button>
+      <button
+        type="button"
+        class="copy-more"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={$t("results.output.copyMenu")}
+        use:tooltip={$t("results.output.copyMenu")}
+        onclick={toggleMenu}
+      >
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {#if menuOpen}
+        <div class="ui-menu copy-menu" role="menu" aria-label={$t("results.output.copyMenu")}>
+          {#each COPY_CHOICES as choice (choice)}
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={amount === choice}
+              class="ui-menu-item"
+              onclick={() => choose(choice)}
+            >
+              <span class="ui-menu-check">{#if amount === choice}<Check size={13} aria-hidden="true" />{/if}</span>
+              <span>{choice === "all" ? $t("results.output.allLines") : $t("results.output.lines", { count: choice })}</span>
+            </button>
+          {/each}
+          <form
+            class="custom"
+            onsubmit={(event) => {
+              event.preventDefault();
+              applyCustom();
+            }}
+          >
+            <span class="ui-menu-check">{#if typeof amount === "number" && !COPY_CHOICES.includes(amount)}<Check size={13} aria-hidden="true" />{/if}</span>
+            <input
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder={$t("results.output.customLines")}
+              aria-label={$t("results.output.customAria")}
+              bind:value={custom}
+            />
+            <button type="submit" class="apply" disabled={parseCustomAmount(custom) === null}>{$t("common.apply")}</button>
+          </form>
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
+  .output {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+  }
+
   .output-log {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-content: start;
-    column-gap: var(--space-3);
-    row-gap: 2px;
     min-height: 0;
     height: 100%;
     overflow: auto;
@@ -100,20 +223,139 @@
     font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
     font-size: 0.8125rem;
     line-height: 1.55;
+    cursor: text;
+  }
+
+  /* Una fila por entrada: seleccionar con el mouse va de una a otra como
+     texto corrido (la grilla de antes cortaba la seleccion por columnas). */
+  .entry {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: var(--space-3);
+    padding: 1px 0;
+  }
+
+  .output-log ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
   }
 
   .empty {
-    grid-column: 1 / -1;
     margin: 0;
     color: color-mix(in srgb, var(--text-secondary) 75%, transparent);
     font-family: var(--font-family);
+    cursor: default;
   }
 
   .time {
     color: color-mix(in srgb, var(--text-secondary) 80%, transparent);
     white-space: nowrap;
+  }
+
+  /* Copiar, flotando arriba a la derecha (lejos de la barra de scroll):
+     discreto hasta que se lo usa. */
+  .copy-float {
+    position: absolute;
+    top: var(--space-2);
+    right: calc(var(--space-3) + 6px);
+    z-index: 3;
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-elevated);
+    font-family: var(--font-family);
+    font-size: 0.75rem;
+    opacity: 0.82;
+    transition: opacity var(--duration-fast) ease;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  .copy-float:hover,
+  .copy-float:focus-within,
+  .copy-float.open {
+    opacity: 1;
+  }
+
+  .copy-main,
+  .copy-more {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 1.625rem;
+    padding: 0 var(--space-2);
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .copy-main {
+    padding: 0 var(--space-2);
+  }
+
+  .copy-float :global(.lucide-check) {
+    color: var(--accent);
+  }
+
+  .copy-more {
+    padding: 0 var(--space-1);
+    border-left: 1px solid var(--border);
+  }
+
+  .copy-main:hover,
+  .copy-more:hover,
+  .copy-float.open .copy-more {
+    background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+    color: var(--text-primary);
+  }
+
+  .copy-main:focus-visible,
+  .copy-more:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .copy-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 14rem;
+  }
+
+  .custom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .custom input {
+    width: 0;
+    min-width: 0;
+    flex: 1;
+    padding: 2px var(--space-2);
+    border: 1px solid var(--control-border, var(--border));
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: var(--surface);
+    color: var(--text-primary);
+    font: inherit;
+  }
+
+  .custom .apply {
+    padding: 2px var(--space-2);
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: var(--accent);
+    color: var(--text-on-accent, #fff);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .custom .apply:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   .text {

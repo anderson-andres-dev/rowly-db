@@ -99,7 +99,7 @@
     sort?: SortKey[];
     sortable?: boolean;
     onsort?: (column: number, additive: boolean) => void;
-    // Filtro local por columna (results/columnFilters.ts, lo maneja ResultPane): las
+    // Filtro por columna (results/columnFilters.ts, lo maneja ResultPane): las
     // columnas con valores desmarcados y el clic en el embudo, con donde
     // abrir el filtro.
     filteredColumns?: ReadonlySet<number> | null;
@@ -622,7 +622,7 @@
   const HEADER_ICON_WIDTH = 12 + 4;
   // Boton de orden del encabezado (icono + numero de prioridad + margen).
   const HEADER_SORT_WIDTH = 26;
-  // El embudo del filtro local (siempre esta).
+  // El embudo del filtro por columna (siempre esta).
   const HEADER_FILTER_WIDTH = 20;
 
   let textMeasureContext: CanvasRenderingContext2D | null = null;

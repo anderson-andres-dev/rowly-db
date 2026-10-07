@@ -3,7 +3,8 @@
 // desvanecido (clases fade-start / fade-end) en el borde que tiene mas, la
 // rueda vertical la mueve en horizontal y la pestaña elegida (.active) se
 // pone a la vista (al elegirla, al cambiar la cantidad y al cambiar el
-// ancho; tras la entrada, 150 ms, para medir el ancho final).
+// ancho. La posicion se corrige en el siguiente fotograma, sin esperar una
+// animacion que pueda quedar por detras del puntero al redimensionar.
 export function tabScroll(node: HTMLElement, _changed: unknown) {
   function update() {
     // Sin desborde (p. ej. tras cerrar pestañas), vuelve al principio aunque
@@ -19,20 +20,40 @@ export function tabScroll(node: HTMLElement, _changed: unknown) {
     node.scrollLeft += event.deltaY;
   }
 
-  let timer = 0;
+  let frame = 0;
   function reveal() {
-    clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      node.querySelector(".active")?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      // Solo la fila: scrollIntoView desplazaba tambien a los de arriba,
+      // aunque recorten (un mosaico angosto quedaba corrido y dejaba una
+      // franja vacia).
+      const tab = node.querySelector<HTMLElement>(".active:not([data-tab-closing])");
+      if (tab) {
+        const box = node.getBoundingClientRect();
+        const rect = tab.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        // En un grupo muy angosto, el margen visual no puede ocupar mas que
+        // una pequena parte de la fila: la pestaña elegida tiene prioridad.
+        const maxPad = node.clientWidth / 4;
+        const pad = Math.min(parseFloat(style.scrollPaddingInlineStart) || 0, maxPad);
+        const padEnd = Math.min(parseFloat(style.scrollPaddingInlineEnd) || 0, maxPad);
+        const previous = tab.previousElementSibling?.getBoundingClientRect();
+        const previousSliver = previous && previous.left < box.left && previous.right > box.left && previous.right - box.left < Math.min(32, rect.width / 2);
+        if (rect.left < box.left + pad || (previousSliver && rect.left > box.left + pad)) {
+          node.scrollLeft += rect.left - box.left - pad;
+        }
+        else if (rect.right > box.right - padEnd) node.scrollLeft += rect.right - box.right + padEnd;
+      }
       update();
-    }, 160);
+    });
   }
 
   // Al cambiar de ancho, la elegida vuelve a quedar a la vista.
   const observer = new ResizeObserver(reveal);
   observer.observe(node);
   // Al quitar o agregar pestañas, se reacomoda al instante.
-  const children = new MutationObserver(update);
+  const children = new MutationObserver(reveal);
   children.observe(node, { childList: true });
   node.addEventListener("scroll", update, { passive: true });
   // No pasivo a proposito: preventDefault evita que la rueda desplace la
@@ -43,7 +64,7 @@ export function tabScroll(node: HTMLElement, _changed: unknown) {
   return {
     update: reveal,
     destroy() {
-      clearTimeout(timer);
+      cancelAnimationFrame(frame);
       observer.disconnect();
       children.disconnect();
       node.removeEventListener("scroll", update);

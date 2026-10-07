@@ -5,6 +5,7 @@ import editor from "./editor";
 import explorer from "./explorer";
 import grid from "./grid";
 import history from "./history";
+import mosaic from "./mosaic";
 import results from "./results";
 import settings from "./settings";
 import shell from "./shell";
@@ -21,6 +22,7 @@ export const messages = {
   explorer,
   grid,
   history,
+  mosaic,
   results,
   settings,
   shell,

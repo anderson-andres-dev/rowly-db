@@ -8,6 +8,7 @@ use khipu_engine::Dialect;
 use khipu_engine::execution_guard::{
     DestructiveClassification, DestructiveStatement, GuardOptions, classify_sql_with,
 };
+use khipu_engine::pagination::ColumnFilter;
 use serde::Serialize;
 use std::sync::Arc;
 /// Page size when the frontend doesn't ask for one.
@@ -27,6 +28,11 @@ pub(crate) struct PageRequest {
     /// consulta).
     #[serde(default)]
     sort: Vec<khipu_engine::pagination::SortKey>,
+    /// Filtros del embudo de las columnas (vacio = sin filtro). Se aplican
+    /// antes de ordenar y paginar; si no se pueden escribir, `PageInfo`
+    /// lo dice y la UI filtra lo cargado.
+    #[serde(default)]
+    filters: Vec<ColumnFilter>,
 }
 
 /// How the returned rows map onto the full result. `pageable: false` means
@@ -41,6 +47,9 @@ pub(crate) struct PageInfo {
     /// La sentencia se puede ordenar desde el grid (se puede reescribir su
     /// ORDER BY). Si no, los encabezados no ofrecen ordenar.
     sortable: bool,
+    /// Los filtros pedidos se aplicaron en la base: las filas, la pagina y
+    /// el total ya son los filtrados.
+    filtered: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -162,11 +171,17 @@ pub async fn execute_query(
     // Se piden page_size + 1 filas: si llega la extra, hay pagina siguiente
     // (el driver la descarta y marca `truncated`).
     //
-    // Primero el orden (sobre la consulta entera) y despues la pagina.
+    // Primero el filtro, despues el orden (sobre todas las filas que pasan)
+    // y por ultimo la pagina.
     let sort = page
         .as_ref()
         .map(|page| page.sort.clone())
         .unwrap_or_default();
+    let filtered_sql = page.as_ref().and_then(|page| {
+        khipu_engine::pagination::filter_sql(sql, dialect, guard_options, &page.filters)
+    });
+    let filtered = filtered_sql.is_some();
+    let source_sql = filtered_sql.as_deref().unwrap_or(sql);
     let sortable = khipu_engine::pagination::sort_sql(
         sql,
         dialect,
@@ -177,8 +192,8 @@ pub async fn execute_query(
         }],
     )
     .is_some();
-    let sorted_sql = khipu_engine::pagination::sort_sql(sql, dialect, guard_options, &sort);
-    let base_sql = sorted_sql.as_deref().unwrap_or(sql);
+    let sorted_sql = khipu_engine::pagination::sort_sql(source_sql, dialect, guard_options, &sort);
+    let base_sql = sorted_sql.as_deref().unwrap_or(source_sql);
     let paged_sql = khipu_engine::pagination::paginate_sql(
         base_sql,
         dialect,
@@ -226,6 +241,7 @@ pub async fn execute_query(
         page_size,
         pageable,
         sortable,
+        filtered,
     });
     let change = follow_console(window.label(), &state, &connector, dialect, sql).await;
     Ok(ExecuteQueryResponse::Completed {
@@ -404,10 +420,12 @@ pub async fn cancel_query(
 }
 
 /// Total rows `sql` would return, via `SELECT COUNT(*) FROM (...)`. Only
-/// for statements `execute_query` can paginate.
+/// for statements `execute_query` can paginate. With `filters`, the rows
+/// that pass them (the same rewrite `execute_query` pages).
 #[tauri::command]
 pub async fn count_query_rows(
     sql: String,
+    filters: Option<Vec<ColumnFilter>>,
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<u64, Message> {
@@ -423,9 +441,26 @@ pub async fn count_query_rows(
         )?
         .then_some(())
         .ok_or_else(|| Message::key("count.unsupported"))?;
-        let count_sql =
-            khipu_engine::pagination::count_sql(sql, active.dialect, active.guard_options())
-                .ok_or_else(|| Message::key("count.unsupported"))?;
+        let filters = filters.as_deref().unwrap_or_default();
+        let filtered = if filters.iter().any(|filter| !filter.excluded.is_empty()) {
+            Some(
+                khipu_engine::pagination::filter_sql(
+                    sql,
+                    active.dialect,
+                    active.guard_options(),
+                    filters,
+                )
+                .ok_or_else(|| Message::key("count.unsupported"))?,
+            )
+        } else {
+            None
+        };
+        let count_sql = khipu_engine::pagination::count_sql(
+            filtered.as_deref().unwrap_or(sql),
+            active.dialect,
+            active.guard_options(),
+        )
+        .ok_or_else(|| Message::key("count.unsupported"))?;
         Ok((Arc::clone(&active.connector), count_sql))
     })?;
     match connector
@@ -439,6 +474,92 @@ pub async fn count_query_rows(
             .ok_or_else(|| Message::key("count.noTotal")),
         QueryExecutionResult::Error { message, .. } => Err(message),
         QueryExecutionResult::Command { .. } => Err(Message::key("count.noTotal")),
+    }
+}
+
+/// Tope de valores distintos que muestra el embudo de una columna (los mas
+/// frecuentes): el resto se acota buscando.
+const MAX_COLUMN_VALUES: usize = 5_000;
+
+/// Un valor distinto de la columna, con cuantas filas quedan con los
+/// filtros de las otras columnas y cuantas lo tienen en total.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ColumnValue {
+    value: Option<String>,
+    remaining: u64,
+    rows: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ColumnValues {
+    values: Vec<ColumnValue>,
+    /// Hay mas valores que los que vinieron.
+    truncated: bool,
+}
+
+/// Los valores del embudo de `column` en todo el resultado de `sql`, no
+/// solo en la pagina cargada (`pagination::column_values_sql`).
+#[tauri::command]
+pub async fn column_values(
+    sql: String,
+    filters: Vec<ColumnFilter>,
+    column: ColumnFilter,
+    window: tauri::Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<ColumnValues, Message> {
+    let sql = sql.trim();
+    let (connector, values_sql) = with_active_connection(&window, &state, |active| {
+        read_only(
+            sql,
+            active.dialect,
+            active.production,
+            active.guard_options(),
+        )?
+        .then_some(())
+        .ok_or_else(|| Message::key("filter.unsupported"))?;
+        let values_sql = khipu_engine::pagination::column_values_sql(
+            sql,
+            active.dialect,
+            active.guard_options(),
+            &filters,
+            &column,
+            MAX_COLUMN_VALUES as u64 + 1,
+        )
+        .ok_or_else(|| Message::key("filter.unsupported"))?;
+        Ok((Arc::clone(&active.connector), values_sql))
+    })?;
+    let count = |value: Option<&Option<String>>| {
+        value
+            .and_then(|value| value.as_deref())
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0)
+    };
+    match connector
+        .execute_query(
+            &values_sql,
+            QueryExecutionOptions {
+                max_rows: MAX_COLUMN_VALUES,
+            },
+        )
+        .await
+    {
+        QueryExecutionResult::ResultSet {
+            rows, truncated, ..
+        } => Ok(ColumnValues {
+            values: rows
+                .iter()
+                .map(|row| ColumnValue {
+                    value: row.first().cloned().flatten(),
+                    remaining: count(row.get(1)),
+                    rows: count(row.get(2)),
+                })
+                .collect(),
+            truncated,
+        }),
+        QueryExecutionResult::Error { message, .. } => Err(message),
+        QueryExecutionResult::Command { .. } => Err(Message::key("filter.unsupported")),
     }
 }
 
@@ -560,6 +681,7 @@ mod tests {
                 page_size: 500,
                 pageable: true,
                 sortable: false,
+                filtered: false,
             }),
             context: None,
             session_reset: true,
@@ -568,9 +690,28 @@ mod tests {
         assert_eq!(value["type"], "completed");
         assert_eq!(
             value["page"],
-            serde_json::json!({ "offset": 0, "pageSize": 500, "pageable": true, "sortable": false })
+            serde_json::json!({ "offset": 0, "pageSize": 500, "pageable": true, "sortable": false, "filtered": false })
         );
         assert_eq!(value["sessionReset"], true);
+        // La pagina que pide el frontend, con los filtros del embudo (NULL
+        // como null) y sin ellos.
+        let request: PageRequest = serde_json::from_value(serde_json::json!({
+            "offset": 0,
+            "pageSize": 100,
+            "filters": [{ "name": "estado", "dataType": "VARCHAR", "excluded": ["baja", null] }]
+        }))
+        .unwrap();
+        assert_eq!(
+            request.filters,
+            [ColumnFilter {
+                name: "estado".into(),
+                data_type: "VARCHAR".into(),
+                excluded: vec![Some("baja".into()), None],
+            }]
+        );
+        let request: PageRequest =
+            serde_json::from_value(serde_json::json!({ "offset": 0, "pageSize": 100 })).unwrap();
+        assert!(request.filters.is_empty());
         let without_page = ExecuteQueryResponse::completed(QueryExecutionResult::Command {
             affected_rows: 0,
             execution_time_ms: 0,

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { NULL_KEY, columnValueCounts, rowsHiddenByFilters, valueKey, withColumnFilter } from "./columnFilters";
+import {
+  NULL_KEY,
+  canFilterOnServer,
+  columnValueCounts,
+  filterRequests,
+  rowsHiddenByFilters,
+  valueKey,
+  withColumnFilter,
+} from "./columnFilters";
 
 const ROWS = [
   ["Ana", "Biometrico_Data"],
@@ -86,5 +94,29 @@ describe("withColumnFilter", () => {
     const filters = withColumnFilter(new Map(), 2, new Set(["a"]));
     expect(filters.get(2)).toEqual(new Set(["a"]));
     expect(withColumnFilter(filters, 2, new Set()).has(2)).toBe(false);
+  });
+});
+
+describe("filtrar en la base", () => {
+  const columns = [
+    { name: "id", type: "INT" },
+    { name: "Estado", type: "VARCHAR" },
+  ];
+  const page = { offset: 0, pageSize: 100, pageable: true };
+
+  it("solo si la consulta se pagina ahi y ninguna columna repite su nombre", () => {
+    expect(canFilterOnServer(columns, page)).toBe(true);
+    expect(canFilterOnServer(columns, { ...page, pageable: false })).toBe(false);
+    expect(canFilterOnServer(columns, null)).toBe(false);
+    expect(canFilterOnServer([...columns, { name: "ESTADO", type: "TEXT" }], page)).toBe(false);
+  });
+
+  it("cada filtro por el nombre y el tipo de su columna, con el NULL como null", () => {
+    const filters = new Map([
+      [1, new Set(["baja", NULL_KEY])],
+      [0, new Set<string>()],
+      [7, new Set(["x"])],
+    ]);
+    expect(filterRequests(columns, filters)).toEqual([{ name: "Estado", dataType: "VARCHAR", excluded: ["baja", null] }]);
   });
 });

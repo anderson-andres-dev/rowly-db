@@ -87,12 +87,12 @@
 >
   <div class="head">
     <CircleX size={14} aria-hidden="true" />
-    <span class="title">{help ? $t(`editor.help.${help}.title` as MessageKey) : diagnostic.message}</span>
+    <span class="title selectable">{help ? $t(`editor.help.${help}.title` as MessageKey) : diagnostic.message}</span>
     {#if diagnostic.code}<span class="code">{diagnostic.code}</span>{/if}
   </div>
 
   {#if help}
-    <p class="description">{$t(`editor.help.${help}.description` as MessageKey)}</p>
+    <p class="description selectable">{$t(`editor.help.${help}.description` as MessageKey)}</p>
     <div class="detail">
       <div class="detail-head">
         <span>{$t("editor.diagnostics.serverDetail")}</span>

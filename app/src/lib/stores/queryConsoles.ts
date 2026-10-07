@@ -1,3 +1,4 @@
+import type { ColumnFilters } from "$lib/results/columnFilters";
 import { isFilterOperator, type FilterCondition } from "$lib/results/filterBuilder";
 import { DEFAULT_TEXT_ENCODING, isTextEncoding, type TextEncoding } from "$lib/textEncoding";
 import { browser } from "$app/environment";
@@ -94,6 +95,14 @@ export interface QueryExecutionState {
   // Orden elegido en los encabezados (vacio = el de la consulta). Se
   // mantiene al paginar y recargar; una ejecucion nueva lo vacia.
   sort: SortKey[];
+  // Filtros del embudo de las columnas (results/columnFilters.ts). Como el
+  // orden: se mantienen al paginar, recargar o ir a otra pestaña y volver;
+  // una ejecucion nueva los vacia. Se aplican en la base si `page.filtered`;
+  // si no, sobre las filas cargadas.
+  columnFilters: ColumnFilters;
+  // La base no pudo aplicar un filtro: hasta la proxima ejecucion se
+  // filtran las filas cargadas.
+  localFilters: boolean;
   pendingConfirmation: PendingQueryConfirmation | null;
 }
 
@@ -106,6 +115,8 @@ const EMPTY_EXECUTION_STATE: QueryExecutionState = {
   totalRows: null,
   counting: false,
   sort: [],
+  columnFilters: new Map(),
+  localFilters: false,
   pendingConfirmation: null,
 };
 
@@ -572,6 +583,17 @@ export function clearQueryResult(consoleId: string): void {
 
 export function setQuerySort(key: string, sort: SortKey[]): void {
   queryConsoles.update((state) => withExecution(state, key, { sort }));
+}
+
+// Sin `localFilters`, quedan como estaban (vaciar los filtros los vuelve a
+// pedir a la base).
+export function setQueryColumnFilters(key: string, columnFilters: ColumnFilters, localFilters?: boolean): void {
+  queryConsoles.update((state) =>
+    withExecution(state, key, {
+      columnFilters,
+      localFilters: localFilters ?? (columnFilters.size === 0 ? false : executionForConsole(state, key).localFilters),
+    }),
+  );
 }
 
 export function setQueryCounting(consoleId: string, counting: boolean): void {

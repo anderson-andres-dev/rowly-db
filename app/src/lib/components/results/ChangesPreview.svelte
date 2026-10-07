@@ -175,7 +175,7 @@
             class:failed={error !== null && line.statement !== null && line.statement === error.statementIndex}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            <span class="line-code">{@html line.html || " "}</span>
+            <span class="line-code selectable">{@html line.html || " "}</span>
           </li>
         {/each}
       </ol>

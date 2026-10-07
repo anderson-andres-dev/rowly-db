@@ -78,80 +78,84 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div class="find-bar" role="search" onkeydown={onKeydown}>
-  <div class="field" class:invalid={error !== null}>
-    <Search size={14} class="field-icon" aria-hidden="true" />
-    <input
-      bind:this={input}
-      bind:value={query}
-      placeholder={$t("results.find.label")}
-      aria-label={$t("results.find.label")}
-      spellcheck="false"
-      autocomplete="off"
-    />
-    {#if query}
-      <button type="button" class="clear" aria-label={$t("results.find.clear")} onclick={() => ((query = ""), void focus())}>
-        <X size={12} aria-hidden="true" />
+  <div class="find-main">
+    <div class="field" class:invalid={error !== null}>
+      <Search size={14} class="field-icon" aria-hidden="true" />
+      <input
+        bind:this={input}
+        bind:value={query}
+        placeholder={$t("results.find.label")}
+        aria-label={$t("results.find.label")}
+        spellcheck="false"
+        autocomplete="off"
+      />
+      {#if query}
+        <button type="button" class="clear" aria-label={$t("results.find.clear")} onclick={() => ((query = ""), void focus())}>
+          <X size={12} aria-hidden="true" />
+        </button>
+      {/if}
+    </div>
+
+    <span class="status" class:error={error !== null} use:tooltip={error ?? (status || undefined)} aria-live="polite">{status}</span>
+  </div>
+
+  <div class="find-controls">
+    <div class="toggles" role="group" aria-label={$t("results.find.options")}>
+      <button
+        type="button"
+        class="toggle"
+        class:on={options.matchCase}
+        aria-pressed={options.matchCase}
+        use:tooltip={$t("results.find.matchCase")}
+        onclick={() => toggle("matchCase")}>Cc</button
+      >
+      <button
+        type="button"
+        class="toggle mono"
+        class:on={options.regex}
+        aria-pressed={options.regex}
+        use:tooltip={$t("results.find.regex")}
+        onclick={() => toggle("regex")}>.*</button
+      >
+      <button
+        type="button"
+        class="toggle"
+        class:on={options.wholeWord}
+        aria-pressed={options.wholeWord}
+        use:tooltip={$t("results.find.wholeWord")}
+        onclick={() => toggle("wholeWord")}>W</button
+      >
+    </div>
+
+    <div class="nav">
+      <button
+        type="button"
+        class="icon"
+        aria-label={$t("results.find.previousLabel")}
+        use:tooltip={$t("results.find.previousTitle")}
+        disabled={count === 0}
+        onclick={onprevious}
+      >
+        <ArrowUp size={14} aria-hidden="true" />
       </button>
-    {/if}
-  </div>
+      <button
+        type="button"
+        class="icon"
+        aria-label={$t("results.find.nextLabel")}
+        use:tooltip={$t("results.find.nextTitle")}
+        disabled={count === 0}
+        onclick={onnext}
+      >
+        <ArrowDown size={14} aria-hidden="true" />
+      </button>
+    </div>
 
-  <div class="toggles" role="group" aria-label={$t("results.find.options")}>
-    <button
-      type="button"
-      class="toggle"
-      class:on={options.matchCase}
-      aria-pressed={options.matchCase}
-      use:tooltip={$t("results.find.matchCase")}
-      onclick={() => toggle("matchCase")}>Cc</button
-    >
-    <button
-      type="button"
-      class="toggle mono"
-      class:on={options.regex}
-      aria-pressed={options.regex}
-      use:tooltip={$t("results.find.regex")}
-      onclick={() => toggle("regex")}>.*</button
-    >
-    <button
-      type="button"
-      class="toggle"
-      class:on={options.wholeWord}
-      aria-pressed={options.wholeWord}
-      use:tooltip={$t("results.find.wholeWord")}
-      onclick={() => toggle("wholeWord")}>W</button
-    >
-  </div>
+    <span class="filter"><Checkbox bind:checked={filterRows} label={$t("results.find.filterRows")} /></span>
 
-  <span class="status" class:error={error !== null} use:tooltip={error ?? undefined} aria-live="polite">{status}</span>
-
-  <div class="nav">
-    <button
-      type="button"
-      class="icon"
-      aria-label={$t("results.find.previousLabel")}
-      use:tooltip={$t("results.find.previousTitle")}
-      disabled={count === 0}
-      onclick={onprevious}
-    >
-      <ArrowUp size={14} aria-hidden="true" />
-    </button>
-    <button
-      type="button"
-      class="icon"
-      aria-label={$t("results.find.nextLabel")}
-      use:tooltip={$t("results.find.nextTitle")}
-      disabled={count === 0}
-      onclick={onnext}
-    >
-      <ArrowDown size={14} aria-hidden="true" />
+    <button type="button" class="icon close" aria-label={$t("results.find.closeLabel")} use:tooltip={$t("results.find.closeTitle")} onclick={onclose}>
+      <X size={14} aria-hidden="true" />
     </button>
   </div>
-
-  <span class="filter"><Checkbox bind:checked={filterRows} label={$t("results.find.filterRows")} /></span>
-
-  <button type="button" class="icon close" aria-label={$t("results.find.closeLabel")} use:tooltip={$t("results.find.closeTitle")} onclick={onclose}>
-    <X size={14} aria-hidden="true" />
-  </button>
 </div>
 
 <style>
@@ -169,6 +173,13 @@
     animation: find-in 140ms ease-out;
   }
 
+  /* En ancho normal, los grupos participan en la misma fila. En un mosaico
+     estrecho se convierten en dos filas con tamaños independientes. */
+  .find-main,
+  .find-controls {
+    display: contents;
+  }
+
   @keyframes find-in {
     from {
       opacity: 0;
@@ -183,6 +194,7 @@
   }
 
   .field {
+    order: 0;
     display: flex;
     width: min(22rem, 40%);
     min-width: 10rem;
@@ -268,6 +280,14 @@
     gap: 2px;
   }
 
+  .toggles {
+    order: 1;
+  }
+
+  .nav {
+    order: 3;
+  }
+
   .toggle {
     min-width: 1.75rem;
     height: 1.625rem;
@@ -287,6 +307,7 @@
   }
 
   .status {
+    order: 2;
     min-width: 6.5rem;
     color: var(--text-secondary);
     font-size: 0.75rem;
@@ -299,12 +320,66 @@
   }
 
   .filter {
+    order: 4;
     display: inline-flex;
     white-space: nowrap;
   }
 
   .close {
+    order: 5;
     margin-left: auto;
+  }
+
+  @container (max-width: 42rem) {
+    .find-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-1);
+      padding-block: var(--space-1);
+    }
+
+    .find-main,
+    .find-controls {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .field {
+      width: auto;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .status {
+      min-width: 0;
+      width: 5rem;
+      flex-shrink: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .find-controls .toggle {
+      min-width: 1.5rem;
+      padding-inline: 2px;
+    }
+
+    .find-controls .icon {
+      width: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .filter {
+      min-width: 0;
+      flex: 0 1 auto;
+      white-space: normal;
+    }
+
+    .filter :global(.ui-checkbox) {
+      text-align: left;
+      white-space: normal;
+    }
   }
 
   .clear:focus-visible,

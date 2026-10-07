@@ -278,10 +278,12 @@
 {/if}
 
 <style>
+  /* En un mosaico angosto el rango ("1-500") no se parte en dos lineas. */
   .pager {
     display: flex;
     align-items: center;
     gap: 2px;
+    white-space: nowrap;
   }
 
   .nav-button,

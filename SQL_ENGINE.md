@@ -487,13 +487,13 @@ Generated from `tests/sql/coverage.json`. *Covered*: every applicable engine has
 | A7 | covered | — | unit: `FIXTURES` (contract.test.ts)<br>unit: `ubicar un error de ejecucion` (diagnostics.test.ts) |
 | A8 | partial | — | unit: `select_into_keeps_positions_with_multibyte_characters` (diagnostics.rs) |
 | A9 | partial | — | unit: `removed_syntax_is_marked_from_its_line_on_and_never_before` (lines.rs)<br>lines: `every_version_line_is_told_apart_from_the_previous_one` (version_lines.rs) |
-| G1 | covered | — | unit: `mod contract` (lib.rs)<br>unit: `perfil` (contract.test.ts) |
+| G1 | covered | — | unit: `mod contract` (lib.rs)<br>unit: `perfil` (contract.test.ts)<br>real: `the_funnel_filters_exactly_what_the_grid_shows` (filters.rs) |
 | G2 | covered | — | real: `completion_calls_run_on_the_real_servers` (generated.rs)<br>real: `CALL escrito por el autocompletado` (catalogCompletions.server.test.ts) |
 | G3 | covered | — | unit: `catalogo SQL` (catalogCompletions.test.ts) |
 | G4 | covered | — | unit: `input.complete` (catalogCompletions.test.ts) |
 | G5 | covered | — | unit: `motor` (contract.test.ts)<br>unit: `catalogo SQL` (catalogCompletions.test.ts) |
 | G6 | covered | — | unit: `cada motor cita las palabras que reserva cualquiera de sus lineas` (contract.test.ts)<br>unit: `every_reserved_word_of_a_line_is_one_its_fixtures_prove` (lines.rs) |
-| G7 | partial | postgres | unit: `fn ` (editing.rs)<br>unit: `fn ` (export.rs)<br>real: `grid_literals_follow_the_session_mode` (contract.rs) |
+| G7 | partial | postgres | unit: `fn ` (editing.rs)<br>unit: `fn ` (export.rs)<br>real: `grid_literals_follow_the_session_mode` (contract.rs)<br>real: `the_funnel_filters_exactly_what_the_grid_shows` (filters.rs) |
 | D1 | covered | — | real: `connects_and_lists_schemas_and_tables` (contract.rs)<br>real: `a_result_set_keeps_values_and_nulls` (contract.rs)<br>real: `truncating_leaves_the_next_queries_complete` (contract.rs)<br>real: `ddl_returns_a_command` (contract.rs)<br>real: `a_server_error_keeps_its_code_and_position` (contract.rs)<br>real: `the_session_keeps_the_server_defaults` (contract.rs) |
 | D2 | covered | — | real: `call_and_show_create_return_their_rows` (analysis.rs) |
 | D3 | covered | — | real: `introspection_classifies_every_object_kind` (contract.rs) |

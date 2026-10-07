@@ -52,8 +52,20 @@ pub struct EngineDefinition {
     pub select_into_variable_lists: bool,
     /// La consulta que dice si la sesion usa NO_BACKSLASH_ESCAPES.
     pub sql_mode_query: Option<&'static str>,
+    /// Como se compara una columna por el texto que muestra el grid, byte a
+    /// byte (el embudo de cada columna, pagination::filter_sql).
+    pub exact_text: ExactText,
     /// Sus lineas de version, como datos: `support/<motor>.json` (lines.rs).
     pub lines: &'static str,
+}
+
+/// La expresion con el texto de una columna tal como lo lee el driver,
+/// comparable byte a byte: `{}` es la columna. Los tipos de `as_is` se
+/// comparan tal cual (su texto convertido no es el que muestra el grid).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExactText {
+    pub template: &'static str,
+    pub as_is: &'static [&'static str],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
