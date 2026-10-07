@@ -75,6 +75,8 @@ export function liftGhost(source: HTMLElement, grab: Point, at: Point): Ghost {
   const stopDragging = beginDragging();
 
   let done = false;
+  // Al soltar, la ventana queda libre enseguida (seleccionar, hacer clic);
+  // la copia termina su animacion y se va.
   function finish(after: number) {
     done = true;
     stopDragging();
@@ -91,7 +93,8 @@ export function liftGhost(source: HTMLElement, grab: Point, at: Point): Ghost {
     settle(landing) {
       if (done) return;
       if (prefersReducedMotion()) return finish(0);
-      done = true;
+      // Lo que dura el vuelo: cuando aterriza se quita.
+      finish(LAND_MS + 40);
       // Dos cuadros: el destino ya se dibujo en su lugar nuevo.
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
@@ -103,13 +106,9 @@ export function liftGhost(source: HTMLElement, grab: Point, at: Point): Ghost {
             ghost.style.transform = `translate(${box.left}px, ${box.top}px)`;
             ghost.style.width = `${box.width}px`;
             setTimeout(() => (target.style.opacity = ""), LAND_MS);
-            done = false;
-            finish(LAND_MS);
           } else {
             ghost.style.transition = `opacity ${SETTLE_MS}ms ease`;
             ghost.style.opacity = "0";
-            done = false;
-            finish(SETTLE_MS);
           }
         }),
       );
