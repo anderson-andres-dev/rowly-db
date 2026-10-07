@@ -600,6 +600,7 @@
   {#if !stripless && (!tableView || terminal)}
     <div
       class="result-tabs tab-strip"
+      class:tiled={visibleKeys.length > 1}
       role="tablist"
       aria-label={$t("results.tabs")}
       bind:this={tabStrip}

@@ -1402,7 +1402,7 @@
           bind:this={resultMosaicArea}
           tree={resultMosaic}
           focused={selectedTab}
-          minSize={{ row: 260, column: 120 }}
+          minSize={{ row: 380, column: 150 }}
           untileLabel={$t("mosaic.tile.untile")}
           untileTooltip={$t("mosaic.tile.untileWithKeys", { keys: shortcutKeys("untile-console") })}
           label={resultLabel}

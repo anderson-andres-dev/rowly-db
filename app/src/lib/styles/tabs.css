@@ -214,3 +214,51 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* Con el resultado en mosaico la fila deja de ser carpeta: la elegida no se
+   une con lo de abajo (ahi hay varios mosaicos, cada uno con su barra, y
+   parecia que una pestaña contenia a la otra). Planas, como las consolas:
+   la enfocada con un relleno tenue y su icono en acento, las otras que se
+   ven con texto pleno. */
+.tab-strip.tiled .result-tab.active,
+.tab-strip.tiled .result-tab:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+
+.tab-strip.tiled .result-tab.active {
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+/* Centradas en la misma altura que la fila de carpeta (6px de aire arriba
+   + 2rem): partir o juntar no mueve nada de lo de abajo. */
+.tab-strip.tiled {
+  align-items: center;
+  height: calc(2rem + 6px);
+  padding-top: 0;
+}
+
+.tab-strip.tiled .result-tabs-scroll {
+  align-items: center;
+}
+
+.tab-strip.tiled .result-tab {
+  margin-bottom: 0;
+  min-height: 1.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.tab-strip.tiled .result-tab:hover::before,
+.tab-strip.tiled .result-tab.active::before,
+.tab-strip.tiled .result-tab.active::after {
+  content: none;
+}
+
+/* Con el teclado, en vez del contorno de carpeta, el anillo de siempre. */
+.tab-strip.tiled .result-tab:focus-visible::before,
+.tab-strip.tiled .result-tab:has(> .tab-select:focus-visible)::before {
+  inset: 0;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+  -webkit-mask-image: none;
+  mask-image: none;
+}

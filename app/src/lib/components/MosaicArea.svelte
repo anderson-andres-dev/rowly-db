@@ -249,7 +249,6 @@
         class:edge-left={box.x > 0}
         class:edge-top={box.y > 0}
         data-tile-id={id}
-        data-zone-piece={tiled ? "" : undefined}
         role={tiled ? "group" : undefined}
         tabindex={tiled ? -1 : undefined}
         aria-label={tiled ? label(id) : undefined}
@@ -353,8 +352,11 @@
     user-select: none;
   }
 
+  /* La enfocada: fondo un poco mas claro, texto pleno e icono en acento.
+     Es el unico acento del area (ni contorno ni linea): con varios a la vez
+     no se entendia que estaba enfocado. */
   .tile.focused .tile-header {
-    box-shadow: inset 0 2px 0 var(--accent);
+    background: color-mix(in srgb, var(--text-primary) 7%, var(--surface));
     color: var(--text-primary);
   }
 
@@ -415,7 +417,8 @@
   }
 
   /* Divisor entre hojas: franja de 6px para agarrar, sin pintar (la linea
-     es el borde de la hoja); al pasar el mouse, el acento. */
+     es el borde de la hoja). Al pasar el mouse o arrastrar, la linea se
+     marca en gris, no en acento; el acento de foco solo con el teclado. */
   .tile-divider {
     position: absolute;
     z-index: 3;
@@ -432,15 +435,25 @@
     cursor: col-resize;
   }
 
-  .tile-divider:hover,
-  .tile-divider:focus-visible {
+  .tile-divider {
+    --divider-line: color-mix(in srgb, var(--text-secondary) 55%, transparent);
     outline: none;
-    background: linear-gradient(var(--accent), var(--accent)) center / 100% 1px no-repeat;
+  }
+
+  .tile-divider:focus-visible {
+    --divider-line: var(--focus-ring);
+  }
+
+  .tile-divider:hover,
+  .tile-divider:active,
+  .tile-divider:focus-visible {
+    background: linear-gradient(var(--divider-line), var(--divider-line)) center / 100% 1px no-repeat;
   }
 
   .tile-divider.vertical:hover,
+  .tile-divider.vertical:active,
   .tile-divider.vertical:focus-visible {
-    background: linear-gradient(var(--accent), var(--accent)) center / 1px 100% no-repeat;
+    background: linear-gradient(var(--divider-line), var(--divider-line)) center / 1px 100% no-repeat;
   }
 
   /* Donde caeria lo arrastrado al soltarlo. */

@@ -413,14 +413,14 @@
 /* Capa encima del contenido de la zona (focusZones.ts): el editor y los
    encabezados del grid llegan de borde a borde y taparian un contorno
    propio del contenedor. */
-/* Ancla de la marca de cada zona y de cada pieza de una zona (un mosaico
-   del editor, focusZones.ts). :where() no suma especificidad: si una zona
-   tuviera su propio position, gana el de su clase. */
-:where([data-focus-zone], [data-zone-piece]) {
+/* Ancla de la marca de cada zona. :where() no suma especificidad: si una
+   zona tuviera su propio position, gana el de su clase. Un mosaico dentro de
+   una zona no lleva marca: su barra ya dice cual tiene el foco. */
+:where([data-focus-zone]) {
   position: relative;
 }
 
-:is([data-focus-zone], [data-zone-piece]).zone-current::after {
+[data-focus-zone].zone-current::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -431,12 +431,12 @@
 }
 
 /* Un segundo despues de dejar de moverse, la marca se desvanece sola. */
-:is([data-focus-zone], [data-zone-piece]).zone-fading::after {
+[data-focus-zone].zone-fading::after {
   opacity: 0;
 }
 
 /* Al llegar: un destello mas marcado que se asienta en la marca tenue. */
-:is([data-focus-zone], [data-zone-piece]).zone-flash::after {
+[data-focus-zone].zone-flash::after {
   animation: zone-flash 560ms ease-out;
 }
 
@@ -457,7 +457,7 @@
 
 /* Sin zona en esa direccion: un pulso breve del mismo borde, sin el
    resplandor de la llegada. */
-:is([data-focus-zone], [data-zone-piece]).zone-nudge::after {
+[data-focus-zone].zone-nudge::after {
   animation: zone-nudge 320ms ease-out;
 }
 
@@ -468,8 +468,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is([data-focus-zone], [data-zone-piece]).zone-flash::after,
-  :is([data-focus-zone], [data-zone-piece]).zone-nudge::after {
+  [data-focus-zone].zone-flash::after,
+  [data-focus-zone].zone-nudge::after {
     animation: none;
   }
 }

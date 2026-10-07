@@ -166,9 +166,11 @@ export async function focusZone(zone: Zone): Promise<boolean> {
 // se cruza a la que haya.
 const SAME_COLUMN: Record<Zone, Zone> = { explorer: "files", files: "explorer", editor: "results", results: "editor" };
 
-// Una zona con varias piezas lado a lado (los mosaicos del editor) se
-// recorre por dentro antes de saltar a la vecina: su navegador enfoca la
-// pieza de esa direccion y la devuelve, o null en el borde.
+// Una zona con varias piezas lado a lado (los mosaicos del editor o del
+// resultado) se recorre por dentro antes de saltar a la vecina: su
+// navegador enfoca la pieza de esa direccion y la devuelve, o null en el
+// borde. Moverse entre piezas no marca nada: la barra del mosaico enfocado
+// ya lo dice, y la marca de la zona se quita.
 type ZoneNavigator = (direction: Direction) => HTMLElement | null;
 const navigators = new Map<Zone, ZoneNavigator>();
 
@@ -183,9 +185,8 @@ export function moveFocus(direction: Direction): void {
   // Desde donde esta el foco de verdad; la zona activa, si el foco no esta
   // en ninguna (un menu, el body).
   const from = zoneOf(document.activeElement) ?? get(activeZone) ?? "editor";
-  const inside = navigators.get(from)?.(direction);
-  if (inside) {
-    flash(inside);
+  if (navigators.get(from)?.(direction)) {
+    clearMark();
     return;
   }
   const target = neighborZone(from, direction, lastLeft, lastRight);
