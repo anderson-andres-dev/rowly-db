@@ -116,7 +116,7 @@
     terminalActive = false,
     onterminal = () => {},
     tiles,
-    terminalBox = null,
+    terminalBelowStrips = false,
     showOutputTab = true,
     terminalTab = true,
     tabCommands = true,
@@ -202,15 +202,15 @@
     onterminal?: () => void;
     // Grupos de pestañas en mosaico (Workspace.svelte, MosaicArea): el panel
     // de la ventana, sin fila propia, pone los grupos (`tiles`) y la
-    // terminal, que no se vuelve a montar y se abre sobre el grupo de arriba
-    // a la derecha (`terminalBox`, en fracciones del area). Cada grupo es
+    // terminal, que no se vuelve a montar: abierta ocupa todo el area debajo
+    // de las filas de arriba (`terminalBelowStrips`). Cada grupo es
     // otro panel con SU fila de carpetas: la Salida solo si es suya
     // (`showOutputTab`), la pestaña Terminal solo en el de la terminal
     // (`terminalTab`), y Ctrl+Tab solo en el enfocado (`tabCommands`).
     // `ondetach`: sacar una pestaña de la fila hacia los grupos
     // (reorder.ts); false si no se puede.
     tiles?: Snippet;
-    terminalBox?: { x: number; y: number; width: number; height: number } | null;
+    terminalBelowStrips?: boolean;
     showOutputTab?: boolean;
     terminalTab?: boolean;
     tabCommands?: boolean;
@@ -697,7 +697,8 @@
       {/if}
     </div>
   {/if}
-  <!-- Con grupos, la terminal tapa solo el suyo (terminalBox). -->
+  <!-- Con grupos, la terminal tapa los grupos pero no las filas de arriba
+       (terminalBelowStrips): ahi se la ve elegida y se vuelve a las demas. -->
   <div class="pane-view" class:hidden={terminalActive && !tiles}>
   {#if tiles}
     {@render tiles()}
@@ -1023,10 +1024,7 @@
     <div
       class="terminal-view"
       class:hidden={!terminalActive}
-      class:over-group={!!terminalBox}
-      style={terminalBox
-        ? `left: ${terminalBox.x * 100}%; top: calc(${terminalBox.y * 100}% + var(--group-strip)); width: ${terminalBox.width * 100}%; height: calc(${terminalBox.height * 100}% - var(--group-strip))`
-        : undefined}
+      class:over-group={terminalBelowStrips}
     >
       {@render terminal()}
     </div>
@@ -1233,12 +1231,15 @@
     display: contents;
   }
 
-  /* Sobre el cuerpo del grupo de la terminal, debajo de su fila (que la
-     marca abierta): no tapa los demas grupos. --group-strip es la altura de
-     la fila de carpetas (tabs.css). */
+  /* Sobre todos los grupos, debajo de las filas de arriba (la de su grupo
+     la marca abierta): tiene sus propias sesiones, no es de un grupo. La
+     altura de la fila de carpetas es la de tabs.css. */
   .terminal-view.over-group {
-    --group-strip: calc(2rem + 6px);
     position: absolute;
+    top: calc(2rem + 6px);
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 6;
   }
 

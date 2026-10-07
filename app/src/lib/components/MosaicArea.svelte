@@ -69,9 +69,32 @@
   } = $props();
 
   let area = $state<HTMLElement>();
-  // Mientras se mueve un divisor, las hojas siguen al puntero sin
-  // transicion; al reacomodar el arbol (partir, juntar, mover) se deslizan.
-  let resizing = $state(false);
+  // Las hojas se deslizan solo cuando cambia la forma del arbol (partir,
+  // juntar, mover un grupo), nunca al cambiar una fraccion (un divisor, la
+  // ventana): con el teclado real del usuario en WebKitGTK, una transicion
+  // de left/width al redimensionar dejaba una franja sin repintar hasta la
+  // siguiente tecla.
+  const ANIMATE_MS = 200;
+  let animating = $state(false);
+  let lastShape: string | null = null;
+  let animateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function shapeOf(node: Mosaic | null): string {
+    if (!node) return "";
+    return node.kind === "leaf" ? node.id : `${node.axis}(${shapeOf(node.first)},${shapeOf(node.second)})`;
+  }
+
+  // Antes de pintar el arbol nuevo, para que la clase y los lugares nuevos
+  // lleguen juntos (la transicion es la del estilo nuevo).
+  $effect.pre(() => {
+    const shape = shapeOf(tree);
+    if (lastShape !== null && shape !== lastShape) {
+      animating = true;
+      if (animateTimer) clearTimeout(animateTimer);
+      animateTimer = setTimeout(() => (animating = false), ANIMATE_MS + 40);
+    }
+    lastShape = shape;
+  });
 
   const ids = $derived(leaves(tree));
   const tiled = $derived(ids.length > 1);
@@ -109,7 +132,6 @@
     event.preventDefault();
     event.stopPropagation();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    resizing = true;
     const box = area?.getBoundingClientRect();
     const live = onePerFrame((ratio: number) => {
       if (tree) onresize(setRatio(tree, divider.path, ratio));
@@ -129,7 +151,6 @@
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       live.flush();
-      resizing = false;
     }
 
     window.addEventListener("pointermove", onMove);
@@ -300,7 +321,7 @@
     `left: ${percent(rect.x)}; top: ${percent(rect.y)}; width: ${percent(rect.width)}; height: ${percent(rect.height)}`;
 </script>
 
-<div class="mosaic" class:tiled class:resizing bind:this={area}>
+<div class="mosaic" class:tiled class:animating bind:this={area}>
   {#each ids as id (id)}
     {@const box = boxes.get(id)}
     {#if box}
@@ -365,10 +386,9 @@
     flex: 1;
   }
 
-  /* Al reacomodar el arbol, cada hoja se desliza a su lugar nuevo (con una
-     sola hoja no hay nada que mover). */
-  .mosaic.tiled:not(.resizing) .tile,
-  .mosaic.tiled:not(.resizing) .tile-divider {
+  /* Al cambiar la forma del arbol, cada hoja se desliza a su lugar nuevo. */
+  .mosaic.animating .tile,
+  .mosaic.animating .tile-divider {
     transition:
       left 180ms cubic-bezier(0.2, 0.9, 0.3, 1),
       top 180ms cubic-bezier(0.2, 0.9, 0.3, 1),

@@ -80,7 +80,7 @@
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { editorGroups, setEditorGroups } from "$lib/stores/consoleMosaic";
-  import { leaves, neighbor, place, rects, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
+  import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
     choose,
     cornerGroup,
@@ -958,8 +958,9 @@
   // elegida de la consola es la del grupo enfocado y ejecutar agrega el
   // resultado nuevo a ese grupo. La Salida y la Terminal no entran en el
   // mosaico: la Salida es siempre la primera del grupo de arriba a la
-  // izquierda y la Terminal, la ultima del de arriba a la derecha (se abre
-  // sobre ese grupo). Vive en memoria, por consola, como sus pestañas.
+  // izquierda y la Terminal, la ultima del de arriba a la derecha. Abierta,
+  // la Terminal ocupa todo el resultado debajo de las filas de arriba (tiene
+  // sus propias sesiones). Vive en memoria, por consola, como sus pestañas.
   const FIRST_GROUP = "g0";
   // Alto de la fila de carpetas de un grupo (2rem + 6px, tabs.css): soltar
   // una pestaña ahi la acopla a ese grupo.
@@ -974,7 +975,6 @@
   const resultLayout = $derived(resultConsole ? (resultLayouts[resultConsole.id] ?? null) : null);
   const resultGrouped = $derived(leaves(resultLayout?.tree ?? null).length > 1);
   const terminalGroup = $derived(resultLayout ? cornerGroup(resultLayout.tree, "right") : FIRST_GROUP);
-  const terminalBox = $derived(resultLayout ? (rects(resultLayout.tree).get(terminalGroup) ?? null) : null);
 
   function setLayout(consoleId: string, groups: TabGroups) {
     resultLayouts = { ...resultLayouts, [consoleId]: normalizeGroups(groups, resultKeys, RESULT_PINNED) };
@@ -1502,7 +1502,7 @@
         {terminalActive}
         onterminal={toggleTerminal}
         tiles={resultConsole ? resultTiles : undefined}
-        terminalBox={resultConsole ? terminalBox : null}
+        terminalBelowStrips={!!resultConsole}
       />
       {#snippet resultTiles()}
         {#if resultLayout}
@@ -1598,7 +1598,7 @@
             terminalActive={hostsTerminal && terminalActive}
             onterminal={toggleTerminal}
             tabCommands={group === layout.focus}
-            dimmed={resultGrouped && group !== layout.focus}
+            dimmed={(resultGrouped && group !== layout.focus) || (terminalActive && !hostsTerminal)}
           />
         {/if}
       {/snippet}
