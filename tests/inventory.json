@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 147,
-    "tests": 1527,
+    "files": 148,
+    "tests": 1530,
     "ignored": 31,
     "byDecision": {
-      "keep": 147,
+      "keep": 148,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 141,
+      "pr": 142,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -1591,6 +1591,26 @@
         "vitest"
       ],
       "durationMs": 17
+    },
+    {
+      "path": "app/src/lib/results/columnFilterMemory.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/columnFilterMemory.ts",
+      "property": "Los filtros por columna de cada pestaña se conservan al ir y volver; otras columnas empiezan sin filtros; cerrar la consola los olvida",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 3,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "columnFilterMemory"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
     },
     {
       "path": "app/src/lib/results/columnFilters.test.ts",

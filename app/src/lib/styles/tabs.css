@@ -296,3 +296,30 @@
 .result-tabs-scroll > .result-tab.closable > .tab-close {
   flex-shrink: 0;
 }
+
+/* Al elegir una pestaña (con el mouse o con Ctrl+Tab), la carpeta se
+   enciende con un fundido corto en vez de saltar: el contorno y la union con
+   lo de abajo aparecen, y el texto pasa a pleno. */
+.result-tab {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.result-tab.active::before,
+.result-tab.active::after {
+  animation: tab-light 170ms ease-out;
+}
+
+@keyframes tab-light {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-tab.active::before,
+  .result-tab.active::after {
+    animation: none;
+  }
+}

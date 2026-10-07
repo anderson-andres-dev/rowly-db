@@ -66,6 +66,8 @@
     withColumnFilter,
     type ColumnFilters,
   } from "$lib/results/columnFilters";
+  import { recallColumnFilters, rememberColumnFilters } from "$lib/results/columnFilterMemory";
+  import { softSwap } from "$lib/motion";
 
   let {
     isExecuting,
@@ -120,6 +122,7 @@
     onterminal,
     dimmed = false,
     commandZone = "results",
+    stateKey = null,
     ondetach,
   }: {
     isExecuting: boolean;
@@ -215,12 +218,29 @@
     // Donde responden los atajos del grid: una tabla abierta en un grupo del
     // editor esta en la zona "editor".
     commandZone?: "results" | "editor";
+    // La clave de la pestaña que se muestra: sus filtros por columna se
+    // guardan con ella (results/columnFilterMemory.ts) y vuelven al volver.
+    stateKey?: string | null;
     ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
 
   // El ">_" de Lucide (Terminal), distinto del de la Salida. Con el Icon base
   // y sus datos: el componente del icono sumaba bytes al JS inicial.
   const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
+
+  // Al elegir otra pestaña, su contenido entra con un fundido corto (la fila
+  // ya anima la carpeta, tabs.css). No al montar ni al llegar un resultado
+  // nuevo en la misma pestaña.
+  let paneRoot = $state<HTMLElement>();
+  let shownTab: string | null = null;
+  $effect(() => {
+    const tab = activeTab;
+    untrack(() => {
+      const changed = shownTab !== null && shownTab !== tab;
+      shownTab = tab;
+      if (changed) void tick().then(() => paneRoot && softSwap(paneRoot.querySelectorAll(":scope > .pane-view > :is(.result-toolbar, .grid-region, .output-region, .centered)")));
+    });
+  });
 
   // --- Pestañas ----------------------------------------------------------
   // Que pestaña se ve lo decide Workspace (cada ejecucion elige: con filas,
@@ -450,19 +470,26 @@
 
   // --- Filtro local por columna (results/columnFilters.ts) ----------------------
   // Sobre las filas cargadas, sin volver a consultar; se suma a "Filtrar
-  // filas". Otro resultado (otras columnas) empieza sin filtros; otra
+  // filas". Son de cada pestaña (stateKey): ir a otra y volver los
+  // conserva. Otro resultado (otras columnas) empieza sin filtros; otra
   // pagina de la misma consulta los conserva.
   let columnFilters = $state<ColumnFilters>(new Map());
   let filterPopover = $state<{ column: number; position: { left: number; top: number } } | null>(null);
   const columnSignature = $derived(result?.type === "resultSet" ? result.columns.map((column) => column.name).join("\u0000") : "");
 
   $effect(() => {
-    void columnSignature;
+    const key = stateKey;
+    const signature = columnSignature;
     untrack(() => {
-      columnFilters = new Map();
+      columnFilters = key ? recallColumnFilters(key, signature) : new Map();
       filterPopover = null;
     });
   });
+
+  function setColumnFilters(next: ColumnFilters) {
+    columnFilters = next;
+    if (stateKey) rememberColumnFilters(stateKey, columnSignature, next);
+  }
 
   const filterHiddenRows = $derived(rowsHiddenByFilters(rows, columnFilters));
   const filteredColumns = $derived(new Set(columnFilters.keys()));
@@ -603,7 +630,7 @@
   {/if}
 {/snippet}
 
-<div class="result-pane">
+<div class="result-pane" bind:this={paneRoot}>
   <!-- La fila sale siempre (salvo en una tabla sin la terminal abierta): a la
        derecha, el boton de la terminal, que es de la ventana y no un
        resultado mas. -->
@@ -824,7 +851,7 @@
           excluded={columnFilters.get(column) ?? new Set()}
           matches={rows.length - (hiddenRows?.size ?? 0)}
           position={filterPopover.position}
-          onchange={(excluded) => (columnFilters = withColumnFilter(columnFilters, column, excluded))}
+          onchange={(excluded) => setColumnFilters(withColumnFilter(columnFilters, column, excluded))}
           onclose={closeColumnFilter}
         />
       {/if}
@@ -947,9 +974,18 @@
         <!-- Segun el ancho de la barra (@container, abajo): las columnas y el
              tiempo se van cayendo; las filas quedan siempre. -->
         <span class="stats">
-          {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
-            count: $numberFormat.format(result.rows.length),
-          })}<span class="wide-only">
+          <!-- Con un filtro (por columna o "Filtrar filas"), cuantas se ven de
+               las de esta pagina. -->
+          {#if hiddenRows && hiddenRows.size > 0}
+            <span class="filtered">{$t("results.stats.rowsFiltered", {
+              visible: $numberFormat.format(result.rows.length - hiddenRows.size),
+              count: $numberFormat.format(result.rows.length),
+            })}</span>
+          {:else}
+            {$t(result.rows.length === 1 ? "results.stats.rowsOne" : "results.stats.rowsOther", {
+              count: $numberFormat.format(result.rows.length),
+            })}
+          {/if}<span class="wide-only">
             · {$t(result.columns.length === 1 ? "results.stats.columnsOne" : "results.stats.columnsOther", {
               count: result.columns.length,
             })}</span
@@ -1366,6 +1402,10 @@
     .narrow-only {
       display: inline;
     }
+  }
+
+  .stats .filtered {
+    color: var(--accent);
   }
 
   .status-bar.minimal {

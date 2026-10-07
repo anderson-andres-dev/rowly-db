@@ -80,6 +80,7 @@
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { editorGroups, setEditorGroups } from "$lib/stores/consoleMosaic";
+  import { forgetColumnFilters } from "$lib/results/columnFilterMemory";
   import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
     choose,
@@ -369,6 +370,7 @@
     resultTabOrder = withoutKey(resultTabOrder, consoleId);
     tableFilterError = withoutKey(tableFilterError, consoleId);
     resultLayouts = withoutKey(resultLayouts, consoleId);
+    forgetColumnFilters(consoleId);
     if (lastSqlConsole === consoleId) lastSqlConsole = null;
     tableLoadAttempted.delete(consoleId);
   }
@@ -1405,6 +1407,7 @@
               filterError={!!tableFilterError[item.id]}
               tabCommands={false}
               commandZone="editor"
+              stateKey={item.id}
             />
             {#snippet tableFiltersBar()}
               {#if $activeEngine}
@@ -1582,7 +1585,11 @@
               selectTab(consoleId, next);
             }}
             onreordertabs={(from, to) => reorderGroupTabs(group, from, to)}
-            onclosetab={(closing) => void closeResultTab(closing)}
+            onclosetab={(closing) => {
+              forgetColumnFilters(closing);
+              void closeResultTab(closing);
+            }}
+            stateKey={key}
             ondetach={beginResultDrag}
             onexport={() => (exportFor = key)}
             onpin={() => pinCurrentResult(consoleId)}
@@ -1847,6 +1854,26 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
+    animation: content-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  /* Elegir otra consola del grupo (con el mouse o con Ctrl+Tab) monta su
+     editor: entra con un fundido corto, como el resultado (motion.ts). */
+  .editor-host > :global(.editor-frame) {
+    animation: content-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  @keyframes content-in {
+    from {
+      opacity: 0.35;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .table-host,
+    .editor-host > :global(.editor-frame) {
+      animation: none;
+    }
   }
 
   /* Sin pestañas abiertas: accesos directos centrados, al estilo de la

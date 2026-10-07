@@ -2,6 +2,7 @@
   import { tick, untrack } from "svelte";
   import { ArrowLeft, Plus, X } from "@lucide/svelte";
   import { tabScroll } from "$lib/tabScroll";
+  import { softSwap } from "$lib/motion";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { editorPalette } from "$lib/theming/theme";
@@ -127,6 +128,18 @@
       cleanupRename();
       cleanupSessions();
     };
+  });
+
+  // Otra sesion elegida (clic o Ctrl+Tab): entra con un fundido corto, como
+  // las pestañas del resultado.
+  let shownSession = 0;
+  $effect(() => {
+    const key = active;
+    untrack(() => {
+      const changed = shownSession !== 0 && key !== 0 && shownSession !== key;
+      shownSession = key;
+      if (changed) void tick().then(() => softSwap(body.querySelectorAll(":scope > :not(.hidden)")));
+    });
   });
 
   // Al mostrarse sin ninguna sesion (la primera vez, o tras cerrar la
