@@ -13,9 +13,6 @@ export default defineMessages({
     "picker.right": "a la derecha",
     "picker.below": "debajo",
     "picker.whole": "de toda el área",
-    "tile.untile": "Quitar del mosaico",
-    "tile.untileWithKeys": "Quitar del mosaico ({keys}); la consola sigue abierta",
-    "tile.aria": "Consola {title}",
   },
   en: {
     "picker.label": "Tile a console",
@@ -27,9 +24,6 @@ export default defineMessages({
     "picker.right": "to the right",
     "picker.below": "below",
     "picker.whole": "of the whole area",
-    "tile.untile": "Remove from tiling",
-    "tile.untileWithKeys": "Remove from tiling ({keys}); the console stays open",
-    "tile.aria": "Console {title}",
   },
   "pt-BR": {
     "picker.label": "Colocar um console em mosaico",
@@ -41,9 +35,6 @@ export default defineMessages({
     "picker.right": "à direita",
     "picker.below": "abaixo",
     "picker.whole": "de toda a área",
-    "tile.untile": "Tirar do mosaico",
-    "tile.untileWithKeys": "Tirar do mosaico ({keys}); o console continua aberto",
-    "tile.aria": "Console {title}",
   },
   fr: {
     "picker.label": "Mettre une console en mosaïque",
@@ -55,9 +46,6 @@ export default defineMessages({
     "picker.right": "à droite",
     "picker.below": "en dessous",
     "picker.whole": "de toute la zone",
-    "tile.untile": "Retirer de la mosaïque",
-    "tile.untileWithKeys": "Retirer de la mosaïque ({keys}) ; la console reste ouverte",
-    "tile.aria": "Console {title}",
   },
   de: {
     "picker.label": "Konsole kacheln",
@@ -69,8 +57,5 @@ export default defineMessages({
     "picker.right": "rechts",
     "picker.below": "darunter",
     "picker.whole": "des ganzen Bereichs",
-    "tile.untile": "Aus der Kachelung nehmen",
-    "tile.untileWithKeys": "Aus der Kachelung nehmen ({keys}); die Konsole bleibt offen",
-    "tile.aria": "Konsole {title}",
   },
 });

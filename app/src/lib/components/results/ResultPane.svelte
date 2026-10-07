@@ -121,6 +121,7 @@
     terminalTab = true,
     tabCommands = true,
     dimmed = false,
+    commandZone = "results",
     ondetach,
   }: {
     isExecuting: boolean;
@@ -215,6 +216,9 @@
     tabCommands?: boolean;
     // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
     dimmed?: boolean;
+    // Donde responden los atajos del grid: una tabla abierta en un grupo del
+    // editor esta en la zona "editor".
+    commandZone?: "results" | "editor";
     ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
 
@@ -544,7 +548,7 @@
   }
 
   $effect(() =>
-    registerCommands("results", {
+    registerCommands(commandZone, {
       "add-result-row": inGrid(addNewRow),
       "delete-result-rows": inGrid(deleteSelectedRows),
       "revert-result-changes": inGrid(() => {
@@ -1204,53 +1208,6 @@
      la linea base de la elegida (si no, contarian como desborde) y baja
      sobre esa linea para que la elegida la tape; los margenes negativos lo
      compensan. Las zonas reservadas no toman clics. */
-  .result-tabs-scroll {
-    --fade: 2rem;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    align-self: stretch;
-    align-items: flex-end;
-    gap: 2px;
-    /* 1px de aire arriba: el contorno de la pestaña elegida se dibuja 1px
-       por encima de ella (tabs.css) y overflow-y lo recortaba, despuntando
-       sus esquinas. */
-    margin: -1px calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
-    padding: 1px var(--tab-reach) 0 var(--tab-curve);
-    overflow-x: auto;
-    overflow-y: hidden;
-    pointer-events: none;
-    scrollbar-width: none;
-    scroll-padding-inline: calc(var(--tab-curve) + var(--fade)) calc(var(--tab-reach) + var(--fade));
-  }
-
-  .result-tabs-scroll::-webkit-scrollbar {
-    display: none;
-  }
-
-  .result-tabs-scroll :global(.result-tab) {
-    margin-bottom: 0;
-    pointer-events: auto;
-  }
-
-  .result-tabs-scroll:global(.fade-end) {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--tab-reach) - var(--fade)), transparent calc(100% - var(--tab-reach)));
-  }
-
-  .result-tabs-scroll:global(.fade-start) {
-    mask-image: linear-gradient(to right, transparent var(--tab-curve), #000 calc(var(--tab-curve) + var(--fade)));
-  }
-
-  .result-tabs-scroll:global(.fade-start.fade-end) {
-    mask-image: linear-gradient(
-      to right,
-      transparent var(--tab-curve),
-      #000 calc(var(--tab-curve) + var(--fade)),
-      #000 calc(100% - var(--tab-reach) - var(--fade)),
-      transparent calc(100% - var(--tab-reach))
-    );
-  }
-
   /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
      montado (el grid conserva su estado). */
   .pane-view {

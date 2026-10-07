@@ -2,17 +2,17 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 145,
-    "tests": 1514,
+    "files": 146,
+    "tests": 1524,
     "ignored": 31,
     "byDecision": {
-      "keep": 145,
+      "keep": 146,
       "move": 0,
       "rewrite": 0,
       "remove": 0
     },
     "byGate": {
-      "pr": 139,
+      "pr": 140,
       "engine-pr": 6,
       "manual": 0,
       "release": 0
@@ -2502,6 +2502,27 @@
       "dependencies": [
         "commands",
         "tabCommands"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/workspace/tabGroups.test.ts",
+      "domain": "workspace",
+      "owner": "app/src/lib/workspace/tabGroups.ts",
+      "property": "Grupos de pestañas: cada pestaña en un grupo, las nuevas en el enfocado, el grupo vacío se va, las fijas (la Salida) en su esquina; elegir, mover, juntar y renombrar; lo guardado bien formado",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 10,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "mosaic",
+        "tabGroups"
       ],
       "external": [
         "vitest"

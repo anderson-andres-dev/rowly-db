@@ -221,3 +221,53 @@
   color: var(--text-secondary);
   opacity: 0.8;
 }
+
+/* Las pestañas que se desplazan entre lo fijo de la fila (la Salida y la
+   Terminal en el resultado, el + en las consolas): scroll nativo sin barra
+   y un desvanecido en el borde que tiene mas (tabScroll.ts). */
+.result-tabs-scroll {
+  --fade: 2rem;
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-self: stretch;
+  align-items: flex-end;
+  gap: 2px;
+  /* 1px de aire arriba: el contorno de la pestaña elegida se dibuja 1px
+     por encima de ella (tabs.css) y overflow-y lo recortaba, despuntando
+     sus esquinas. */
+  margin: -1px calc(-1 * var(--tab-reach)) -1px calc(-1 * var(--tab-curve));
+  padding: 1px var(--tab-reach) 0 var(--tab-curve);
+  overflow-x: auto;
+  overflow-y: hidden;
+  pointer-events: none;
+  scrollbar-width: none;
+  scroll-padding-inline: calc(var(--tab-curve) + var(--fade)) calc(var(--tab-reach) + var(--fade));
+}
+
+.result-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.result-tabs-scroll .result-tab {
+  margin-bottom: 0;
+  pointer-events: auto;
+}
+
+.result-tabs-scroll.fade-end {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--tab-reach) - var(--fade)), transparent calc(100% - var(--tab-reach)));
+}
+
+.result-tabs-scroll.fade-start {
+  mask-image: linear-gradient(to right, transparent var(--tab-curve), #000 calc(var(--tab-curve) + var(--fade)));
+}
+
+.result-tabs-scroll.fade-start.fade-end {
+  mask-image: linear-gradient(
+    to right,
+    transparent var(--tab-curve),
+    #000 calc(var(--tab-curve) + var(--fade)),
+    #000 calc(100% - var(--tab-reach) - var(--fade)),
+    transparent calc(100% - var(--tab-reach))
+  );
+}
