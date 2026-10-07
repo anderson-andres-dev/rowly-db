@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 interface KeyInit {
   ctrl?: boolean;
   shift?: boolean;
+  alt?: boolean;
   inTerminal?: boolean;
 }
 
@@ -16,7 +17,7 @@ class FakeKey extends Event {
   ctrlKey: boolean;
   shiftKey: boolean;
   repeat = false;
-  altKey = false;
+  altKey: boolean;
   metaKey = false;
   isComposing = false;
   constructor(type: string, key: string, init: KeyInit = {}) {
@@ -24,6 +25,7 @@ class FakeKey extends Event {
     this.key = key;
     this.ctrlKey = init.ctrl ?? false;
     this.shiftKey = init.shift ?? false;
+    this.altKey = init.alt ?? false;
     // El despachador mira si la tecla viene de la terminal por el destino.
     if (init.inTerminal) {
       Object.defineProperty(this, "target", { value: { closest: (selector: string) => selector === "[data-terminal]" } });
@@ -75,16 +77,18 @@ function release(key: string) {
   (g.window as EventTarget).dispatchEvent(new FakeKey("keyup", key));
 }
 
-describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
-  it("cada flecha con Ctrl+Shift mueve a su zona, sin prefijo", () => {
-    expect(press("ArrowLeft", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowUp", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowRight", { ctrl: true, shift: true })).toBe(true);
+describe("moverse entre zonas (Ctrl+Shift+Alt+flechas)", () => {
+  it("cada flecha con Ctrl+Shift+Alt mueve a su zona, sin prefijo", () => {
+    const all = { ctrl: true, shift: true, alt: true };
+    expect(press("ArrowLeft", all)).toBe(true);
+    expect(press("ArrowDown", all)).toBe(true);
+    expect(press("ArrowUp", all)).toBe(true);
+    expect(press("ArrowRight", all)).toBe(true);
     expect(moves).toEqual(["left", "down", "up", "right"]);
   });
 
-  it("las flechas sin Ctrl+Shift siguen su camino", () => {
+  it("las flechas con menos modificadores siguen su camino (seleccionar por palabra, etc.)", () => {
+    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(false);
     expect(press("ArrowDown", { ctrl: true })).toBe(false);
     expect(press("ArrowDown", { shift: true })).toBe(false);
     expect(press("ArrowDown")).toBe(false);
@@ -92,52 +96,53 @@ describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
   });
 
   it("tambien desde la terminal", () => {
-    expect(press("ArrowUp", { ctrl: true, shift: true, inTerminal: true })).toBe(true);
+    expect(press("ArrowUp", { ctrl: true, shift: true, alt: true, inTerminal: true })).toBe(true);
     expect(moves).toEqual(["up"]);
   });
 });
 
-describe("modo mover (Ctrl+Shift sostenidos)", () => {
-  it("la flecha cambia de zona aunque el evento llegue sin Ctrl ni Shift, y no sigue al arbol", () => {
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
+function hold() {
+  press("Control", { ctrl: true });
+  press("Shift", { ctrl: true, shift: true });
+  press("Alt", { ctrl: true, shift: true, alt: true });
+}
+
+function letGo() {
+  release("Alt");
+  release("Shift");
+  release("Control");
+}
+
+describe("modo mover (Ctrl+Shift+Alt sostenidos)", () => {
+  it("la flecha cambia de zona aunque el evento llegue sin modificadores, y no sigue al arbol", () => {
+    hold();
     expect(press("ArrowDown")).toBe(true);
     expect(press("ArrowLeft", { ctrl: true })).toBe(true);
+    release("Alt");
+    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(false);
     release("Shift");
-    expect(press("ArrowDown", { ctrl: true })).toBe(false);
     release("Control");
     expect(press("ArrowDown")).toBe(false);
   });
 
-  it("otro atajo con Ctrl+Shift sigue su camino", () => {
-    const calls: string[] = [];
-    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
+  it("Ctrl+Shift sin Alt no activa la capa: Tab y las letras son del editor", () => {
     press("Control", { ctrl: true });
     press("Shift", { ctrl: true, shift: true });
-    expect(press("T", { ctrl: true, shift: true })).toBe(true);
-    expect(calls).toEqual(["nueva"]);
+    expect(press("Tab")).toBe(false);
+    expect(press("x")).toBe(false);
     release("Shift");
     release("Control");
-    done();
   });
 
-  it("con el foco movido, las teclas llegan sin Ctrl ni Shift: la capa las toma igual", () => {
-    const calls: string[] = [];
-    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
-    expect(press("T")).toBe(true);
-    expect(press("x")).toBe(true);
-    expect(calls).toEqual(["nueva"]);
-    release("Shift");
-    release("Control");
+  it("con la capa, una tecla que no es de ningun atajo (Tab, una letra) sigue su camino", () => {
+    hold();
+    expect(press("Tab")).toBe(false);
     expect(press("x")).toBe(false);
-    done();
+    letGo();
   });
 
   it("perder la ventana suelta los modificadores", () => {
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
+    hold();
     (g.window as EventTarget).dispatchEvent(new Event("blur"));
     expect(press("ArrowDown")).toBe(false);
   });

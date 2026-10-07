@@ -33,10 +33,10 @@ export const TAB_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export const commandDefinitions: CommandDefinition[] = [
   // Mueven el foco a la zona vecina (focusZones.ts). Valen tambien con el
   // foco en la terminal.
-  { id: "focus-zone-left", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowLeft" },
-  { id: "focus-zone-right", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowRight" },
-  { id: "focus-zone-up", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowUp" },
-  { id: "focus-zone-down", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowDown" },
+  { id: "focus-zone-left", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowLeft" },
+  { id: "focus-zone-right", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowRight" },
+  { id: "focus-zone-up", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowUp" },
+  { id: "focus-zone-down", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowDown" },
   // Las pestañas de la fila del foco: consolas, panel inferior o sesiones de
   // la terminal (workspace/tabCommands.ts).
   { id: "next-tab", zone: "global", group: "general", defaultKeys: "Ctrl+Tab", aliasKeys: ["Ctrl+PageDown"] },

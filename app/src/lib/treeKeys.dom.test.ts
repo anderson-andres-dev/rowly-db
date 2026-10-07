@@ -92,7 +92,7 @@ describe("teclado del arbol", () => {
     expect(focused()).toBe("facturas");
   });
 
-  it("con modificadores no toca la tecla: Ctrl+Shift+flechas son para cambiar de zona", () => {
+  it("con modificadores no toca la tecla: Ctrl+Shift+Alt+flechas son para cambiar de zona", () => {
     const { action } = mountTree();
     cleanup = action.destroy;
     document.getElementById("conn")!.focus();
