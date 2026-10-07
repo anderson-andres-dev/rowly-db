@@ -11,7 +11,6 @@ import {
   rects,
   remove,
   replace,
-  rename,
   reveal,
   setRatio,
   siblingOf,
@@ -83,14 +82,6 @@ describe("mosaico: poner y sacar", () => {
     const tree = abc();
     expect(reveal(tree, "b", "c")).toBe(tree);
     expect(reveal(null, "d", null)).toEqual(leaf("d"));
-  });
-
-  it("renombrar deja la hoja en su lugar; si el nombre nuevo ya estaba, la vieja se va", () => {
-    expect(leaves(rename(abc(), "b", "b2"))).toEqual(["a", "b2", "c"]);
-    expect(rects(rename(abc(), "b", "b2")).get("b2")).toEqual(rects(abc()).get("b"));
-    expect(leaves(rename(abc(), "b", "c"))).toEqual(["a", "c"]);
-    const tree = abc();
-    expect(rename(tree, "zz", "d")).toBe(tree);
   });
 
   it("podar quita las que ya no existen", () => {

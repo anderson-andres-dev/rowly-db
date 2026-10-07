@@ -10,6 +10,7 @@
     leaves,
     place,
     rects,
+    remove,
     replace,
     setRatio,
     type Divider,
@@ -20,14 +21,17 @@
   } from "$lib/workspace/mosaic";
 
   // Un area en mosaico tipo i3 (workspace/mosaic.ts): las consolas del editor
-  // y las pestañas del resultado. Cada hoja va con posicion absoluta en una
-  // lista plana con clave por id, asi reacomodar el arbol no vuelve a montar
-  // lo que hay dentro (el editor conserva cursor y deshacer; el grid, su
-  // scroll). Con una sola hoja no hay barra ni bordes: se ve como siempre.
+  // y los grupos de pestañas del resultado. Cada hoja va con posicion
+  // absoluta en una lista plana con clave por id, asi reacomodar el arbol no
+  // vuelve a montar lo que hay dentro (el editor conserva cursor y deshacer;
+  // el grid, su scroll). Con una sola hoja no hay nada encima: se ve como
+  // siempre.
   //
-  // Lo que va en cada hoja y su barra lo pone quien la usa (snippets); aca
-  // esta la mecanica comun: divisores, arrastrar y soltar con su vista
-  // previa, y quitar del mosaico.
+  // Lo que va en cada hoja lo pone quien la usa (snippets); aca esta la
+  // mecanica comun: divisores, arrastrar y soltar con su vista previa, y
+  // quitar del mosaico. Sin barras por hoja (sumaban lineas horizontales): el
+  // editor nombra cada consola con una etiqueta flotante (`chip`), y el
+  // resultado, con la fila de carpetas de cada grupo.
   let {
     tree,
     focused,
@@ -39,7 +43,8 @@
     onarrange,
     onfocus,
     onuntile,
-    header,
+    onmerge,
+    chip,
     tile,
     children,
   }: {
@@ -48,8 +53,8 @@
     focused: string | null;
     // Minimo en pixeles de cada hoja, a lo ancho (row) y a lo alto (column).
     minSize: { row: number; column: number };
-    untileLabel: string;
-    untileTooltip: string;
+    untileLabel?: string;
+    untileTooltip?: string;
     // Nombre de una hoja (aria y lo que se arrastra).
     label: (id: string) => string;
     // Un divisor movido: el arbol con su nueva fraccion.
@@ -57,9 +62,13 @@
     // Soltar lo arrastrado: el arbol nuevo y la hoja que queda enfocada.
     onarrange: (tree: Mosaic, focus: string) => void;
     onfocus: (id: string) => void;
-    onuntile: (id: string) => void;
-    // Icono y titulo de la barra de una hoja.
-    header: Snippet<[string]>;
+    onuntile?: (id: string) => void;
+    // Soltar en el centro de una hoja algo que entra en ella (una pestaña en
+    // un grupo del resultado; beginDrag con `merge`).
+    onmerge?: (target: string, id: string) => void;
+    // Icono y titulo de la etiqueta flotante de una hoja, arriba a la
+    // derecha: de ahi se la arrastra y se la quita del mosaico.
+    chip?: Snippet<[string]>;
     tile: Snippet<[string]>;
     // Lo que flota encima del area (un selector).
     children?: Snippet;
@@ -130,7 +139,25 @@
   // a beginDrag) o desde la barra de una hoja. Cada tercio junto a un borde
   // es ese lado y el medio toma su lugar (si ya estaba en otra, se
   // intercambian), como en los demas editores.
-  let drag = $state<{ id: string; title: string; x: number; y: number; target: string | null; side: Side | "center" | null } | null>(null);
+  // `vacate`: la hoja que se queda sin nada si lo arrastrado sale de ella (un
+  // grupo con una sola pestaña), y que no cuenta para el resultado. `merge`:
+  // el centro de una hoja no la reemplaza, recibe lo arrastrado.
+  interface DragOptions {
+    title?: string;
+    vacate?: string;
+    merge?: boolean;
+  }
+
+  let drag = $state<{
+    id: string;
+    title: string;
+    x: number;
+    y: number;
+    target: string | null;
+    side: Side | "center" | null;
+    vacate: string | null;
+    merge: boolean;
+  } | null>(null);
 
   function dropTarget(x: number, y: number): { target: string | null; side: Side | "center" | null } {
     const box = area?.getBoundingClientRect();
@@ -155,12 +182,15 @@
     return { target: null, side: null };
   }
 
-  // Como queda el arbol si se suelta ahi; null si no cambia nada.
-  function dropResult(current: { id: string; target: string | null; side: Side | "center" | null }): Mosaic | null {
+  // Como queda el arbol si se suelta ahi; null si no cambia nada. Con
+  // `merge`, el centro no cambia el arbol (lo resuelve onmerge): el arbol de
+  // siempre, sin la hoja que se vacia.
+  function dropResult(current: NonNullable<typeof drag>): Mosaic | null {
     if (!current.target || !current.side || current.target === current.id) return null;
-    return current.side === "center"
-      ? replace(tree, current.target, current.id)
-      : place(tree, current.target, current.id, current.side);
+    if (current.vacate === current.target) return null;
+    const base = current.vacate ? remove(tree, current.vacate) : tree;
+    if (current.side === "center") return current.merge ? base : replace(base, current.target, current.id);
+    return place(base, current.target, current.id, current.side);
   }
 
   // Lo que se resalta al arrastrar es donde quedaria de verdad: el
@@ -169,11 +199,22 @@
   // arriba ocupa toda la altura), y marcar solo la mitad del destino mentia.
   const preview = $derived.by((): Rect | null => {
     const next = drag ? dropResult(drag) : null;
-    return next && drag ? (rects(next).get(drag.id) ?? null) : null;
+    if (!next || !drag) return null;
+    // Entrar en una hoja: la hoja entera.
+    if (drag.merge && drag.side === "center" && drag.target) return rects(next).get(drag.target) ?? null;
+    return rects(next).get(drag.id) ?? null;
   });
 
-  export function beginDrag(id: string, start: PointerEvent): boolean {
-    drag = { id, title: label(id), x: start.clientX, y: start.clientY, ...dropTarget(start.clientX, start.clientY) };
+  export function beginDrag(id: string, start: PointerEvent, options: DragOptions = {}): boolean {
+    drag = {
+      id,
+      title: options.title ?? label(id),
+      x: start.clientX,
+      y: start.clientY,
+      vacate: options.vacate ?? null,
+      merge: options.merge ?? false,
+      ...dropTarget(start.clientX, start.clientY),
+    };
 
     function onMove(moveEvent: PointerEvent) {
       if (!drag) return;
@@ -189,7 +230,9 @@
       drag = null;
       swallowNextClick();
       const next = current && apply ? dropResult(current) : null;
-      if (current && next) onarrange(next, current.id);
+      if (!current || !next) return;
+      if (current.merge && current.side === "center" && current.target) onmerge?.(current.target, current.id);
+      else onarrange(next, current.id);
     }
 
     const onUp = () => finish(true);
@@ -209,9 +252,9 @@
     return true;
   }
 
-  // La barra de una hoja: un clic la enfoca; arrastrar mas de unos px la
+  // La etiqueta de una hoja: un clic la enfoca; arrastrar mas de unos px la
   // mueve.
-  function onHeaderPointerDown(event: PointerEvent, id: string) {
+  function onChipPointerDown(event: PointerEvent, id: string) {
     if (event.button !== 0 || (event.target as Element).closest("button")) return;
     event.preventDefault();
     onfocus(id);
@@ -256,21 +299,24 @@
         onfocusin={() => onfocus(id)}
         onpointerdown={() => onfocus(id)}
       >
-        {#if tiled}
-          <div class="tile-header" onpointerdown={(event) => onHeaderPointerDown(event, id)}>
-            {@render header(id)}
-            <button
-              type="button"
-              class="tile-untile"
-              aria-label={untileLabel}
-              use:tooltip={untileTooltip}
-              onclick={() => onuntile(id)}
-            >
-              <X size={12} aria-hidden="true" />
-            </button>
+        {@render tile(id)}
+        {#if tiled && chip}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="tile-chip" onpointerdown={(event) => onChipPointerDown(event, id)}>
+            {@render chip(id)}
+            {#if onuntile}
+              <button
+                type="button"
+                class="tile-untile"
+                aria-label={untileLabel}
+                use:tooltip={untileTooltip}
+                onclick={() => onuntile?.(id)}
+              >
+                <X size={11} aria-hidden="true" />
+              </button>
+            {/if}
           </div>
         {/if}
-        {@render tile(id)}
       </div>
     {/if}
   {/each}
@@ -335,49 +381,51 @@
     border-top: 1px solid var(--border);
   }
 
-  /* Barra compacta de cada hoja: de donde se la arrastra y donde se ve cual
-     tiene el foco. El icono y el titulo los pone quien usa el area. */
-  .tile-header {
-    display: flex;
-    flex-shrink: 0;
+  /* Etiqueta flotante de cada hoja, arriba a la derecha y encima del
+     contenido: nombra la hoja sin sumar una franja. La enfocada, con texto
+     pleno e icono en acento; es el unico acento del area. */
+  .tile-chip {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-3);
+    z-index: 5;
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-2);
-    height: 1.375rem;
-    padding: 0 var(--space-1) 0 var(--space-2);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    gap: var(--space-1);
+    max-width: calc(100% - 2 * var(--space-3));
+    padding: 2px var(--space-1) 2px var(--space-2);
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-elevated);
     color: var(--text-secondary);
     font-size: 0.6875rem;
     cursor: grab;
     user-select: none;
   }
 
-  /* La enfocada: fondo un poco mas claro, texto pleno e icono en acento.
-     Es el unico acento del area (ni contorno ni linea): con varios a la vez
-     no se entendia que estaba enfocado. */
-  .tile.focused .tile-header {
-    background: color-mix(in srgb, var(--text-primary) 7%, var(--surface));
+  .tile.focused .tile-chip {
     color: var(--text-primary);
   }
 
-  .tile-header :global(svg) {
+  .tile-chip :global(svg) {
     flex-shrink: 0;
     opacity: 0.8;
   }
 
-  .tile.focused .tile-header :global(svg) {
+  .tile.focused .tile-chip :global(svg) {
     color: var(--accent);
     opacity: 1;
   }
 
-  .tile-header :global(.mosaic-title) {
+  .tile-chip :global(.mosaic-title) {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .tile-header :global(.mosaic-dirty) {
+  .tile-chip :global(.mosaic-dirty) {
     width: 0.375rem;
     height: 0.375rem;
     flex-shrink: 0;
@@ -389,9 +437,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1rem;
-    height: 1rem;
-    margin-left: auto;
+    width: 0.875rem;
+    height: 0.875rem;
     padding: 0;
     border: 0;
     border-radius: var(--radius-sm);
@@ -402,7 +449,7 @@
     transition: opacity var(--duration-fast) ease;
   }
 
-  .tile-header:hover .tile-untile,
+  .tile-chip:hover .tile-untile,
   .tile-untile:focus-visible {
     opacity: 1;
   }

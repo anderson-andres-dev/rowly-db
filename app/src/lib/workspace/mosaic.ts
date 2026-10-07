@@ -124,19 +124,6 @@ export function reveal(node: Mosaic | null, id: string, focused: string | null):
   return replace(node, target, id);
 }
 
-// Un id que cambia de nombre (una pestaña del resultado al fijarla o
-// desfijarla) sigue en su lugar. Si el nombre nuevo ya estaba en otra hoja,
-// el viejo solo se va: nunca queda dos veces.
-export function rename(node: Mosaic | null, from: string, to: string): Mosaic | null {
-  if (!contains(node, from) || from === to) return node;
-  if (contains(node, to)) return remove(node, from);
-  const visit = (current: Mosaic): Mosaic =>
-    current.kind === "leaf"
-      ? current.id === from ? leaf(to) : current
-      : { ...current, first: visit(current.first), second: visit(current.second) };
-  return node && visit(node);
-}
-
 // Sin los ids que ya no existen (una consola cerrada en otra parte).
 export function prune(node: Mosaic | null, keep: (id: string) => boolean): Mosaic | null {
   let current = node;

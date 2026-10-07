@@ -8,7 +8,7 @@
   import { tick, untrack } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
-  import { CircleCheck, FileCode, Pin, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
+  import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import TilePicker from "$lib/components/TilePicker.svelte";
@@ -78,7 +78,7 @@
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { consoleMosaics, setConsoleMosaic } from "$lib/stores/consoleMosaic";
-  import { leaves, neighbor, place, remove, rename, reveal, siblingOf, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
+  import { leaf, leaves, neighbor, place, rects, remove, reveal, siblingOf, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import {
     OUTPUT_TAB,
@@ -186,9 +186,15 @@
   function keepTabPosition(consoleId: string, fromKey: string, toKey: string) {
     const current = resultTabs.map((tab) => tab.key);
     resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
-    // Y en el mosaico del resultado, el mismo lugar.
-    setResultMosaic(consoleId, rename(resultMosaics[consoleId] ?? null, fromKey, toKey));
-    if (focusedResultTile[consoleId] === fromKey) focusedResultTile[consoleId] = toKey;
+    // Y en los grupos del resultado, el mismo grupo.
+    const layout = resultLayouts[consoleId];
+    if (layout?.member[fromKey]) {
+      const next = copyLayout(layout);
+      next.member[toKey] = next.member[fromKey];
+      delete next.member[fromKey];
+      for (const [group, key] of Object.entries(next.selected)) if (key === fromKey) next.selected[group] = toKey;
+      setLayout(consoleId, next);
+    }
   }
 
   // Fijar, desfijar, cerrar y olvidar (workspace/resultTabs.ts).
@@ -352,8 +358,7 @@
     selectedTabByConsole = withoutKey(selectedTabByConsole, consoleId);
     resultTabOrder = withoutKey(resultTabOrder, consoleId);
     tableFilterError = withoutKey(tableFilterError, consoleId);
-    resultMosaics = withoutKey(resultMosaics, consoleId);
-    delete focusedResultTile[consoleId];
+    resultLayouts = withoutKey(resultLayouts, consoleId);
     tableLoadAttempted.delete(consoleId);
   }
 
@@ -627,7 +632,7 @@
       sqlEditor.toggleSearch();
     });
     const cleanupResults = registerCommand("find", "results", () => {
-      (resultBodies[selectedTab] ?? resultPane)?.toggleFind();
+      ((resultLayout && resultGroups[resultLayout.focus]) || resultPane)?.toggleFind();
     });
     const cleanupReplace = registerCommand("replace", "editor", () => {
       if (!sqlEditor) return false;
@@ -934,52 +939,96 @@
     return item ? consoleDisplayTitle(item.title, $t) : "";
   }
 
-  // --- Resultado en mosaico -------------------------------------------------
-  // Las pestañas del resultado de la consola activa (la Salida y cada
-  // resultado) se ponen una junto a otra con la misma mecanica que las
-  // consolas (MosaicArea). La pestaña elegida es la del mosaico enfocado:
-  // ejecutar la muestra ahi, como siempre; elegir en la fila una que no se ve
-  // la pone en el enfocado. Una pestaña vive en un solo mosaico. Los atajos
-  // son los mismos (Ctrl+Alt+M, Ctrl+Alt+W, Ctrl+Shift+Alt+flechas) y el foco
-  // decide si actuan sobre el editor o sobre el resultado. Vive en memoria,
-  // por consola, como sus pestañas; una pestaña de tabla no tiene mosaico.
-  let resultMosaics = $state<Record<string, Mosaic>>({});
-  const focusedResultTile: Record<string, string> = {};
-  let resultMosaicArea = $state<ReturnType<typeof MosaicArea>>();
-  // Un panel por mosaico (sin fila); el del enfocado recibe buscar.
-  let resultBodies = $state<Record<string, ReturnType<typeof ResultPane> | undefined>>({});
-  const resultMosaic = $derived(activeConsole && !activeConsole.table ? (resultMosaics[activeConsole.id] ?? null) : null);
-  const resultTileIds = $derived(leaves(resultMosaic));
-  const resultTiled = $derived(resultTileIds.length > 1);
-
-  function setResultMosaic(consoleId: string, tree: Mosaic | null) {
-    if ((resultMosaics[consoleId] ?? null) === tree) return;
-    resultMosaics = tree ? { ...resultMosaics, [consoleId]: tree } : withoutKey(resultMosaics, consoleId);
+  // --- Resultado en mosaico: grupos de pestañas ------------------------------
+  // Como los grupos de VS Code: el resultado de la consola activa se parte en
+  // grupos (las hojas del mosaico, MosaicArea), cada uno con su propia fila
+  // de carpetas y la pestaña elegida debajo. Cada pestaña (la Salida y cada
+  // resultado) vive en un solo grupo; la elegida de la consola es la del
+  // grupo enfocado, y ejecutar agrega el resultado nuevo a ese grupo. Con un
+  // solo grupo se ve como siempre. Los atajos son los del editor
+  // (Ctrl+Alt+M, Ctrl+Alt+W, Ctrl+Shift+Alt+flechas) y el foco decide el
+  // area. Vive en memoria, por consola, como sus pestañas; una pestaña de
+  // tabla no tiene grupos.
+  interface ResultLayout {
+    tree: Mosaic;
+    // Grupo -> su pestaña elegida.
+    selected: Record<string, string>;
+    // Pestaña -> su grupo.
+    member: Record<string, string>;
+    focus: string;
   }
 
+  const FIRST_GROUP = "g0";
+  let groupCount = 0;
+  let resultLayouts = $state<Record<string, ResultLayout>>({});
+  let resultMosaicArea = $state<ReturnType<typeof MosaicArea>>();
+  // Un panel por grupo; el del enfocado recibe buscar.
+  let resultGroups = $state<Record<string, ReturnType<typeof ResultPane> | undefined>>({});
+  const resultLayout = $derived(activeConsole && !activeConsole.table ? (resultLayouts[activeConsole.id] ?? null) : null);
+  const resultGrouped = $derived(leaves(resultLayout?.tree ?? null).length > 1);
+  // La terminal es de la ventana: su pestaña va en la fila del grupo de
+  // arriba a la derecha y se abre sobre ese grupo.
+  const terminalGroup = $derived.by(() => {
+    if (!resultLayout) return FIRST_GROUP;
+    let best: [string, number] = [FIRST_GROUP, -1];
+    for (const [id, box] of rects(resultLayout.tree)) {
+      if (box.y < 1e-6 && box.x + box.width > best[1]) best = [id, box.x + box.width];
+    }
+    return best[0];
+  });
+  const terminalBox = $derived(resultLayout ? (rects(resultLayout.tree).get(terminalGroup) ?? null) : null);
+
+  function groupTabs(layout: ResultLayout, group: string, keys: string[]): string[] {
+    return keys.filter((key) => layout.member[key] === group);
+  }
+
+  function setLayout(consoleId: string, layout: ResultLayout) {
+    resultLayouts = { ...resultLayouts, [consoleId]: layout };
+  }
+
+  // Al aparecer o irse pestañas, y al elegir una: cada pestaña en un grupo
+  // (las nuevas, en el enfocado), un grupo vacio se va y deja su lugar a su
+  // hermano, y la elegida de la consola es la del grupo enfocado.
   $effect(() => {
     const item = activeConsole;
     if (!item || item.table) return;
-    const valid = new Set([OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]);
-    const selected = selectedTab;
+    const keys = [OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)];
+    const chosen = selectedTab;
     untrack(() => {
-      let tree: Mosaic | null = resultMosaics[item.id] ?? null;
-      // Una pestaña cerrada deja su lugar a su hermana, que queda elegida.
-      let refocus: string | null = null;
-      for (const key of leaves(tree)) {
-        if (valid.has(key)) continue;
-        if (key === focusedResultTile[item.id]) refocus = siblingOf(tree, key);
-        tree = remove(tree, key);
+      const previous = resultLayouts[item.id];
+      const layout: ResultLayout = previous
+        ? { tree: previous.tree, selected: { ...previous.selected }, member: { ...previous.member }, focus: previous.focus }
+        : { tree: leaf(FIRST_GROUP), selected: { [FIRST_GROUP]: chosen }, member: {}, focus: FIRST_GROUP };
+      const present = new Set(keys);
+      for (const key of Object.keys(layout.member)) if (!present.has(key)) delete layout.member[key];
+      for (const key of keys) layout.member[key] ??= layout.focus;
+      // La elegida que se fue: otra de su mismo grupo, no la que elija el
+      // respaldo de la consola (podia saltar a otro grupo).
+      const lostFocus = previous && !present.has(previous.selected[previous.focus] ?? "");
+      for (const group of leaves(layout.tree)) {
+        const tabs = groupTabs(layout, group, keys);
+        if (tabs.length === 0) {
+          const sibling = siblingOf(layout.tree, group);
+          layout.tree = remove(layout.tree, group) ?? leaf(FIRST_GROUP);
+          delete layout.selected[group];
+          if (layout.focus === group && sibling) layout.focus = sibling;
+          continue;
+        }
+        if (!tabs.includes(layout.selected[group])) layout.selected[group] = tabs.at(-1)!;
       }
-      if (refocus && refocus !== selected && valid.has(refocus) && leaves(tree).includes(refocus)) {
-        setResultMosaic(item.id, tree);
-        focusedResultTile[item.id] = refocus;
-        selectTab(item.id, refocus);
+      if (lostFocus) {
+        setLayout(item.id, layout);
+        const next = layout.selected[layout.focus];
+        if (next && next !== chosen) selectTab(item.id, next);
         return;
       }
-      tree = reveal(tree, selected, focusedResultTile[item.id] ?? null);
-      focusedResultTile[item.id] = selected;
-      setResultMosaic(item.id, tree);
+      // Elegir una pestaña (clic, Ctrl+Tab, ejecutar) enfoca su grupo.
+      const group = layout.member[chosen];
+      if (group) {
+        layout.focus = group;
+        layout.selected[group] = chosen;
+      }
+      setLayout(item.id, layout);
     });
   });
 
@@ -988,84 +1037,154 @@
     return resultTabs.find((tab) => tab.key === key)?.label ?? $t("workspace.result");
   }
 
-  // Lo que se enfoca al llegar a un mosaico del resultado: su grid o, sin el
-  // (la Salida), el mosaico mismo.
-  function focusResultTileContent(key: string): HTMLElement | null {
-    const element = resultMosaicArea?.tileElement(key) ?? null;
+  // Lo que se enfoca al llegar a un grupo: su grid o, sin el (la Salida), el
+  // grupo mismo.
+  function focusGroupContent(group: string): HTMLElement | null {
+    const element = resultMosaicArea?.tileElement(group) ?? null;
     const target = element?.querySelector<HTMLElement>('[role="grid"]') ?? element;
     target?.focus({ preventScroll: true });
     return element;
   }
 
-  async function arrangeResults(tree: Mosaic | null, focus: string) {
+  async function arrangeResults(layout: ResultLayout, focus: string) {
     const item = activeConsole;
     if (!item) return;
-    setResultMosaic(item.id, tree);
-    focusedResultTile[item.id] = focus;
-    terminalActive = false;
-    selectTab(item.id, focus);
+    layout.focus = focus;
+    setLayout(item.id, layout);
+    if (focus === terminalGroup) terminalActive = false;
+    selectTab(item.id, layout.selected[focus]);
     await tick();
-    focusResultTileContent(focus);
+    focusGroupContent(focus);
   }
 
-  function untileResult(key: string): boolean {
-    const sibling = siblingOf(resultMosaic, key);
+  function copyLayout(layout: ResultLayout): ResultLayout {
+    return { tree: layout.tree, selected: { ...layout.selected }, member: { ...layout.member }, focus: layout.focus };
+  }
+
+  // Ctrl+Alt+W en el resultado: el grupo enfocado se junta con su hermano,
+  // con sus pestañas, y la que se veia sigue elegida.
+  function mergeGroup(group: string): boolean {
+    if (!resultLayout || !activeConsole) return false;
+    const sibling = siblingOf(resultLayout.tree, group);
     if (!sibling) return false;
-    void arrangeResults(remove(resultMosaic, key), sibling);
+    const layout = copyLayout(resultLayout);
+    for (const [key, owner] of Object.entries(layout.member)) if (owner === group) layout.member[key] = sibling;
+    layout.selected[sibling] = layout.selected[group] ?? layout.selected[sibling];
+    delete layout.selected[group];
+    layout.tree = remove(layout.tree, group) ?? leaf(sibling);
+    void arrangeResults(layout, sibling);
     return true;
   }
 
-  function focusResultTile(key: string) {
-    if (activeConsole && key !== selectedTab) selectTab(activeConsole.id, key);
-  }
-
-  // Sacar una pestaña de la fila del resultado hacia sus mosaicos.
+  // Sacar una pestaña de la fila de su grupo: al borde de un grupo, un grupo
+  // nuevo de ese lado; en el centro, entra en ese grupo.
   function beginResultDrag(key: string, start: PointerEvent): boolean {
-    if (!activeConsole || activeConsole.table || terminalActive || !resultMosaicArea) return false;
-    return resultMosaicArea.beginDrag(key, start);
+    if (!activeConsole || activeConsole.table || !resultMosaicArea || !resultLayout) return false;
+    const from = resultLayout.member[key];
+    const alone = groupTabs(resultLayout, from, [OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]).length === 1;
+    pendingDrag = { key, from, alone };
+    return resultMosaicArea.beginDrag(`g${++groupCount}`, start, { title: resultLabel(key), vacate: alone ? from : undefined, merge: true });
   }
 
-  // Ctrl+Alt+M con el foco en el resultado: elegir que pestaña va junto a la
-  // enfocada (TilePicker, sin "nueva": las crea ejecutar).
+  let pendingDrag: { key: string; from: string; alone: boolean } | null = null;
+
+  function moveTab(layout: ResultLayout, key: string, to: string) {
+    const from = layout.member[key];
+    layout.member[key] = to;
+    layout.selected[to] = key;
+    if (from && from !== to && layout.selected[from] === key) {
+      const rest = groupTabs(layout, from, [OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]);
+      if (rest.length > 0) layout.selected[from] = rest.at(-1)!;
+      else delete layout.selected[from];
+    }
+  }
+
+  function dropTabInNewGroup(tree: Mosaic, group: string) {
+    const drag = pendingDrag;
+    pendingDrag = null;
+    if (!drag || !resultLayout) return;
+    const layout = copyLayout(resultLayout);
+    layout.tree = tree;
+    moveTab(layout, drag.key, group);
+    void arrangeResults(layout, group);
+  }
+
+  function dropTabInGroup(target: string) {
+    const drag = pendingDrag;
+    pendingDrag = null;
+    if (!drag || !resultLayout || target === drag.from) return;
+    const layout = copyLayout(resultLayout);
+    if (drag.alone) layout.tree = remove(layout.tree, drag.from) ?? leaf(target);
+    moveTab(layout, drag.key, target);
+    void arrangeResults(layout, target);
+  }
+
+  // Reordenar en la fila de un grupo: los indices son de sus pestañas de
+  // resultado; el orden de la consola se reacomoda solo en esos lugares.
+  function reorderGroupTabs(group: string, from: number, to: number) {
+    if (!activeConsole || !resultLayout) return;
+    const layout = resultLayout;
+    const all = resultTabs.map((tab) => tab.key);
+    const mine = all.filter((key) => layout.member[key] === group);
+    const moved = moveItem(mine, from, to);
+    let index = 0;
+    resultTabOrder = { ...resultTabOrder, [activeConsole.id]: all.map((key) => (layout.member[key] === group ? moved[index++] : key)) };
+  }
+
+  function focusGroup(group: string) {
+    if (!activeConsole || !resultLayout) return;
+    const key = resultLayout.selected[group];
+    if (key && key !== selectedTab) selectTab(activeConsole.id, key);
+  }
+
+  // Ctrl+Alt+M con el foco en el resultado: una pestaña que no se ve pasa a
+  // un grupo nuevo junto al enfocado (TilePicker, sin "nueva": las crea
+  // ejecutar).
   let resultPickerOpen = $state(false);
-  const resultPickerItems = $derived(
-    [
+  const resultPickerItems = $derived.by(() => {
+    if (!resultLayout) return [];
+    const shown = new Set(Object.values(resultLayout.selected));
+    return [
       { id: OUTPUT_TAB, title: $t("results.tab.output"), icon: "output" as const },
       ...resultTabs.map((tab) => ({ id: tab.key, title: tab.label, icon: tab.pinned ? ("pinned" as const) : ("result" as const) })),
-    ].filter((item) => !resultTileIds.includes(item.id)),
-  );
+    ].filter((item) => !shown.has(item.id));
+  });
 
   function pickResultTile(key: string | null, side: "right" | "bottom", whole: boolean) {
     resultPickerOpen = false;
-    if (key === null) return;
-    void arrangeResults(place(resultMosaic, whole ? WHOLE : selectedTab, key, side), key);
+    if (key === null || !resultLayout) return;
+    const layout = copyLayout(resultLayout);
+    const group = `g${++groupCount}`;
+    layout.tree = place(layout.tree, whole ? WHOLE : layout.focus, group, side);
+    moveTab(layout, key, group);
+    void arrangeResults(layout, group);
   }
 
   function closeResultPicker(refocus: boolean) {
     resultPickerOpen = false;
-    if (refocus) focusResultTileContent(selectedTab);
+    if (refocus && resultLayout) focusGroupContent(resultLayout.focus);
   }
 
   $effect(() => {
     const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
     return registerCommands("results", {
       "tile-console": whenIdle(() => {
-        if (!activeConsole || activeConsole.table || terminalActive) return false;
+        if (!activeConsole || activeConsole.table || resultPickerItems.length === 0) return false;
         resultPickerOpen = true;
       }),
-      "untile-console": whenIdle(() => !terminalActive && untileResult(selectedTab)),
+      "untile-console": whenIdle(() => !!resultLayout && mergeGroup(resultLayout.focus)),
     });
   });
 
   $effect(() =>
     setZoneNavigator("results", (direction) => {
-      if (!resultTiled || terminalActive || !activeConsole) return null;
+      if (!resultGrouped || !activeConsole || !resultLayout) return null;
       const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
-      const next = neighbor(resultMosaic, selectedTab, side);
+      const next = neighbor(resultLayout.tree, resultLayout.focus, side);
       if (!next) return null;
-      focusedResultTile[activeConsole.id] = next;
-      selectTab(activeConsole.id, next);
-      return focusResultTileContent(next);
+      if (next !== terminalGroup) terminalActive = false;
+      focusGroup(next);
+      return focusGroupContent(next);
     }),
   );
 
@@ -1241,7 +1360,7 @@
         onfocus={focusTile}
         onuntile={untile}
       >
-        {#snippet header(id)}
+        {#snippet chip(id)}
           {@const item = consoles.find((candidate) => candidate.id === id)}
           {#if item}
             {#if item.filePath}
@@ -1394,58 +1513,49 @@
         {terminalActive}
         onterminal={toggleTerminal}
         tiles={activeConsole && !activeConsole.table ? resultTiles : undefined}
-        visibleKeys={resultTiled ? resultTileIds : []}
-        ondetach={beginResultDrag}
+        terminalBox={activeConsole && !activeConsole.table ? terminalBox : null}
       />
       {#snippet resultTiles()}
-        <MosaicArea
-          bind:this={resultMosaicArea}
-          tree={resultMosaic}
-          focused={selectedTab}
-          minSize={{ row: 380, column: 150 }}
-          untileLabel={$t("mosaic.tile.untile")}
-          untileTooltip={$t("mosaic.tile.untileWithKeys", { keys: shortcutKeys("untile-console") })}
-          label={resultLabel}
-          onresize={(tree) => activeConsole && setResultMosaic(activeConsole.id, tree)}
-          onarrange={(tree, focus) => void arrangeResults(tree, focus)}
-          onfocus={focusResultTile}
-          onuntile={untileResult}
-        >
-          {#snippet header(key)}
-            {@const tab = resultTabs.find((candidate) => candidate.key === key)}
-            {#if key === OUTPUT_TAB}
-              <SquareTerminal size={12} aria-hidden="true" />
-            {:else if tab?.pinned}
-              <Pin size={12} aria-hidden="true" />
-            {:else}
-              <Table size={12} aria-hidden="true" />
+        {#if resultLayout}
+          {@const layout = resultLayout}
+          <MosaicArea
+            bind:this={resultMosaicArea}
+            tree={layout.tree}
+            focused={layout.focus}
+            minSize={{ row: 380, column: 150 }}
+            label={(group) => resultLabel(layout.selected[group] ?? OUTPUT_TAB)}
+            onresize={(tree) => activeConsole && setLayout(activeConsole.id, { ...layout, tree })}
+            onarrange={dropTabInNewGroup}
+            onmerge={(target) => dropTabInGroup(target)}
+            onfocus={focusGroup}
+          >
+            {#snippet tile(group)}
+              <div class="result-host">{@render resultGroup(group)}</div>
+            {/snippet}
+            {#if resultPickerOpen}
+              <TilePicker
+                items={resultPickerItems}
+                label={$t("mosaic.picker.resultLabel")}
+                placeholder={$t("mosaic.picker.resultSearch")}
+                onpick={pickResultTile}
+                onclose={closeResultPicker}
+              />
             {/if}
-            <span class="mosaic-title">{resultLabel(key)}</span>
-          {/snippet}
-          {#snippet tile(key)}
-            <div class="result-host">{@render resultBody(key)}</div>
-          {/snippet}
-          {#if resultPickerOpen}
-            <TilePicker
-              items={resultPickerItems}
-              label={$t("mosaic.picker.resultLabel")}
-              placeholder={$t("mosaic.picker.resultSearch")}
-              onpick={pickResultTile}
-              onclose={closeResultPicker}
-            />
-          {/if}
-        </MosaicArea>
+          </MosaicArea>
+        {/if}
       {/snippet}
-      {#snippet resultBody(tab: string)}
-        {#if activeConsole}
+      {#snippet resultGroup(group: string)}
+        {#if activeConsole && resultLayout}
           {@const item = activeConsole}
+          {@const layout = resultLayout}
           {@const consoleId = item.id}
+          {@const tab = layout.selected[group] ?? OUTPUT_TAB}
           {@const key = tab === OUTPUT_TAB ? consoleId : tab}
           {@const view = executionForConsole($queryConsoles, key)}
           {@const edit = editStateFor($resultEdits, key)}
+          {@const hostsTerminal = group === terminalGroup}
           <ResultPane
-            bind:this={resultBodies[tab]}
-            stripless
+            bind:this={resultGroups[group]}
             isExecuting={view.isExecuting}
             result={view.result}
             resultSql={view.resultSql}
@@ -1472,11 +1582,19 @@
             consoleRunning={liveExecution.isExecuting}
             oncancelquery={() => cancelExecution(consoleId)}
             cancellingQuery={$cancelling[consoleId] === true}
-            tabs={resultTabs}
+            tabs={resultTabs.filter((candidate) => layout.member[candidate.key] === group)}
+            showOutputTab={layout.member[OUTPUT_TAB] === group}
             activeTab={tab}
+            onselecttab={(next) => {
+              if (hostsTerminal) terminalActive = false;
+              selectTab(consoleId, next);
+            }}
+            onreordertabs={(from, to) => reorderGroupTabs(group, from, to)}
+            onclosetab={(closing) => void closeResultTab(closing)}
+            ondetach={beginResultDrag}
             onexport={() => (exportFor = key)}
             onpin={() => pinCurrentResult(consoleId)}
-            fileEncoding={tab === selectedTab ? fileEncoding(item) : null}
+            fileEncoding={group === layout.focus ? fileEncoding(item) : null}
             onencodingchange={(encoding) => setQueryConsoleEncoding(consoleId, encoding)}
             onunpin={() => unpinTab(key)}
             onrepin={() => {
@@ -1486,6 +1604,11 @@
             onpreview={() => void openChangesPreview(key)}
             onsubmit={() => void submitChanges(key)}
             onnotice={notifyError}
+            terminalTab={hostsTerminal}
+            terminalActive={hostsTerminal && terminalActive}
+            onterminal={toggleTerminal}
+            tabCommands={group === layout.focus}
+            dimmed={resultGrouped && group !== layout.focus}
           />
         {/if}
       {/snippet}

@@ -70,7 +70,9 @@ export function reorderable(node: HTMLElement, initial: ReorderParams) {
 
     const items = [...node.querySelectorAll<HTMLElement>(params.items)];
     const from = items.indexOf(item);
-    if (from < 0 || items.length < 2) return;
+    // Una sola no tiene con que reordenarse, pero puede sacarse de la fila
+    // (la unica pestaña de un grupo del resultado).
+    if (from < 0 || (items.length < 2 && !params.detach)) return;
 
     const startX = event.clientX;
     const startY = event.clientY;

@@ -115,9 +115,12 @@
     terminal,
     terminalActive = false,
     onterminal = () => {},
-    stripless = false,
     tiles,
-    visibleKeys = [],
+    terminalBox = null,
+    showOutputTab = true,
+    terminalTab = true,
+    tabCommands = true,
+    dimmed = false,
     ondetach,
   }: {
     isExecuting: boolean;
@@ -196,15 +199,22 @@
     terminal?: Snippet;
     terminalActive?: boolean;
     onterminal?: () => void;
-    // Pestañas en mosaico (Workspace.svelte, MosaicArea): el panel de la
-    // ventana pone la fila y la terminal y, en vez de su propio cuerpo, los
-    // mosaicos (`tiles`); cada mosaico es otro panel sin fila (`stripless`)
-    // con el estado de su pestaña. `visibleKeys`: las que se ven en algun
-    // mosaico (la fila las marca). `ondetach`: sacar una pestaña de la fila
-    // hacia los mosaicos (reorder.ts); false si no se puede.
-    stripless?: boolean;
+    // Grupos de pestañas en mosaico (Workspace.svelte, MosaicArea): el panel
+    // de la ventana, sin fila propia, pone los grupos (`tiles`) y la
+    // terminal, que no se vuelve a montar y se abre sobre el grupo de arriba
+    // a la derecha (`terminalBox`, en fracciones del area). Cada grupo es
+    // otro panel con SU fila de carpetas: la Salida solo si es suya
+    // (`showOutputTab`), la pestaña Terminal solo en el de la terminal
+    // (`terminalTab`), y Ctrl+Tab solo en el enfocado (`tabCommands`).
+    // `ondetach`: sacar una pestaña de la fila hacia los grupos
+    // (reorder.ts); false si no se puede.
     tiles?: Snippet;
-    visibleKeys?: string[];
+    terminalBox?: { x: number; y: number; width: number; height: number } | null;
+    showOutputTab?: boolean;
+    terminalTab?: boolean;
+    tabCommands?: boolean;
+    // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
+    dimmed?: boolean;
     ondetach?: (key: string, event: PointerEvent) => boolean;
   } = $props();
 
@@ -554,12 +564,13 @@
   // ella, las mismas teclas recorren sus sesiones.
   let tabStrip = $state<HTMLElement>();
   const showsResultTabs = $derived(!tableView && hasActivity);
-  const stripKeys = $derived(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []);
+  const stripKeys = $derived(showsResultTabs ? [...(showOutputTab ? ["output"] : []), ...tabs.map((tab) => tab.key)] : []);
 
   $effect(() => {
-    // Los mosaicos no tienen fila: la recorre el panel de la ventana.
-    if (stripless) return;
+    // Con grupos, cada uno recorre la suya y solo el enfocado responde.
+    if (tiles) return;
     return registerTabCommands("results", {
+      applies: () => tabCommands,
       keys: () => stripKeys,
       current: () => (terminalActive ? null : showingOutput ? "output" : (selectedKey ?? null)),
       select: (key) => {
@@ -597,29 +608,30 @@
   <!-- La fila sale siempre (salvo en una tabla sin la terminal abierta): a la
        derecha, el boton de la terminal, que es de la ventana y no un
        resultado mas. -->
-  {#if !stripless && (!tableView || terminal)}
+  {#if !tiles && (!tableView || terminal)}
     <div
       class="result-tabs tab-strip"
-      class:tiled={visibleKeys.length > 1}
+      class:dimmed
       role="tablist"
       aria-label={$t("results.tabs")}
       bind:this={tabStrip}
       use:settleTransitions
     >
       {#if showsResultTabs}
+      {#if showOutputTab}
       <button
         type="button"
         role="tab"
         class="result-tab"
         style:--tab-active="var(--surface-content)"
         class:active={showingOutput}
-        class:tiled={!showingOutput && visibleKeys.includes("output")}
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
       >
         <SquareTerminal size={12} aria-hidden="true" />
         <span>{$t("results.tab.output")}</span>
       </button>
+      {/if}
       <!-- Salida y Terminal quedan fijas; los resultados se desplazan entre
            ellas, como las pestañas de las consolas. -->
       <div
@@ -635,7 +647,6 @@
         <div
           class="result-tab closable"
           class:active={selectedKey === tab.key}
-          class:tiled={selectedKey !== tab.key && visibleKeys.includes(tab.key)}
           data-result-key={tab.key}
           animate:flip={{ duration: flipDuration(160) }}
         >
@@ -662,6 +673,7 @@
       {/if}
       <!-- La terminal es de la ventana: su pestaña va aparte, a la derecha,
            y abierta se une a ella (el fondo de la terminal). -->
+      {#if terminalTab}
       <button
         type="button"
         role="tab"
@@ -677,9 +689,11 @@
         <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
         <span>{$t("workspace.terminal.title")}</span>
       </button>
+      {/if}
     </div>
   {/if}
-  <div class="pane-view" class:hidden={terminalActive}>
+  <!-- Con grupos, la terminal tapa solo el suyo (terminalBox). -->
+  <div class="pane-view" class:hidden={terminalActive && !tiles}>
   {#if tiles}
     {@render tiles()}
   {:else}
@@ -1000,13 +1014,23 @@
   {/if}
   {/if}
   </div>
-  {#if terminal && !stripless}
-    <div class="terminal-view" class:hidden={!terminalActive}>{@render terminal()}</div>
+  {#if terminal}
+    <div
+      class="terminal-view"
+      class:hidden={!terminalActive}
+      class:over-group={!!terminalBox}
+      style={terminalBox
+        ? `left: ${terminalBox.x * 100}%; top: calc(${terminalBox.y * 100}% + var(--group-strip)); width: ${terminalBox.width * 100}%; height: calc(${terminalBox.height * 100}% - var(--group-strip))`
+        : undefined}
+    >
+      {@render terminal()}
+    </div>
   {/if}
 </div>
 
 <style>
   .result-pane {
+    position: relative;
     display: flex;
     min-height: 0;
     height: 100%;
@@ -1231,6 +1255,15 @@
      montado (el grid conserva su estado). */
   .pane-view {
     display: contents;
+  }
+
+  /* Sobre el cuerpo del grupo de la terminal, debajo de su fila (que la
+     marca abierta): no tapa los demas grupos. --group-strip es la altura de
+     la fila de carpetas (tabs.css). */
+  .terminal-view.over-group {
+    --group-strip: calc(2rem + 6px);
+    position: absolute;
+    z-index: 6;
   }
 
   .terminal-view {
