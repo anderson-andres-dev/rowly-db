@@ -8,10 +8,10 @@
   import { tick, untrack } from "svelte";
   import { flip } from "svelte/animate";
   import { fade, fly } from "svelte/transition";
-  import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
+  import { CircleCheck, FileCode, Pin, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
-  import ConsolePicker from "$lib/components/ConsolePicker.svelte";
+  import TilePicker from "$lib/components/TilePicker.svelte";
   import MosaicArea from "$lib/components/MosaicArea.svelte";
   import ExecutionGuard from "$lib/components/ExecutionGuard.svelte";
   import ResultPane from "$lib/components/results/ResultPane.svelte";
@@ -78,7 +78,7 @@
   } from "$lib/stores/queryConsoles";
   import { flipDuration, moveItem, reorderable } from "$lib/reorder";
   import { consoleMosaics, setConsoleMosaic } from "$lib/stores/consoleMosaic";
-  import { leaves, neighbor, place, remove, reveal, siblingOf, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
+  import { leaves, neighbor, place, remove, rename, reveal, siblingOf, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import {
     OUTPUT_TAB,
@@ -143,11 +143,10 @@
   // firstFromTable complementa a extractFromContext, que es del
   // autocompletado y depende de la posicion del cursor: sobre el texto
   // entero a veces no resuelve una consulta simple.
-  const resultTableName = $derived.by(() => {
-    const sql = execution.resultSql;
+  function resultTableOf(sql: string | null): string | undefined {
     if (!sql) return undefined;
     return extractFromContext(sql, sql.length)?.table ?? firstFromTable(sql)?.table;
-  });
+  }
   // Rotula un resultado como DataGrip: "schema.tabla". La fuente mas
   // confiable es el analisis de edicion del backend (AST + catalogo); si la
   // consulta no es editable, la primera tabla del FROM; sin tabla ("SELECT
@@ -187,6 +186,9 @@
   function keepTabPosition(consoleId: string, fromKey: string, toKey: string) {
     const current = resultTabs.map((tab) => tab.key);
     resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
+    // Y en el mosaico del resultado, el mismo lugar.
+    setResultMosaic(consoleId, rename(resultMosaics[consoleId] ?? null, fromKey, toKey));
+    if (focusedResultTile[consoleId] === fromKey) focusedResultTile[consoleId] = toKey;
   }
 
   // Fijar, desfijar, cerrar y olvidar (workspace/resultTabs.ts).
@@ -216,42 +218,54 @@
   // sin pedirle nada nuevo al backend, reusando el catalogo que ya existe
   // para el arbol de tablas y el autocompletado.
   //
-  // Busca en TODAS las tablas, no solo en resultTableName: con un JOIN
-  // (USING/ON), columnas como "clie_codi" vienen de la tabla unida, no de
-  // la primera del FROM, y resultTableName solo resuelve esa primera. Si
-  // el mismo nombre de columna existe en mas de una tabla, gana
-  // resultTableName cuando aplica (es la señal mas confiable de a que
+  // Busca en TODAS las tablas, no solo en la principal (resultTableOf): con
+  // un JOIN (USING/ON), columnas como "clie_codi" vienen de la tabla unida,
+  // no de la primera del FROM, y resultTableOf solo resuelve esa primera. Si
+  // el mismo nombre de columna existe en mas de una tabla, gana la
+  // principal cuando aplica (es la señal mas confiable de a que
   // tabla pertenece), y si no, la primera tabla del catalogo que la tenga.
-  const resultColumnCatalogInfo = $derived.by((): Map<string, ColumnCatalogInfo> | null => {
+  //
+  // Por pestaña (cada mosaico del resultado tiene la suya): la base con
+  // todas las tablas se arma una vez por catalogo, y la de cada tabla
+  // principal se guarda, asi el grid recibe siempre el mismo Map.
+  function toColumnInfo(column: CatalogColumn, table: CatalogTable): ColumnCatalogInfo {
+    const fkColumns = new Set(table.foreignKeys.map((fk) => fk.column.toLowerCase()));
+    return {
+      isPrimaryKey: column.isPrimaryKey,
+      isForeignKey: fkColumns.has(column.name.toLowerCase()),
+      comment: column.comment,
+    };
+  }
+
+  const catalogColumnInfo = $derived.by(() => {
     const tables = $catalogTables;
     if (tables.length === 0) return null;
-
-    function toColumnInfo(column: CatalogColumn, table: CatalogTable): ColumnCatalogInfo {
-      const fkColumns = new Set(table.foreignKeys.map((fk) => fk.column.toLowerCase()));
-      return {
-        isPrimaryKey: column.isPrimaryKey,
-        isForeignKey: fkColumns.has(column.name.toLowerCase()),
-        comment: column.comment,
-      };
-    }
-
-    const map = new Map<string, ColumnCatalogInfo>();
+    const base = new Map<string, ColumnCatalogInfo>();
     for (const table of tables) {
       for (const column of table.columns) {
         const key = column.name.toLowerCase();
-        if (!map.has(key)) map.set(key, toColumnInfo(column, table));
+        if (!base.has(key)) base.set(key, toColumnInfo(column, table));
       }
     }
-
-    const mainTable = tables.find((t) => t.name.toLowerCase() === resultTableName?.toLowerCase());
-    if (mainTable) {
-      for (const column of mainTable.columns) {
-        map.set(column.name.toLowerCase(), toColumnInfo(column, mainTable));
-      }
-    }
-
-    return map;
+    return { tables, base, byTable: new Map<CatalogTable, Map<string, ColumnCatalogInfo>>() };
   });
+
+  function columnInfoFor(key: string): Map<string, ColumnCatalogInfo> | null {
+    const catalog = catalogColumnInfo;
+    if (!catalog) return null;
+    const name = resultTableOf(executionForConsole($queryConsoles, key).resultSql)?.toLowerCase();
+    const mainTable = name ? catalog.tables.find((table) => table.name.toLowerCase() === name) : undefined;
+    if (!mainTable) return catalog.base;
+    let map = catalog.byTable.get(mainTable);
+    if (!map) {
+      map = new Map(catalog.base);
+      for (const column of mainTable.columns) map.set(column.name.toLowerCase(), toColumnInfo(column, mainTable));
+      catalog.byTable.set(mainTable, map);
+    }
+    return map;
+  }
+
+  const resultColumnCatalogInfo = $derived(columnInfoFor(viewKey));
   let tableDefinitionRequest = $state<CatalogTableRef | null>(null);
   // "schema@host", igual que resultSourceLabel usa "database || name" como
   // nombre de schema (ver mas abajo) - la misma convencion para las dos
@@ -338,6 +352,8 @@
     selectedTabByConsole = withoutKey(selectedTabByConsole, consoleId);
     resultTabOrder = withoutKey(resultTabOrder, consoleId);
     tableFilterError = withoutKey(tableFilterError, consoleId);
+    resultMosaics = withoutKey(resultMosaics, consoleId);
+    delete focusedResultTile[consoleId];
     tableLoadAttempted.delete(consoleId);
   }
 
@@ -611,7 +627,7 @@
       sqlEditor.toggleSearch();
     });
     const cleanupResults = registerCommand("find", "results", () => {
-      resultPane?.toggleFind();
+      (resultBodies[selectedTab] ?? resultPane)?.toggleFind();
     });
     const cleanupReplace = registerCommand("replace", "editor", () => {
       if (!sqlEditor) return false;
@@ -829,7 +845,9 @@
   // otro. Si el foco esta en otro mosaico, pasa al de la activa.
   async function followFocus(id: string) {
     await tick();
-    const holder = document.activeElement?.closest<HTMLElement>("[data-tile-id]");
+    // Solo los mosaicos del editor: los del resultado usan las claves de sus
+    // pestañas, y la normal es el id de la consola.
+    const holder = document.activeElement?.closest<HTMLElement>('[data-focus-zone="editor"] [data-tile-id]');
     if (holder && holder.dataset.tileId !== id) editors[id]?.focus();
   }
 
@@ -850,12 +868,12 @@
     return true;
   }
 
-  // Ctrl+Alt+M: elegir cual va junto a la enfocada (ConsolePicker).
+  // Ctrl+Alt+M: elegir cual va junto a la enfocada (TilePicker).
   let pickerOpen = $state(false);
   const pickerItems = $derived(
     consoles
       .filter((item) => !item.table && !tileIds.includes(item.id))
-      .map((item) => ({ id: item.id, title: consoleDisplayTitle(item.title, $t), file: !!item.filePath })),
+      .map((item) => ({ id: item.id, title: consoleDisplayTitle(item.title, $t), icon: item.filePath ? ("file" as const) : ("console" as const) })),
   );
 
   function pickTile(id: string | null, side: "right" | "bottom", whole: boolean) {
@@ -915,6 +933,141 @@
     const item = consoles.find((candidate) => candidate.id === id);
     return item ? consoleDisplayTitle(item.title, $t) : "";
   }
+
+  // --- Resultado en mosaico -------------------------------------------------
+  // Las pestañas del resultado de la consola activa (la Salida y cada
+  // resultado) se ponen una junto a otra con la misma mecanica que las
+  // consolas (MosaicArea). La pestaña elegida es la del mosaico enfocado:
+  // ejecutar la muestra ahi, como siempre; elegir en la fila una que no se ve
+  // la pone en el enfocado. Una pestaña vive en un solo mosaico. Los atajos
+  // son los mismos (Ctrl+Alt+M, Ctrl+Alt+W, Ctrl+Shift+Alt+flechas) y el foco
+  // decide si actuan sobre el editor o sobre el resultado. Vive en memoria,
+  // por consola, como sus pestañas; una pestaña de tabla no tiene mosaico.
+  let resultMosaics = $state<Record<string, Mosaic>>({});
+  const focusedResultTile: Record<string, string> = {};
+  let resultMosaicArea = $state<ReturnType<typeof MosaicArea>>();
+  // Un panel por mosaico (sin fila); el del enfocado recibe buscar.
+  let resultBodies = $state<Record<string, ReturnType<typeof ResultPane> | undefined>>({});
+  const resultMosaic = $derived(activeConsole && !activeConsole.table ? (resultMosaics[activeConsole.id] ?? null) : null);
+  const resultTileIds = $derived(leaves(resultMosaic));
+  const resultTiled = $derived(resultTileIds.length > 1);
+
+  function setResultMosaic(consoleId: string, tree: Mosaic | null) {
+    if ((resultMosaics[consoleId] ?? null) === tree) return;
+    resultMosaics = tree ? { ...resultMosaics, [consoleId]: tree } : withoutKey(resultMosaics, consoleId);
+  }
+
+  $effect(() => {
+    const item = activeConsole;
+    if (!item || item.table) return;
+    const valid = new Set([OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]);
+    const selected = selectedTab;
+    untrack(() => {
+      let tree: Mosaic | null = resultMosaics[item.id] ?? null;
+      // Una pestaña cerrada deja su lugar a su hermana, que queda elegida.
+      let refocus: string | null = null;
+      for (const key of leaves(tree)) {
+        if (valid.has(key)) continue;
+        if (key === focusedResultTile[item.id]) refocus = siblingOf(tree, key);
+        tree = remove(tree, key);
+      }
+      if (refocus && refocus !== selected && valid.has(refocus) && leaves(tree).includes(refocus)) {
+        setResultMosaic(item.id, tree);
+        focusedResultTile[item.id] = refocus;
+        selectTab(item.id, refocus);
+        return;
+      }
+      tree = reveal(tree, selected, focusedResultTile[item.id] ?? null);
+      focusedResultTile[item.id] = selected;
+      setResultMosaic(item.id, tree);
+    });
+  });
+
+  function resultLabel(key: string): string {
+    if (key === OUTPUT_TAB) return $t("results.tab.output");
+    return resultTabs.find((tab) => tab.key === key)?.label ?? $t("workspace.result");
+  }
+
+  // Lo que se enfoca al llegar a un mosaico del resultado: su grid o, sin el
+  // (la Salida), el mosaico mismo.
+  function focusResultTileContent(key: string): HTMLElement | null {
+    const element = resultMosaicArea?.tileElement(key) ?? null;
+    const target = element?.querySelector<HTMLElement>('[role="grid"]') ?? element;
+    target?.focus({ preventScroll: true });
+    return element;
+  }
+
+  async function arrangeResults(tree: Mosaic | null, focus: string) {
+    const item = activeConsole;
+    if (!item) return;
+    setResultMosaic(item.id, tree);
+    focusedResultTile[item.id] = focus;
+    terminalActive = false;
+    selectTab(item.id, focus);
+    await tick();
+    focusResultTileContent(focus);
+  }
+
+  function untileResult(key: string): boolean {
+    const sibling = siblingOf(resultMosaic, key);
+    if (!sibling) return false;
+    void arrangeResults(remove(resultMosaic, key), sibling);
+    return true;
+  }
+
+  function focusResultTile(key: string) {
+    if (activeConsole && key !== selectedTab) selectTab(activeConsole.id, key);
+  }
+
+  // Sacar una pestaña de la fila del resultado hacia sus mosaicos.
+  function beginResultDrag(key: string, start: PointerEvent): boolean {
+    if (!activeConsole || activeConsole.table || terminalActive || !resultMosaicArea) return false;
+    return resultMosaicArea.beginDrag(key, start);
+  }
+
+  // Ctrl+Alt+M con el foco en el resultado: elegir que pestaña va junto a la
+  // enfocada (TilePicker, sin "nueva": las crea ejecutar).
+  let resultPickerOpen = $state(false);
+  const resultPickerItems = $derived(
+    [
+      { id: OUTPUT_TAB, title: $t("results.tab.output"), icon: "output" as const },
+      ...resultTabs.map((tab) => ({ id: tab.key, title: tab.label, icon: tab.pinned ? ("pinned" as const) : ("result" as const) })),
+    ].filter((item) => !resultTileIds.includes(item.id)),
+  );
+
+  function pickResultTile(key: string | null, side: "right" | "bottom", whole: boolean) {
+    resultPickerOpen = false;
+    if (key === null) return;
+    void arrangeResults(place(resultMosaic, whole ? WHOLE : selectedTab, key, side), key);
+  }
+
+  function closeResultPicker(refocus: boolean) {
+    resultPickerOpen = false;
+    if (refocus) focusResultTileContent(selectedTab);
+  }
+
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
+    return registerCommands("results", {
+      "tile-console": whenIdle(() => {
+        if (!activeConsole || activeConsole.table || terminalActive) return false;
+        resultPickerOpen = true;
+      }),
+      "untile-console": whenIdle(() => !terminalActive && untileResult(selectedTab)),
+    });
+  });
+
+  $effect(() =>
+    setZoneNavigator("results", (direction) => {
+      if (!resultTiled || terminalActive || !activeConsole) return null;
+      const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
+      const next = neighbor(resultMosaic, selectedTab, side);
+      if (!next) return null;
+      focusedResultTile[activeConsole.id] = next;
+      selectTab(activeConsole.id, next);
+      return focusResultTileContent(next);
+    }),
+  );
 
   function startResize(event: PointerEvent) {
     event.preventDefault();
@@ -1137,7 +1290,14 @@
           {/if}
         {/snippet}
         {#if pickerOpen}
-          <ConsolePicker items={pickerItems} onpick={pickTile} onclose={closePicker} />
+          <TilePicker
+            items={pickerItems}
+            label={$t("mosaic.picker.label")}
+            placeholder={$t("mosaic.picker.search")}
+            newLabel={$t("mosaic.picker.new")}
+            onpick={pickTile}
+            onclose={closePicker}
+          />
         {/if}
       </MosaicArea>
     </div>
@@ -1170,7 +1330,11 @@
       class="result-region"
       bind:this={resultRegion}
       tabindex="-1"
-      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') || focusSelf(zone) }}
+      use:focusZoneAction={{
+        zone: "results",
+        focusDefault: (zone) =>
+          focusIn(zone, `[data-tile-id="${CSS.escape(selectedTab)}"] [role="grid"]`) || focusIn(zone, '[role="grid"]') || focusSelf(zone),
+      }}
     >
       <ResultPane
         bind:this={resultPane}
@@ -1229,7 +1393,102 @@
         terminal={TerminalDock ? terminalDock : undefined}
         {terminalActive}
         onterminal={toggleTerminal}
+        tiles={activeConsole && !activeConsole.table ? resultTiles : undefined}
+        visibleKeys={resultTiled ? resultTileIds : []}
+        ondetach={beginResultDrag}
       />
+      {#snippet resultTiles()}
+        <MosaicArea
+          bind:this={resultMosaicArea}
+          tree={resultMosaic}
+          focused={selectedTab}
+          minSize={{ row: 260, column: 120 }}
+          untileLabel={$t("mosaic.tile.untile")}
+          untileTooltip={$t("mosaic.tile.untileWithKeys", { keys: shortcutKeys("untile-console") })}
+          label={resultLabel}
+          onresize={(tree) => activeConsole && setResultMosaic(activeConsole.id, tree)}
+          onarrange={(tree, focus) => void arrangeResults(tree, focus)}
+          onfocus={focusResultTile}
+          onuntile={untileResult}
+        >
+          {#snippet header(key)}
+            {@const tab = resultTabs.find((candidate) => candidate.key === key)}
+            {#if key === OUTPUT_TAB}
+              <SquareTerminal size={12} aria-hidden="true" />
+            {:else if tab?.pinned}
+              <Pin size={12} aria-hidden="true" />
+            {:else}
+              <Table size={12} aria-hidden="true" />
+            {/if}
+            <span class="mosaic-title">{resultLabel(key)}</span>
+          {/snippet}
+          {#snippet tile(key)}
+            <div class="result-host">{@render resultBody(key)}</div>
+          {/snippet}
+          {#if resultPickerOpen}
+            <TilePicker
+              items={resultPickerItems}
+              label={$t("mosaic.picker.resultLabel")}
+              placeholder={$t("mosaic.picker.resultSearch")}
+              onpick={pickResultTile}
+              onclose={closeResultPicker}
+            />
+          {/if}
+        </MosaicArea>
+      {/snippet}
+      {#snippet resultBody(tab: string)}
+        {#if activeConsole}
+          {@const item = activeConsole}
+          {@const consoleId = item.id}
+          {@const key = tab === OUTPUT_TAB ? consoleId : tab}
+          {@const view = executionForConsole($queryConsoles, key)}
+          {@const edit = editStateFor($resultEdits, key)}
+          <ResultPane
+            bind:this={resultBodies[tab]}
+            stripless
+            isExecuting={view.isExecuting}
+            result={view.result}
+            resultSql={view.resultSql}
+            resultAt={view.resultAt}
+            sourceLabel={labelForKey(key)}
+            columnCatalogInfo={columnInfoFor(key)}
+            page={view.page}
+            totalRows={view.totalRows}
+            counting={view.counting}
+            nextPageShortcut={shortcutKeys("next-result-page")}
+            previousPageShortcut={shortcutKeys("previous-result-page")}
+            onnavigate={(offset, pageSize) => void navigatePage(key, offset, pageSize)}
+            sort={view.sort}
+            onsort={(column, additive) => void sortResult(key, column, additive)}
+            oncount={() => countTotalRows(key)}
+            editInfo={edit.info ?? null}
+            editBlockedReason={edit.blockedReason ?? null}
+            edits={edit.edits ?? EMPTY_EDITS}
+            onedits={(edits, at) => commitResultEdits(key, edits, at)}
+            lastEditStep={edit.history.at(-1) ?? null}
+            onundo={() => undoResultEdit(key)}
+            onreload={() => void reloadResult(key)}
+            outputLog={$executionLog[consoleId] ?? []}
+            consoleRunning={liveExecution.isExecuting}
+            oncancelquery={() => cancelExecution(consoleId)}
+            cancellingQuery={$cancelling[consoleId] === true}
+            tabs={resultTabs}
+            activeTab={tab}
+            onexport={() => (exportFor = key)}
+            onpin={() => pinCurrentResult(consoleId)}
+            fileEncoding={tab === selectedTab ? fileEncoding(item) : null}
+            onencodingchange={(encoding) => setQueryConsoleEncoding(consoleId, encoding)}
+            onunpin={() => unpinTab(key)}
+            onrepin={() => {
+              const id = pinnedIdOf(key);
+              if (id !== null) setResultPinned(consoleId, id, true);
+            }}
+            onpreview={() => void openChangesPreview(key)}
+            onsubmit={() => void submitChanges(key)}
+            onnotice={notifyError}
+          />
+        {/if}
+      {/snippet}
       {#snippet terminalDock()}
         {#if TerminalDock}
           <TerminalDock visible={terminalActive} {profileId} onerror={notifyError} />
@@ -1660,6 +1919,14 @@
     position: relative;
     min-height: 0;
     flex: 1;
+  }
+
+  /* El panel de una pestaña dentro de su mosaico, debajo de la barra. */
+  .result-host {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
 

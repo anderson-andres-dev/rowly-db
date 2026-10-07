@@ -2,29 +2,35 @@
   export interface PickerItem {
     id: string;
     title: string;
-    file: boolean;
+    icon: "console" | "file" | "output" | "result" | "pinned";
   }
 </script>
 
 <script lang="ts">
   import { tick } from "svelte";
-  import { FileCode, Plus, Search, SquareTerminal } from "@lucide/svelte";
+  import { FileCode, Pin, Plus, Search, SquareTerminal, Table } from "@lucide/svelte";
   import { t } from "$lib/i18n";
 
-  // Elegir que consola se pone en mosaico junto a la enfocada (Ctrl+Alt+M):
-  // capa flotante como el historial, todo con el teclado desde el filtro.
-  // Enter la pone a la derecha, Shift+Enter debajo; con Ctrl, de toda el
-  // area (al lado de todas las que se ven, no solo de la enfocada). Esc
-  // cierra. Solo lista
-  // las que no se ven: una consola vive en un unico mosaico. La ultima
-  // opcion abre una consola nueva ahi.
+  // Elegir que va en mosaico junto a lo enfocado (Ctrl+Alt+M): una consola en
+  // el editor o una pestaña en el resultado. Capa flotante como el
+  // historial, todo con el teclado desde el filtro. Enter la pone a la
+  // derecha, Shift+Enter debajo; con Ctrl, de toda el area (al lado de todo
+  // lo que se ve, no solo de lo enfocado). Esc cierra. Solo lista lo que no
+  // se ve: cada cosa vive en un unico mosaico. Con `newLabel`, la ultima
+  // opcion abre una nueva ahi.
 
   let {
     items,
+    label,
+    placeholder,
+    newLabel = null,
     onpick,
     onclose,
   }: {
     items: PickerItem[];
+    label: string;
+    placeholder: string;
+    newLabel?: string | null;
     // null: una consola nueva.
     onpick: (id: string | null, side: "right" | "bottom", whole: boolean) => void;
     onclose: (refocus: boolean) => void;
@@ -39,7 +45,8 @@
   const filtered = $derived.by(() => {
     const needle = query.trim().toLowerCase();
     const matching = needle ? items.filter((item) => item.title.toLowerCase().includes(needle)) : items;
-    return [...matching.map((item) => item.id), NEW];
+    const ids = matching.map((item) => item.id);
+    return newLabel ? [...ids, NEW] : ids;
   });
   const active = $derived(filtered.includes(activeId ?? "") ? activeId : filtered[0]);
   const byId = $derived(new Map(items.map((item) => [item.id, item])));
@@ -54,6 +61,7 @@
   });
 
   async function move(delta: number) {
+    if (filtered.length === 0) return;
     const index = active ? filtered.indexOf(active) : -1;
     const next = filtered[Math.min(filtered.length - 1, Math.max(0, index + delta))];
     activeId = next;
@@ -91,28 +99,31 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="console-picker ui-menu" bind:this={root} onkeydown={onKeydown} onfocusout={onFocusOut}>
+<div class="tile-picker ui-menu" bind:this={root} onkeydown={onKeydown} onfocusout={onFocusOut}>
   <label class="ui-field compact">
     <Search size={13} aria-hidden="true" />
     <input
       type="search"
       bind:value={query}
-      placeholder={$t("mosaic.picker.search")}
-      aria-label={$t("mosaic.picker.label")}
+      {placeholder}
+      aria-label={label}
       role="combobox"
       aria-expanded="true"
-      aria-controls="console-picker-list"
-      aria-activedescendant={active ? `console-picker-${filtered.indexOf(active)}` : undefined}
+      aria-controls="tile-picker-list"
+      aria-activedescendant={active ? `tile-picker-${filtered.indexOf(active)}` : undefined}
       use:focusOnMount
     />
   </label>
 
-  <div class="entries" id="console-picker-list" role="listbox" aria-label={$t("mosaic.picker.label")} bind:this={list}>
+  <div class="entries" id="tile-picker-list" role="listbox" aria-label={label} bind:this={list}>
+    {#if filtered.length === 0}
+      <p class="empty">{$t("mosaic.picker.empty")}</p>
+    {/if}
     {#each filtered as id, index (id)}
       {@const item = byId.get(id)}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
-        id={`console-picker-${index}`}
+        id={`tile-picker-${index}`}
         data-index={index}
         class="ui-menu-item entry"
         class:active={id === active}
@@ -125,10 +136,14 @@
       >
         {#if !item}
           <Plus size={13} aria-hidden="true" />
-          <span class="title">{$t("mosaic.picker.new")}</span>
+          <span class="title">{newLabel}</span>
         {:else}
-          {#if item.file}
+          {#if item.icon === "file"}
             <FileCode size={13} aria-hidden="true" />
+          {:else if item.icon === "result"}
+            <Table size={13} aria-hidden="true" />
+          {:else if item.icon === "pinned"}
+            <Pin size={13} aria-hidden="true" />
           {:else}
             <SquareTerminal size={13} aria-hidden="true" />
           {/if}
@@ -147,8 +162,8 @@
 </div>
 
 <style>
-  /* Centrada arriba del area de las consolas, como el historial. */
-  .console-picker {
+  /* Centrada arriba del area, como el historial. */
+  .tile-picker {
     position: absolute;
     top: var(--space-3);
     right: 0;
@@ -185,6 +200,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--space-3) var(--space-2);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    text-align: center;
   }
 
   .new-entry {

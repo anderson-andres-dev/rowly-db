@@ -115,6 +115,10 @@
     terminal,
     terminalActive = false,
     onterminal = () => {},
+    stripless = false,
+    tiles,
+    visibleKeys = [],
+    ondetach,
   }: {
     isExecuting: boolean;
     result: QueryExecutionResult | null;
@@ -192,6 +196,16 @@
     terminal?: Snippet;
     terminalActive?: boolean;
     onterminal?: () => void;
+    // Pestañas en mosaico (Workspace.svelte, MosaicArea): el panel de la
+    // ventana pone la fila y la terminal y, en vez de su propio cuerpo, los
+    // mosaicos (`tiles`); cada mosaico es otro panel sin fila (`stripless`)
+    // con el estado de su pestaña. `visibleKeys`: las que se ven en algun
+    // mosaico (la fila las marca). `ondetach`: sacar una pestaña de la fila
+    // hacia los mosaicos (reorder.ts); false si no se puede.
+    stripless?: boolean;
+    tiles?: Snippet;
+    visibleKeys?: string[];
+    ondetach?: (key: string, event: PointerEvent) => boolean;
   } = $props();
 
   // El ">_" de Lucide (Terminal), distinto del SquareTerminal de la Salida.
@@ -542,8 +556,10 @@
   const showsResultTabs = $derived(!tableView && hasActivity);
   const stripKeys = $derived(showsResultTabs ? ["output", ...tabs.map((tab) => tab.key)] : []);
 
-  $effect(() =>
-    registerTabCommands("results", {
+  $effect(() => {
+    // Los mosaicos no tienen fila: la recorre el panel de la ventana.
+    if (stripless) return;
+    return registerTabCommands("results", {
       keys: () => stripKeys,
       current: () => (terminalActive ? null : showingOutput ? "output" : (selectedKey ?? null)),
       select: (key) => {
@@ -551,8 +567,8 @@
         // El foco va a la pestaña elegida, como al hacer clic.
         void tick().then(() => tabStrip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
       },
-    }),
-  );
+    });
+  });
 
 </script>
 
@@ -581,7 +597,7 @@
   <!-- La fila sale siempre (salvo en una tabla sin la terminal abierta): a la
        derecha, el boton de la terminal, que es de la ventana y no un
        resultado mas. -->
-  {#if !tableView || terminal}
+  {#if !stripless && (!tableView || terminal)}
     <div
       class="result-tabs tab-strip"
       role="tablist"
@@ -596,6 +612,7 @@
         class="result-tab"
         style:--tab-active="var(--surface-content)"
         class:active={showingOutput}
+        class:tiled={!showingOutput && visibleKeys.includes("output")}
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
       >
@@ -607,10 +624,20 @@
       <div
         class="result-tabs-scroll"
         use:tabScroll={`${selectedKey}|${tabs.length}`}
-        use:reorderable={{ items: ".result-tab.closable", onmove: (from, to) => onreordertabs(from, to) }}
+        use:reorderable={{
+          items: ".result-tab.closable",
+          onmove: (from, to) => onreordertabs(from, to),
+          detach: ondetach ? (item, event) => !!item.dataset.resultKey && ondetach(item.dataset.resultKey, event) : undefined,
+        }}
       >
       {#each tabs as tab (tab.key)}
-        <div class="result-tab closable" class:active={selectedKey === tab.key} animate:flip={{ duration: flipDuration(160) }}>
+        <div
+          class="result-tab closable"
+          class:active={selectedKey === tab.key}
+          class:tiled={selectedKey !== tab.key && visibleKeys.includes(tab.key)}
+          data-result-key={tab.key}
+          animate:flip={{ duration: flipDuration(160) }}
+        >
           <button
             type="button"
             role="tab"
@@ -652,6 +679,9 @@
     </div>
   {/if}
   <div class="pane-view" class:hidden={terminalActive}>
+  {#if tiles}
+    {@render tiles()}
+  {:else}
   {#if hasActivity}
     {#if showingResult}
       <!-- Barra de herramientas del resultado: fila propia debajo de las
@@ -967,8 +997,9 @@
       </div>
     </div>
   {/if}
+  {/if}
   </div>
-  {#if terminal}
+  {#if terminal && !stripless}
     <div class="terminal-view" class:hidden={!terminalActive}>{@render terminal()}</div>
   {/if}
 </div>

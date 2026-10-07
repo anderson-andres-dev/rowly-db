@@ -1,9 +1,13 @@
 import { defineMessages } from "../define";
 
-// Consolas en mosaico (Workspace.svelte, ConsolePicker.svelte).
+// Mosaico de consolas y del resultado (Workspace.svelte, MosaicArea.svelte,
+// TilePicker.svelte).
 export default defineMessages({
   es: {
     "picker.label": "Poner una consola en mosaico",
+    "picker.resultLabel": "Poner una pestaña del resultado en mosaico",
+    "picker.resultSearch": "Buscar pestaña",
+    "picker.empty": "Ya se ve todo.",
     "picker.search": "Buscar consola",
     "picker.new": "Consola nueva",
     "picker.right": "a la derecha",
@@ -15,6 +19,9 @@ export default defineMessages({
   },
   en: {
     "picker.label": "Tile a console",
+    "picker.resultLabel": "Tile a result tab",
+    "picker.resultSearch": "Search tabs",
+    "picker.empty": "Everything is already visible.",
     "picker.search": "Search consoles",
     "picker.new": "New console",
     "picker.right": "to the right",
@@ -26,6 +33,9 @@ export default defineMessages({
   },
   "pt-BR": {
     "picker.label": "Colocar um console em mosaico",
+    "picker.resultLabel": "Colocar uma aba do resultado em mosaico",
+    "picker.resultSearch": "Buscar aba",
+    "picker.empty": "Tudo já está visível.",
     "picker.search": "Buscar console",
     "picker.new": "Novo console",
     "picker.right": "à direita",
@@ -37,6 +47,9 @@ export default defineMessages({
   },
   fr: {
     "picker.label": "Mettre une console en mosaïque",
+    "picker.resultLabel": "Mettre un onglet du résultat en mosaïque",
+    "picker.resultSearch": "Rechercher un onglet",
+    "picker.empty": "Tout est déjà visible.",
     "picker.search": "Rechercher une console",
     "picker.new": "Nouvelle console",
     "picker.right": "à droite",
@@ -48,6 +61,9 @@ export default defineMessages({
   },
   de: {
     "picker.label": "Konsole kacheln",
+    "picker.resultLabel": "Ergebnis-Tab kacheln",
+    "picker.resultSearch": "Tab suchen",
+    "picker.empty": "Alles ist schon sichtbar.",
     "picker.search": "Konsole suchen",
     "picker.new": "Neue Konsole",
     "picker.right": "rechts",

@@ -239,8 +239,10 @@
   {#each ids as id (id)}
     {@const box = boxes.get(id)}
     {#if box}
-      <!-- Enfocar cualquier parte de la hoja la vuelve la enfocada. -->
+      <!-- Enfocar cualquier parte de la hoja la vuelve la enfocada; la hoja
+           misma se enfoca si no tiene otra cosa (la Salida). -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
         class="tile"
         class:focused={tiled && id === focused}
@@ -249,6 +251,7 @@
         data-tile-id={id}
         data-zone-piece={tiled ? "" : undefined}
         role={tiled ? "group" : undefined}
+        tabindex={tiled ? -1 : undefined}
         aria-label={tiled ? label(id) : undefined}
         style={boxStyle(box)}
         onfocusin={() => onfocus(id)}

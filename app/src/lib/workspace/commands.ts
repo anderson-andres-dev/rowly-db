@@ -65,8 +65,9 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "save-query-console-as", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+S" },
   { id: "open-sql-file", zone: "global", group: "general", defaultKeys: "Ctrl+O" },
   { id: "close-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
-  // Consolas en mosaico (Workspace.svelte): elegir cual va junto a la
-  // enfocada, y sacar la enfocada del mosaico sin cerrarla.
+  // Mosaico (Workspace.svelte): elegir que va junto a lo enfocado, y sacar
+  // lo enfocado del mosaico sin cerrarlo. Segun el foco, consolas o
+  // pestañas del resultado (handlers en "global" y en "results").
   { id: "tile-console", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+M" },
   { id: "untile-console", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+W" },
   // Solo con el foco en la terminal; fuera, la tecla sigue su camino.

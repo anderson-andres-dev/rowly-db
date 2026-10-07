@@ -58,6 +58,12 @@
   color: var(--text-primary);
 }
 
+/* Visible en otro mosaico del resultado, sin el foco: texto pleno, sin
+   relleno (como las consolas). */
+.result-tab.tiled {
+  color: var(--text-primary);
+}
+
 /* La elegida: el contorno en acento, intenso arriba al centro y
    desvanecido hacia las esquinas y hacia abajo, donde se une con su
    contenido; dentro, un degradado muy suave del acento que termina en el
