@@ -842,7 +842,14 @@
     const from = editorLayout.member[id];
     const alone = groupTabs(editorLayout, from, consoleIds).length === 1;
     pendingEditorDrag = { id, from };
-    return editorMosaic.beginDrag(freshEditorGroup(), start, { source, grab, vacate: alone ? from : undefined, origin: from, merge: true });
+    return editorMosaic.beginDrag(freshEditorGroup(), start, {
+      source,
+      grab,
+      vacate: alone ? from : undefined,
+      origin: from,
+      merge: true,
+      landing: () => editorPane?.querySelector<HTMLElement>(`.console-tab[data-console-id="${CSS.escape(id)}"]`) ?? null,
+    });
   }
 
   function dropConsoleInNewGroup(tree: Mosaic, group: string) {
@@ -895,6 +902,10 @@
     if (!editorLayout) return;
     const group = freshEditorGroup();
     const tree = place(editorLayout.tree, whole ? WHOLE : editorLayout.focus, group, side);
+    if (editorMosaic && !editorMosaic.fits(tree)) {
+      notifyError($t("mosaic.noRoom"));
+      return;
+    }
     const chosen = id ?? createQueryConsole(profileId);
     const ids = consoleIds.includes(chosen) ? consoleIds : [...consoleIds, chosen];
     setEditorGroups(profileId, normalizeGroups(moveTab({ ...editorLayout, tree }, chosen, group, ids), ids));
@@ -1034,7 +1045,14 @@
     const from = resultLayout.member[key];
     const alone = groupTabs(resultLayout, from, resultKeys).length === 1;
     pendingDrag = { key, from };
-    return resultMosaicArea.beginDrag(freshResultGroup(), start, { source, grab, vacate: alone ? from : undefined, origin: from, merge: true });
+    return resultMosaicArea.beginDrag(freshResultGroup(), start, {
+      source,
+      grab,
+      vacate: alone ? from : undefined,
+      origin: from,
+      merge: true,
+      landing: () => resultRegion?.querySelector<HTMLElement>(`.result-tab[data-result-key="${CSS.escape(key)}"]`) ?? null,
+    });
   }
 
   function dropTabInNewGroup(tree: Mosaic, group: string) {
@@ -1086,6 +1104,10 @@
     if (key === null || !resultLayout) return;
     const group = freshResultGroup();
     const tree = place(resultLayout.tree, whole ? WHOLE : resultLayout.focus, group, side);
+    if (resultMosaicArea && !resultMosaicArea.fits(tree)) {
+      notifyError($t("mosaic.noRoom"));
+      return;
+    }
     void arrangeResults(moveTab({ ...resultLayout, tree }, key, group, resultKeys));
   }
 
@@ -1259,6 +1281,7 @@
                 oncontextmenu={(event) => openTabMenu(event, item.id)}
                 animate:flip={{ duration: flipDuration(150) }}
                 in:fly={{ x: -8, duration: 150 }}
+                out:fade={{ duration: 120 }}
               >
                 {#if renamingId === item.id}
                   <input
@@ -1291,7 +1314,7 @@
                     {/if}
                     <span
                       class="console-tab-title"
-                      use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{title}</span
+                      use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? title)}>{title}</span
                     >
                   </button>
                 {/if}
@@ -1488,7 +1511,7 @@
             bind:this={resultMosaicArea}
             tree={layout.tree}
             focused={layout.focus}
-            minSize={{ row: 380, column: 150 }}
+            minSize={{ row: 320, column: 150 }}
             label={(group) => resultLabel(layout.selected[group] ?? OUTPUT_TAB)}
             onresize={(tree) => resultConsole && setLayout(resultConsole.id, { ...layout, tree })}
             onarrange={dropTabInNewGroup}

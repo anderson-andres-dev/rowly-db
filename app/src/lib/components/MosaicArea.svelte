@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { fade } from "svelte/transition";
   import { onePerFrame } from "$lib/onePerFrame";
   import { swallowNextClick } from "$lib/reorder";
   import { liftGhost, type Ghost, type Point } from "$lib/dragGhost";
@@ -68,6 +69,9 @@
   } = $props();
 
   let area = $state<HTMLElement>();
+  // Mientras se mueve un divisor, las hojas siguen al puntero sin
+  // transicion; al reacomodar el arbol (partir, juntar, mover) se deslizan.
+  let resizing = $state(false);
 
   const ids = $derived(leaves(tree));
   const tiled = $derived(ids.length > 1);
@@ -76,6 +80,17 @@
 
   // Pegado al borde exterior del area, se parte el area entera.
   const OUTER_EDGE_PX = 24;
+
+  // Si cada hoja de `next` respeta el minimo en pixeles: partir no puede
+  // dejar un grupo donde ya no caben su fila ni su barra.
+  export function fits(next: Mosaic): boolean {
+    const box = area?.getBoundingClientRect();
+    if (!box || box.width === 0) return true;
+    for (const rect of rects(next).values()) {
+      if (rect.width * box.width < minSize.row - 1 || rect.height * box.height < minSize.column - 1) return false;
+    }
+    return true;
+  }
 
   export function tileElement(id: string): HTMLElement | null {
     return area?.querySelector<HTMLElement>(`[data-tile-id="${CSS.escape(id)}"]`) ?? null;
@@ -94,6 +109,7 @@
     event.preventDefault();
     event.stopPropagation();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    resizing = true;
     const box = area?.getBoundingClientRect();
     const live = onePerFrame((ratio: number) => {
       if (tree) onresize(setRatio(tree, divider.path, ratio));
@@ -113,6 +129,7 @@
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       live.flush();
+      resizing = false;
     }
 
     window.addEventListener("pointermove", onMove);
@@ -140,6 +157,9 @@
   // donde sale; entrar de nuevo en ella no hace nada.
   interface DragOptions {
     source?: HTMLElement;
+    // Donde queda lo soltado (la pestaña en su fila nueva): la copia vuela
+    // hasta ahi.
+    landing?: () => HTMLElement | null;
     grab?: Point;
     vacate?: string;
     origin?: string;
@@ -199,7 +219,9 @@
     if (current.merge && current.side === "center" && current.target === current.origin) return null;
     const base = current.vacate ? remove(tree, current.vacate) : tree;
     if (current.side === "center") return current.merge ? base : replace(base, current.target, current.id);
-    return place(base, current.target, current.id, current.side);
+    // Sin lugar para otra hoja: no se puede soltar ahi (sin vista previa).
+    const next = place(base, current.target, current.id, current.side);
+    return fits(next) ? next : null;
   }
 
   // Lo que se resalta al arrastrar es donde quedaria de verdad: el
@@ -243,13 +265,17 @@
       drag = null;
       swallowNextClick();
       const next = current && apply ? dropResult(current) : null;
-      // Se asienta donde cae; sin destino, vuelve a su lugar.
-      if (next) ghost?.settle();
-      else ghost?.cancel();
+      const lifted = ghost;
       ghost = null;
-      if (!current || !next) return;
+      // Sin destino, vuelve a su lugar.
+      if (!current || !next) {
+        lifted?.cancel();
+        return;
+      }
       if (current.merge && current.side === "center" && current.target) onmerge?.(current.target, current.id);
       else onarrange(next, current.id);
+      // Se asienta donde quedo, ya reacomodado el destino.
+      lifted?.settle(options.landing);
     }
 
     const onUp = () => finish(true);
@@ -274,7 +300,7 @@
     `left: ${percent(rect.x)}; top: ${percent(rect.y)}; width: ${percent(rect.width)}; height: ${percent(rect.height)}`;
 </script>
 
-<div class="mosaic" class:tiled bind:this={area}>
+<div class="mosaic" class:tiled class:resizing bind:this={area}>
   {#each ids as id (id)}
     {@const box = boxes.get(id)}
     {#if box}
@@ -292,6 +318,7 @@
         tabindex={tiled ? -1 : undefined}
         aria-label={tiled ? label(id) : undefined}
         style={boxStyle(box)}
+        in:fade={{ duration: tiled ? 160 : 0 }}
         onfocusin={() => onfocus(id)}
         onpointerdown={() => onfocus(id)}
       >
@@ -336,6 +363,24 @@
     min-width: 0;
     min-height: 0;
     flex: 1;
+  }
+
+  /* Al reacomodar el arbol, cada hoja se desliza a su lugar nuevo (con una
+     sola hoja no hay nada que mover). */
+  .mosaic.tiled:not(.resizing) .tile,
+  .mosaic.tiled:not(.resizing) .tile-divider {
+    transition:
+      left 180ms cubic-bezier(0.2, 0.9, 0.3, 1),
+      top 180ms cubic-bezier(0.2, 0.9, 0.3, 1),
+      width 180ms cubic-bezier(0.2, 0.9, 0.3, 1),
+      height 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mosaic .tile,
+    .mosaic .tile-divider {
+      transition: none !important;
+    }
   }
 
   .tile {

@@ -271,3 +271,26 @@
     transparent calc(100% - var(--tab-reach))
   );
 }
+
+/* Como las pestañas del navegador: en una fila angosta se encogen (el titulo
+   se corta con ...) hasta un minimo, y recien ahi la fila se desplaza. */
+.result-tabs-scroll > .result-tab.closable {
+  flex: 0 1 auto;
+  min-width: 4.5rem;
+}
+
+.result-tabs-scroll > .result-tab.closable > .tab-select {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.result-tabs-scroll > .result-tab.closable > .tab-select > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-tabs-scroll > .result-tab.closable > .tab-close {
+  flex-shrink: 0;
+}

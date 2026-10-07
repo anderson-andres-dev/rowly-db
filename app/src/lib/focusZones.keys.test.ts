@@ -9,14 +9,17 @@ interface KeyInit {
   ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
+  code?: string;
+  repeat?: boolean;
   inTerminal?: boolean;
 }
 
 class FakeKey extends Event {
   key: string;
+  code: string;
   ctrlKey: boolean;
   shiftKey: boolean;
-  repeat = false;
+  repeat: boolean;
   altKey: boolean;
   metaKey = false;
   isComposing = false;
@@ -26,6 +29,8 @@ class FakeKey extends Event {
     this.ctrlKey = init.ctrl ?? false;
     this.shiftKey = init.shift ?? false;
     this.altKey = init.alt ?? false;
+    this.code = init.code ?? "";
+    this.repeat = init.repeat ?? false;
     // El despachador mira si la tecla viene de la terminal por el destino.
     if (init.inTerminal) {
       Object.defineProperty(this, "target", { value: { closest: (selector: string) => selector === "[data-terminal]" } });
@@ -206,5 +211,35 @@ describe("zonas con piezas (consolas en mosaico)", () => {
     done();
     moveFocus("left");
     expect(asked).toEqual(["left", "right"]);
+  });
+});
+
+describe("lo que manda WebKitGTK (medido con el teclado real)", () => {
+  it("Ctrl+Shift+Tab llega con key Unidentified: cuenta por su code", () => {
+    const calls: string[] = [];
+    const done = registerCommand("previous-tab", "global", () => void calls.push("previous-tab"));
+    expect(press("Unidentified", { ctrl: true, shift: true, code: "Tab" })).toBe(true);
+    expect(calls).toEqual(["previous-tab"]);
+    done();
+  });
+
+  it("con Ctrl+Shift sostenidos, la repeticion de Tab sin modificadores sigue siendo el atajo", () => {
+    const calls: string[] = [];
+    const done = registerCommand("previous-tab", "global", () => void calls.push("previous-tab"));
+    press("Control", { ctrl: true, code: "ControlLeft" });
+    press("Shift", { ctrl: true, shift: true, code: "ShiftLeft" });
+    expect(press("Tab", { code: "Tab", repeat: true })).toBe(true);
+    expect(calls).toEqual(["previous-tab"]);
+    // Soltar Shift llega como CapsLock, pero con su code.
+    (g.window as EventTarget).dispatchEvent(Object.assign(new FakeKey("keyup", "CapsLock", { code: "ShiftLeft" })));
+    (g.window as EventTarget).dispatchEvent(Object.assign(new FakeKey("keyup", "Control", { code: "ControlLeft" })));
+    expect(press("Tab", { code: "Tab" })).toBe(false);
+    done();
+  });
+
+  it("perder la ventana suelta los modificadores fisicos", () => {
+    press("Control", { ctrl: true, code: "ControlLeft" });
+    (g.window as EventTarget).dispatchEvent(new Event("blur"));
+    expect(press("Tab", { code: "Tab" })).toBe(false);
   });
 });

@@ -666,7 +666,8 @@
             {:else}
               <Table size={12} aria-hidden="true" />
             {/if}
-            <span>{tab.label}</span>
+            <!-- En una fila angosta el nombre se corta: entero al pasar. -->
+            <span use:tooltip={tab.label}>{tab.label}</span>
           </button>
           <button type="button" class="tab-close" aria-label={$t("results.tab.close", { name: tab.label })} onclick={() => onclosetab(tab.key)}>
             <X size={11} aria-hidden="true" />
@@ -1033,8 +1034,11 @@
 </div>
 
 <style>
+  /* Contenedor de sus barras: en un grupo angosto se compactan
+     (@container, abajo). */
   .result-pane {
     position: relative;
+    container-type: inline-size;
     display: flex;
     min-height: 0;
     height: 100%;
@@ -1117,6 +1121,21 @@
     box-sizing: border-box;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    /* Si aun compacta no cabe, se desplaza: nunca pierde botones. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .result-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* En un grupo angosto, los grupos de botones se juntan. */
+  @container (max-width: 34rem) {
+    .result-toolbar {
+      gap: var(--space-1);
+      padding: 0 var(--space-1);
+    }
   }
 
   /* 4px entre botones: el hover de uno no toca al de al lado y la burbuja

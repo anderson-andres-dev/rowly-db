@@ -11,13 +11,16 @@ export interface Point {
 
 export interface Ghost {
   move(at: Point): void;
-  // Se solto sobre un destino.
-  settle(): void;
+  // Se solto sobre un destino: vuela hasta donde quedo (`landing`, buscado
+  // despues de que el destino se reacomoda) y ahi se va; sin el, se
+  // desvanece donde esta.
+  settle(landing?: () => HTMLElement | null): void;
   // Esc, o se solto donde no hace nada: vuelve a su lugar.
   cancel(): void;
 }
 
 const SETTLE_MS = 120;
+const LAND_MS = 170;
 const RETURN_MS = 180;
 const EASE = "cubic-bezier(0.2, 0.9, 0.3, 1)";
 
@@ -85,12 +88,31 @@ export function liftGhost(source: HTMLElement, grab: Point, at: Point): Ghost {
     move(point) {
       if (!done) place(point);
     },
-    settle() {
+    settle(landing) {
       if (done) return;
       if (prefersReducedMotion()) return finish(0);
-      ghost.style.transition = `opacity ${SETTLE_MS}ms ease`;
-      ghost.style.opacity = "0";
-      finish(SETTLE_MS);
+      done = true;
+      // Dos cuadros: el destino ya se dibujo en su lugar nuevo.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const target = landing?.();
+          const box = target?.getBoundingClientRect();
+          if (target && box && box.width > 0) {
+            target.style.opacity = "0";
+            ghost.style.transition = `transform ${LAND_MS}ms ${EASE}, width ${LAND_MS}ms ${EASE}`;
+            ghost.style.transform = `translate(${box.left}px, ${box.top}px)`;
+            ghost.style.width = `${box.width}px`;
+            setTimeout(() => (target.style.opacity = ""), LAND_MS);
+            done = false;
+            finish(LAND_MS);
+          } else {
+            ghost.style.transition = `opacity ${SETTLE_MS}ms ease`;
+            ghost.style.opacity = "0";
+            done = false;
+            finish(SETTLE_MS);
+          }
+        }),
+      );
     },
     cancel() {
       if (done) return;
