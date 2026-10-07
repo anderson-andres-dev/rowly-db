@@ -414,7 +414,8 @@
    encabezados del grid llegan de borde a borde y taparian un contorno
    propio del contenedor. */
 /* Ancla de la marca de cada zona. :where() no suma especificidad: si una
-   zona tuviera su propio position, gana el de su clase. */
+   zona tuviera su propio position, gana el de su clase. Un mosaico dentro de
+   una zona no lleva marca: su barra ya dice cual tiene el foco. */
 :where([data-focus-zone]) {
   position: relative;
 }
@@ -447,7 +448,7 @@
   }
 }
 
-/* Moviendose entre zonas (Ctrl+Shift sostenidos): solo la marca de la zona;
+/* Moviendose entre zonas (Ctrl+Shift+Alt sostenidos): solo la marca de la zona;
    el anillo del elemento enfocado (una fila del arbol, una celda) sale al
    soltar. */
 :root.zone-moving [data-focus-zone] :focus-visible {

@@ -263,6 +263,9 @@ export interface ResultPage {
   pageable: boolean;
   // Se puede ordenar desde los encabezados (la consulta admite ORDER BY).
   sortable?: boolean;
+  // Los filtros del embudo pedidos se aplicaron en la base: las filas, la
+  // pagina y el total son los filtrados.
+  filtered?: boolean;
 }
 
 // Orden pedido desde un encabezado del grid: columna (base 0) y sentido.

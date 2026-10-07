@@ -23,6 +23,7 @@ pub const DEFINITION: EngineDefinition = EngineDefinition {
     do_blocks: DoBlocks::Expression,
     select_into_variable_lists: true,
     sql_mode_query: Some(mysql::SQL_MODE_QUERY),
+    exact_text: mysql::EXACT_TEXT,
     lines: include_str!("../../../../support/mariadb.json"),
 };
 

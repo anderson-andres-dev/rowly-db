@@ -8,15 +8,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 interface KeyInit {
   ctrl?: boolean;
   shift?: boolean;
+  alt?: boolean;
+  code?: string;
+  repeat?: boolean;
   inTerminal?: boolean;
 }
 
 class FakeKey extends Event {
   key: string;
+  code: string;
   ctrlKey: boolean;
   shiftKey: boolean;
-  repeat = false;
-  altKey = false;
+  repeat: boolean;
+  altKey: boolean;
   metaKey = false;
   isComposing = false;
   constructor(type: string, key: string, init: KeyInit = {}) {
@@ -24,6 +28,9 @@ class FakeKey extends Event {
     this.key = key;
     this.ctrlKey = init.ctrl ?? false;
     this.shiftKey = init.shift ?? false;
+    this.altKey = init.alt ?? false;
+    this.code = init.code ?? "";
+    this.repeat = init.repeat ?? false;
     // El despachador mira si la tecla viene de la terminal por el destino.
     if (init.inTerminal) {
       Object.defineProperty(this, "target", { value: { closest: (selector: string) => selector === "[data-terminal]" } });
@@ -75,16 +82,18 @@ function release(key: string) {
   (g.window as EventTarget).dispatchEvent(new FakeKey("keyup", key));
 }
 
-describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
-  it("cada flecha con Ctrl+Shift mueve a su zona, sin prefijo", () => {
-    expect(press("ArrowLeft", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowUp", { ctrl: true, shift: true })).toBe(true);
-    expect(press("ArrowRight", { ctrl: true, shift: true })).toBe(true);
+describe("moverse entre zonas (Ctrl+Shift+Alt+flechas)", () => {
+  it("cada flecha con Ctrl+Shift+Alt mueve a su zona, sin prefijo", () => {
+    const all = { ctrl: true, shift: true, alt: true };
+    expect(press("ArrowLeft", all)).toBe(true);
+    expect(press("ArrowDown", all)).toBe(true);
+    expect(press("ArrowUp", all)).toBe(true);
+    expect(press("ArrowRight", all)).toBe(true);
     expect(moves).toEqual(["left", "down", "up", "right"]);
   });
 
-  it("las flechas sin Ctrl+Shift siguen su camino", () => {
+  it("las flechas con menos modificadores siguen su camino (seleccionar por palabra, etc.)", () => {
+    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(false);
     expect(press("ArrowDown", { ctrl: true })).toBe(false);
     expect(press("ArrowDown", { shift: true })).toBe(false);
     expect(press("ArrowDown")).toBe(false);
@@ -92,58 +101,69 @@ describe("moverse entre zonas (Ctrl+Shift+flechas)", () => {
   });
 
   it("tambien desde la terminal", () => {
-    expect(press("ArrowUp", { ctrl: true, shift: true, inTerminal: true })).toBe(true);
+    expect(press("ArrowUp", { ctrl: true, shift: true, alt: true, inTerminal: true })).toBe(true);
     expect(moves).toEqual(["up"]);
   });
 });
 
-describe("modo mover (Ctrl+Shift sostenidos)", () => {
-  it("la flecha cambia de zona aunque el evento llegue sin Ctrl ni Shift, y no sigue al arbol", () => {
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
+function hold() {
+  press("Control", { ctrl: true });
+  press("Shift", { ctrl: true, shift: true });
+  press("Alt", { ctrl: true, shift: true, alt: true });
+}
+
+function letGo() {
+  release("Alt");
+  release("Shift");
+  release("Control");
+}
+
+describe("modo mover (Ctrl+Shift+Alt sostenidos)", () => {
+  it("la flecha cambia de zona aunque el evento llegue sin modificadores, y no sigue al arbol", () => {
+    hold();
     expect(press("ArrowDown")).toBe(true);
     expect(press("ArrowLeft", { ctrl: true })).toBe(true);
+    release("Alt");
+    expect(press("ArrowDown", { ctrl: true, shift: true })).toBe(false);
     release("Shift");
-    expect(press("ArrowDown", { ctrl: true })).toBe(false);
     release("Control");
     expect(press("ArrowDown")).toBe(false);
   });
 
-  it("otro atajo con Ctrl+Shift sigue su camino", () => {
-    const calls: string[] = [];
-    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
+  it("Ctrl+Shift sin Alt no activa la capa: Tab y las letras son del editor", () => {
     press("Control", { ctrl: true });
     press("Shift", { ctrl: true, shift: true });
-    expect(press("T", { ctrl: true, shift: true })).toBe(true);
-    expect(calls).toEqual(["nueva"]);
+    expect(press("Tab")).toBe(false);
+    expect(press("x")).toBe(false);
     release("Shift");
     release("Control");
-    done();
   });
 
-  it("con el foco movido, las teclas llegan sin Ctrl ni Shift: la capa las toma igual", () => {
-    const calls: string[] = [];
-    const done = registerCommand("new-terminal-session", "global", () => void calls.push("nueva"));
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
-    expect(press("T")).toBe(true);
-    expect(press("x")).toBe(true);
-    expect(calls).toEqual(["nueva"]);
-    release("Shift");
-    release("Control");
+  it("con la capa, una tecla que no es de ningun atajo (Tab, una letra) sigue su camino", () => {
+    hold();
+    expect(press("Tab")).toBe(false);
     expect(press("x")).toBe(false);
-    done();
+    letGo();
   });
 
   it("perder la ventana suelta los modificadores", () => {
-    press("Control", { ctrl: true });
-    press("Shift", { ctrl: true, shift: true });
+    hold();
     (g.window as EventTarget).dispatchEvent(new Event("blur"));
     expect(press("ArrowDown")).toBe(false);
   });
 });
 
 describe("la terminal", () => {
+  it("permite separar y reunir mosaicos sin enviar los atajos al shell", () => {
+    const calls: string[] = [];
+    const cleanups = ["tile-console", "untile-console"].map(id =>
+      registerCommand(id, "global", () => void calls.push(id)),
+    );
+    expect(press("m", { ctrl: true, alt: true, inTerminal: true })).toBe(true);
+    expect(press("w", { ctrl: true, alt: true, inTerminal: true })).toBe(true);
+    expect(calls).toEqual(["tile-console", "untile-console"]);
+    cleanups.forEach(done => done());
+  });
   it("las teclas del shell y de las IA siguen siendo suyas", () => {
     const calls: string[] = [];
     const cleanups = ["close-query-console", "query-history", "replace", "toggle-sidebar"].map((id) =>
@@ -179,5 +199,57 @@ describe("alias de fabrica", () => {
     expect(press("Tab", { ctrl: true })).toBe(true);
     expect(calls).toEqual(["next-tab", "next-tab"]);
     done();
+  });
+});
+
+describe("zonas con piezas (consolas en mosaico)", () => {
+  it("el navegador de la zona va primero; en el borde, la zona vecina", async () => {
+    const { moveFocus, setZoneNavigator } = await import("./focusZones");
+    const piece = {};
+    const asked: string[] = [];
+    let edge = false;
+    const done = setZoneNavigator("editor", (direction) => {
+      asked.push(direction);
+      return edge ? null : (piece as unknown as HTMLElement);
+    });
+    // Sin foco en ninguna zona se parte del editor.
+    moveFocus("left");
+    expect(asked).toEqual(["left"]);
+    edge = true;
+    moveFocus("right");
+    expect(asked).toEqual(["left", "right"]);
+    done();
+    moveFocus("left");
+    expect(asked).toEqual(["left", "right"]);
+  });
+});
+
+describe("lo que manda WebKitGTK (medido con el teclado real)", () => {
+  it("Ctrl+Shift+Tab llega con key Unidentified: cuenta por su code", () => {
+    const calls: string[] = [];
+    const done = registerCommand("previous-tab", "global", () => void calls.push("previous-tab"));
+    expect(press("Unidentified", { ctrl: true, shift: true, code: "Tab" })).toBe(true);
+    expect(calls).toEqual(["previous-tab"]);
+    done();
+  });
+
+  it("con Ctrl+Shift sostenidos, la repeticion de Tab sin modificadores sigue siendo el atajo", () => {
+    const calls: string[] = [];
+    const done = registerCommand("previous-tab", "global", () => void calls.push("previous-tab"));
+    press("Control", { ctrl: true, code: "ControlLeft" });
+    press("Shift", { ctrl: true, shift: true, code: "ShiftLeft" });
+    expect(press("Tab", { code: "Tab", repeat: true })).toBe(true);
+    expect(calls).toEqual(["previous-tab"]);
+    // Soltar Shift llega como CapsLock, pero con su code.
+    (g.window as EventTarget).dispatchEvent(Object.assign(new FakeKey("keyup", "CapsLock", { code: "ShiftLeft" })));
+    (g.window as EventTarget).dispatchEvent(Object.assign(new FakeKey("keyup", "Control", { code: "ControlLeft" })));
+    expect(press("Tab", { code: "Tab" })).toBe(false);
+    done();
+  });
+
+  it("perder la ventana suelta los modificadores fisicos", () => {
+    press("Control", { ctrl: true, code: "ControlLeft" });
+    (g.window as EventTarget).dispatchEvent(new Event("blur"));
+    expect(press("Tab", { code: "Tab" })).toBe(false);
   });
 });

@@ -1,16 +1,20 @@
 <script lang="ts">
   import { onePerFrame } from "$lib/onePerFrame";
   import { get } from "svelte/store";
-  import { focusZoneAction } from "$lib/focusZones";
+  import { focusZoneAction, setZoneNavigator } from "$lib/focusZones";
   import { registerCommand, registerCommands } from "$lib/workspace/commands";
   import { registerTabCommands } from "$lib/workspace/tabCommands";
   import { tooltip } from "$lib/tooltip";
-  import { tick } from "svelte";
-  import { flip } from "svelte/animate";
+  import { tabScroll } from "$lib/tabScroll";
+  import { tabEnter, tabExit } from "$lib/motion";
+  import { editorPalette } from "$lib/theming/theme";
+  import { tick, untrack } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { CircleCheck, FileCode, Plus, SquareTerminal, Table, TriangleAlert, X } from "@lucide/svelte";
   import SqlEditor from "$lib/SqlEditor.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
+  import TilePicker from "$lib/components/TilePicker.svelte";
+  import MosaicArea from "$lib/components/MosaicArea.svelte";
   import ExecutionGuard from "$lib/components/ExecutionGuard.svelte";
   import ResultPane from "$lib/components/results/ResultPane.svelte";
   import TableDefinitionModal from "$lib/components/TableDefinitionModal.svelte";
@@ -74,7 +78,21 @@
     fileEncoding,
     setQueryConsoleEncoding,
   } from "$lib/stores/queryConsoles";
-  import { flipDuration, moveItem, reorderable } from "$lib/reorder";
+  import { moveItem, reorderable } from "$lib/reorder";
+  import TabOutline from "$lib/components/TabOutline.svelte";
+  import { editorGroups, setEditorGroups } from "$lib/stores/consoleMosaic";
+  import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
+  import {
+    choose,
+    cornerGroup,
+    emptyGroups,
+    groupTabs,
+    mergeGroup,
+    moveTab,
+    normalizeGroups,
+    renameTab,
+    type TabGroups,
+  } from "$lib/workspace/tabGroups";
   import { dismissNotice, notice, notifyError, notifySuccess } from "$lib/stores/notifications";
   import {
     OUTPUT_TAB,
@@ -93,15 +111,30 @@
   const profileId = $derived($connection.profileId ?? "default");
   const consoles = $derived($queryConsoles.consoles.filter((item) => item.profileId === profileId));
   const activeId = $derived($queryConsoles.activeByProfile[profileId]);
+  // La consola elegida del grupo enfocado del editor: puede ser una tabla.
   const activeConsole = $derived(consoles.find((item) => item.id === activeId));
+  // La consola SQL cuyo resultado se ve abajo: la activa si es SQL; con una
+  // tabla enfocada (sus datos se ven en su grupo del editor), la ultima SQL
+  // que tuvo el foco.
+  // Solo las de la conexion actual cuentan (consoles ya esta filtrada).
+  let lastSqlConsole = $state<string | null>(null);
+  $effect(() => {
+    const item = activeConsole;
+    if (item && !item.table) lastSqlConsole = item.id;
+  });
+  const resultConsole = $derived(
+    activeConsole && !activeConsole.table
+      ? activeConsole
+      : (consoles.find((item) => item.id === lastSqlConsole && !item.table) ?? consoles.find((item) => !item.table)),
+  );
   // --- Pestañas de resultado ------------------------------------------
   // Cada pestaña tiene su propio estado (resultado, pagina, total, cambios,
   // historial) guardado bajo su clave: la consola para la pestaña normal,
   // "<consola>#pin<n>" para cada fijada. `liveExecution` es la normal (la
   // que usa el editor); `execution` es la de la pestaña que se esta viendo.
-  const pinnedTabs = $derived(activeConsole ? ($pinnedResults[activeConsole.id] ?? []) : []);
+  const pinnedTabs = $derived(resultConsole ? ($pinnedResults[resultConsole.id] ?? []) : []);
   const liveExecution = $derived(
-    activeConsole ? executionForConsole($queryConsoles, activeConsole.id) : executionForConsole($queryConsoles, ""),
+    resultConsole ? executionForConsole($queryConsoles, resultConsole.id) : executionForConsole($queryConsoles, ""),
   );
   // "output" o la clave de la pestaña elegida, por consola.
   let selectedTabByConsole = $state<Record<string, string>>({});
@@ -113,8 +146,8 @@
   }
 
   const selectedTab = $derived.by(() => {
-    if (!activeConsole) return OUTPUT_TAB;
-    const consoleId = activeConsole.id;
+    if (!resultConsole) return OUTPUT_TAB;
+    const consoleId = resultConsole.id;
     return visibleTab(
       consoleId,
       selectedTabByConsole[consoleId],
@@ -128,8 +161,7 @@
   }
 
   // Clave cuyo estado se muestra (con la Salida elegida, la normal).
-  const viewKey = $derived(activeConsole ? (selectedTab === OUTPUT_TAB ? activeConsole.id : selectedTab) : "");
-  const execution = $derived(executionForConsole($queryConsoles, viewKey));
+  const viewKey = $derived(resultConsole ? (selectedTab === OUTPUT_TAB ? resultConsole.id : selectedTab) : "");
   const activeProfile = $derived($connectionProfiles.find((profile) => profile.id === profileId));
   // Tabla principal (primer FROM) de la consulta que produjo el resultado
   // vigente — no la del texto actual del editor, que puede haber cambiado
@@ -139,11 +171,10 @@
   // firstFromTable complementa a extractFromContext, que es del
   // autocompletado y depende de la posicion del cursor: sobre el texto
   // entero a veces no resuelve una consulta simple.
-  const resultTableName = $derived.by(() => {
-    const sql = execution.resultSql;
+  function resultTableOf(sql: string | null): string | undefined {
     if (!sql) return undefined;
     return extractFromContext(sql, sql.length)?.table ?? firstFromTable(sql)?.table;
-  });
+  }
   // Rotula un resultado como DataGrip: "schema.tabla". La fuente mas
   // confiable es el analisis de edicion del backend (AST + catalogo); si la
   // consulta no es editable, la primera tabla del FROM; sin tabla ("SELECT
@@ -158,7 +189,6 @@
     return `${from.schema ?? (activeProfile.database || activeProfile.name)}.${from.table}`;
   }
 
-  const resultSourceLabel = $derived(labelForKey(viewKey));
 
   // Orden de las pestañas de resultado (arrastrables), por consola: claves
   // en el orden en que el usuario las dejo. Las nuevas se agregan al final
@@ -168,8 +198,8 @@
   // Fijadas primero (en el orden en que se fijaron) y la normal al final,
   // salvo que el usuario las haya reordenado.
   const resultTabs = $derived.by(() => {
-    if (!activeConsole) return [];
-    const consoleId = activeConsole.id;
+    if (!resultConsole) return [];
+    const consoleId = resultConsole.id;
     const tabs = pinnedTabs.map((item) => {
       const key = resultKey(consoleId, item.id);
       return { key, label: labelForKey(key) ?? $t("workspace.result"), pinned: item.pinned };
@@ -183,6 +213,9 @@
   function keepTabPosition(consoleId: string, fromKey: string, toKey: string) {
     const current = resultTabs.map((tab) => tab.key);
     resultTabOrder = { ...resultTabOrder, [consoleId]: replaceTabKey(resultTabOrder[consoleId], current, fromKey, toKey) };
+    // Y en los grupos del resultado, el mismo grupo.
+    const layout = resultLayouts[consoleId];
+    if (layout) resultLayouts = { ...resultLayouts, [consoleId]: renameTab(layout, fromKey, toKey) };
   }
 
   // Fijar, desfijar, cerrar y olvidar (workspace/resultTabs.ts).
@@ -198,58 +231,60 @@
   const forgetConsoleResults = tabActions.forgetConsole;
   const closeResultTab = tabActions.close;
 
-  function reorderResultTabs(from: number, to: number) {
-    if (!activeConsole) return;
-    const keys = moveItem(
-      resultTabs.map((tab) => tab.key),
-      from,
-      to,
-    );
-    resultTabOrder = { ...resultTabOrder, [activeConsole.id]: keys };
-  }
   // Para cada columna del resultado que coincide (por nombre) con una
   // columna del catalogo ya cargado, expone si es PK/FK y su comentario —
   // sin pedirle nada nuevo al backend, reusando el catalogo que ya existe
   // para el arbol de tablas y el autocompletado.
   //
-  // Busca en TODAS las tablas, no solo en resultTableName: con un JOIN
-  // (USING/ON), columnas como "clie_codi" vienen de la tabla unida, no de
-  // la primera del FROM, y resultTableName solo resuelve esa primera. Si
-  // el mismo nombre de columna existe en mas de una tabla, gana
-  // resultTableName cuando aplica (es la señal mas confiable de a que
+  // Busca en TODAS las tablas, no solo en la principal (resultTableOf): con
+  // un JOIN (USING/ON), columnas como "clie_codi" vienen de la tabla unida,
+  // no de la primera del FROM, y resultTableOf solo resuelve esa primera. Si
+  // el mismo nombre de columna existe en mas de una tabla, gana la
+  // principal cuando aplica (es la señal mas confiable de a que
   // tabla pertenece), y si no, la primera tabla del catalogo que la tenga.
-  const resultColumnCatalogInfo = $derived.by((): Map<string, ColumnCatalogInfo> | null => {
+  //
+  // Por pestaña (cada mosaico del resultado tiene la suya): la base con
+  // todas las tablas se arma una vez por catalogo, y la de cada tabla
+  // principal se guarda, asi el grid recibe siempre el mismo Map.
+  function toColumnInfo(column: CatalogColumn, table: CatalogTable): ColumnCatalogInfo {
+    const fkColumns = new Set(table.foreignKeys.map((fk) => fk.column.toLowerCase()));
+    return {
+      isPrimaryKey: column.isPrimaryKey,
+      isForeignKey: fkColumns.has(column.name.toLowerCase()),
+      comment: column.comment,
+    };
+  }
+
+  const catalogColumnInfo = $derived.by(() => {
     const tables = $catalogTables;
     if (tables.length === 0) return null;
-
-    function toColumnInfo(column: CatalogColumn, table: CatalogTable): ColumnCatalogInfo {
-      const fkColumns = new Set(table.foreignKeys.map((fk) => fk.column.toLowerCase()));
-      return {
-        isPrimaryKey: column.isPrimaryKey,
-        isForeignKey: fkColumns.has(column.name.toLowerCase()),
-        comment: column.comment,
-      };
-    }
-
-    const map = new Map<string, ColumnCatalogInfo>();
+    const base = new Map<string, ColumnCatalogInfo>();
     for (const table of tables) {
       for (const column of table.columns) {
         const key = column.name.toLowerCase();
-        if (!map.has(key)) map.set(key, toColumnInfo(column, table));
+        if (!base.has(key)) base.set(key, toColumnInfo(column, table));
       }
     }
-
-    const mainTable = tables.find((t) => t.name.toLowerCase() === resultTableName?.toLowerCase());
-    if (mainTable) {
-      for (const column of mainTable.columns) {
-        map.set(column.name.toLowerCase(), toColumnInfo(column, mainTable));
-      }
-    }
-
-    return map;
+    return { tables, base, byTable: new Map<CatalogTable, Map<string, ColumnCatalogInfo>>() };
   });
+
+  function columnInfoFor(key: string): Map<string, ColumnCatalogInfo> | null {
+    const catalog = catalogColumnInfo;
+    if (!catalog) return null;
+    const name = resultTableOf(executionForConsole($queryConsoles, key).resultSql)?.toLowerCase();
+    const mainTable = name ? catalog.tables.find((table) => table.name.toLowerCase() === name) : undefined;
+    if (!mainTable) return catalog.base;
+    let map = catalog.byTable.get(mainTable);
+    if (!map) {
+      map = new Map(catalog.base);
+      for (const column of mainTable.columns) map.set(column.name.toLowerCase(), toColumnInfo(column, mainTable));
+      catalog.byTable.set(mainTable, map);
+    }
+    return map;
+  }
+
   let tableDefinitionRequest = $state<CatalogTableRef | null>(null);
-  // "schema@host", igual que resultSourceLabel usa "database || name" como
+  // "schema@host", igual que labelForKey usa "database || name" como
   // nombre de schema (ver mas abajo) - la misma convencion para las dos
   // etiquetas de origen que puede ver el usuario.
   const dataSourceLabel = $derived(
@@ -334,6 +369,8 @@
     selectedTabByConsole = withoutKey(selectedTabByConsole, consoleId);
     resultTabOrder = withoutKey(resultTabOrder, consoleId);
     tableFilterError = withoutKey(tableFilterError, consoleId);
+    resultLayouts = withoutKey(resultLayouts, consoleId);
+    if (lastSqlConsole === consoleId) lastSqlConsole = null;
     tableLoadAttempted.delete(consoleId);
   }
 
@@ -345,60 +382,6 @@
 
   $effect(() => {
     ensureQueryConsole(profileId);
-  });
-
-  // --- Desborde de la barra de pestañas -----------------------------------
-  // Las pestañas scrollean por debajo del boton "+" (que queda fijo a la
-  // derecha); un desvanecido en cada borde con contenido oculto sugiere que
-  // hay mas pestañas de ese lado.
-  let tabsScroll = $state<HTMLDivElement>();
-  let tabsOverflow = $state({ start: false, end: false });
-
-  function updateTabsOverflow() {
-    const el = tabsScroll;
-    if (!el) return;
-    const start = el.scrollLeft > 1;
-    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-    if (start !== tabsOverflow.start || end !== tabsOverflow.end) tabsOverflow = { start, end };
-  }
-
-  // La rueda vertical del mouse desplaza la barra en horizontal.
-  function onTabsWheel(event: WheelEvent) {
-    const el = tabsScroll;
-    if (!el || el.scrollWidth <= el.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    event.preventDefault();
-    el.scrollLeft += event.deltaY;
-  }
-
-  $effect(() => {
-    const el = tabsScroll;
-    if (!el) return;
-    const observer = new ResizeObserver(updateTabsOverflow);
-    observer.observe(el);
-    // No pasivo a proposito: preventDefault evita que la rueda scrollee
-    // tambien la pagina.
-    el.addEventListener("wheel", onTabsWheel, { passive: false });
-    return () => {
-      observer.disconnect();
-      el.removeEventListener("wheel", onTabsWheel);
-    };
-  });
-
-  // Al activar o crear una pestaña, la barra se desliza hasta dejarla a la
-  // vista: una pestaña nueva entra por la derecha y empuja a las demas.
-  // Espera a que termine la animacion de entrada (fly, 150ms) para medir el
-  // ancho final.
-  $effect(() => {
-    const id = activeId;
-    consoles.length;
-    const el = tabsScroll;
-    if (!id || !el) return;
-    const timer = setTimeout(() => {
-      const tab = el.querySelector<HTMLElement>(`[data-console-id="${CSS.escape(id)}"]`);
-      tab?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-      updateTabsOverflow();
-    }, 160);
-    return () => clearTimeout(timer);
   });
 
   function closeConsole(event: Event, id: string) {
@@ -434,14 +417,16 @@
   }
 
   // --- Terminal ------------------------------------------------------------
-  // Una por ventana, como pestaña fija del panel inferior (ResultPane), con
-  // sus sesiones dentro. No es de ninguna consola: activa, sigue a la vista
-  // al cambiar de consola o sin ninguna abierta. Desactivarla vuelve a la
-  // pestaña que la consola tenia elegida, que no se toca.
+  // Una por ventana, en el mismo lugar que los datos pero como otro espacio:
+  // Ctrl+T alterna entre los dos (sin pestaña: no carga la fila del
+  // resultado). Abierta, tapa todo el panel con su propia fila de sesiones;
+  // los datos quedan debajo tal como estaban. No es de ninguna consola:
+  // sigue a la vista al cambiar de consola o sin ninguna abierta.
   let terminalActive = $state(false);
   // Terminal.svelte (y con el, xterm) se carga la primera vez que se abre:
   // quien no la usa no los descarga ni crea un shell.
   let TerminalDock = $state<typeof import("$lib/components/Terminal.svelte").default | null>(null);
+  let terminalView = $state<ReturnType<typeof import("$lib/components/Terminal.svelte").default>>();
   // Donde estaba el foco al abrirla: ahi vuelve con el atajo (Ctrl+T).
   let terminalReturnFocus: HTMLElement | null = null;
 
@@ -449,38 +434,38 @@
   // dentro, la oculta.
   function toggleTerminal() {
     if (terminalActive && !document.activeElement?.closest("[data-terminal]")) {
-      resultRegion?.querySelector<HTMLElement>("[data-terminal]:not(.hidden) textarea")?.focus({ preventScroll: true });
+      terminalView?.focus();
       return;
     }
-    if (terminalActive) {
-      terminalActive = false;
-      if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
-      return;
-    }
+    if (terminalActive) closeTerminal();
+    else openTerminal();
+  }
+
+  // El icono de la fila: siempre la abre (abierta, la fila queda tapada).
+  function openTerminal() {
+    if (terminalActive) return;
     terminalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     terminalActive = true;
     if (!TerminalDock) void import("$lib/components/Terminal.svelte").then((module) => (TerminalDock = module.default));
   }
 
+  // La flecha de la terminal: siempre vuelve a los datos, este donde este el
+  // foco (Ctrl+T, con el foco fuera, primero lleva a ella).
+  function closeTerminal() {
+    if (!terminalActive) return;
+    terminalActive = false;
+    if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
+  }
+
 
   $effect(() => registerCommands("global", { "toggle-terminal": toggleTerminal }));
 
-  // Una pestaña de tabla es solo su resultado, sin fila de Salida ni de
-  // resultados: con la terminal encima no se veian sus datos ni habia como
-  // volver a ellos. Al abrirla o pasar a ella, la terminal se oculta (sigue
-  // viva; Ctrl+T la trae). Entre consolas normales, sigue a la vista.
-  let lastTableTab: string | null = null;
-  $effect(() => {
-    const tableTab = activeConsole?.table ? activeConsole.id : null;
-    if (tableTab && tableTab !== lastTableTab) terminalActive = false;
-    lastTableTab = tableTab;
-  });
-
   // Ctrl+Tab y Ctrl+1..9 fuera del panel inferior y de la terminal: las
-  // consolas (workspace/tabCommands.ts).
+  // consolas del grupo enfocado (workspace/tabCommands.ts).
   $effect(() =>
     registerTabCommands("global", {
-      keys: () => consoles.map((item) => item.id),
+      // Las del grupo enfocado, como en la fila del resultado.
+      keys: () => (editorLayout ? groupTabs(editorLayout, editorLayout.focus, consoleIds) : consoleIds),
       current: () => activeId,
       select: (id) => activateQueryConsole(profileId, id),
       applies: () => $pendingClose === null,
@@ -560,20 +545,18 @@
     void runTableQuery(consoleId);
   }
 
-  // Columnas que ofrece el constructor de filtros: las del catalogo (con su
-  // tipo, para citar bien los valores); si la tabla no esta en el catalogo,
-  // las del resultado.
-  const tableFilterColumns = $derived(
-    activeConsole?.table ? filterColumns(activeConsole.table, $catalogTables, liveExecution.result) : [],
-  );
-
-  // Al abrir (o volver a) una pestaña de tabla sin datos todavia, se carga.
+  // Al abrir (o volver a) una pestaña de tabla sin datos todavia, se carga:
+  // la elegida de cada grupo del editor (se ven todas a la vez).
   $effect(() => {
-    const item = activeConsole;
-    if (!item?.table || tableLoadAttempted.has(item.id)) return;
-    if (liveExecution.result !== null || liveExecution.isExecuting) return;
-    tableLoadAttempted.add(item.id);
-    void runTableQuery(item.id);
+    const shown = new Set(Object.values(editorLayout?.selected ?? {}));
+    if (activeId) shown.add(activeId);
+    for (const item of consoles) {
+      if (!item.table || !shown.has(item.id) || tableLoadAttempted.has(item.id)) continue;
+      const state = executionForConsole($queryConsoles, item.id);
+      if (state.result !== null || state.isExecuting) continue;
+      tableLoadAttempted.add(item.id);
+      void runTableQuery(item.id);
+    }
   });
 
   // --- Buscar segun la zona activa ------------------------------------------
@@ -581,7 +564,9 @@
   // focusZones.ts), nunca en la que tiene el mouse encima: editor -> su
   // barra de buscar/reemplazar; resultado -> la barra del grid. El sidebar
   // lo resuelve +layout.svelte.
-  let sqlEditor = $state<ReturnType<typeof SqlEditor>>();
+  // Un editor por mosaico; el de la consola activa es el enfocado.
+  let editors = $state<Record<string, ReturnType<typeof SqlEditor> | undefined>>({});
+  const sqlEditor = $derived(activeConsole ? editors[activeConsole.id] : undefined);
 
   // Primer foco de una zona a la que se llega con el teclado (focusZones.ts).
   function focusIn(zone: HTMLElement, selector: string): boolean {
@@ -601,11 +586,18 @@
 
   $effect(() => {
     const cleanupEditor = registerCommand("find", "editor", () => {
+      // Una tabla enfocada en su grupo: buscar en su grid.
+      if (activeConsole?.table) {
+        const body = tableBodies[activeConsole.id];
+        if (!body) return false;
+        body.toggleFind();
+        return;
+      }
       if (!sqlEditor) return false;
       sqlEditor.toggleSearch();
     });
     const cleanupResults = registerCommand("find", "results", () => {
-      resultPane?.toggleFind();
+      ((resultLayout && resultGroups[resultLayout.focus]) || resultPane)?.toggleFind();
     });
     const cleanupReplace = registerCommand("replace", "editor", () => {
       if (!sqlEditor) return false;
@@ -685,9 +677,7 @@
     dropUnpinned: dropUnpinnedResults,
     newScriptTab: (consoleId) => resultKey(consoleId, addResultTab(consoleId, false)),
     fillParameters,
-    markStatement: (consoleId, index, outcome) => {
-      if (activeConsole?.id === consoleId) sqlEditor?.markStatement(index, outcome);
-    },
+    markStatement: (consoleId, index, outcome) => editors[consoleId]?.markStatement(index, outcome),
     refreshCatalog,
     notifyError,
   });
@@ -700,9 +690,7 @@
   const navigatePage = executions.navigate;
   const sortResult = executions.sort;
   const countTotalRows = executions.count;
-
-  // --- Edicion del resultado -------------------------------------------
-  const editState = $derived(activeConsole ? editStateFor($resultEdits, viewKey) : null);
+  const filterResult = executions.filter;
 
   // --- Exportar datos ---------------------------------------------------
   // Clave de la pestaña que se exporta.
@@ -739,14 +727,19 @@
   }
 
   // Alt+→ / Alt+←.
+  // Con una tabla enfocada, sus datos; si no, la pestaña elegida del
+  // resultado.
   function stepPage(direction: 1 | -1): boolean {
-    if (!activeConsole || execution.isExecuting) return false;
-    const { page, result } = execution;
+    const key = activeConsole?.table ? activeConsole.id : resultConsole ? viewKey : null;
+    if (key === null) return false;
+    const target = executionForConsole($queryConsoles, key);
+    if (target.isExecuting) return false;
+    const { page, result } = target;
     if (!page?.pageable || result?.type !== "resultSet") return false;
     if (direction === 1 && !result.truncated) return false;
     if (direction === -1 && page.offset === 0) return false;
     const offset = Math.max(0, page.offset + direction * page.pageSize);
-    void navigatePage(viewKey, offset, page.pageSize);
+    void navigatePage(key, offset, page.pageSize);
     return true;
   }
 
@@ -775,6 +768,391 @@
       };
     });
   }
+
+  // --- Grupos de consolas en el editor (workspace/tabGroups.ts) -------------
+  // Como los grupos de VS Code y con el mismo sistema que el resultado: el
+  // editor se parte en grupos (MosaicArea), cada uno con su fila de
+  // carpetas (las consolas, archivos y tablas que tiene) y debajo la elegida.
+  // La consola activa es la elegida del grupo enfocado. Una consola vive en
+  // un solo grupo; las nuevas entran en el enfocado. Una pestaña de tabla
+  // muestra sus datos en su grupo; abajo sigue el resultado de la ultima
+  // consola SQL enfocada (resultConsole). Los grupos se guardan por conexion
+  // (stores/consoleMosaic.ts).
+  const FIRST_EDITOR_GROUP = "e0";
+  let editorGroupCount = 0;
+  const editorLayout = $derived($editorGroups[profileId] ?? null);
+  const editorGrouped = $derived(leaves(editorLayout?.tree ?? null).length > 1);
+  const consoleIds = $derived(consoles.map((item) => item.id));
+  let editorMosaic = $state<ReturnType<typeof MosaicArea>>();
+  // El panel de cada tabla abierta en un grupo (buscar, cerrar filtros).
+  let tableBodies = $state<Record<string, ReturnType<typeof ResultPane> | undefined>>({});
+
+  function consoleLabel(id: string): string {
+    const item = consoles.find((candidate) => candidate.id === id);
+    return item ? consoleDisplayTitle(item.title, $t) : "";
+  }
+
+  function freshEditorGroup(): string {
+    const used = new Set(leaves(editorLayout?.tree ?? null));
+    let id: string;
+    do id = `e${++editorGroupCount}`;
+    while (used.has(id));
+    return id;
+  }
+
+  $effect(() => {
+    const ids = consoleIds;
+    const chosen = activeId ?? null;
+    const profile = profileId;
+    untrack(() => {
+      const previous = get(editorGroups)[profile] ?? null;
+      let groups = normalizeGroups(previous ?? emptyGroups(FIRST_EDITOR_GROUP), ids);
+      // La elegida del grupo enfocado se cerro: la reemplaza otra de su
+      // grupo (o la de su hermano), no la pestaña vecina que eligio cerrar.
+      const lost = previous && previous.selected[previous.focus] && !ids.includes(previous.selected[previous.focus]);
+      const replacement = groups.selected[groups.focus];
+      if (lost && replacement && replacement !== chosen) {
+        setEditorGroups(profile, groups);
+        activateQueryConsole(profile, replacement);
+        return;
+      }
+      if (chosen) groups = choose(groups, chosen);
+      setEditorGroups(profile, groups);
+      if (chosen) void followFocus(chosen);
+    });
+  });
+
+  // Elegir en otra parte (Ctrl+Tab, el explorador, un archivo) una consola
+  // de otro grupo la activa, pero el foco del teclado seguia en el editor
+  // anterior: se escribia en uno con el resultado del otro abajo. Si el foco
+  // esta en el editor de otro grupo, pasa al de la activa.
+  async function followFocus(id: string) {
+    await tick();
+    const holder = document.activeElement?.closest<HTMLElement>('[data-focus-zone="editor"] [data-tile-id]');
+    const group = get(editorGroups)[profileId]?.member[id];
+    if (holder && group && holder.dataset.tileId !== group) editors[id]?.focus();
+  }
+
+  // Cambiar los grupos y activar una consola en el mismo paso: el efecto de
+  // arriba ya la encuentra en su lugar.
+  async function arrangeEditor(groups: TabGroups, focus: string | null) {
+    setEditorGroups(profileId, normalizeGroups(groups, consoleIds));
+    if (focus) activateQueryConsole(profileId, focus);
+    await tick();
+    if (focus) editors[focus]?.focus();
+  }
+
+  function focusEditorGroup(group: string) {
+    const id = editorLayout?.selected[group];
+    if (id && id !== activeId) activateQueryConsole(profileId, id);
+  }
+
+  // Sacar una pestaña de consola de la fila de su grupo: al borde de un
+  // grupo, uno nuevo de ese lado; en su fila o en su centro, entra en el.
+  let pendingEditorDrag: { id: string; from: string } | null = null;
+
+  function beginConsoleDrag(id: string, start: PointerEvent, source: HTMLElement, grab: { x: number; y: number }): boolean {
+    if (!editorMosaic || !editorLayout) return false;
+    const from = editorLayout.member[id];
+    const alone = groupTabs(editorLayout, from, consoleIds).length === 1;
+    pendingEditorDrag = { id, from };
+    return editorMosaic.beginDrag(freshEditorGroup(), start, {
+      source,
+      grab,
+      vacate: alone ? from : undefined,
+      origin: from,
+      merge: true,
+      landing: () => editorPane?.querySelector<HTMLElement>(`.console-tab[data-console-id="${CSS.escape(id)}"]`) ?? null,
+    });
+  }
+
+  function dropConsoleInNewGroup(tree: Mosaic, group: string) {
+    const drag = pendingEditorDrag;
+    pendingEditorDrag = null;
+    if (!drag || !editorLayout) return;
+    void arrangeEditor(moveTab({ ...editorLayout, tree }, drag.id, group, consoleIds), drag.id);
+  }
+
+  function dropConsoleInGroup(target: string) {
+    const drag = pendingEditorDrag;
+    pendingEditorDrag = null;
+    if (!drag || !editorLayout || target === drag.from) return;
+    void arrangeEditor(moveTab(editorLayout, drag.id, target, consoleIds), drag.id);
+  }
+
+  // Reordenar en la fila de un grupo: los indices son de sus pestañas; el
+  // orden de la conexion se reacomoda solo en esos lugares.
+  function reorderGroupConsoles(group: string, from: number, to: number) {
+    if (!editorLayout) return;
+    const layout = editorLayout;
+    const mine = consoleIds.filter((id) => layout.member[id] === group);
+    const fromIndex = consoleIds.indexOf(mine[from]);
+    const toIndex = consoleIds.indexOf(mine[to]);
+    if (fromIndex >= 0 && toIndex >= 0) reorderQueryConsoles(profileId, fromIndex, toIndex);
+  }
+
+  // + de la fila de un grupo: una consola nueva en ese grupo.
+  function newConsoleIn(group: string) {
+    if (editorLayout && editorLayout.focus !== group) setEditorGroups(profileId, { ...editorLayout, focus: group });
+    createQueryConsole(profileId);
+  }
+
+  // Ctrl+Alt+M con el foco en el editor: una consola que no se ve pasa a un
+  // grupo nuevo junto al enfocado (o una nueva).
+  let pickerOpen = $state(false);
+  const pickerItems = $derived.by(() => {
+    const shown = new Set(Object.values(editorLayout?.selected ?? {}));
+    return consoles
+      .filter((item) => !shown.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        title: consoleDisplayTitle(item.title, $t),
+        icon: item.table ? ("result" as const) : item.filePath ? ("file" as const) : ("console" as const),
+      }));
+  });
+
+  function pickTile(id: string | null, side: "right" | "bottom", whole: boolean) {
+    pickerOpen = false;
+    if (!editorLayout) return;
+    const group = freshEditorGroup();
+    const tree = place(editorLayout.tree, whole ? WHOLE : editorLayout.focus, group, side);
+    if (editorMosaic && !editorMosaic.fits(tree)) {
+      notifyError($t("mosaic.noRoom"));
+      return;
+    }
+    const chosen = id ?? createQueryConsole(profileId);
+    const ids = consoleIds.includes(chosen) ? consoleIds : [...consoleIds, chosen];
+    setEditorGroups(profileId, normalizeGroups(moveTab({ ...editorLayout, tree }, chosen, group, ids), ids));
+    activateQueryConsole(profileId, chosen);
+    void tick().then(() => editors[chosen]?.focus());
+  }
+
+  function closePicker(refocus: boolean) {
+    pickerOpen = false;
+    if (refocus) sqlEditor?.focus();
+  }
+
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
+    return registerCommands("global", {
+      "tile-console": whenIdle(() => {
+        if (!editorLayout) return false;
+        historyOpen = false;
+        pickerOpen = true;
+      }),
+      "untile-console": whenIdle(() => {
+        if (!editorLayout) return false;
+        const merged = mergeGroup(editorLayout, editorLayout.focus);
+        if (!merged) return false;
+        void arrangeEditor(merged, merged.selected[merged.focus] ?? null);
+      }),
+    });
+  });
+
+  // Ctrl+Shift+Alt+flechas recorren los grupos antes de salir del editor
+  // (focusZones.ts): en el borde, el foco pasa a la zona vecina.
+  $effect(() =>
+    setZoneNavigator("editor", (direction) => {
+      if (!editorGrouped || !editorLayout) return null;
+      const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
+      const next = neighbor(editorLayout.tree, editorLayout.focus, side);
+      const id = next ? editorLayout.selected[next] : null;
+      if (!next || !id) return null;
+      activateQueryConsole(profileId, id);
+      const element = editorMosaic?.tileElement(next) ?? null;
+      if (editors[id]) editors[id]?.focus();
+      else element?.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
+      return element;
+    }),
+  );
+
+  // --- Resultado en grupos (workspace/tabGroups.ts) -------------------------
+  // El mismo sistema que el editor: el resultado de resultConsole se parte en
+  // grupos, cada uno con su fila de carpetas y la pestaña elegida debajo. La
+  // elegida de la consola es la del grupo enfocado y ejecutar agrega el
+  // resultado nuevo a ese grupo. La Salida no entra en el mosaico: es
+  // siempre la primera del grupo de arriba a la izquierda. Vive en memoria,
+  // por consola, como sus pestañas.
+  const FIRST_GROUP = "g0";
+  // Alto de la fila de carpetas de un grupo (2rem + 6px, tabs.css): soltar
+  // una pestaña ahi la acopla a ese grupo.
+  const GROUP_STRIP_PX = 38;
+  const RESULT_PINNED = { [OUTPUT_TAB]: "left" } as const;
+  let resultGroupCount = 0;
+  let resultLayouts = $state<Record<string, TabGroups>>({});
+  let resultMosaicArea = $state<ReturnType<typeof MosaicArea>>();
+  // Un panel por grupo; el del enfocado recibe buscar.
+  let resultGroups = $state<Record<string, ReturnType<typeof ResultPane> | undefined>>({});
+  const resultKeys = $derived([OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]);
+  const resultLayout = $derived(resultConsole ? (resultLayouts[resultConsole.id] ?? null) : null);
+  const resultGrouped = $derived(leaves(resultLayout?.tree ?? null).length > 1);
+
+  function setLayout(consoleId: string, groups: TabGroups) {
+    resultLayouts = { ...resultLayouts, [consoleId]: normalizeGroups(groups, resultKeys, RESULT_PINNED) };
+  }
+
+  function freshResultGroup(): string {
+    const used = new Set(leaves(resultLayout?.tree ?? null));
+    let id: string;
+    do id = `g${++resultGroupCount}`;
+    while (used.has(id));
+    return id;
+  }
+
+  // Al aparecer o irse pestañas, y al elegir una.
+  $effect(() => {
+    const item = resultConsole;
+    if (!item) return;
+    const keys = resultKeys;
+    const chosen = selectedTab;
+    untrack(() => {
+      const previous = resultLayouts[item.id] ?? null;
+      let groups = normalizeGroups(previous ?? emptyGroups(FIRST_GROUP), keys, RESULT_PINNED);
+      // La elegida que se fue: otra de su mismo grupo, no la que elija el
+      // respaldo de la consola (podia saltar a otro grupo).
+      const lost = previous && previous.selected[previous.focus] && !keys.includes(previous.selected[previous.focus]);
+      const replacement = groups.selected[groups.focus];
+      if (lost && replacement && replacement !== chosen) {
+        resultLayouts = { ...resultLayouts, [item.id]: groups };
+        selectTab(item.id, replacement);
+        return;
+      }
+      groups = choose(groups, chosen);
+      resultLayouts = { ...resultLayouts, [item.id]: groups };
+    });
+  });
+
+  function resultLabel(key: string): string {
+    if (key === OUTPUT_TAB) return $t("results.tab.output");
+    return resultTabs.find((tab) => tab.key === key)?.label ?? $t("workspace.result");
+  }
+
+  // Lo que se enfoca al llegar a un grupo: su grid o, sin el (la Salida), el
+  // grupo mismo.
+  function focusGroupContent(group: string): HTMLElement | null {
+    const element = resultMosaicArea?.tileElement(group) ?? null;
+    const target = element?.querySelector<HTMLElement>('[role="grid"]') ?? element;
+    target?.focus({ preventScroll: true });
+    return element;
+  }
+
+  async function arrangeResults(groups: TabGroups) {
+    const item = resultConsole;
+    if (!item) return;
+    setLayout(item.id, groups);
+    const layout = resultLayouts[item.id];
+    selectTab(item.id, layout.selected[layout.focus]);
+    await tick();
+    focusGroupContent(layout.focus);
+  }
+
+  // Sacar una pestaña de la fila de su grupo: al borde de un grupo, uno
+  // nuevo de ese lado; en su fila o en su centro, entra en el.
+  let pendingDrag: { key: string; from: string } | null = null;
+
+  function beginResultDrag(key: string, start: PointerEvent, source: HTMLElement, grab: { x: number; y: number }): boolean {
+    if (!resultConsole || !resultMosaicArea || !resultLayout) return false;
+    const from = resultLayout.member[key];
+    const alone = groupTabs(resultLayout, from, resultKeys).length === 1;
+    pendingDrag = { key, from };
+    return resultMosaicArea.beginDrag(freshResultGroup(), start, {
+      source,
+      grab,
+      vacate: alone ? from : undefined,
+      origin: from,
+      merge: true,
+      landing: () => resultRegion?.querySelector<HTMLElement>(`.result-tab[data-result-key="${CSS.escape(key)}"]`) ?? null,
+    });
+  }
+
+  function dropTabInNewGroup(tree: Mosaic, group: string) {
+    const drag = pendingDrag;
+    pendingDrag = null;
+    if (!drag || !resultLayout) return;
+    void arrangeResults(moveTab({ ...resultLayout, tree }, drag.key, group, resultKeys));
+  }
+
+  function dropTabInGroup(target: string) {
+    const drag = pendingDrag;
+    pendingDrag = null;
+    if (!drag || !resultLayout || target === drag.from) return;
+    void arrangeResults(moveTab(resultLayout, drag.key, target, resultKeys));
+  }
+
+  // Reordenar en la fila de un grupo: los indices son de sus pestañas de
+  // resultado; el orden de la consola se reacomoda solo en esos lugares.
+  function reorderGroupTabs(group: string, from: number, to: number) {
+    if (!resultConsole || !resultLayout) return;
+    const layout = resultLayout;
+    const all = resultTabs.map((tab) => tab.key);
+    const mine = all.filter((key) => layout.member[key] === group);
+    const moved = moveItem(mine, from, to);
+    let index = 0;
+    resultTabOrder = { ...resultTabOrder, [resultConsole.id]: all.map((key) => (layout.member[key] === group ? moved[index++] : key)) };
+  }
+
+  function focusGroup(group: string) {
+    if (!resultConsole || !resultLayout) return;
+    const key = resultLayout.selected[group];
+    if (key && key !== selectedTab) selectTab(resultConsole.id, key);
+  }
+
+  // Ctrl+Alt+M con el foco en el resultado: una pestaña que no se ve pasa a
+  // un grupo nuevo junto al enfocado (sin la Salida, que no entra en el
+  // mosaico, ni "nueva": las crea ejecutar).
+  let resultPickerOpen = $state(false);
+  const resultPickerItems = $derived.by(() => {
+    if (!resultLayout) return [];
+    const shown = new Set(Object.values(resultLayout.selected));
+    return resultTabs
+      .filter((tab) => !shown.has(tab.key))
+      .map((tab) => ({ id: tab.key, title: tab.label, icon: tab.pinned ? ("pinned" as const) : ("result" as const) }));
+  });
+
+  function pickResultTile(key: string | null, side: "right" | "bottom", whole: boolean) {
+    resultPickerOpen = false;
+    if (key === null || !resultLayout) return;
+    const group = freshResultGroup();
+    const tree = place(resultLayout.tree, whole ? WHOLE : resultLayout.focus, group, side);
+    if (resultMosaicArea && !resultMosaicArea.fits(tree)) {
+      notifyError($t("mosaic.noRoom"));
+      return;
+    }
+    void arrangeResults(moveTab({ ...resultLayout, tree }, key, group, resultKeys));
+  }
+
+  function closeResultPicker(refocus: boolean) {
+    resultPickerOpen = false;
+    if (refocus && resultLayout) focusGroupContent(resultLayout.focus);
+  }
+
+  $effect(() => {
+    const whenIdle = (run: () => boolean | void) => () => $pendingClose === null && run() !== false;
+    return registerCommands("results", {
+      "tile-console": whenIdle(() => {
+        if (!resultConsole || resultPickerItems.length === 0) return false;
+        resultPickerOpen = true;
+      }),
+      "untile-console": whenIdle(() => {
+        if (!resultLayout) return false;
+        const merged = mergeGroup(resultLayout, resultLayout.focus);
+        if (!merged) return false;
+        void arrangeResults(merged);
+      }),
+    });
+  });
+
+  $effect(() =>
+    setZoneNavigator("results", (direction) => {
+      if (terminalActive) return terminalView?.navigate(direction === "up" ? "top" : direction === "down" ? "bottom" : direction) ?? null;
+      if (!resultGrouped || !resultLayout) return null;
+      const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
+      const next = neighbor(resultLayout.tree, resultLayout.focus, side);
+      if (!next) return null;
+      focusGroup(next);
+      return focusGroupContent(next);
+    }),
+  );
 
   function startResize(event: PointerEvent) {
     event.preventDefault();
@@ -817,90 +1195,6 @@
 
 
 <div class="workspace">
-  <div class="console-tabs">
-  <div
-    class="tabs-scroll"
-    use:reorderable={{ items: ".console-tab", onmove: (from, to) => reorderQueryConsoles(profileId, from, to) }}
-    class:fade-start={tabsOverflow.start}
-    class:fade-end={tabsOverflow.end}
-    role="tablist"
-    aria-label={$t("workspace.tabs.aria")}
-    bind:this={tabsScroll}
-    onscroll={updateTabsOverflow}
-  >
-    {#each consoles as item (item.id)}
-      {@const dirty = isQueryConsoleDirty(item)}
-      <div
-        class="console-tab"
-        data-console-id={item.id}
-        class:active={item.id === activeId}
-        class:dirty
-        role="tab"
-        tabindex="0"
-        aria-selected={item.id === activeId}
-        onclick={() => activateQueryConsole(profileId, item.id)}
-        oncontextmenu={(event) => openTabMenu(event, item.id)}
-        onkeydown={(event) => {
-          if (event.key === "Enter" || event.key === " ") activateQueryConsole(profileId, item.id);
-        }}
-        animate:flip={{ duration: flipDuration(150) }}
-        in:fly={{ x: -8, duration: 150 }}
-        out:fade={{ duration: 120 }}
-      >
-        {#if item.table}
-          <Table size={13} class="console-tab-icon" aria-hidden="true" />
-        {:else if item.filePath}
-          <FileCode size={13} class="console-tab-icon" aria-hidden="true" />
-        {:else}
-          <SquareTerminal size={13} class="console-tab-icon" aria-hidden="true" />
-        {/if}
-        {#if renamingId === item.id}
-          <input
-            class="rename-input"
-            aria-label={$t("workspace.tabs.renameAria")}
-            bind:this={renameInput}
-            bind:value={renameValue}
-            onclick={(event) => event.stopPropagation()}
-            onkeydown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") finishRename(true);
-              if (event.key === "Escape") finishRename(false);
-            }}
-            onblur={() => finishRename(true)}
-          />
-        {:else}
-          <span
-            class="console-tab-title"
-            use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? undefined)}>{consoleDisplayTitle(item.title, $t)}</span
-          >
-        {/if}
-        <button
-          type="button"
-          class="close-tab"
-          aria-label={$t(dirty ? "workspace.tabs.closeDirty" : "workspace.tabs.close", { title: consoleDisplayTitle(item.title, $t) })}
-          use:tooltip={dirty
-            ? $t(item.filePath ? "workspace.tabs.unsavedFile" : "workspace.tabs.unsavedConsole", {
-                shortcut: shortcutKeys("save-query-console"),
-              })
-            : undefined}
-          onclick={(event) => closeConsole(event, item.id)}
-        >
-          <span class="dirty-dot" aria-hidden="true"></span>
-          <X size={12} class="close-icon" aria-hidden="true" />
-        </button>
-      </div>
-    {/each}
-  </div>
-    <button
-      type="button"
-      class="new-console"
-      use:tooltip={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
-      aria-label={$t("workspace.tabs.newAria")}
-      onclick={() => createQueryConsole(profileId)}
-    >
-      <Plus size={14} aria-hidden="true" />
-    </button>
-  </div>
   {#if !activeConsole && !terminalActive}
     <div class="workspace-empty" in:fade={{ duration: 150 }}>
       <SquareTerminal size={30} strokeWidth={1.25} class="workspace-empty-icon" aria-hidden="true" />
@@ -920,54 +1214,266 @@
        (para no perder sus sesiones), y se ve solo con ella activa. -->
   {#if activeConsole || TerminalDock}
   <section class="workspace-body" class:idle={!activeConsole && !terminalActive} bind:this={workspaceBody}>
-    {#if activeConsole && !activeConsole.table}
+    {#if activeConsole}
     <div
       class="editor-pane"
       bind:this={editorPane}
-      use:focusZoneAction={{ zone: "editor", focusDefault: (zone) => focusIn(zone, ".cm-content") }}
+      use:focusZoneAction={{
+        zone: "editor",
+        focusDefault: (zone) => {
+          const group = CSS.escape(editorLayout?.focus ?? "");
+          return focusIn(zone, `[data-tile-id="${group}"] .cm-content`) || focusIn(zone, `[data-tile-id="${group}"] [role="grid"]`) || focusIn(zone, ".cm-content");
+        },
+      }}
       style={`flex-basis: ${editorFraction * 100}%`}
     >
-      <!-- Una consola grande cuyo texto todavia se lee del disco (al
-           arrancar) no monta el editor hasta tenerlo. -->
-      {#if activeConsole && !activeConsole.textPending}
-        <div class="editor-host">
-          {#key activeConsole.id}
-            <SqlEditor
-              bind:this={sqlEditor}
-              value={activeConsole.sql}
-              onchange={(sql) => updateQueryConsoleSql(activeConsole.id, sql)}
-              onexecute={(sql) => {
-                // Ejecutar desde el editor (o el historial) muestra el
-                // resultado; una ejecucion que termina sola no saca de la
-                // terminal.
-                terminalActive = false;
-                void requestExecution(activeConsole.id, sql);
-              }}
-              executing={liveExecution.isExecuting}
-              result={liveExecution.result}
-              onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
-            />
-          {/key}
-        </div>
-
-        {#if historyOpen}
-          <QueryHistory
-            entries={historyEntries}
-            oninsert={insertFromHistory}
-            onexecute={executeFromHistory}
-            onclose={closeHistory}
+      <MosaicArea
+        bind:this={editorMosaic}
+        tree={editorLayout?.tree ?? null}
+        focused={editorLayout?.focus ?? null}
+        minSize={{ row: 220, column: 110 }}
+        label={(group) => consoleLabel(editorLayout?.selected[group] ?? "")}
+        onresize={(tree) => editorLayout && setEditorGroups(profileId, { ...editorLayout, tree })}
+        onarrange={dropConsoleInNewGroup}
+        onmerge={(target) => dropConsoleInGroup(target)}
+        onfocus={focusEditorGroup}
+        stripHeight={GROUP_STRIP_PX}
+      >
+        {#snippet tile(group)}
+          <div class="editor-group">
+            {@render consoleStrip(group)}
+            {@render consoleBody(group)}
+          </div>
+        {/snippet}
+        {#if pickerOpen}
+          <TilePicker
+            items={pickerItems}
+            label={$t("mosaic.picker.label")}
+            placeholder={$t("mosaic.picker.search")}
+            newLabel={$t("mosaic.picker.new")}
+            onpick={pickTile}
+            onclose={closePicker}
           />
         {/if}
-      {/if}
+      </MosaicArea>
+      {#snippet consoleStrip(group: string)}
+        {@const layout = editorLayout}
+        {@const mine = layout ? consoles.filter((item) => layout.member[item.id] === group) : consoles}
+        {@const chosen = layout?.selected[group] ?? activeId}
+        <!-- La fila de un grupo: carpetas como las del resultado (tabs.css),
+             con lo propio de una consola: cambios sin guardar, renombrar, su
+             menu y guardar o descartar al cerrar. -->
+        <div
+          class="result-tabs tab-strip console-strip"
+          class:dimmed={editorGrouped && group !== layout?.focus}
+          role="tablist"
+          aria-label={$t("workspace.tabs.aria")}
+        >
+          <div
+            class="result-tabs-scroll"
+            use:tabScroll={`${chosen}|${mine.length}`}
+            use:reorderable={{
+              items: ".result-tab.closable",
+              onmove: (from, to) => reorderGroupConsoles(group, from, to),
+              detach: (tab, event, grab) => !!tab.dataset.consoleId && beginConsoleDrag(tab.dataset.consoleId, event, tab, grab),
+            }}
+          >
+            {#each mine as item (item.id)}
+              {@const dirty = isQueryConsoleDirty(item)}
+              {@const title = consoleDisplayTitle(item.title, $t)}
+              <div
+                class="result-tab closable console-tab"
+                class:active={item.id === chosen}
+                class:dirty
+                data-console-id={item.id}
+                role="presentation"
+                style:--tab-active={item.table ? "var(--surface-content)" : $editorPalette.background}
+                oncontextmenu={(event) => openTabMenu(event, item.id)}
+                in:tabEnter
+                out:tabExit
+              >
+                <TabOutline />
+                {#if renamingId === item.id}
+                  <input
+                    class="rename-input"
+                    aria-label={$t("workspace.tabs.renameAria")}
+                    bind:this={renameInput}
+                    bind:value={renameValue}
+                    onclick={(event) => event.stopPropagation()}
+                    onkeydown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === "Enter") finishRename(true);
+                      if (event.key === "Escape") finishRename(false);
+                    }}
+                    onblur={() => finishRename(true)}
+                  />
+                {:else}
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tab-select"
+                    aria-selected={item.id === chosen}
+                    onclick={() => activateQueryConsole(profileId, item.id)}
+                  >
+                    {#if item.table}
+                      <Table size={12} aria-hidden="true" />
+                    {:else if item.filePath}
+                      <FileCode size={12} aria-hidden="true" />
+                    {:else}
+                      <SquareTerminal size={12} aria-hidden="true" />
+                    {/if}
+                    <span
+                      class="console-tab-title"
+                      use:tooltip={item.table ? `${item.table.schema}.${item.table.name}` : (item.filePath ?? title)}>{title}</span
+                    >
+                  </button>
+                {/if}
+                <button
+                  type="button"
+                  class="tab-close"
+                  aria-label={$t(dirty ? "workspace.tabs.closeDirty" : "workspace.tabs.close", { title })}
+                  use:tooltip={dirty
+                    ? $t(item.filePath ? "workspace.tabs.unsavedFile" : "workspace.tabs.unsavedConsole", {
+                        shortcut: shortcutKeys("save-query-console"),
+                      })
+                    : undefined}
+                  onclick={(event) => closeConsole(event, item.id)}
+                >
+                  <span class="dirty-dot" aria-hidden="true"></span>
+                  <X size={11} class="close-icon" aria-hidden="true" />
+                </button>
+              </div>
+            {/each}
+          </div>
+          <button
+            type="button"
+            class="new-console"
+            use:tooltip={$t("workspace.tabs.newTitle", { shortcut: shortcutKeys("new-query-console") })}
+            aria-label={$t("workspace.tabs.newAria")}
+            onclick={() => newConsoleIn(group)}
+          >
+            <Plus size={14} aria-hidden="true" />
+          </button>
+        </div>
+      {/snippet}
+      {#snippet consoleBody(group: string)}
+        {@const id = editorLayout?.selected[group] ?? activeId}
+        {@const item = consoles.find((candidate) => candidate.id === id)}
+        {#if item?.table}
+          <!-- Una tabla: sus datos en su grupo, con su constructor de
+               filtros. Sus atajos del grid responden con el foco en el
+               editor (commandZone). -->
+          {@const view = executionForConsole($queryConsoles, item.id)}
+          {@const edit = editStateFor($resultEdits, item.id)}
+          {@const table = item.table}
+          <div class="table-host">
+            <ResultPane
+              bind:this={tableBodies[item.id]}
+              isExecuting={view.isExecuting}
+              result={view.result}
+              resultSql={view.resultSql}
+              resultAt={view.resultAt}
+              sourceLabel={labelForKey(item.id)}
+              columnCatalogInfo={columnInfoFor(item.id)}
+              page={view.page}
+              totalRows={view.totalRows}
+              counting={view.counting}
+              nextPageShortcut={shortcutKeys("next-result-page")}
+              previousPageShortcut={shortcutKeys("previous-result-page")}
+              onnavigate={(offset, pageSize) => void navigatePage(item.id, offset, pageSize)}
+              sort={view.sort}
+              onsort={(column, additive) => void sortResult(item.id, column, additive)}
+              oncount={() => countTotalRows(item.id)}
+              editInfo={edit.info ?? null}
+              editBlockedReason={edit.blockedReason ?? null}
+              edits={edit.edits ?? EMPTY_EDITS}
+              onedits={(edits, at) => commitResultEdits(item.id, edits, at)}
+              lastEditStep={edit.history.at(-1) ?? null}
+              onundo={() => undoResultEdit(item.id)}
+              onreload={() => void reloadResult(item.id)}
+              outputLog={$executionLog[item.id] ?? []}
+              consoleRunning={view.isExecuting}
+              oncancelquery={() => cancelExecution(item.id)}
+              cancellingQuery={$cancelling[item.id] === true}
+              tabs={[{ key: item.id, label: labelForKey(item.id) ?? consoleDisplayTitle(item.title, $t), pinned: false }]}
+              activeTab={item.id}
+              onexport={() => (exportFor = item.id)}
+              onpreview={() => void openChangesPreview(item.id)}
+              onsubmit={() => void submitChanges(item.id)}
+              onnotice={notifyError}
+              fileEncoding={fileEncoding(item)}
+              onencodingchange={null}
+              tableView
+              filters={tableFiltersBar}
+              filterCount={table.where ? table.conditions.filter((condition) => condition.column).length : 0}
+              filterError={!!tableFilterError[item.id]}
+              tabCommands={false}
+              commandZone="editor"
+              columnFilters={view.columnFilters}
+              onfilterchange={(filters) => void filterResult(item.id, filters)}
+              loadColumnValues={(column) => executions.columnValues(item.id, column)}
+            />
+            {#snippet tableFiltersBar()}
+              {#if $activeEngine}
+                <TableFilters
+                  filters={table}
+                  columns={filterColumns(table, $catalogTables, view.result)}
+                  engine={$activeEngine}
+                  error={tableFilterError[item.id] ?? null}
+                  busy={view.isExecuting}
+                  onapply={(filters) => applyTableFilters(item.id, filters)}
+                  onclose={() => tableBodies[item.id]?.closeFilters()}
+                />
+              {/if}
+            {/snippet}
+          </div>
+        {:else if item && !item.textPending}
+          <!-- Una consola grande cuyo texto todavia se lee del disco (al
+               arrancar) no monta el editor hasta tenerlo. -->
+          <div class="editor-host">
+            <!-- Un bloque con clave por consola: al pasar a otra del grupo, el
+                 editor que se va guarda su texto (al desmontarse) en SU
+                 consola. Con `item` directo, el callback ya apuntaba a la
+                 nueva y el texto terminaba en ella. -->
+            {#each [item] as editing (editing.id)}
+              {@const tileExecution = executionForConsole($queryConsoles, editing.id)}
+              <SqlEditor
+                bind:this={editors[editing.id]}
+                value={editing.sql}
+                onchange={(sql) => updateQueryConsoleSql(editing.id, sql)}
+                onexecute={(sql) => {
+                  // Ejecutar desde el editor (o el historial) muestra el
+                  // resultado; una ejecucion que termina sola no saca de la
+                  // terminal.
+                  terminalActive = false;
+                  void requestExecution(editing.id, sql);
+                }}
+                executing={tileExecution.isExecuting}
+                result={tileExecution.result}
+                onopentabledefinition={(ref) => (tableDefinitionRequest = ref)}
+              />
+            {/each}
+          </div>
+
+          {#if historyOpen && item.id === activeId}
+            <QueryHistory
+              entries={historyEntries}
+              oninsert={insertFromHistory}
+              onexecute={executeFromHistory}
+              onclose={closeHistory}
+            />
+          {/if}
+        {/if}
+      {/snippet}
     </div>
-    {#if liveExecution.pendingConfirmation && activeConsole}
+    {#if liveExecution.pendingConfirmation && resultConsole}
       <!-- Cada confirmacion nueva abre su propio modal. -->
       {#key liveExecution.pendingConfirmation}
         <ExecutionGuard
           count={liveExecution.pendingConfirmation.script?.statements.length ?? 1}
           production={$isProduction}
-          oncancel={() => cancelPendingExecution(activeConsole.id)}
-          onconfirm={() => confirmPendingExecution(activeConsole.id)}
+          oncancel={() => cancelPendingExecution(resultConsole.id)}
+          onconfirm={() => confirmPendingExecution(resultConsole.id)}
         />
       {/key}
     {/if}
@@ -989,83 +1495,132 @@
       class="result-region"
       bind:this={resultRegion}
       tabindex="-1"
-      use:focusZoneAction={{ zone: "results", focusDefault: (zone) => focusIn(zone, '[role="grid"]') || focusSelf(zone) }}
+      use:focusZoneAction={{
+        zone: "results",
+        focusDefault: (zone) =>
+          focusIn(zone, `[data-tile-id="${CSS.escape(selectedTab)}"] [role="grid"]`) || focusIn(zone, '[role="grid"]') || focusSelf(zone),
+      }}
     >
+      <!-- El panel de la ventana: sin fila ni cuerpo propios, dibuja los
+           grupos del resultado (resultTiles) y la terminal, que no se
+           vuelve a montar. Sin consola SQL, solo su fila (Salida y Terminal). -->
       <ResultPane
         bind:this={resultPane}
-        isExecuting={execution.isExecuting}
-        result={execution.result}
-        resultSql={execution.resultSql}
-        resultAt={execution.resultAt}
-        sourceLabel={resultSourceLabel}
-        columnCatalogInfo={resultColumnCatalogInfo}
-        page={execution.page}
-        totalRows={execution.totalRows}
-        counting={execution.counting}
-        nextPageShortcut={shortcutKeys("next-result-page")}
-        previousPageShortcut={shortcutKeys("previous-result-page")}
-        onnavigate={(offset, pageSize) => void navigatePage(viewKey, offset, pageSize)}
-        sort={execution.sort}
-        onsort={(column, additive) => void sortResult(viewKey, column, additive)}
-        oncount={() => countTotalRows(viewKey)}
-        editInfo={editState?.info ?? null}
-        editBlockedReason={editState?.blockedReason ?? null}
-        edits={editState?.edits ?? EMPTY_EDITS}
-        onedits={(edits, at) => commitResultEdits(viewKey, edits, at)}
-        lastEditStep={editState?.history.at(-1) ?? null}
-        onundo={() => undoResultEdit(viewKey)}
-        onreload={() => void reloadResult(viewKey)}
-        outputLog={activeConsole ? ($executionLog[activeConsole.id] ?? []) : []}
+        isExecuting={false}
+        result={null}
+        outputLog={resultConsole ? ($executionLog[resultConsole.id] ?? []) : []}
         consoleRunning={liveExecution.isExecuting}
-        oncancelquery={() => activeConsole && cancelExecution(activeConsole.id)}
-        cancellingQuery={!!activeConsole && $cancelling[activeConsole.id] === true}
-        tabs={resultTabs}
-        activeTab={selectedTab}
-        onselecttab={(tab) => {
-          terminalActive = false;
-          if (activeConsole) selectTab(activeConsole.id, tab);
-        }}
-        onreordertabs={reorderResultTabs}
-        onclosetab={(key) => void closeResultTab(key)}
-        onexport={() => (exportFor = viewKey)}
-        onpin={() => activeConsole && pinCurrentResult(activeConsole.id)}
-        fileEncoding={activeConsole ? fileEncoding(activeConsole) : null}
-        onencodingchange={activeConsole && !activeConsole.table
-          ? (encoding) => setQueryConsoleEncoding(activeConsole.id, encoding)
-          : null}
-        onunpin={() => unpinTab(viewKey)}
-        onrepin={() => {
-          const id = pinnedIdOf(viewKey);
-          if (activeConsole && id !== null) setResultPinned(activeConsole.id, id, true);
-        }}
-        onpreview={() => void openChangesPreview(viewKey)}
-        onsubmit={() => void submitChanges(viewKey)}
-        onnotice={notifyError}
-        filters={activeConsole?.table ? tableFiltersBar : undefined}
-        tableView={!!activeConsole?.table}
-        filterCount={activeConsole?.table?.where ? activeConsole.table.conditions.filter((condition) => condition.column).length : 0}
-        filterError={!!(activeConsole && tableFilterError[activeConsole.id])}
         terminal={TerminalDock ? terminalDock : undefined}
         {terminalActive}
-        onterminal={toggleTerminal}
+        tiles={resultConsole ? resultTiles : undefined}
+        onterminal={resultConsole ? undefined : openTerminal}
       />
-      {#snippet terminalDock()}
-        {#if TerminalDock}
-          <TerminalDock visible={terminalActive} {profileId} onerror={notifyError} />
+      {#snippet resultTiles()}
+        {#if resultLayout}
+          {@const layout = resultLayout}
+          <MosaicArea
+            bind:this={resultMosaicArea}
+            tree={layout.tree}
+            focused={layout.focus}
+            minSize={{ row: 320, column: 150 }}
+            label={(group) => resultLabel(layout.selected[group] ?? OUTPUT_TAB)}
+            onresize={(tree) => resultConsole && setLayout(resultConsole.id, { ...layout, tree })}
+            onarrange={dropTabInNewGroup}
+            onmerge={(target) => dropTabInGroup(target)}
+            onfocus={focusGroup}
+            stripHeight={GROUP_STRIP_PX}
+          >
+            {#snippet tile(group)}
+              <div class="result-host">{@render resultGroup(group)}</div>
+            {/snippet}
+            {#if resultPickerOpen}
+              <TilePicker
+                items={resultPickerItems}
+                label={$t("mosaic.picker.resultLabel")}
+                placeholder={$t("mosaic.picker.resultSearch")}
+                onpick={pickResultTile}
+                onclose={closeResultPicker}
+              />
+            {/if}
+          </MosaicArea>
         {/if}
       {/snippet}
-      {#snippet tableFiltersBar()}
-        {#if activeConsole?.table && $activeEngine}
-          {@const consoleId = activeConsole.id}
-          {@const table = activeConsole.table}
-          <TableFilters
-            filters={table}
-            columns={tableFilterColumns}
-            engine={$activeEngine}
-            error={tableFilterError[consoleId] ?? null}
-            busy={liveExecution.isExecuting}
-            onapply={(filters) => applyTableFilters(consoleId, filters)}
-            onclose={() => resultPane?.closeFilters()}
+      {#snippet resultGroup(group: string)}
+        {#if resultConsole && resultLayout}
+          {@const item = resultConsole}
+          {@const layout = resultLayout}
+          {@const consoleId = item.id}
+          {@const tab = layout.selected[group] ?? OUTPUT_TAB}
+          {@const key = tab === OUTPUT_TAB ? consoleId : tab}
+          {@const view = executionForConsole($queryConsoles, key)}
+          {@const edit = editStateFor($resultEdits, key)}
+          <ResultPane
+            bind:this={resultGroups[group]}
+            isExecuting={view.isExecuting}
+            result={view.result}
+            resultSql={view.resultSql}
+            resultAt={view.resultAt}
+            sourceLabel={labelForKey(key)}
+            columnCatalogInfo={columnInfoFor(key)}
+            page={view.page}
+            totalRows={view.totalRows}
+            counting={view.counting}
+            nextPageShortcut={shortcutKeys("next-result-page")}
+            previousPageShortcut={shortcutKeys("previous-result-page")}
+            onnavigate={(offset, pageSize) => void navigatePage(key, offset, pageSize)}
+            sort={view.sort}
+            onsort={(column, additive) => void sortResult(key, column, additive)}
+            oncount={() => countTotalRows(key)}
+            editInfo={edit.info ?? null}
+            editBlockedReason={edit.blockedReason ?? null}
+            edits={edit.edits ?? EMPTY_EDITS}
+            onedits={(edits, at) => commitResultEdits(key, edits, at)}
+            lastEditStep={edit.history.at(-1) ?? null}
+            onundo={() => undoResultEdit(key)}
+            onreload={() => void reloadResult(key)}
+            outputLog={$executionLog[consoleId] ?? []}
+            consoleRunning={liveExecution.isExecuting}
+            oncancelquery={() => cancelExecution(consoleId)}
+            cancellingQuery={$cancelling[consoleId] === true}
+            tabs={resultTabs.filter((candidate) => layout.member[candidate.key] === group)}
+            showOutputTab={layout.member[OUTPUT_TAB] === group}
+            activeTab={tab}
+            onselecttab={(next) => {
+              selectTab(consoleId, next);
+            }}
+            onreordertabs={(from, to) => reorderGroupTabs(group, from, to)}
+            onclosetab={(closing) => void closeResultTab(closing)}
+            columnFilters={view.columnFilters}
+            onfilterchange={(filters) => void filterResult(key, filters)}
+            loadColumnValues={(column) => executions.columnValues(key, column)}
+            ondetach={beginResultDrag}
+            onexport={() => (exportFor = key)}
+            onpin={() => pinCurrentResult(consoleId)}
+            fileEncoding={group === layout.focus ? fileEncoding(item) : null}
+            onencodingchange={(encoding) => setQueryConsoleEncoding(consoleId, encoding)}
+            onunpin={() => unpinTab(key)}
+            onrepin={() => {
+              const id = pinnedIdOf(key);
+              if (id !== null) setResultPinned(consoleId, id, true);
+            }}
+            onpreview={() => void openChangesPreview(key)}
+            onsubmit={() => void submitChanges(key)}
+            onnotice={notifyError}
+                tabCommands={group === layout.focus}
+            onterminal={group === cornerGroup(layout.tree, "right") ? openTerminal : undefined}
+            dimmed={resultGrouped && group !== layout.focus}
+          />
+        {/if}
+      {/snippet}
+      {#snippet terminalDock()}
+        {#if TerminalDock}
+          <TerminalDock
+            bind:this={terminalView}
+            visible={terminalActive}
+            {profileId}
+            onerror={notifyError}
+            onback={closeTerminal}
+            backKeys={shortcutKeys("toggle-terminal")}
           />
         {/if}
       {/snippet}
@@ -1185,140 +1740,52 @@
     flex-direction: column;
   }
 
-  .console-tabs {
-    display: flex;
-    min-width: 0;
-    min-height: 2.25rem;
+  /* La fila de cada grupo del editor: las carpetas de tabs.css, con lo
+     propio de una consola. El + queda fijo a la derecha de sus pestañas. */
+  .console-strip {
     flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
   }
 
-  /* El scroll es nativo (rueda, trackpad, arrastre) pero sin barra visible:
-     el desvanecido de los bordes ya indica que hay mas pestañas. */
-  .tabs-scroll {
-    --fade: 2rem;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    align-items: center;
-    gap: var(--space-1);
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-padding-inline: var(--fade);
-  }
-
-  .tabs-scroll::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tabs-scroll.fade-end {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
-  }
-
-  .tabs-scroll.fade-start {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
-  }
-
-  .tabs-scroll.fade-start.fade-end {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
-  }
-
-  .console-tab,
   .new-console {
     display: inline-flex;
     flex-shrink: 0;
+    align-self: center;
     align-items: center;
     justify-content: center;
-    min-height: 1.75rem;
-    box-sizing: border-box;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-left: var(--space-1);
+    padding: 0;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: 50%;
     background: transparent;
     color: var(--text-secondary);
-    font: inherit;
-    font-size: 0.75rem;
     cursor: pointer;
     transition:
       background-color var(--duration-fast) ease,
       color var(--duration-fast) ease;
   }
 
-  /* Pestaña tomada al arrastrar (reorder.ts): por encima de las demas, con
-     una sombra sutil. */
-  .console-tab:global(.reorder-dragging) {
-    /* Sin fondo propio, al arrastrarla se veria vacia. */
-    background: var(--surface-elevated);
-    position: relative;
-    z-index: 2;
-    box-shadow: var(--shadow-elevated);
-    cursor: grabbing;
-  }
-
-  .console-tab {
-    gap: var(--space-2);
-    min-width: 7rem;
-    padding: 0 var(--space-2) 0 var(--space-3);
-  }
-
-  /* Mismo resaltado que las pestañas del resultado (ResultPane): sin
-     bordes; en reposo solo texto e icono, la activa con un relleno tenue y
-     su icono en acento. */
-  .console-tab:hover,
   .new-console:hover {
-    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 4%, transparent);
     color: var(--text-primary);
   }
 
-  .console-tab.active {
-    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
-    color: var(--text-primary);
-  }
-
-  .console-tab:focus-visible,
-  .new-console:focus-visible,
-  .close-tab:focus-visible {
+  .new-console:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
-  }
-
-  .console-tab :global(.console-tab-icon) {
-    flex-shrink: 0;
-    color: var(--text-secondary);
-    opacity: 0.8;
-  }
-
-  .console-tab.active :global(.console-tab-icon) {
-    color: var(--accent);
-    opacity: 1;
   }
 
   .console-tab-title {
     white-space: nowrap;
   }
 
-  /* Boton de cierre de tamaño fijo: la bolita de "sin guardar" y la X
-     ocupan el mismo lugar, asi la pestaña no cambia de ancho al alternar.
-     Con cambios pendientes se ve la bolita; al pasar el mouse por la
-     pestaña (o enfocar el boton) se cambia por la X, como en los editores
-     de codigo. */
-  .close-tab {
+  /* La bolita de "sin guardar" y la X ocupan el mismo lugar del boton de
+     cierre, asi la pestaña no cambia de ancho al alternar. Con cambios
+     pendientes se ve la bolita; al pasar el mouse por la pestaña (o enfocar
+     el boton) se cambia por la X, como en los editores de codigo. */
+  .console-tab .tab-close {
     position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1rem;
-    height: 1rem;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
   }
 
   .dirty-dot {
@@ -1335,7 +1802,7 @@
       transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
   }
 
-  .close-tab :global(.close-icon) {
+  .console-tab .tab-close :global(.close-icon) {
     transition: opacity 120ms ease;
   }
 
@@ -1344,24 +1811,24 @@
     transform: scale(1);
   }
 
-  .console-tab.dirty .close-tab :global(.close-icon) {
+  .console-tab.dirty .tab-close :global(.close-icon) {
     opacity: 0;
   }
 
   .console-tab.dirty:hover .dirty-dot,
-  .console-tab.dirty .close-tab:focus-visible .dirty-dot {
+  .console-tab.dirty .tab-close:focus-visible .dirty-dot {
     opacity: 0;
     transform: scale(0.4);
   }
 
-  .console-tab.dirty:hover .close-tab :global(.close-icon),
-  .console-tab.dirty .close-tab:focus-visible :global(.close-icon) {
+  .console-tab.dirty:hover .tab-close :global(.close-icon),
+  .console-tab.dirty .tab-close:focus-visible :global(.close-icon) {
     opacity: 1;
   }
 
   @media (prefers-reduced-motion: reduce) {
     .dirty-dot,
-    .close-tab :global(.close-icon) {
+    .console-tab .tab-close :global(.close-icon) {
       transition: none;
     }
   }
@@ -1378,19 +1845,19 @@
     font: inherit;
   }
 
-  .close-tab:hover {
-    background: var(--surface);
+  /* Un grupo: su fila y debajo la consola (o la tabla) elegida. */
+  .editor-group {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
-  .new-console {
-    width: 1.75rem;
-    background: transparent;
-  }
-
-  /* Fijo a la derecha de las pestañas; cuando desbordan, las pestañas
-     pasan por debajo del desvanecido y el boton no se mueve. */
-  .console-tabs > .new-console {
-    flex-shrink: 0;
+  .table-host {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
   /* Sin pestañas abiertas: accesos directos centrados, al estilo de la
@@ -1475,6 +1942,15 @@
     min-height: 0;
     flex: 1;
   }
+
+  /* El panel de una pestaña dentro de su mosaico, debajo de la barra. */
+  .result-host {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
 
 
 

@@ -28,8 +28,8 @@ function evidence(commit = SHA) {
   for (const { engine, version, digest } of requiredVersions(LINES)) {
     job(`real-${engine}-${version}`, {
       "evidence.jsonl": JSON.stringify({ engine: ENGINE[engine], version, image: `${engine}:${version}`, digest }) + "\n",
-      // Cuatro suites, 3 pruebas en total.
-      "real.log": ["2 passed; 0 failed; 0 ignored", "1 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 0 ignored"]
+      // Cinco suites, 3 pruebas en total.
+      "real.log": ["2 passed; 0 failed; 0 ignored", "1 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 0 ignored"]
         .map((counts) => `test result: ok. ${counts}; 0 measured; 0 filtered out`)
         .join("\n"),
     });
@@ -76,7 +76,7 @@ test("evidencia ausente: rechazada", (t) => {
   rmSync(join(dir, "real-mysql-8.4.11"), { recursive: true });
   rmSync(join(dir, "lines-postgres", "origin.json"));
   const { problems } = check(dir);
-  assert.match(problems[0], /^mysql 8\.4\.11: sin origin\.json.*sin registro del servidor; sin el resultado de las 4 suites/);
+  assert.match(problems[0], /^mysql 8\.4\.11: sin origin\.json.*sin registro del servidor; sin el resultado de las 5 suites/);
   assert.match(problems[1], /^lineas postgres: sin origin\.json/);
   assert.equal(problems.length, 2);
 });

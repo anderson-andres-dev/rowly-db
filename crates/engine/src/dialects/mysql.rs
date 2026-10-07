@@ -1,6 +1,6 @@
 //! MySQL. MariaDB parte de estas mismas listas (dialects/mariadb.rs).
 
-use super::{DoBlocks, EngineDefinition, InsertDefaults, RoutineBodies};
+use super::{DoBlocks, EngineDefinition, ExactText, InsertDefaults, RoutineBodies};
 
 pub const DEFINITION: EngineDefinition = EngineDefinition {
     id: "mysql",
@@ -20,11 +20,18 @@ pub const DEFINITION: EngineDefinition = EngineDefinition {
     do_blocks: DoBlocks::Expression,
     select_into_variable_lists: true,
     sql_mode_query: Some(SQL_MODE_QUERY),
+    exact_text: EXACT_TEXT,
     lines: include_str!("../../../../support/mysql.json"),
 };
 
 pub(super) const ROUTINE_KINDS: &[&str] = &["PROCEDURE", "FUNCTION", "TRIGGER", "EVENT"];
 pub(super) const SQL_MODE_QUERY: &str = "SELECT @@SESSION.sql_mode";
+/// En utf8mb4 (lo que lee el driver) y como binario: la intercalacion de la
+/// columna juntaria 'abc' con 'ABC' o 'ñu' con 'Ñu'.
+pub(super) const EXACT_TEXT: ExactText = ExactText {
+    template: "CAST(CONVERT({} USING utf8mb4) AS BINARY)",
+    as_is: &[],
+};
 
 pub(super) const UNPARSED_WRITES: &[&[&str]] = &[
     &["DROP", "EVENT"],

@@ -33,10 +33,10 @@ export const TAB_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export const commandDefinitions: CommandDefinition[] = [
   // Mueven el foco a la zona vecina (focusZones.ts). Valen tambien con el
   // foco en la terminal.
-  { id: "focus-zone-left", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowLeft" },
-  { id: "focus-zone-right", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowRight" },
-  { id: "focus-zone-up", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowUp" },
-  { id: "focus-zone-down", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+ArrowDown" },
+  { id: "focus-zone-left", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowLeft" },
+  { id: "focus-zone-right", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowRight" },
+  { id: "focus-zone-up", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowUp" },
+  { id: "focus-zone-down", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+Shift+ArrowDown" },
   // Las pestañas de la fila del foco: consolas, panel inferior o sesiones de
   // la terminal (workspace/tabCommands.ts).
   { id: "next-tab", zone: "global", group: "general", defaultKeys: "Ctrl+Tab", aliasKeys: ["Ctrl+PageDown"] },
@@ -65,6 +65,11 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "save-query-console-as", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+S" },
   { id: "open-sql-file", zone: "global", group: "general", defaultKeys: "Ctrl+O" },
   { id: "close-query-console", zone: "global", group: "general", defaultKeys: "Ctrl+W" },
+  // Mosaico (Workspace.svelte): elegir que va junto a lo enfocado, y sacar
+  // lo enfocado del mosaico sin cerrarlo. Segun el foco, consolas o
+  // pestañas del resultado (handlers en "global" y en "results").
+  { id: "tile-console", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+M" },
+  { id: "untile-console", zone: "global", group: "general", defaultKeys: "Ctrl+Alt+W" },
   // Solo con el foco en la terminal; fuera, la tecla sigue su camino.
   { id: "new-terminal-session", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+T" },
   { id: "close-terminal-session", zone: "global", group: "general", defaultKeys: "Ctrl+Shift+W" },

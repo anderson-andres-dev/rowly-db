@@ -1,0 +1,77 @@
+/* Como una app de escritorio, no una pagina: con el mouse no se selecciona
+   nada salvo lo que es texto para leer o copiar (campos, el editor, los
+   bloques de SQL y la Salida), y las imagenes y enlaces no se arrastran. Lo
+   que se arrastra lo define cada pieza (reorder.ts, MosaicArea) y se mueve
+   con el puntero (dragGhost.ts). WebKitGTK necesita el prefijo. */
+:root {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable=""],
+pre,
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img,
+svg,
+a {
+  -webkit-user-drag: none;
+}
+
+/* Mientras se arrastra algo, nada se selecciona por debajo y el cursor es
+   el de agarrar en toda la ventana. */
+:root.dragging,
+:root.dragging * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  cursor: grabbing !important;
+}
+
+/* Una pestaña elevada: conserva el icono y el titulo, sin boton de cierre ni
+   las curvas que la unian al panel. El original queda como hueco tenue. */
+.drag-ghost.result-tab {
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-top-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 2%, var(--surface-elevated));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.2);
+  color: var(--text-primary);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.drag-ghost.result-tab::before,
+.drag-ghost.result-tab::after {
+  content: none;
+}
+
+.drag-ghost .tab-select {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.drag-ghost .tab-select > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drag-ghost.result-tab svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.drag-source {
+  opacity: 0.35;
+}

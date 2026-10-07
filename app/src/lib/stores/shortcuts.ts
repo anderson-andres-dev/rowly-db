@@ -87,11 +87,26 @@ export function resetAllShortcuts(): void {
 
 const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
 
+// La tecla de un evento. WebKitGTK manda "Unidentified" para teclas que GTK
+// convierte con Shift (Shift+Tab es ISO_Left_Tab): Ctrl+Shift+Tab no llegaba
+// a ningun atajo. Ahi manda la tecla fisica (code): KeyT -> T, Digit1 -> 1,
+// Tab -> Tab.
+export function eventKey(event: Pick<KeyboardEvent, "key" | "code">): string {
+  if (event.key && event.key !== "Unidentified") return event.key;
+  const code = event.code ?? "";
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  return code || event.key;
+}
+
+// Lo que formatShortcutEvent lee de un evento (keybindings.ts le pasa los
+// modificadores fisicos, que WebKitGTK a veces no trae).
+export type ShortcutEventLike = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "shiftKey" | "metaKey">;
+
 // Normaliza un KeyboardEvent a un string estable como "Ctrl+Alt+1" para
 // guardar/comparar atajos. Devuelve null mientras solo se sostiene un
 // modificador (todavia no hay una tecla "principal" que capturar).
-export function formatShortcutEvent
-(event: KeyboardEvent): string | null {
+export function formatShortcutEvent(event: ShortcutEventLike): string | null {
   if (MODIFIER_KEYS.has(event.key)) return null;
 
   const parts: string[] = [];
@@ -100,7 +115,7 @@ export function formatShortcutEvent
   if (event.shiftKey) parts.push("Shift");
   if (event.metaKey) parts.push("Meta");
 
-  const key = event.key;
+  const key = eventKey(event);
   parts.push(key.length === 1 ? key.toUpperCase() : key);
 
   return parts.join("+");

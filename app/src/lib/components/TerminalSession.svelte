@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { get } from "svelte/store";
   import type { Terminal as Xterm, ITheme } from "@xterm/xterm";
   import type { FitAddon } from "@xterm/addon-fit";
@@ -15,12 +15,14 @@
   // buffer es el de xterm: la salida no pasa por ningun store.
   let {
     visible,
+    focused = visible,
     profileId,
     oninfo,
     onexit,
     onerror,
   }: {
     visible: boolean;
+    focused?: boolean;
     // El shell arranca en la carpeta SQL de este perfil; sin ella, en HOME.
     profileId: string;
     oninfo: (info: TerminalInfo) => void;
@@ -134,7 +136,7 @@
     opened.attachCustomKeyEventHandler(clipboardKeys);
     observer = new ResizeObserver(() => refit.set(undefined));
     observer.observe(host);
-    if (visible) opened.focus();
+    if (visible && focused) opened.focus();
   });
 
   onDestroy(() => {
@@ -150,9 +152,15 @@
     fit = null;
   });
 
-  // Al mostrarse, el foco va al shell.
+  export function focus() { if (visible) term?.focus(); }
+
+  // Varias sesiones pueden verse a la vez; solo una recibe el teclado.
   $effect(() => {
-    if (visible) term?.focus();
+    // Primero se traslada el nodo a su nuevo grupo. Enfocarlo antes hacia
+    // que focusin activara el grupo anterior durante un movimiento.
+    if (visible && focused) void tick().then(() => {
+      if (visible && focused && !destroyed) term?.focus();
+    });
   });
 </script>
 
@@ -164,6 +172,7 @@
   .terminal-host {
     position: absolute;
     inset: 0;
+    pointer-events: auto;
     /* Sin aire arriba: la fila de sesiones ya deja el suyo bajo la pestaña. */
     padding: 0 0 0 var(--space-3);
   }

@@ -18,6 +18,7 @@ import { get, writable, type Readable } from "svelte/store";
 import {
   cancelQuery,
   classifyStatements,
+  columnValues,
   countQueryRows,
   executeQuery,
   type PageRequest,
@@ -26,6 +27,15 @@ import {
 import { sqlTokens } from "$lib/editor/context";
 import { splitStatements, type SqlLexical } from "$lib/sqlStatements";
 import { nextSort } from "$lib/results/gridSort";
+import {
+  canFilterOnServer,
+  filterRequests,
+  serverValueCounts,
+  type ColumnFilterRequest,
+  type ColumnFilters,
+  type ServerColumnValues,
+  type ValueCount,
+} from "$lib/results/columnFilters";
 import { appendLog } from "$lib/stores/executionLog";
 import { recordQuery, type HistoryOutcome } from "$lib/stores/queryHistory";
 import { forgetResultEdits } from "$lib/stores/resultEdits";
@@ -38,6 +48,7 @@ import {
   finishQueryExecution,
   queryConsoles,
   requireQueryConfirmation,
+  setQueryColumnFilters,
   setQueryCounting,
   setQuerySort,
   setQueryTotalRows,
@@ -199,6 +210,13 @@ export interface ExecutionFlow {
   // El total de filas de la consulta del resultado (COUNT(*)), con su
   // registro en la Salida; null si no se pudo.
   count(key: string): Promise<number | null>;
+  // Los filtros del embudo de las columnas: en la base, de vuelta a la
+  // primera pagina; si la consulta no se filtra ahi, solo se guardan (el
+  // grid filtra lo cargado).
+  filter(key: string, filters: ColumnFilters): Promise<void>;
+  // Los valores del embudo de una columna en todo el resultado; null si se
+  // filtra lo cargado (o la base no pudo): los cuenta el grid.
+  columnValues(key: string, column: number): Promise<ValueCount[] | null>;
   firstPage(key: string): PageRequest;
 }
 
@@ -212,7 +230,12 @@ export function createExecutionFlow(
   view: ExecutionView,
   session: ExecutionSession = createExecutionSession(),
   classify: (statements: string[]) => Promise<StatementCheck[]> = classifyStatements,
-  countRows: (sql: string) => Promise<number> = countQueryRows,
+  countRows: (sql: string, filters?: ColumnFilterRequest[]) => Promise<number> = countQueryRows,
+  readValues: (
+    sql: string,
+    filters: ColumnFilterRequest[],
+    column: ColumnFilterRequest,
+  ) => Promise<ServerColumnValues> = columnValues,
 ): ExecutionFlow {
   const execution = (key: string) => executionForConsole(get(queryConsoles), key);
   const outcomeText = (result: QueryExecutionResult, offset: number, elapsedMs: number) =>
@@ -234,6 +257,26 @@ export function createExecutionFlow(
   function firstPage(key: string): PageRequest {
     const current = execution(key).page;
     return { offset: 0, pageSize: current?.pageSize ?? view.defaultPageSize() };
+  }
+
+  // Los filtros de la pestaña tal como los pide el backend, si se filtra en
+  // la base: la consulta se pagina ahi y sus columnas se nombran sin
+  // ambiguedad. Si un filtro ya fallo en la base (localFilters), se sigue
+  // filtrando lo cargado.
+  function serverFilters(key: string): ColumnFilterRequest[] | undefined {
+    const current = execution(key);
+    const result = current.result;
+    if (current.localFilters || result?.type !== "resultSet" || !canFilterOnServer(result.columns, current.page)) {
+      return undefined;
+    }
+    const requests = filterRequests(result.columns, current.columnFilters);
+    return requests.length > 0 ? requests : undefined;
+  }
+
+  // Consulta nueva: sin el orden ni los filtros de los encabezados.
+  function resetHeaders(key: string) {
+    setQuerySort(key, []);
+    setQueryColumnFilters(key, new Map());
   }
 
   function applyResponse(key: string, sql: string, response: ExecuteQueryResponse, paging: boolean) {
@@ -270,7 +313,24 @@ export function createExecutionFlow(
     const consoleId = consoleOfKey(key);
     const startedAt = Date.now();
     const started = performance.now();
-    const { response, cancelled } = await session.run(consoleId, sql, confirmed, page);
+    let { response, cancelled } = await session.run(consoleId, sql, confirmed, page);
+    // Un filtro que la base no pudo aplicar (un tipo que no se compara, un
+    // nombre que el motor no acepta en una subconsulta): queda en la Salida
+    // y la pestaña sigue con la consulta sin filtrar, filtrando lo cargado.
+    if (
+      page.filters?.length &&
+      !cancelled &&
+      response.type === "completed" &&
+      response.result.type === "error"
+    ) {
+      appendLog(consoleId, { kind: "query", schema: view.schema(), text: sql.trim(), at: startedAt });
+      appendLog(consoleId, {
+        kind: "error",
+        text: view.text("workspace.output.filterFailed", { error: response.result.message }),
+      });
+      setQueryColumnFilters(key, execution(key).columnFilters, true);
+      ({ response, cancelled } = await session.run(consoleId, sql, confirmed, { ...page, filters: undefined }));
+    }
     if (response.type === "completed") {
       const elapsed = performance.now() - started;
       appendLog(consoleId, { kind: "query", schema: view.schema(), text: sql.trim(), at: startedAt });
@@ -412,8 +472,7 @@ export function createExecutionFlow(
       const lexical = view.lexical();
       const sql = await view.fillParameters(requested, lexical);
       if (sql === null || !beginQueryExecution(consoleId)) return;
-      // Consulta nueva: arranca sin el orden de los encabezados.
-      setQuerySort(consoleId, []);
+      resetHeaders(consoleId);
       const statements = splitStatements(sql, lexical).map((range) => sql.slice(range.from, range.to));
       if (statements.length === 0) {
         stopQueryExecution(consoleId);
@@ -433,7 +492,7 @@ export function createExecutionFlow(
     async confirmPending(consoleId) {
       const pending = takeQueryConfirmation(consoleId);
       if (!pending || !beginQueryExecution(consoleId)) return;
-      setQuerySort(consoleId, []);
+      resetHeaders(consoleId);
       if (pending.script) {
         await runScript(consoleId, pending.sql, pending.script.statements, pending.script.confirmations);
         return;
@@ -454,7 +513,12 @@ export function createExecutionFlow(
       const sql = current.resultSql;
       if (!sql || !(await view.confirmDiscard(key)) || !beginQueryExecution(key)) return;
       const page = current.page ?? firstPage(key);
-      await run(key, sql, null, { offset: page.offset, pageSize: page.pageSize, sort: current.sort });
+      await run(key, sql, null, {
+        offset: page.offset,
+        pageSize: page.pageSize,
+        sort: current.sort,
+        filters: serverFilters(key),
+      });
     },
 
     // Otra pagina de la consulta que produjo el resultado vigente (resultSql,
@@ -465,7 +529,7 @@ export function createExecutionFlow(
       const current = execution(key);
       const sql = current.resultSql;
       if (!sql || !(await view.confirmDiscard(key)) || !beginQueryExecution(key)) return;
-      await run(key, sql, null, { offset, pageSize, sort: current.sort }, true);
+      await run(key, sql, null, { offset, pageSize, sort: current.sort, filters: serverFilters(key) }, true);
     },
 
     // Clic en un encabezado: nuevo orden, de vuelta a la primera pagina
@@ -477,12 +541,18 @@ export function createExecutionFlow(
       if (!(await view.confirmDiscard(key)) || !beginQueryExecution(key)) return;
       const sort = nextSort(current.sort, column, additive);
       setQuerySort(key, sort);
-      await run(key, sql, null, { offset: 0, pageSize: current.page.pageSize, sort }, true);
+      await run(
+        key,
+        sql,
+        null,
+        { offset: 0, pageSize: current.page.pageSize, sort, filters: serverFilters(key) },
+        true,
+      );
     },
 
     // Los filtros se ejecutan mientras se arman. Un filtro con error no
     // borra lo que se estaba viendo: el error queda al lado de los filtros
-    // y en la Salida.
+    // y en la Salida. Los del embudo se conservan: son las mismas columnas.
     async table(consoleId, sql) {
       if (!(await view.confirmDiscard(view.replaceableKeys(consoleId))) || !beginQueryExecution(consoleId)) {
         return undefined;
@@ -490,7 +560,10 @@ export function createExecutionFlow(
       setQuerySort(consoleId, []);
       const startedAt = Date.now();
       const started = performance.now();
-      const { response, cancelled } = await session.run(consoleId, sql, null, firstPage(consoleId));
+      const { response, cancelled } = await session.run(consoleId, sql, null, {
+        ...firstPage(consoleId),
+        filters: serverFilters(consoleId),
+      });
       if (response.type !== "completed") {
         applyResponse(consoleId, sql, response, false);
         return undefined;
@@ -516,14 +589,22 @@ export function createExecutionFlow(
 
     async count(key) {
       const consoleId = consoleOfKey(key);
-      const sql = execution(key).resultSql;
+      const current = execution(key);
+      const sql = current.resultSql;
       if (!sql) return null;
+      const filters = serverFilters(key);
       setQueryCounting(key, true);
       const started = performance.now();
-      appendLog(consoleId, { kind: "query", schema: view.schema(), text: `SELECT COUNT(*) FROM (${sql.trim()})` });
+      appendLog(consoleId, {
+        kind: "query",
+        schema: view.schema(),
+        text: `SELECT COUNT(*) FROM (${sql.trim()})${filters ? ` -- ${view.text("workspace.output.filteredSuffix")}` : ""}`,
+      });
       try {
-        const total = await countRows(sql);
-        setQueryTotalRows(key, sql, total);
+        const total = await countRows(sql, filters);
+        // Si mientras contaba cambiaron los filtros, el total es de otras filas.
+        if (execution(key).columnFilters === current.columnFilters) setQueryTotalRows(key, sql, total);
+        else setQueryCounting(key, false);
         appendLog(consoleId, {
           kind: "info",
           text: view.text(total === 1 ? "workspace.output.totalOne" : "workspace.output.totalOther", {
@@ -536,6 +617,51 @@ export function createExecutionFlow(
         setQueryCounting(key, false);
         appendLog(consoleId, { kind: "error", text: String(error) });
         view.notifyError(error);
+        return null;
+      }
+    },
+
+    // Desmarcar valores en el embudo. En la base es otra consulta (las mismas
+    // filas filtradas), asi que el total se vuelve a calcular y se vuelve a
+    // la primera pagina; con cambios pendientes, pregunta antes.
+    async filter(key, filters) {
+      const current = execution(key);
+      const sql = current.resultSql;
+      const result = current.result;
+      const onServer =
+        !!sql && !current.localFilters && result?.type === "resultSet" && canFilterOnServer(result.columns, current.page);
+      if (!onServer) {
+        setQueryColumnFilters(key, filters);
+        return;
+      }
+      if (!(await view.confirmDiscard(key)) || !beginQueryExecution(key)) return;
+      setQueryColumnFilters(key, filters);
+      await run(key, sql, null, {
+        offset: 0,
+        pageSize: current.page?.pageSize ?? view.defaultPageSize(),
+        sort: current.sort,
+        filters: serverFilters(key),
+      });
+    },
+
+    async columnValues(key, column) {
+      const current = execution(key);
+      const sql = current.resultSql;
+      const result = current.result;
+      if (!sql || current.localFilters || result?.type !== "resultSet" || !canFilterOnServer(result.columns, current.page)) {
+        return null;
+      }
+      const info = result.columns[column];
+      if (!info) return null;
+      try {
+        const server = await readValues(sql, serverFilters(key) ?? [], {
+          name: info.name,
+          dataType: info.type,
+          excluded: [],
+        });
+        return serverValueCounts(server, current.columnFilters.get(column) ?? new Set());
+      } catch (error) {
+        appendLog(consoleOfKey(key), { kind: "error", text: String(error) });
         return null;
       }
     },

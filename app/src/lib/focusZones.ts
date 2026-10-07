@@ -6,10 +6,11 @@ import { inTerminal, TERMINAL_COMMANDS } from "$lib/keybindings";
 // Zonas de foco de la ventana y movimiento entre ellas con el teclado.
 //
 //   ┌──────────┬────────────┐
-//   │ explorer │   editor   │    Ctrl+Shift+flecha lleva el foco a la
+//   │ explorer │   editor   │    Ctrl+Shift+Alt+flecha lleva el foco a la
 //   │          ├────────────┤    zona vecina en esa direccion (en los
 //   │  files   │  results   │    bordes da la vuelta), tambien desde la
-//   └──────────┴────────────┘    terminal.
+//   └──────────┴────────────┘    terminal. Dentro del editor, primero
+//                                 recorre las consolas en mosaico.
 //
 // La zona activa la deciden solo el foco real y el clic, nunca el mouse
 // encima: WebKit no enfoca un boton al hacer clic, asi que el clic tambien
@@ -74,7 +75,7 @@ function isUsable(element: HTMLElement | undefined, zone: HTMLElement): element 
 }
 
 // Al llegar con el teclado, la zona destella y queda marcada con un
-// contorno tenue. Mientras se sostienen Ctrl+Shift (modo mover) la marca no
+// contorno tenue. Mientras se sostienen Ctrl+Shift+Alt (modo mover) la marca no
 // se va; un segundo despues de soltarlos, o de la ultima pulsacion, se
 // desvanece sola, para no estorbar. Un clic la quita al instante. Ambos van
 // en una capa encima del contenido (controls.css), para que el editor o los
@@ -89,13 +90,13 @@ function scheduleFade() {
   if (fadeTimer) clearTimeout(fadeTimer);
   fadeTimer = setTimeout(() => {
     fadeTimer = null;
-    // Con Ctrl+Shift todavia apretados, la marca espera a que se suelten.
+    // Con Ctrl+Shift+Alt todavia apretados, la marca espera a que se suelten.
     if (holding()) return;
     marked?.classList.add("zone-fading");
   }, MARK_LINGER_MS);
 }
 
-// La zona actual, marcada sin destello: al sostener Ctrl+Shift.
+// La zona actual, marcada sin destello: al sostener Ctrl+Shift+Alt.
 function showMark(element: HTMLElement) {
   if (fadeTimer) clearTimeout(fadeTimer);
   fadeTimer = null;
@@ -165,10 +166,29 @@ export async function focusZone(zone: Zone): Promise<boolean> {
 // se cruza a la que haya.
 const SAME_COLUMN: Record<Zone, Zone> = { explorer: "files", files: "explorer", editor: "results", results: "editor" };
 
+// Una zona con varias piezas lado a lado (los mosaicos del editor o del
+// resultado) se recorre por dentro antes de saltar a la vecina: su
+// navegador enfoca la pieza de esa direccion y la devuelve, o null en el
+// borde. Moverse entre piezas no marca nada: la barra del mosaico enfocado
+// ya lo dice, y la marca de la zona se quita.
+type ZoneNavigator = (direction: Direction) => HTMLElement | null;
+const navigators = new Map<Zone, ZoneNavigator>();
+
+export function setZoneNavigator(zone: Zone, navigator: ZoneNavigator): () => void {
+  navigators.set(zone, navigator);
+  return () => {
+    if (navigators.get(zone) === navigator) navigators.delete(zone);
+  };
+}
+
 export function moveFocus(direction: Direction): void {
   // Desde donde esta el foco de verdad; la zona activa, si el foco no esta
   // en ninguna (un menu, el body).
   const from = zoneOf(document.activeElement) ?? get(activeZone) ?? "editor";
+  if (navigators.get(from)?.(direction)) {
+    clearMark();
+    return;
+  }
   const target = neighborZone(from, direction, lastLeft, lastRight);
   const crossing = direction === "left" || direction === "right";
   const stay = () => {
@@ -221,20 +241,20 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     registerCommand(id, "global", () => moveFocus(direction)),
   );
 
-  // Modo mover: una capa encima de la app mientras Ctrl y Shift estan
+  // Modo mover: una capa encima de la app mientras Ctrl, Shift y Alt estan
   // apretados. Las flechas solo cambian de zona (nunca llegan al arbol, al
   // texto ni al grid) y la zona actual queda marcada hasta soltarlos; al
   // soltar, se interactua con lo que quedo enfocado. La marca espera
-  // HOLD_MARK_MS para que un atajo rapido (Ctrl+Shift+T, Ctrl+Shift+Enter)
+  // HOLD_MARK_MS para que un atajo rapido (Ctrl+Shift+Alt+T)
   // no la haga parpadear.
   //
-  // Solo cuentan el pulsar y soltar de las teclas fisicas Ctrl y Shift
+  // Solo cuentan el pulsar y soltar de las teclas fisicas Ctrl, Shift y Alt
   // (event.code), nunca ctrlKey/shiftKey de las demas: medido con el teclado
   // real en WebKitGTK, al pasar el foco al explorador las flechas siguientes
-  // llegan sin Ctrl ni Shift aunque sigan apretados, y soltar Shift llega a
+  // llegan sin Ctrl, Shift ni Alt aunque sigan apretados, y soltar Shift llega a
   // veces como key "CapsLock".
-  const held = { Control: false, Shift: false };
-  holding = () => held.Control && held.Shift;
+  const held = { Control: false, Shift: false, Alt: false };
+  holding = () => held.Control && held.Shift && held.Alt;
   let markTimer: ReturnType<typeof setTimeout> | null = null;
   const HOLD_MARK_MS = 200;
 
@@ -252,7 +272,7 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
 
   // Mientras dura, ningun elemento dibuja su anillo de foco (controls.css):
   // solo se ve la marca de la zona. Al soltar, aparece donde quedo el foco.
-  function setHeld(key: "Control" | "Shift", down: boolean) {
+  function setHeld(key: "Control" | "Shift" | "Alt", down: boolean) {
     const was = holding();
     held[key] = down;
     if (!was && holding()) {
@@ -266,10 +286,11 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
     }
   }
 
-  function modifierOf(event: KeyboardEvent): "Control" | "Shift" | null {
+  function modifierOf(event: KeyboardEvent): "Control" | "Shift" | "Alt" | null {
     const code = event.code ?? "";
     if (code.startsWith("Control") || event.key === "Control") return "Control";
     if (code.startsWith("Shift") || event.key === "Shift") return "Shift";
+    if (code.startsWith("Alt") || event.key === "Alt") return "Alt";
     // Soltar Shift que llega como CapsLock (ver arriba).
     if (event.type === "keyup" && event.key === "CapsLock" && held.Shift) return "Shift";
     return null;
@@ -281,10 +302,10 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
       setHeld(modifier, true);
       return;
     }
-    if (!holding() || event.altKey || event.metaKey || isBlocked()) return;
-    // La misma tecla que veria el despachador, con Ctrl y Shift aunque el
-    // evento no los traiga.
-    const keys = `Ctrl+Shift+${event.key.length === 1 ? event.key.toUpperCase() : event.key}`;
+    if (!holding() || event.metaKey || isBlocked()) return;
+    // La misma tecla que veria el despachador, con Ctrl, Alt y Shift aunque
+    // el evento no los traiga.
+    const keys = `Ctrl+Alt+Shift+${event.key.length === 1 ? event.key.toUpperCase() : event.key}`;
     const direction = get(shortcuts).find((shortcut) => shortcut.id in DIRECTION_COMMANDS && shortcutUses(shortcut, keys));
     cancelMarkTimer();
     if (direction) {
@@ -293,18 +314,18 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
       if (!event.repeat) moveFocus(DIRECTION_COMMANDS[direction.id]);
       return;
     }
-    // Otro atajo con Ctrl+Shift (Ctrl+Shift+T, Ctrl+Shift+Enter): con sus
-    // modificadores sigue su camino normal. Si llega sin ellos, se ejecuta
-    // aqui como Ctrl+Shift+tecla; nunca llega suelta (una "t") al elemento
-    // enfocado.
-    if (event.ctrlKey && event.shiftKey) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    // Otro atajo con Ctrl+Alt+Shift: con sus modificadores sigue su camino
+    // normal. Si llega sin ellos, se ejecuta aqui; la tecla que no es de
+    // ningun atajo (Tab, una letra) sigue su camino, nunca se traga.
+    if (event.ctrlKey && event.shiftKey && event.altKey) return;
     const ids = get(shortcuts)
       .filter((shortcut) => shortcutUses(shortcut, keys))
       .map((shortcut) => shortcut.id)
       .filter((id) => !inTerminal(event.target) || TERMINAL_COMMANDS.has(id));
-    if (ids.length > 0) runFirstCommand(ids, get(activeZone));
+    if (ids.length === 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    runFirstCommand(ids, get(activeZone));
   }
 
   function onKeyup(event: KeyboardEvent) {
@@ -316,6 +337,7 @@ export function installFocusZones(isBlocked: () => boolean): () => void {
   function onWindowBlur() {
     setHeld("Control", false);
     setHeld("Shift", false);
+    setHeld("Alt", false);
   }
 
   // Esc desde el explorador, los archivos o el resultado vuelve al editor,

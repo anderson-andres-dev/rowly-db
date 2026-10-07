@@ -29,6 +29,8 @@ export const TERMINAL_COMMANDS = new Set([
   "new-terminal-session",
   "close-terminal-session",
   "rename-query-console",
+  "tile-console",
+  "untile-console",
   "shortcut-sheet",
 ]);
 
@@ -38,13 +40,66 @@ export function inTerminal(target: EventTarget | null): boolean {
 
 let installed = false;
 
+// Los modificadores fisicos. Medido con el teclado real en WebKitGTK: con
+// Ctrl+Shift sostenidos, las repeticiones de Tab llegan sin ctrlKey ni
+// shiftKey (y el editor las tomaba como Tab: sangraba), y tras mover el foco
+// otras teclas tambien. Se siguen por event.code (soltar Shift llega a
+// veces con key "CapsLock", pero code ShiftLeft) y valen un rato: un
+// keyup perdido no puede dejar Ctrl "pegado" a las letras.
+const HELD_MS = 3000;
+type Modifier = "ctrl" | "shift" | "alt" | "meta";
+
+export function modifierOfCode(code: string): Modifier | null {
+  if (code.startsWith("Control")) return "ctrl";
+  if (code.startsWith("Shift")) return "shift";
+  if (code.startsWith("Alt")) return "alt";
+  if (code.startsWith("Meta") || code.startsWith("OS")) return "meta";
+  return null;
+}
+
 export function installKeybindings(isBlocked: () => boolean): () => void {
   if (installed) return () => {};
   installed = true;
 
+  // Cuando se vio por ultima vez cada modificador apretado (0: suelto).
+  const held: Record<Modifier, number> = { ctrl: 0, shift: 0, alt: 0, meta: 0 };
+
+  function track(event: KeyboardEvent) {
+    const modifier = modifierOfCode(event.code ?? "");
+    const now = event.timeStamp || performance.now();
+    if (modifier) held[modifier] = event.type === "keydown" ? now : 0;
+    // Un evento que si los trae confirma que siguen apretados.
+    if (event.ctrlKey && held.ctrl) held.ctrl = now;
+    if (event.shiftKey && held.shift) held.shift = now;
+    if (event.altKey && held.alt) held.alt = now;
+    if (event.metaKey && held.meta) held.meta = now;
+  }
+
+  function withHeld(event: KeyboardEvent) {
+    const now = event.timeStamp || performance.now();
+    const down = (modifier: Modifier) => held[modifier] > 0 && now - held[modifier] < HELD_MS;
+    return {
+      key: event.key,
+      code: event.code,
+      ctrlKey: event.ctrlKey || down("ctrl"),
+      shiftKey: event.shiftKey || down("shift"),
+      altKey: event.altKey || down("alt"),
+      metaKey: event.metaKey || down("meta"),
+    };
+  }
+
+  function onKeyup(event: KeyboardEvent) {
+    track(event);
+  }
+
+  function onBlur() {
+    held.ctrl = held.shift = held.alt = held.meta = 0;
+  }
+
   function onKeydown(event: KeyboardEvent) {
+    track(event);
     if (event.defaultPrevented || event.isComposing || isBlocked()) return;
-    const keys = formatShortcutEvent(event);
+    const keys = formatShortcutEvent(withHeld(event));
     if (!keys) return;
     let ids = get(shortcuts)
       .filter((shortcut) => shortcutUses(shortcut, keys))
@@ -57,8 +112,12 @@ export function installKeybindings(isBlocked: () => boolean): () => void {
   }
 
   window.addEventListener("keydown", onKeydown, true);
+  window.addEventListener("keyup", onKeyup, true);
+  window.addEventListener("blur", onBlur);
   return () => {
     installed = false;
     window.removeEventListener("keydown", onKeydown, true);
+    window.removeEventListener("keyup", onKeyup, true);
+    window.removeEventListener("blur", onBlur);
   };
 }

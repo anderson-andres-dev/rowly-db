@@ -80,7 +80,7 @@ jobs:
         working-directory: app
         run: npm ci
       - name: Compilar la suite
-        run: cargo test -p rowly-server-tests --test safety --test analysis --test generated --test contract --locked --no-run
+        run: cargo test -p rowly-server-tests --test safety --test analysis --test generated --test contract --test filters --locked --no-run
       - name: Servidor ${{ matrix.engine }} ${{ matrix.version }} con Sakila/Pagila
         run: tools/test-dbs/up.sh "${{ matrix.engine }}=${{ matrix.version }}"
       - name: Origen de la evidencia
@@ -92,7 +92,7 @@ jobs:
           ROWLY_ENGINES: ${{ matrix.engine }}
           ROWLY_FUZZ_CASES: ${{ inputs.fuzz_cases || '4000' }}
           ROWLY_EVIDENCE: evidence.jsonl
-        run: cargo test -p rowly-server-tests --test safety --test analysis --test generated --test contract --locked -- --ignored --test-threads=1 2>&1 | tee real.log
+        run: cargo test -p rowly-server-tests --test safety --test analysis --test generated --test contract --test filters --locked -- --ignored --test-threads=1 2>&1 | tee real.log
       - name: Evidencia
         if: always()
         uses: actions/upload-artifact@v4
