@@ -23,7 +23,9 @@
     PinOff,
     Search,
     Filter,
+    Icon,
   } from "@lucide/svelte";
+  import type { IconNode } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
   import { flipDuration, reorderable } from "$lib/reorder";
@@ -115,6 +117,7 @@
     tiles,
     showOutputTab = true,
     tabCommands = true,
+    onterminal,
     dimmed = false,
     commandZone = "results",
     ondetach,
@@ -204,6 +207,9 @@
     tiles?: Snippet;
     showOutputTab?: boolean;
     tabCommands?: boolean;
+    // Con esto, al final de la fila el icono de la terminal (solo el del
+    // grupo de arriba a la derecha): la abre, como Ctrl+T.
+    onterminal?: () => void;
     // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
     dimmed?: boolean;
     // Donde responden los atajos del grid: una tabla abierta en un grupo del
@@ -211,6 +217,10 @@
     commandZone?: "results" | "editor";
     ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
+
+  // El ">_" de Lucide (Terminal), distinto del de la Salida. Con el Icon base
+  // y sus datos: el componente del icono sumaba bytes al JS inicial.
+  const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
 
   // --- Pestañas ----------------------------------------------------------
   // Que pestaña se ve lo decide Workspace (cada ejecucion elige: con filas,
@@ -660,6 +670,20 @@
         </div>
       {/each}
       </div>
+      {/if}
+      {#if onterminal}
+        <!-- Solo el icono: la terminal es otro espacio, no una pestaña. -->
+        <button
+          type="button"
+          class="strip-terminal"
+          tabindex="-1"
+          data-no-zone-focus
+          aria-label={$t("workspace.terminal.title")}
+          use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
+          onclick={onterminal}
+        >
+          <Icon iconNode={TERMINAL_ICON} size={14} aria-hidden="true" />
+        </button>
       {/if}
     </div>
   {/if}
@@ -1183,6 +1207,36 @@
      la linea base de la elegida (si no, contarian como desborde) y baja
      sobre esa linea para que la elegida la tape; los margenes negativos lo
      compensan. Las zonas reservadas no toman clics. */
+  /* El icono de la terminal, al final de la fila. */
+  .strip-terminal {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) ease,
+      color var(--duration-fast) ease;
+  }
+
+  .strip-terminal:hover {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+    color: var(--text-primary);
+  }
+
+  .strip-terminal:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
   /* Lo del resultado sin caja propia. */
   .pane-view {
     display: contents;

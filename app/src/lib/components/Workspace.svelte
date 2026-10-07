@@ -83,6 +83,7 @@
   import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
     choose,
+    cornerGroup,
     emptyGroups,
     groupTabs,
     mergeGroup,
@@ -434,14 +435,24 @@
       resultRegion?.querySelector<HTMLElement>("[data-terminal]:not(.hidden) textarea")?.focus({ preventScroll: true });
       return;
     }
-    if (terminalActive) {
-      terminalActive = false;
-      if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
-      return;
-    }
+    if (terminalActive) closeTerminal();
+    else openTerminal();
+  }
+
+  // El icono de la fila: siempre la abre (abierta, la fila queda tapada).
+  function openTerminal() {
+    if (terminalActive) return;
     terminalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     terminalActive = true;
     if (!TerminalDock) void import("$lib/components/Terminal.svelte").then((module) => (TerminalDock = module.default));
+  }
+
+  // La flecha de la terminal: siempre vuelve a los datos, este donde este el
+  // foco (Ctrl+T, con el foco fuera, primero lleva a ella).
+  function closeTerminal() {
+    if (!terminalActive) return;
+    terminalActive = false;
+    if (terminalReturnFocus?.isConnected) terminalReturnFocus.focus({ preventScroll: true });
   }
 
 
@@ -1495,6 +1506,7 @@
         terminal={TerminalDock ? terminalDock : undefined}
         {terminalActive}
         tiles={resultConsole ? resultTiles : undefined}
+        onterminal={resultConsole ? undefined : openTerminal}
       />
       {#snippet resultTiles()}
         {#if resultLayout}
@@ -1585,6 +1597,7 @@
             onsubmit={() => void submitChanges(key)}
             onnotice={notifyError}
                 tabCommands={group === layout.focus}
+            onterminal={group === cornerGroup(layout.tree, "right") ? openTerminal : undefined}
             dimmed={resultGrouped && group !== layout.focus}
           />
         {/if}
@@ -1595,7 +1608,7 @@
             visible={terminalActive}
             {profileId}
             onerror={notifyError}
-            onback={toggleTerminal}
+            onback={closeTerminal}
             backKeys={shortcutKeys("toggle-terminal")}
           />
         {/if}

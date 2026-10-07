@@ -11,7 +11,9 @@
   align-items: flex-end;
   gap: 2px;
   /* Tan alta como las pestañas mas el aire de la carpeta: sin una elegida,
-     el texto no queda descuadrado. */
+     el texto no queda descuadrado; y sin ninguna (una consola sin
+     ejecutar), la fila no se encoge a una franja entre dos lineas. */
+  min-height: calc(2rem + 6px);
   padding: 6px var(--space-2) 0;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
