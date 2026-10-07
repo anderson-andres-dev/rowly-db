@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { Plus, X } from "@lucide/svelte";
+  import { ArrowLeft, Plus, X } from "@lucide/svelte";
+  import { tabScroll } from "$lib/tabScroll";
   import { t } from "$lib/i18n";
   import { tooltip } from "$lib/tooltip";
   import { editorPalette } from "$lib/theming/theme";
@@ -9,19 +10,27 @@
   import { registerCommands } from "$lib/workspace/commands";
   import { registerTabCommands } from "$lib/workspace/tabCommands";
 
-  // La terminal de la ventana, dentro del panel inferior (la pestaña
-  // Terminal de ResultPane): una fila con las sesiones en el lugar de la
-  // barra del resultado y, debajo, la sesion elegida. Cada sesion es un
-  // shell con su xterm; las ocultas siguen vivas. Se monta la primera vez
-  // que se abre la pestaña y queda montada: cerrarla desmonta solo sesiones.
+  // La terminal de la ventana: un espacio propio en el lugar del resultado,
+  // que alterna con los datos (Ctrl+T, ResultPane la pone encima de todo).
+  // Arriba, su fila de carpetas, como la del resultado: las sesiones son las
+  // pestañas (sin una pestaña "Terminal" que no mostraria nada) y a la
+  // derecha la flecha para volver a los datos. Debajo, la sesion elegida.
+  // Cada sesion es un shell con su xterm; las ocultas siguen vivas. Se monta
+  // la primera vez que se abre y queda montada: cerrarla desmonta solo
+  // sesiones.
   let {
     visible,
     profileId,
     onerror,
+    onback,
+    backKeys = "",
   }: {
     visible: boolean;
     profileId: string;
     onerror: (message: string) => void;
+    // Volver a los datos (lo mismo que Ctrl+T con el foco aca).
+    onback: () => void;
+    backKeys?: string;
   } = $props();
 
   // closing: la pestaña se esta yendo (fade) y su shell sigue hasta quitarla.
@@ -85,45 +94,6 @@
     if (save && session && name) session.label = name;
   }
 
-  // Como las pestañas de las consolas: se desplazan por debajo del + (fijo a
-  // la derecha), con un desvanecido en el borde que tiene mas, la rueda
-  // vertical las mueve en horizontal y la elegida se pone a la vista.
-  let scroller: HTMLDivElement;
-  let overflow = $state({ start: false, end: false });
-
-  function updateOverflow() {
-    const start = scroller.scrollLeft > 1;
-    const end = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
-    if (start !== overflow.start || end !== overflow.end) overflow = { start, end };
-  }
-
-  function onWheel(event: WheelEvent) {
-    if (scroller.scrollWidth <= scroller.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    event.preventDefault();
-    scroller.scrollLeft += event.deltaY;
-  }
-
-  $effect(() => {
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(scroller);
-    scroller.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      observer.disconnect();
-      scroller.removeEventListener("wheel", onWheel);
-    };
-  });
-
-  // Tras la entrada (150 ms), para medir el ancho final.
-  $effect(() => {
-    const key = active;
-    sessions.length;
-    const timer = setTimeout(() => {
-      scroller.querySelector(`[data-flip="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-      updateOverflow();
-    }, 160);
-    return () => clearTimeout(timer);
-  });
-
   // Atajos de las sesiones (lib/workspace/commands.ts), solo con el foco en
   // la terminal: Ctrl+Tab y Ctrl+1..9 entre sesiones, Ctrl+Shift+T nueva,
   // Ctrl+Shift+W cerrar y Ctrl+Shift+R renombrar. Fuera de ella, la tecla
@@ -167,23 +137,20 @@
   });
 </script>
 
-<!-- Dentro de la terminal, las sesiones como las pestañas de las consolas:
-     la elegida con un relleno suave, sobre el fondo de la terminal. -->
-<div class="terminal-sessions" style:background={$editorPalette.background} bind:this={row}>
-  <div
-    class="sessions-scroll"
-    class:fade-start={overflow.start}
-    class:fade-end={overflow.end}
-    role="tablist"
-    aria-label={$t("workspace.terminal.title")}
-    bind:this={scroller}
-    onscroll={updateOverflow}
-  >
+<!-- La fila de la terminal: carpetas como las del resultado (tabs.css), sobre
+     el fondo de la terminal, y la elegida se une con su sesion. -->
+<div
+  class="result-tabs tab-strip terminal-strip"
+  style:--terminal-bg={$editorPalette.background}
+  style:--tab-active={$editorPalette.background}
+  bind:this={row}
+>
+  <div class="result-tabs-scroll" role="tablist" aria-label={$t("workspace.terminal.title")} use:tabScroll={`${active}|${sessions.length}`}>
   {#each sessions as session (session.key)}
-    <!-- Las mismas transiciones que las pestañas de las consolas: entra
-         como fly (x -8, 150 ms) y sale como fade (120 ms). -->
+    <!-- Entra como fly (x -8, 150 ms) y sale como fade (120 ms), como las
+         pestañas de las consolas. -->
     <div
-      class="session"
+      class="result-tab closable session"
       class:active={session.key === active}
       class:closing={session.closing}
       data-flip={session.key}
@@ -214,6 +181,7 @@
           ondblclick={() => startRename(session)}
           onkeydown={(event) => event.key === "F2" && startRename(session)}
         >
+          <span class="prompt" aria-hidden="true">&gt;_</span>
           <span>{session.label}</span>
         </button>
       {/if}
@@ -228,8 +196,17 @@
     </div>
   {/each}
   </div>
-  <button type="button" class="session-add" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
+  <button type="button" class="strip-button" data-flip="+" aria-label={$t("workspace.terminal.new")} use:tooltip={$t("workspace.terminal.new")} onclick={add}>
     <Plus size={13} aria-hidden="true" />
+  </button>
+  <button
+    type="button"
+    class="strip-button back"
+    aria-label={$t("workspace.terminal.back", { keys: backKeys })}
+    use:tooltip={$t("workspace.terminal.back", { keys: backKeys })}
+    onclick={onback}
+  >
+    <ArrowLeft size={14} aria-hidden="true" />
   </button>
 </div>
 <!-- Las sesiones, apiladas en el mismo lugar: cambiar de una a otra solo
@@ -247,82 +224,30 @@
 </div>
 
 <style>
-  /* Alta como la barra del resultado, en su lugar, y con el fondo de la
-     terminal. */
-  .terminal-sessions {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    min-height: 2.5rem;
-    padding: 0 var(--space-2);
-    box-sizing: border-box;
+  /* La fila sobre el fondo de la terminal, apenas distinto: se nota que es
+     otro espacio que el de los datos. */
+  .terminal-strip {
+    background: color-mix(in srgb, var(--text-primary) 4%, var(--terminal-bg));
   }
 
-  /* Como las pestañas de las consolas. */
+  .session .prompt {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.6875rem;
+    opacity: 0.8;
+  }
+
+  .session.active .prompt {
+    color: var(--accent);
+    opacity: 1;
+  }
+
   .session {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 1.75rem;
-    padding: 0 var(--space-1) 0 var(--space-3);
-    box-sizing: border-box;
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
     animation: session-in 150ms cubic-bezier(0.33, 1, 0.68, 1);
-    transition:
-      background-color var(--duration-fast) ease,
-      color var(--duration-fast) ease;
-  }
-
-  .session:hover {
-    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-    color: var(--text-primary);
-  }
-
-  .session.active {
-    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
-    color: var(--text-primary);
-  }
-
-  /* Con el teclado, el foco es el borde de la propia pestaña. */
-  .session:has(> .tab-select:focus-visible) {
-    box-shadow: inset 0 0 0 1px var(--focus-ring);
   }
 
   .session.closing {
     animation: session-out 120ms linear forwards;
     pointer-events: none;
-  }
-
-  /* El scroll es nativo pero sin barra: el desvanecido indica que hay mas. */
-  .sessions-scroll {
-    --fade: 2rem;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    align-items: center;
-    gap: 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-padding-inline: var(--fade);
-  }
-
-  .sessions-scroll::-webkit-scrollbar {
-    display: none;
-  }
-
-  .sessions-scroll.fade-end {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
-  }
-
-  .sessions-scroll.fade-start {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade));
-  }
-
-  .sessions-scroll.fade-start.fade-end {
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
   }
 
   /* Como el de las pestañas de las consolas. */
@@ -338,11 +263,12 @@
     font: inherit;
   }
 
-  .session-add {
+  .strip-button {
     display: grid;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.75rem;
+    height: 1.75rem;
     flex-shrink: 0;
+    align-self: center;
     margin-left: var(--space-1);
     place-items: center;
     padding: 0;
@@ -353,12 +279,17 @@
     cursor: pointer;
   }
 
-  .session-add:hover {
+  /* La flecha para volver, al final de la fila. */
+  .strip-button.back {
+    margin-left: auto;
+  }
+
+  .strip-button:hover {
     background: color-mix(in srgb, var(--text-primary) 8%, transparent);
     color: var(--text-primary);
   }
 
-  .session-add:focus-visible {
+  .strip-button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
   }

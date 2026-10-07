@@ -11,7 +11,7 @@
     Minus,
     Plus,
     RotateCw,
-    SquareTerminal,
+    SquareArrowRightExit,
     Table,
     TableProperties,
     Undo2,
@@ -23,7 +23,6 @@
     PinOff,
     Search,
     Filter,
-    Icon,
   } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
   import { flip } from "svelte/animate";
@@ -58,7 +57,6 @@
   import { numberFormat, t } from "$lib/i18n";
   import { tick, untrack, type Snippet } from "svelte";
   import { editorPalette } from "$lib/theming/theme";
-  import type { IconNode } from "@lucide/svelte";
   import ColumnFilterPopover from "$lib/components/results/ColumnFilterPopover.svelte";
   import {
     columnValueCounts,
@@ -114,11 +112,8 @@
     filterError = false,
     terminal,
     terminalActive = false,
-    onterminal = () => {},
     tiles,
-    terminalBelowStrips = false,
     showOutputTab = true,
-    terminalTab = true,
     tabCommands = true,
     dimmed = false,
     commandZone = "results",
@@ -195,24 +190,19 @@
     filterCount?: number;
     filterError?: boolean;
     // La terminal de la ventana (Workspace la carga la primera vez que se
-    // abre): pestaña fija a la izquierda de Salida y, activa, ocupa el lugar
-    // de la barra y el cuerpo del resultado, que quedan montados y ocultos.
+    // abre con Ctrl+T): otro espacio en el mismo lugar que los datos, con su
+    // propia fila de sesiones. Abierta, tapa todo el panel (filas incluidas)
+    // y los datos quedan montados debajo, tal como estaban.
     terminal?: Snippet;
     terminalActive?: boolean;
-    onterminal?: () => void;
     // Grupos de pestañas en mosaico (Workspace.svelte, MosaicArea): el panel
     // de la ventana, sin fila propia, pone los grupos (`tiles`) y la
-    // terminal, que no se vuelve a montar: abierta ocupa todo el area debajo
-    // de las filas de arriba (`terminalBelowStrips`). Cada grupo es
-    // otro panel con SU fila de carpetas: la Salida solo si es suya
-    // (`showOutputTab`), la pestaña Terminal solo en el de la terminal
-    // (`terminalTab`), y Ctrl+Tab solo en el enfocado (`tabCommands`).
-    // `ondetach`: sacar una pestaña de la fila hacia los grupos
-    // (reorder.ts); false si no se puede.
+    // terminal, que no se vuelve a montar. Cada grupo es otro panel con SU
+    // fila de carpetas: la Salida solo si es suya (`showOutputTab`) y
+    // Ctrl+Tab solo en el enfocado (`tabCommands`). `ondetach`: sacar una
+    // pestaña de la fila hacia los grupos (reorder.ts); false si no se puede.
     tiles?: Snippet;
-    terminalBelowStrips?: boolean;
     showOutputTab?: boolean;
-    terminalTab?: boolean;
     tabCommands?: boolean;
     // Un grupo sin el foco: su carpeta elegida en gris, no en acento.
     dimmed?: boolean;
@@ -221,11 +211,6 @@
     commandZone?: "results" | "editor";
     ondetach?: (key: string, event: PointerEvent, source: HTMLElement, grab: { x: number; y: number }) => boolean;
   } = $props();
-
-  // El ">_" de Lucide (Terminal), distinto del SquareTerminal de la Salida.
-  // Con el Icon base y sus datos: el componente del icono sumaba 303 B al JS
-  // inicial.
-  const TERMINAL_ICON: IconNode = [["path", { d: "M12 19h8" }], ["path", { d: "m4 17 6-6-6-6" }]];
 
   // --- Pestañas ----------------------------------------------------------
   // Que pestaña se ve lo decide Workspace (cada ejecucion elige: con filas,
@@ -632,7 +617,7 @@
         aria-selected={showingOutput}
         onclick={() => onselecttab("output")}
       >
-        <SquareTerminal size={12} aria-hidden="true" />
+        <SquareArrowRightExit size={12} aria-hidden="true" />
         <span>{$t("results.tab.output")}</span>
       </button>
       {/if}
@@ -676,30 +661,11 @@
       {/each}
       </div>
       {/if}
-      <!-- La terminal es de la ventana: su pestaña va aparte, a la derecha,
-           y abierta se une a ella (el fondo de la terminal). -->
-      {#if terminalTab}
-      <button
-        type="button"
-        role="tab"
-        class="result-tab terminal-tab"
-        class:active={terminalActive}
-        aria-selected={terminalActive}
-        tabindex="-1"
-        data-no-zone-focus
-        style:--tab-active={$editorPalette.background}
-        use:tooltip={{ label: $t("workspace.terminal.title"), shortcut: shortcutKeys("toggle-terminal") }}
-        onclick={() => terminalActive || onterminal()}
-      >
-        <Icon iconNode={TERMINAL_ICON} size={12} aria-hidden="true" />
-        <span>{$t("workspace.terminal.title")}</span>
-      </button>
-      {/if}
     </div>
   {/if}
-  <!-- Con grupos, la terminal tapa los grupos pero no las filas de arriba
-       (terminalBelowStrips): ahi se la ve elegida y se vuelve a las demas. -->
-  <div class="pane-view" class:hidden={terminalActive && !tiles}>
+  <!-- Los datos siguen montados debajo de la terminal (grids, scroll,
+       grupos): al volver estan tal como se dejaron. -->
+  <div class="pane-view">
   {#if tiles}
     {@render tiles()}
   {:else}
@@ -1021,11 +987,7 @@
   {/if}
   </div>
   {#if terminal}
-    <div
-      class="terminal-view"
-      class:hidden={!terminalActive}
-      class:over-group={terminalBelowStrips}
-    >
+    <div class="terminal-view" class:hidden={!terminalActive}>
       {@render terminal()}
     </div>
   {/if}
@@ -1216,41 +1178,27 @@
 
 
 
-  .terminal-tab {
-    margin-left: auto;
-  }
-
   /* Scroll nativo sin barra; el desvanecido (tabScroll) indica que hay mas.
      Reserva a los lados el lugar de las curvas y del contorno que sigue por
      la linea base de la elegida (si no, contarian como desborde) y baja
      sobre esa linea para que la elegida la tape; los margenes negativos lo
      compensan. Las zonas reservadas no toman clics. */
-  /* Lo del resultado sin caja propia; con la terminal activa, oculto pero
-     montado (el grid conserva su estado). */
+  /* Lo del resultado sin caja propia. */
   .pane-view {
     display: contents;
   }
 
-  /* Sobre todos los grupos, debajo de las filas de arriba (la de su grupo
-     la marca abierta): tiene sus propias sesiones, no es de un grupo. La
-     altura de la fila de carpetas es la de tabs.css. */
-  .terminal-view.over-group {
-    position: absolute;
-    top: calc(2rem + 6px);
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 6;
-  }
-
+  /* El espacio de la terminal: encima de todo el panel, con su propia fila. */
   .terminal-view {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
     display: flex;
     min-height: 0;
     flex: 1;
     flex-direction: column;
   }
 
-  .pane-view.hidden,
   .terminal-view.hidden {
     display: none;
   }

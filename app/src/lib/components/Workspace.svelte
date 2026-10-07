@@ -83,7 +83,6 @@
   import { leaves, neighbor, place, WHOLE, type Mosaic, type Side } from "$lib/workspace/mosaic";
   import {
     choose,
-    cornerGroup,
     emptyGroups,
     groupTabs,
     mergeGroup,
@@ -416,10 +415,11 @@
   }
 
   // --- Terminal ------------------------------------------------------------
-  // Una por ventana, como pestaña fija del panel inferior (ResultPane), con
-  // sus sesiones dentro. No es de ninguna consola: activa, sigue a la vista
-  // al cambiar de consola o sin ninguna abierta. Desactivarla vuelve a la
-  // pestaña que la consola tenia elegida, que no se toca.
+  // Una por ventana, en el mismo lugar que los datos pero como otro espacio:
+  // Ctrl+T alterna entre los dos (sin pestaña: no carga la fila del
+  // resultado). Abierta, tapa todo el panel con su propia fila de sesiones;
+  // los datos quedan debajo tal como estaban. No es de ninguna consola:
+  // sigue a la vista al cambiar de consola o sin ninguna abierta.
   let terminalActive = $state(false);
   // Terminal.svelte (y con el, xterm) se carga la primera vez que se abre:
   // quien no la usa no los descarga ni crea un shell.
@@ -956,11 +956,9 @@
   // El mismo sistema que el editor: el resultado de resultConsole se parte en
   // grupos, cada uno con su fila de carpetas y la pestaña elegida debajo. La
   // elegida de la consola es la del grupo enfocado y ejecutar agrega el
-  // resultado nuevo a ese grupo. La Salida y la Terminal no entran en el
-  // mosaico: la Salida es siempre la primera del grupo de arriba a la
-  // izquierda y la Terminal, la ultima del de arriba a la derecha. Abierta,
-  // la Terminal ocupa todo el resultado debajo de las filas de arriba (tiene
-  // sus propias sesiones). Vive en memoria, por consola, como sus pestañas.
+  // resultado nuevo a ese grupo. La Salida no entra en el mosaico: es
+  // siempre la primera del grupo de arriba a la izquierda. Vive en memoria,
+  // por consola, como sus pestañas.
   const FIRST_GROUP = "g0";
   // Alto de la fila de carpetas de un grupo (2rem + 6px, tabs.css): soltar
   // una pestaña ahi la acopla a ese grupo.
@@ -974,7 +972,6 @@
   const resultKeys = $derived([OUTPUT_TAB, ...resultTabs.map((tab) => tab.key)]);
   const resultLayout = $derived(resultConsole ? (resultLayouts[resultConsole.id] ?? null) : null);
   const resultGrouped = $derived(leaves(resultLayout?.tree ?? null).length > 1);
-  const terminalGroup = $derived(resultLayout ? cornerGroup(resultLayout.tree, "right") : FIRST_GROUP);
 
   function setLayout(consoleId: string, groups: TabGroups) {
     resultLayouts = { ...resultLayouts, [consoleId]: normalizeGroups(groups, resultKeys, RESULT_PINNED) };
@@ -1030,7 +1027,6 @@
     if (!item) return;
     setLayout(item.id, groups);
     const layout = resultLayouts[item.id];
-    if (layout.focus === terminalGroup) terminalActive = false;
     selectTab(item.id, layout.selected[layout.focus]);
     await tick();
     focusGroupContent(layout.focus);
@@ -1138,7 +1134,6 @@
       const side: Side = direction === "up" ? "top" : direction === "down" ? "bottom" : direction;
       const next = neighbor(resultLayout.tree, resultLayout.focus, side);
       if (!next) return null;
-      if (next !== terminalGroup) terminalActive = false;
       focusGroup(next);
       return focusGroupContent(next);
     }),
@@ -1397,7 +1392,6 @@
               filters={tableFiltersBar}
               filterCount={table.where ? table.conditions.filter((condition) => condition.column).length : 0}
               filterError={!!tableFilterError[item.id]}
-              terminalTab={false}
               tabCommands={false}
               commandZone="editor"
             />
@@ -1500,9 +1494,7 @@
         consoleRunning={liveExecution.isExecuting}
         terminal={TerminalDock ? terminalDock : undefined}
         {terminalActive}
-        onterminal={toggleTerminal}
         tiles={resultConsole ? resultTiles : undefined}
-        terminalBelowStrips={!!resultConsole}
       />
       {#snippet resultTiles()}
         {#if resultLayout}
@@ -1543,7 +1535,6 @@
           {@const key = tab === OUTPUT_TAB ? consoleId : tab}
           {@const view = executionForConsole($queryConsoles, key)}
           {@const edit = editStateFor($resultEdits, key)}
-          {@const hostsTerminal = group === terminalGroup}
           <ResultPane
             bind:this={resultGroups[group]}
             isExecuting={view.isExecuting}
@@ -1576,7 +1567,6 @@
             showOutputTab={layout.member[OUTPUT_TAB] === group}
             activeTab={tab}
             onselecttab={(next) => {
-              if (hostsTerminal) terminalActive = false;
               selectTab(consoleId, next);
             }}
             onreordertabs={(from, to) => reorderGroupTabs(group, from, to)}
@@ -1594,17 +1584,20 @@
             onpreview={() => void openChangesPreview(key)}
             onsubmit={() => void submitChanges(key)}
             onnotice={notifyError}
-            terminalTab={hostsTerminal}
-            terminalActive={hostsTerminal && terminalActive}
-            onterminal={toggleTerminal}
-            tabCommands={group === layout.focus}
-            dimmed={(resultGrouped && group !== layout.focus) || (terminalActive && !hostsTerminal)}
+                tabCommands={group === layout.focus}
+            dimmed={resultGrouped && group !== layout.focus}
           />
         {/if}
       {/snippet}
       {#snippet terminalDock()}
         {#if TerminalDock}
-          <TerminalDock visible={terminalActive} {profileId} onerror={notifyError} />
+          <TerminalDock
+            visible={terminalActive}
+            {profileId}
+            onerror={notifyError}
+            onback={toggleTerminal}
+            backKeys={shortcutKeys("toggle-terminal")}
+          />
         {/if}
       {/snippet}
     </div>
