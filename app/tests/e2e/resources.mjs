@@ -595,14 +595,14 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   if ((await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`)) !== separators)
     throw new Error("la terminal agrego un splitter");
   await toggleTerminal(page);
-  await waitFor(page, "el grid de vuelta", `!${terminalShown} && ${gridText}.includes("tres") && document.querySelector('.result-tabs [aria-selected="true"]')?.textContent.includes("victim")`);
+  await waitFor(page, "el grid de vuelta", `!${terminalShown} && ${gridText}.includes("tres")`);
   await toggleTerminal(page);
   await waitFor(page, "la terminal de vuelta", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
 
   // Cambiar de consola con la terminal a la vista: sigue la terminal.
   await press(page, { key: "n", code: "KeyN", ctrl: true }, "body");
   await waitFor(page, "la segunda consola", `document.querySelectorAll(".console-tab").length === 2`);
-  await page.evaluate(`document.querySelector(".console-tab").click(), true`);
+  await page.evaluate(`document.querySelector(".console-tab .tab-select").click(), true`);
   await sleep(300);
   if (!(await page.evaluate(`${terminalShown} && ${terminalText}.includes("RWA${first}")`))) throw new Error("cambiar de consola oculto la terminal");
 

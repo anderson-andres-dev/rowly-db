@@ -49,7 +49,9 @@
   // pinta. Agruparlo por cuadros deja que input, layout y pintura respiren;
   // la confirmacion al backend sigue ocurriendo solo despues de que xterm lo
   // proceso, asi que conserva la contrapresion del PTY.
-  const OUTPUT_BATCH = 256 * 1024;
+  // Un lote grande hace que el parser de xterm ocupe el hilo principal por
+  // cientos de milisegundos con productores continuos como `yes`.
+  const OUTPUT_BATCH = 16 * 1024;
   let outputQueue: Uint8Array[] = [];
   let queuedBytes = 0;
   let outputWriting = false;
