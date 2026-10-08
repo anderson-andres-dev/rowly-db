@@ -45,12 +45,50 @@
   let unsubscribeTheme: (() => void) | null = null;
   let destroyed = false;
   let processed = 0;
+  // El canal nativo puede entregar `yes` mucho mas rapido de lo que WebKit
+  // pinta. Agruparlo por cuadros deja que input, layout y pintura respiren;
+  // la confirmacion al backend sigue ocurriendo solo despues de que xterm lo
+  // proceso, asi que conserva la contrapresion del PTY.
+  const OUTPUT_BATCH = 256 * 1024;
+  let outputQueue: Uint8Array[] = [];
+  let queuedBytes = 0;
+  let outputWriting = false;
+  let outputFrame: number | null = null;
 
   function written(bytes: number) {
     processed += bytes;
     if (processed < ACK_BYTES || !info) return;
     void ackTerminal(info.id, processed).catch(() => {});
     processed = 0;
+  }
+
+  function flushOutput() {
+    outputFrame = null;
+    if (destroyed || outputWriting || !term || queuedBytes === 0) return;
+    const size = Math.min(queuedBytes, OUTPUT_BATCH);
+    const batch = new Uint8Array(size);
+    let at = 0;
+    while (at < size) {
+      const chunk = outputQueue[0]!;
+      const take = Math.min(chunk.length, size - at);
+      batch.set(chunk.subarray(0, take), at);
+      at += take;
+      queuedBytes -= take;
+      if (take === chunk.length) outputQueue.shift();
+      else outputQueue[0] = chunk.subarray(take);
+    }
+    outputWriting = true;
+    term.write(batch, () => {
+      outputWriting = false;
+      written(size);
+      if (queuedBytes && !destroyed) outputFrame = requestAnimationFrame(flushOutput);
+    });
+  }
+
+  function enqueueOutput(bytes: Uint8Array) {
+    outputQueue.push(bytes);
+    queuedBytes += bytes.length;
+    if (!outputWriting && outputFrame === null) outputFrame = requestAnimationFrame(flushOutput);
   }
 
   function themeOf(palette: EditorPalette): ITheme {
@@ -117,7 +155,7 @@
     const opened = term;
     try {
       info = await createTerminal(opened.cols, opened.rows, get(sqlFolders).folderByProfile[profileId] ?? null, {
-        output: (bytes) => opened.write(bytes, () => written(bytes.length)),
+        output: enqueueOutput,
         exit: () => onexit(),
       });
     } catch (error) {
@@ -143,6 +181,9 @@
     destroyed = true;
     observer?.disconnect();
     refit.cancel();
+    if (outputFrame !== null) cancelAnimationFrame(outputFrame);
+    outputFrame = null;
+    outputQueue = [];
     unsubscribeTheme?.();
     // Si el shell ya termino, el backend ya no la tiene: no hay nada que
     // decir.

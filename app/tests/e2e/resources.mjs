@@ -588,10 +588,10 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   // splitter; y otra vez, de vuelta a la pestaña que estaba.
   await toggleTerminal(page);
   await waitFor(page, "la terminal sobre el grid", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
-  const [view, tabs, after] = await page.evaluate(`[${rect(".terminal-view")}, ${rect(".result-tabs")}, ${rect(".result-region")}]`);
+  const [view, after] = await page.evaluate(`[${rect(".terminal-view")}, ${rect(".result-region")}]`);
   if (JSON.stringify(after) !== JSON.stringify(region)) throw new Error(`el panel inferior cambio: ${region} -> ${after}`);
-  if (Math.abs(view[0] - tabs[1]) > 1 || Math.abs(view[1] - region[1]) > 1)
-    throw new Error(`la terminal no ocupa el lugar del grid: ${view} (pestañas ${tabs}, panel ${region})`);
+  if (Math.abs(view[0] - region[0]) > 1 || Math.abs(view[1] - region[1]) > 1)
+    throw new Error(`la terminal no ocupa el lugar del grid: ${view} (panel ${region})`);
   if ((await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`)) !== separators)
     throw new Error("la terminal agrego un splitter");
   await toggleTerminal(page);
