@@ -487,8 +487,11 @@ const TERMINAL_CYCLES = Number(process.env.E2E_TERMINAL_CYCLES ?? 300);
 const terminalHost = `document.querySelector(".terminal-host:not(.hidden)")`;
 const terminalText = `(${terminalHost}?.querySelector(".xterm-rows")?.innerText ?? "")`;
 const terminalShown = `!!document.querySelector(".terminal-view:not(.hidden)")`;
-const sessionCount = `document.querySelectorAll(".terminal-sessions .session").length`;
-const terminalTab = `document.querySelector(".result-tabs .terminal-tab")`;
+// La terminal ahora vive como un panel propio (y puede dividirse en grupos),
+// no como una pestaña dentro de ResultPane.  Los selectores se anclan al
+// dock para no confundir las pestañas de las consolas con las sesiones.
+const sessionCount = `document.querySelectorAll(".terminal-dock .session").length`;
+const terminalTab = `document.querySelector(".terminal-dock .terminal-strip")`;
 
 // Ctrl+T, como lo recibe el despachador de atajos.
 const toggleTerminal = (page) => press(page, { key: "t", code: "KeyT", ctrl: true }, "body");
@@ -513,6 +516,31 @@ async function shellPid(page, marker) {
 }
 
 const threads = (pid) => readdirSync(`/proc/${pid}/task`).length;
+// El runtime y sus bibliotecas pueden crear hilos ajenos a la terminal entre
+// las dos mediciones. Estos son los hilos nombrados por terminal.rs; Linux
+// trunca `comm` a 15 caracteres, pero conserva el prefijo `terminal-`.
+function terminalThreads(pid) {
+  return readdirSync(`/proc/${pid}/task`).flatMap((tid) => {
+    try {
+      const name = readFileSync(`/proc/${pid}/task/${tid}/comm`, "utf8").trim();
+      return name.startsWith("terminal-") ? [`${tid}:${name}`] : [];
+    } catch {
+      // El hilo terminó entre listar /proc y leer su nombre.
+      return [];
+    }
+  });
+}
+
+async function terminalThreadsAtMost(pid, baseline) {
+  const deadline = Date.now() + 5000;
+  let remaining;
+  while (Date.now() < deadline) {
+    remaining = terminalThreads(pid);
+    if (remaining.length <= baseline) return;
+    await sleep(50);
+  }
+  throw new Error(`quedaron ${remaining.length} hilos de terminal (antes ${baseline}): ${remaining.join(", ")}`);
+}
 const alive = (pid) => existsSync(`/proc/${pid}`);
 
 // Espera a que la sesion a la vista tenga su shell.
@@ -525,13 +553,13 @@ async function openTerminal(page) {
 }
 
 async function addSession(page, count) {
-  await page.evaluate(`document.querySelector(".terminal-sessions > :last-child").click(), true`);
+  await page.evaluate(`document.querySelector(".terminal-dock .terminal-strip .strip-button:not(.back)").click(), true`);
   await waitFor(page, `la sesion ${count}`, `${sessionCount} === ${count}`);
   await shellReady(page, `el shell de la sesion ${count}`);
 }
 
 async function closeSession(page, index, count) {
-  await page.evaluate(`document.querySelectorAll(".terminal-sessions .tab-close")[${index}].click(), true`);
+  await page.evaluate(`document.querySelectorAll(".terminal-dock .session .tab-close")[${index}].click(), true`);
   await waitFor(page, `cerrar la sesion ${index}`, `${sessionCount} === ${count}`);
 }
 
@@ -547,7 +575,7 @@ async function reaped(pids) {
 async function closeConsoles(page) {
   while (await page.evaluate(`document.querySelectorAll(".console-tab").length > 0`)) {
     const before = await page.evaluate(`document.querySelectorAll(".console-tab").length`);
-    await page.evaluate(`document.querySelector(".console-tab .close-tab").click(), true`);
+    await page.evaluate(`document.querySelector(".console-tab .tab-close").click(), true`);
     await waitFor(page, "cerrar una consola", `document.querySelectorAll(".console-tab").length < ${before} || !!document.querySelector("dialog[open] .danger-soft")`);
     if (await page.evaluate(`!!document.querySelector("dialog[open] .danger-soft")`))
       await page.evaluate(`document.querySelector("dialog[open] .danger-soft").click(), true`);
@@ -585,21 +613,21 @@ cycle("pestaña Terminal en el panel inferior: mismo lugar que el grid, sin cons
   // splitter; y otra vez, de vuelta a la pestaña que estaba.
   await toggleTerminal(page);
   await waitFor(page, "la terminal sobre el grid", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
-  const [view, tabs, after] = await page.evaluate(`[${rect(".terminal-view")}, ${rect(".result-tabs")}, ${rect(".result-region")}]`);
+  const [view, after] = await page.evaluate(`[${rect(".terminal-view")}, ${rect(".result-region")}]`);
   if (JSON.stringify(after) !== JSON.stringify(region)) throw new Error(`el panel inferior cambio: ${region} -> ${after}`);
-  if (Math.abs(view[0] - tabs[1]) > 1 || Math.abs(view[1] - region[1]) > 1)
-    throw new Error(`la terminal no ocupa el lugar del grid: ${view} (pestañas ${tabs}, panel ${region})`);
+  if (Math.abs(view[0] - region[0]) > 1 || Math.abs(view[1] - region[1]) > 1)
+    throw new Error(`la terminal no ocupa el lugar del grid: ${view} (panel ${region})`);
   if ((await page.evaluate(`document.querySelectorAll('[role="separator"][aria-orientation="horizontal"]').length`)) !== separators)
     throw new Error("la terminal agrego un splitter");
   await toggleTerminal(page);
-  await waitFor(page, "el grid de vuelta", `!${terminalShown} && ${gridText}.includes("tres") && document.querySelector('.result-tabs [aria-selected="true"]')?.textContent.includes("victim")`);
+  await waitFor(page, "el grid de vuelta", `!${terminalShown} && ${gridText}.includes("tres")`);
   await toggleTerminal(page);
   await waitFor(page, "la terminal de vuelta", `${terminalShown} && ${terminalText}.includes("RWA${first}")`);
 
   // Cambiar de consola con la terminal a la vista: sigue la terminal.
   await press(page, { key: "n", code: "KeyN", ctrl: true }, "body");
   await waitFor(page, "la segunda consola", `document.querySelectorAll(".console-tab").length === 2`);
-  await page.evaluate(`document.querySelector(".console-tab").click(), true`);
+  await page.evaluate(`document.querySelector(".console-tab .tab-select").click(), true`);
   await sleep(300);
   if (!(await page.evaluate(`${terminalShown} && ${terminalText}.includes("RWA${first}")`))) throw new Error("cambiar de consola oculto la terminal");
 
@@ -625,6 +653,7 @@ cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin proc
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
   await openTerminal(page);
   const baseThreads = threads(app.pid);
+  const baseTerminalThreads = terminalThreads(app.pid).length;
   const shells = [];
   const samples = [];
   for (let index = 1; index <= TERMINAL_CYCLES; index += 1) {
@@ -638,8 +667,8 @@ cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin proc
   // Cada shell se recogio y el backend volvio a sus hilos: dos por sesion
   // mientras esta abierta.
   await reaped(shells);
+  await terminalThreadsAtMost(app.pid, baseTerminalThreads);
   console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
-  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; con una sesion, ${baseThreads}`);
   assertStable(samples);
 });
 
@@ -649,6 +678,7 @@ cycle(`1, 5 y 10 sesiones de terminal en reposo, ocultas y cerradas: sin trabajo
   await seedProfiles(page, [MYSQL_PROFILE]);
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
   const baseThreads = threads(app.pid);
+  const baseTerminalThreads = terminalThreads(app.pid).length;
   await openTerminal(page);
   const shells = [await shellPid(page, "RW")];
   const total = (pss) => Object.values(pss.anonymousByName).reduce((sum, mb) => sum + mb, 0);
@@ -675,8 +705,8 @@ cycle(`1, 5 y 10 sesiones de terminal en reposo, ocultas y cerradas: sin trabajo
   await waitFor(page, "la terminal", terminalShown);
   for (let count = shells.length - 1; count >= 0; count -= 1) await closeSession(page, count, count);
   await reaped(shells);
+  await terminalThreadsAtMost(app.pid, baseTerminalThreads);
   console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
-  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; sin terminales, ${baseThreads}`);
 });
 
 // P4: salida grande. Durante la rafaga la pagina sigue respondiendo (se mide
