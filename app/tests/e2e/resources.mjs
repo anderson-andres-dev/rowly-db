@@ -487,8 +487,11 @@ const TERMINAL_CYCLES = Number(process.env.E2E_TERMINAL_CYCLES ?? 300);
 const terminalHost = `document.querySelector(".terminal-host:not(.hidden)")`;
 const terminalText = `(${terminalHost}?.querySelector(".xterm-rows")?.innerText ?? "")`;
 const terminalShown = `!!document.querySelector(".terminal-view:not(.hidden)")`;
-const sessionCount = `document.querySelectorAll(".terminal-sessions .session").length`;
-const terminalTab = `document.querySelector(".result-tabs .terminal-tab")`;
+// La terminal ahora vive como un panel propio (y puede dividirse en grupos),
+// no como una pestaña dentro de ResultPane.  Los selectores se anclan al
+// dock para no confundir las pestañas de las consolas con las sesiones.
+const sessionCount = `document.querySelectorAll(".terminal-dock .session").length`;
+const terminalTab = `document.querySelector(".terminal-dock .terminal-strip")`;
 
 // Ctrl+T, como lo recibe el despachador de atajos.
 const toggleTerminal = (page) => press(page, { key: "t", code: "KeyT", ctrl: true }, "body");
@@ -525,13 +528,13 @@ async function openTerminal(page) {
 }
 
 async function addSession(page, count) {
-  await page.evaluate(`document.querySelector(".terminal-sessions > :last-child").click(), true`);
+  await page.evaluate(`document.querySelector(".terminal-dock .terminal-strip .strip-button:not(.back)").click(), true`);
   await waitFor(page, `la sesion ${count}`, `${sessionCount} === ${count}`);
   await shellReady(page, `el shell de la sesion ${count}`);
 }
 
 async function closeSession(page, index, count) {
-  await page.evaluate(`document.querySelectorAll(".terminal-sessions .tab-close")[${index}].click(), true`);
+  await page.evaluate(`document.querySelectorAll(".terminal-dock .session .tab-close")[${index}].click(), true`);
   await waitFor(page, `cerrar la sesion ${index}`, `${sessionCount} === ${count}`);
 }
 
@@ -547,7 +550,7 @@ async function reaped(pids) {
 async function closeConsoles(page) {
   while (await page.evaluate(`document.querySelectorAll(".console-tab").length > 0`)) {
     const before = await page.evaluate(`document.querySelectorAll(".console-tab").length`);
-    await page.evaluate(`document.querySelector(".console-tab .close-tab").click(), true`);
+    await page.evaluate(`document.querySelector(".console-tab .tab-close").click(), true`);
     await waitFor(page, "cerrar una consola", `document.querySelectorAll(".console-tab").length < ${before} || !!document.querySelector("dialog[open] .danger-soft")`);
     if (await page.evaluate(`!!document.querySelector("dialog[open] .danger-soft")`))
       await page.evaluate(`document.querySelector("dialog[open] .danger-soft").click(), true`);
