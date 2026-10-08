@@ -516,6 +516,31 @@ async function shellPid(page, marker) {
 }
 
 const threads = (pid) => readdirSync(`/proc/${pid}/task`).length;
+// El runtime y sus bibliotecas pueden crear hilos ajenos a la terminal entre
+// las dos mediciones. Estos son los hilos nombrados por terminal.rs; Linux
+// trunca `comm` a 15 caracteres, pero conserva el prefijo `terminal-`.
+function terminalThreads(pid) {
+  return readdirSync(`/proc/${pid}/task`).flatMap((tid) => {
+    try {
+      const name = readFileSync(`/proc/${pid}/task/${tid}/comm`, "utf8").trim();
+      return name.startsWith("terminal-") ? [`${tid}:${name}`] : [];
+    } catch {
+      // El hilo terminó entre listar /proc y leer su nombre.
+      return [];
+    }
+  });
+}
+
+async function terminalThreadsAtMost(pid, baseline) {
+  const deadline = Date.now() + 5000;
+  let remaining;
+  while (Date.now() < deadline) {
+    remaining = terminalThreads(pid);
+    if (remaining.length <= baseline) return;
+    await sleep(50);
+  }
+  throw new Error(`quedaron ${remaining.length} hilos de terminal (antes ${baseline}): ${remaining.join(", ")}`);
+}
 const alive = (pid) => existsSync(`/proc/${pid}`);
 
 // Espera a que la sesion a la vista tenga su shell.
@@ -628,6 +653,7 @@ cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin proc
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
   await openTerminal(page);
   const baseThreads = threads(app.pid);
+  const baseTerminalThreads = terminalThreads(app.pid).length;
   const shells = [];
   const samples = [];
   for (let index = 1; index <= TERMINAL_CYCLES; index += 1) {
@@ -641,8 +667,8 @@ cycle(`${TERMINAL_CYCLES} ciclos de sesion: abrir con + y cerrar con x, sin proc
   // Cada shell se recogio y el backend volvio a sus hilos: dos por sesion
   // mientras esta abierta.
   await reaped(shells);
+  await terminalThreadsAtMost(app.pid, baseTerminalThreads);
   console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
-  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; con una sesion, ${baseThreads}`);
   assertStable(samples);
 });
 
@@ -652,6 +678,7 @@ cycle(`1, 5 y 10 sesiones de terminal en reposo, ocultas y cerradas: sin trabajo
   await seedProfiles(page, [MYSQL_PROFILE]);
   await open(page, MYSQL_PROFILE, SERVERS[MYSQL_PROFILE.id], "rowly");
   const baseThreads = threads(app.pid);
+  const baseTerminalThreads = terminalThreads(app.pid).length;
   await openTerminal(page);
   const shells = [await shellPid(page, "RW")];
   const total = (pss) => Object.values(pss.anonymousByName).reduce((sum, mb) => sum + mb, 0);
@@ -678,8 +705,8 @@ cycle(`1, 5 y 10 sesiones de terminal en reposo, ocultas y cerradas: sin trabajo
   await waitFor(page, "la terminal", terminalShown);
   for (let count = shells.length - 1; count >= 0; count -= 1) await closeSession(page, count, count);
   await reaped(shells);
+  await terminalThreadsAtMost(app.pid, baseTerminalThreads);
   console.log(`        ${shells.length} shells recogidos; hilos del backend ${baseThreads} -> ${threads(app.pid)}`);
-  if (threads(app.pid) > baseThreads) throw new Error(`el backend tiene ${threads(app.pid)} hilos; sin terminales, ${baseThreads}`);
 });
 
 // P4: salida grande. Durante la rafaga la pagina sigue respondiendo (se mide
