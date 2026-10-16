@@ -328,3 +328,4 @@ Lo que la arquitectura todavía no decide. Cada uno es un hueco deliberado, no u
 - **`Capability` es un enum cerrado** (`crates/engine/src/lines.rs`): una capacidad nueva del catálogo es un cambio del núcleo.
 - **Código de mecanismo con nombre de motor.** Algunas funciones compartidas de `diagnostics.rs` y `execution_guard.rs` se llaman `mysql_*` / `postgres_*`; se activan por mecanismo (`RoutineBodies::Block`, `Quoted`, `select_into_variable_lists`), no por motor. Un tercer motor con otro mecanismo añade una variante, no una rama.
 - **Las palabras reservadas base** viven en una lista compartida de `crates/engine/src/editing.rs` y en cada perfil de TypeScript; entre ellas solo se comparten los datos de línea.
+
