@@ -125,7 +125,7 @@ jobs:
       ref: ${{ needs.plan.outputs.ref }}
       # Completo: sin alcance en el reporte. Si no, los motores elegidos.
       engines: ${{ needs.plan.outputs.full == 'true' && '*' || needs.plan.outputs.sql }}
-      fuzz_seeds: ${{ inputs.fuzz_seeds || '0' }}
+      fuzz_seeds: ${{ inputs.fuzz_seeds || '0,1,2' }}
 
   site:
     needs: plan
