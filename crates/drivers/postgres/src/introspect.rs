@@ -625,3 +625,4 @@ mod tests {
         assert_eq!(checks[0].1.expression, "(total >= 0)");
     }
 }
+// prueba de CI
