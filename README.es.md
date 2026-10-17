@@ -74,7 +74,7 @@
         <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/history-dark.webp">
         <img src="docs/assets/features/history-light.webp" alt="Historial de consultas">
       </picture>
-      <p><strong>Historial</strong><br>Cada consulta que ejecutaste, a un <kbd>Ctrl</kbd>+<kbd>E</kbd>.</p>
+      <p><strong>Historial</strong><br>Cada consulta que ejecutaste, a un <kbd>Ctrl</kbd>+<kbd>H</kbd>.</p>
     </td>
   </tr>
   <tr>

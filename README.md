@@ -74,7 +74,7 @@
         <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features/history-dark.webp">
         <img src="docs/assets/features/history-light.webp" alt="Query history">
       </picture>
-      <p><strong>History</strong><br>Every query you ran, one <kbd>Ctrl</kbd>+<kbd>E</kbd> away.</p>
+      <p><strong>History</strong><br>Every query you ran, one <kbd>Ctrl</kbd>+<kbd>H</kbd> away.</p>
     </td>
   </tr>
   <tr>
