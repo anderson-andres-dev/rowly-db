@@ -118,3 +118,13 @@ test("compareRecords vigila las consultas cortas con tolerancia amplia (son poca
   assert.equal(compareRecords(rec(0.8), rec(0.65), DEFAULT_TOLERANCE).warnings.length, 1);
   assert.equal(compareRecords(rec(0.8), rec(0.4), DEFAULT_TOLERANCE).failures.length, 1);
 });
+
+test("compareRecords estricto: una caida pequena que avisaria, falla", () => {
+  const before = record();
+  const small = record({ summary: { recall: 0.57 } });
+  assert.equal(compareRecords(before, small, DEFAULT_TOLERANCE).failures.length, 0);
+  const strict = compareRecords(before, small, DEFAULT_TOLERANCE, { strict: true });
+  assert.equal(strict.failures.length, 1);
+  assert.deepEqual(strict.warnings, []);
+  assert.deepEqual(compareRecords(before, before, DEFAULT_TOLERANCE, { strict: true }), { failures: [], warnings: [] });
+});

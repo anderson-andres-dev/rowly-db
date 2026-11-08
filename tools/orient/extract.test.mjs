@@ -77,3 +77,11 @@ test("isTestFile reconoce pruebas por nombre y por carpeta", () => {
   assert.ok(isTestFile("app/src/lib/__test-stubs__/x.ts"));
   assert.ok(!isTestFile("app/src/lib/x.ts"));
 });
+
+test("un archivo con finales de linea CRLF da los mismos simbolos y el mismo comentario de apertura", () => {
+  const text = ["// Abre el archivo.", "export function f() {", "  return 1;", "}"].join("\n");
+  const crlf = text.replace(/\n/g, "\r\n");
+  assert.deepEqual(extract("a/x.ts", crlf), extract("a/x.ts", text));
+  const messages = 'export default defineMessages({\r\n  es: {\r\n    a: "A",\r\n  },\r\n  en: {\r\n    a: "B",\r\n  },\r\n});';
+  assert.deepEqual(messagesOf(messages), { es: { a: "A" }, en: { a: "B" } });
+});

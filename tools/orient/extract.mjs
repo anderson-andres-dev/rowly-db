@@ -86,7 +86,7 @@ function literalsOf(text) {
 export function messagesOf(text) {
   const out = {};
   let lang = null;
-  for (const line of text.split("\n")) {
+  for (const line of text.split(/\r?\n/)) {
     const open = /^ {2}(es|en): \{/.exec(line);
     if (open) {
       lang = open[1];
@@ -101,7 +101,7 @@ export function messagesOf(text) {
 }
 
 export function extractFile(path, text, references, code) {
-  const lines = text.split("\n");
+  const lines = text.split(/\r?\n/);
   const rec = {
     lines: lines.length,
     symbols: symbolsOf(path, lines),

@@ -109,5 +109,44 @@ jobs:
       - name: El orientador no empeora mas que la tolerancia de tests/orient/orient.json
         run: node tools/orient/eval.mjs --check
 
+      # En la corrida nocturna o manual (workflow_dispatch) tambien falla una caida pequena: asi
+      # una deriva lenta no se acumula sin que nadie la vea.
+      - name: El orientador no deriva (estricto)
+        if: github.event_name == 'workflow_dispatch'
+        run: node tools/orient/eval.mjs --check --strict
+
       - name: Evidencia de la release, latest.json y el planner de CI
         run: node --test tools/test-dbs/*.test.mjs tools/ci/*.test.mjs tools/release/*.test.mjs tools/orient/*.test.mjs
+
+  # El orientador solo usa la biblioteca estandar de Node y git: debe funcionar igual en los tres
+  # sistemas y en las versiones de Node que soporta el proyecto (>= 20).
+  orient-portable:
+    name: orient (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    # macOS y Windows son informativos hasta que corran en verde una vez: un fallo ahi no bloquea el CI.
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Sin conversion de finales de linea: FEATURES.md y los registros se comparan byte a byte.
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Pruebas de orient
+        run: node --test tools/orient/*.test.mjs
+
+      - name: El orientador reproduce lo registrado
+        run: node tools/orient/eval.mjs --check

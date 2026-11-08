@@ -16,7 +16,10 @@ const repo = () => {
 };
 const hook = (dir, name) => join(hooksDir(dir), name);
 
-test("install crea los tres hooks ejecutables, validos para sh, y es idempotente", () => {
+// Los hooks son scripts de shell: en Windows (Git Bash) se omiten las pruebas que los ejecutan.
+const unix = { skip: process.platform === "win32" };
+
+test("install crea los tres hooks ejecutables, validos para sh, y es idempotente", unix, () => {
   const dir = repo();
   assert.deepEqual(install(dir).done, HOOKS);
   for (const name of HOOKS) {
@@ -78,7 +81,7 @@ test("respeta core.hooksPath", () => {
 
 // Los hooks no pueden estorbar: un commit con ellos instalados sale bien aunque no haya
 // tools/orient o aunque node no este en el PATH.
-test("con los hooks instalados el commit sale bien sin tools/orient y sin node en el PATH", () => {
+test("con los hooks instalados el commit sale bien sin tools/orient y sin node en el PATH", unix, () => {
   const dir = repo();
   install(dir, { graphify: true });
   writeFileSync(join(dir, "a.txt"), "a");
@@ -95,7 +98,7 @@ test("con los hooks instalados el commit sale bien sin tools/orient y sin node e
   assert.equal(again.stderr.trim(), "");
 });
 
-test("el hook de verdad refresca el indice cuando existe tools/orient/index.mjs", () => {
+test("el hook de verdad refresca el indice cuando existe tools/orient/index.mjs", unix, () => {
   const dir = repo();
   mkdirSync(join(dir, "tools/orient"), { recursive: true });
   writeFileSync(join(dir, "tools/orient/index.mjs"), 'import { writeFileSync } from "node:fs";\nwriteFileSync("refrescado.txt", process.argv.slice(2).join(" "));\n');
