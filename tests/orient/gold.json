@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final. Fase 5: las `validation` de la fase 3 pasan a `seen` (ya se vieron tarea por tarea; se miden pero no deciden nada). Las tareas `p*` se anadieron antes de tocar el orientador: `train` si su numero es multiplo de 3 y `validation2` el resto; `validation2` no se mira hasta la medicion final. Fase 6: las `validation2` de la fase 5 pasan a `seen2`. Las tareas `q*` se anadieron antes de tocar nada: `train` si su numero es multiplo de 3 y `validation3` el resto; `validation3` no se mira hasta la medicion final. Sus `files` y `tests` salen automaticamente de los archivos de codigo que tocó el commit (existentes hoy).",
+  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final. Fase 5: las `validation` de la fase 3 pasan a `seen` (ya se vieron tarea por tarea; se miden pero no deciden nada). Las tareas `p*` se anadieron antes de tocar el orientador: `train` si su numero es multiplo de 3 y `validation2` el resto; `validation2` no se mira hasta la medicion final. Fase 6: las `validation2` de la fase 5 pasan a `seen2`. Las tareas `q*` se anadieron antes de tocar nada: `train` si su numero es multiplo de 3 y `validation3` el resto; `validation3` no se mira hasta la medicion final. Sus `files` y `tests` salen automaticamente de los archivos de codigo que tocó el commit (existentes hoy). Fase 7b: las `validation3` pasan a `seen3`. Las tareas `r*` se anadieron antes de tocar la busqueda: `train` si su numero modulo 8 es 0, 3 o 6 (15) y `validation4` el resto (25); `validation4` no se mira hasta la medicion final.",
   "tasks": [
     {
       "id": "issue-98-autoscroll",
@@ -1083,7 +1083,7 @@
     {
       "id": "q01-3fb2fef",
       "kind": "modify",
-      "split": "validation3",
+      "split": "seen3",
       "source": "3fb2fef (fase 6)",
       "task": "Dejar una sola línea de separación entre el editor y el resultado y poner el icono de la terminal en la fila.",
       "files": [
@@ -1095,7 +1095,7 @@
     {
       "id": "q02-b5f994d",
       "kind": "bug",
-      "split": "validation3",
+      "split": "seen3",
       "source": "b5f994d (fase 6)",
       "task": "Al redimensionar el mosaico aparece una franja de más y la terminal debería ocupar todo el resultado.",
       "files": [
@@ -1125,7 +1125,7 @@
     {
       "id": "q04-2e226af",
       "kind": "refactor",
-      "split": "validation3",
+      "split": "seen3",
       "source": "2e226af (fase 6)",
       "task": "Sacar la mecánica del mosaico a MosaicArea para poder usarla también en el resultado.",
       "files": [
@@ -1138,7 +1138,7 @@
     {
       "id": "q05-e8ab84b",
       "kind": "bug",
-      "split": "validation3",
+      "split": "seen3",
       "source": "e8ab84b (fase 6)",
       "task": "La vista previa del mosaico no muestra dónde queda de verdad la ventana al arrastrar.",
       "files": [
@@ -1163,7 +1163,7 @@
     {
       "id": "q07-b992356",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "b992356 (fase 6)",
       "task": "Las pestañas de resultado deben desplazarse entre Salida y Terminal y quedar fijas.",
       "files": [
@@ -1175,7 +1175,7 @@
     {
       "id": "q08-68fb03f",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "68fb03f (fase 6)",
       "task": "Ajustes con la cabecera fija, secciones agrupadas y los temas en una lista.",
       "files": [
@@ -1204,7 +1204,7 @@
     {
       "id": "q10-c59cb22",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "c59cb22 (fase 6)",
       "task": "Mostrar los temas en tres columnas con buscador y los nombres Tema y Modo en Ajustes.",
       "files": [
@@ -1216,7 +1216,7 @@
     {
       "id": "q11-5ece585",
       "kind": "modify",
-      "split": "validation3",
+      "split": "seen3",
       "source": "5ece585 (fase 6)",
       "task": "Mostrar el icono de entorno también para Local y en el menú del selector de conexión.",
       "files": [
@@ -1241,7 +1241,7 @@
     {
       "id": "q13-d36ef4d",
       "kind": "modify",
-      "split": "validation3",
+      "split": "seen3",
       "source": "d36ef4d (fase 6)",
       "task": "La tarjeta de conexión debe ser más limpia: dos líneas y el logo del motor en la esquina.",
       "files": [
@@ -1252,7 +1252,7 @@
     {
       "id": "q14-760a464",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "760a464 (fase 6)",
       "task": "La vista previa de cambios debe mostrar el SQL formateado y no teñir de error el código de la sentencia fallida.",
       "files": [
@@ -1279,7 +1279,7 @@
     {
       "id": "q16-f8c905d",
       "kind": "modify",
-      "split": "validation3",
+      "split": "seen3",
       "source": "f8c905d (fase 6)",
       "task": "La cabecera del resultado no debe llevar cajas: pestañas livianas y grupos separados por aire.",
       "files": [
@@ -1290,7 +1290,7 @@
     {
       "id": "q17-44ab672",
       "kind": "modify",
-      "split": "validation3",
+      "split": "seen3",
       "source": "44ab672 (fase 6)",
       "task": "Cambiar el tema Rowly oscuro: fondos gris pizarra en lugar de teal saturado.",
       "files": [
@@ -1313,7 +1313,7 @@
     {
       "id": "q19-81aa10b",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "81aa10b (fase 6)",
       "task": "Usar los logotipos de cada base de datos en el selector de motor.",
       "files": [
@@ -1325,7 +1325,7 @@
     {
       "id": "q20-f8a495b",
       "kind": "refactor",
-      "split": "validation3",
+      "split": "seen3",
       "source": "f8a495b (fase 6)",
       "task": "Un solo botón para toda la aplicación y diálogos más compactos.",
       "files": [
@@ -1353,7 +1353,7 @@
     {
       "id": "q22-8e967e5",
       "kind": "bug",
-      "split": "validation3",
+      "split": "seen3",
       "source": "8e967e5 (fase 6)",
       "task": "La guarda deja pasar sentencias destructivas sin confirmar: DO con datos, CTE y falsos positivos de DDL.",
       "files": [
@@ -1365,7 +1365,7 @@
     {
       "id": "q23-79a1c7a",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "79a1c7a (fase 6)",
       "task": "Las sentencias válidas que sqlparser no entiende deben juzgarse por su estructura en la guarda.",
       "files": [
@@ -1391,7 +1391,7 @@
     {
       "id": "q25-01b5249",
       "kind": "bug",
-      "split": "validation3",
+      "split": "seen3",
       "source": "01b5249 (fase 6)",
       "task": "El analizador marca falsos positivos con handlers, el operador := y SELECT INTO.",
       "files": [
@@ -1402,7 +1402,7 @@
     {
       "id": "q26-21d6136",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "21d6136 (fase 6)",
       "task": "La guarda de ejecución debe reconocer bloques por inicio de sentencia y comentarios ejecutables.",
       "files": [
@@ -1424,7 +1424,7 @@
     {
       "id": "q28-7cd0bcb",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "7cd0bcb (fase 6)",
       "task": "Poder conectar sin almacén de credenciales con perfiles que no guardan la contraseña.",
       "files": [
@@ -1435,7 +1435,7 @@
     {
       "id": "q29-4563a96",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "4563a96 (fase 6)",
       "task": "El aviso de actualización debe contar la novedad de la versión.",
       "files": [
@@ -1476,7 +1476,7 @@
     {
       "id": "q31-f477c38",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "f477c38 (fase 6)",
       "task": "Demostrar las líneas de versión contra servidores reales en sus dos extremos.",
       "files": [
@@ -1489,7 +1489,7 @@
     {
       "id": "q32-9ed2c93",
       "kind": "refactor",
-      "split": "validation3",
+      "split": "seen3",
       "source": "9ed2c93 (fase 6)",
       "task": "Mover el corpus a tests/sql y separar la suite de servidor real por propiedad.",
       "files": [
@@ -1530,12 +1530,554 @@
     {
       "id": "q34-16308b2",
       "kind": "feature",
-      "split": "validation3",
+      "split": "seen3",
       "source": "16308b2 (fase 6)",
       "task": "Un mapa del estado actual y un inventario de todas las pruebas.",
       "files": [
         "tools/inventory/tests.mjs",
         "tools/inventory/unused.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r01-12bfef8",
+      "kind": "modify",
+      "split": "validation4",
+      "source": "12bfef8 (fase 7b)",
+      "task": "Al cambiar de pestaña la transición debe ser suave y los filtros por columna no deben perderse.",
+      "files": [
+        "app/src/lib/components/Terminal.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/i18n/messages/results.ts",
+        "app/src/lib/motion.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r02-cb4a9cc",
+      "kind": "modify",
+      "split": "validation4",
+      "source": "cb4a9cc (fase 7b)",
+      "task": "Acotar el trabajo de la terminal por cuadro de pantalla para que no se trabe.",
+      "files": [
+        "app/src/lib/components/TerminalSession.svelte"
+      ],
+      "tests": [
+        "app/tests/e2e/resources.mjs"
+      ]
+    },
+    {
+      "id": "r03-41c55dd",
+      "kind": "feature",
+      "split": "train",
+      "source": "41c55dd (fase 7b)",
+      "task": "Quitar la sección Motores de Ajustes, dejar la barra sin grupos y suavizar las cajas oscuras.",
+      "files": [
+        "app/src-tauri/src/support.rs",
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/components/UpdatesSection.svelte",
+        "app/src/lib/i18n/messages/index.ts",
+        "app/src/lib/i18n/messages/settings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r04-512793b",
+      "kind": "modify",
+      "split": "validation4",
+      "source": "512793b (fase 7b)",
+      "task": "Dejar por escrito en los contratos permanentes las decisiones del cierre de consolidación y de motores.",
+      "files": [
+        "app/src-tauri/src/engine_context.rs"
+      ],
+      "tests": [
+        "app/src/lib/editor/analysisSession.test.ts"
+      ]
+    },
+    {
+      "id": "r05-07f0ef5",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "07f0ef5 (fase 7b)",
+      "task": "Probar la plantilla con un motor de ejemplo destapó fallos en el motor y en el harness de pruebas.",
+      "files": [
+        "crates/engine/src/lib.rs",
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r06-d1c272d",
+      "kind": "feature",
+      "split": "train",
+      "source": "d1c272d (fase 7b)",
+      "task": "Los contratos de motores deben decir dónde falta algo cuando se añade un motor nuevo.",
+      "files": [
+        "app/src-tauri/src/drivers.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": [
+        "app/src/lib/engines/contract.test.ts"
+      ]
+    },
+    {
+      "id": "r07-f998f0a",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "f998f0a (fase 7b)",
+      "task": "Corregir lo que destapó la compuerta de CI en el analizador de diagnósticos.",
+      "files": [
+        "crates/engine/src/diagnostics.rs"
+      ],
+      "tests": [
+        "app/tests/e2e/run.mjs",
+        "app/tests/e2e/webdriver.mjs"
+      ]
+    },
+    {
+      "id": "r08-d0750c5",
+      "kind": "feature",
+      "split": "train",
+      "source": "d0750c5 (fase 7b)",
+      "task": "Medir una referencia de rendimiento de la versión 0.3.0 en Linux para el catálogo y el editor.",
+      "files": [
+        "crates/server-tests/examples/catalog_bench.rs",
+        "tools/bench/frontend/editor.measure.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r09-702513f",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "702513f (fase 7b)",
+      "task": "La confirmación de ejecución debe abrirse en un modal, como la de los cambios de la grilla.",
+      "files": [
+        "app/src/lib/components/ExecutionGuard.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ChangesPreview.svelte",
+        "app/src/lib/dialogKeys.ts"
+      ],
+      "tests": [
+        "app/src/lib/dialogKeys.test.ts"
+      ]
+    },
+    {
+      "id": "r10-a781c04",
+      "kind": "modify",
+      "split": "validation4",
+      "source": "a781c04 (fase 7b)",
+      "task": "Dar jerarquía tipográfica dentro de los comentarios del editor, siempre en gris.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/theming/codemirrorTheme.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r11-c541dea",
+      "kind": "feature",
+      "split": "train",
+      "source": "c541dea (fase 7b)",
+      "task": "Cerrar automáticamente los comentarios /* */ en el editor.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r12-82838ed",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "82838ed (fase 7b)",
+      "task": "Mostrar la versión del servidor en el editor y una etiqueta de sin soporte oficial.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/i18n/messages/editor.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r13-8d67a0a",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "8d67a0a (fase 7b)",
+      "task": "Simular contra servidores reales el CALL del autocompletado y el SQL escrito letra a letra.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "crates/engine/src/diagnostics.rs",
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r14-bdb977f",
+      "kind": "bug",
+      "split": "train",
+      "source": "bdb977f (fase 7b)",
+      "task": "La guarda falla con sentencias tras un END suelto y con NO_BACKSLASH_ESCAPES, y el analizador con SELECT INTO una variable.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "crates/engine/src/diagnostics.rs",
+        "crates/engine/src/execution_guard.rs",
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r15-13c1bb2",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "13c1bb2 (fase 7b)",
+      "task": "Bases de prueba reales y pruebas contra servidor: CALL y SHOW CREATE deben devolver filas.",
+      "files": [
+        "crates/drivers/mysql/src/lib.rs",
+        "crates/engine/src/execution_guard.rs",
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r16-9fe8e94",
+      "kind": "feature",
+      "split": "train",
+      "source": "9fe8e94 (fase 7b)",
+      "task": "El divisor debe separar bloques por inicio de sentencia y rutinas sin punto y coma final.",
+      "files": [
+        "app/src/lib/sqlStatements.ts"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts"
+      ]
+    },
+    {
+      "id": "r17-c9bf339",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "c9bf339 (fase 7b)",
+      "task": "En Postgres un cuerpo $$ sin cerrar absorbe las consultas siguientes.",
+      "files": [
+        "app/src/lib/sqlStatements.ts"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts"
+      ]
+    },
+    {
+      "id": "r18-b90621c",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "b90621c (fase 7b)",
+      "task": "Poder crear rutinas desde la consola, con las correcciones de la revisión final.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src/lib/sqlStatements.ts",
+        "app/src/lib/stores/connection.ts",
+        "crates/engine/src/diagnostics.rs",
+        "crates/engine/src/execution_guard.rs"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts",
+        "app/src/lib/stores/connectionCatalog.test.ts"
+      ]
+    },
+    {
+      "id": "r19-1c2ca38",
+      "kind": "feature",
+      "split": "train",
+      "source": "1c2ca38 (fase 7b)",
+      "task": "Tab debe insertar sangría y se puede elegir entre espacios o tabulador.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/messages/settings.ts",
+        "app/src/lib/sqlIndentationConfig.ts",
+        "app/src/lib/stores/editorSettings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r20-df690e5",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "df690e5 (fase 7b)",
+      "task": "Autocompletar vistas, rutinas y schemas, con margen bajo la última línea.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/stores/connection.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r21-2a56629",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "2a56629 (fase 7b)",
+      "task": "El divisor y el analizador marcan falsos positivos en rutinas completas.",
+      "files": [
+        "app/src/lib/sqlStatements.ts",
+        "crates/engine/src/diagnostics.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": [
+        "app/src/lib/sqlMixedCorpus.test.ts",
+        "app/src/lib/sqlStatements.test.ts",
+        "crates/engine/tests/corpus.rs"
+      ]
+    },
+    {
+      "id": "r22-198ba65",
+      "kind": "modify",
+      "split": "train",
+      "source": "198ba65 (fase 7b)",
+      "task": "Alinear en columnas la definición de tabla.",
+      "files": [
+        "app/src/lib/components/TableDefinitionModal.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r23-7e1ac96",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "7e1ac96 (fase 7b)",
+      "task": "En la definición de tabla hay que poder copiar, usar Ctrl+A sobre todo el SQL y no cortar líneas.",
+      "files": [
+        "app/src/lib/components/TableDefinitionModal.svelte",
+        "app/src/lib/theming/codemirrorTheme.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r24-719e36c",
+      "kind": "feature",
+      "split": "train",
+      "source": "719e36c (fase 7b)",
+      "task": "Filtro local por columna en la grilla.",
+      "files": [
+        "app/src/lib/components/results/ColumnFilterPopover.svelte",
+        "app/src/lib/components/results/DataGrid.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/i18n/messages/grid.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r25-84eb032",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "84eb032 (fase 7b)",
+      "task": "Pedir los parámetros con nombre (:nombre) antes de ejecutar.",
+      "files": [
+        "app/src/lib/components/ParametersDialog.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/i18n/messages/workspace.ts",
+        "app/src/lib/stores/queryParameters.ts"
+      ],
+      "tests": [
+        "app/src/lib/stores/queryParameters.test.ts"
+      ]
+    },
+    {
+      "id": "r26-51e07a2",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "51e07a2 (fase 7b)",
+      "task": "La sesión de base de datos debe usar la configuración del servidor.",
+      "files": [
+        "crates/drivers/mysql/src/lib.rs",
+        "crates/drivers/postgres/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r27-0b5d181",
+      "kind": "bug",
+      "split": "train",
+      "source": "0b5d181 (fase 7b)",
+      "task": "El modo foco se rompe mientras se mantiene Ctrl apretado.",
+      "files": [
+        "app/src/lib/focusZones.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r28-bef6b9a",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "bef6b9a (fase 7b)",
+      "task": "La confirmación de ejecución debe ser siempre del último bloque pedido.",
+      "files": [
+        "app/src/lib/components/ExecutionGuard.svelte",
+        "app/src/lib/components/Workspace.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r29-f393cab",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "f393cab (fase 7b)",
+      "task": "La grilla debe comportarse como una planilla: teclado, edición múltiple en vivo y teclado numérico.",
+      "files": [
+        "app/src/lib/components/results/DataGrid.svelte",
+        "app/src/lib/i18n/messages/grid.ts",
+        "app/src/lib/numpadKeys.ts",
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": [
+        "app/src/lib/numpadKeys.test.ts"
+      ]
+    },
+    {
+      "id": "r30-60ce078",
+      "kind": "bug",
+      "split": "train",
+      "source": "60ce078 (fase 7b)",
+      "task": "Un clic en el fondo de un modal solo debe cerrarlo si de verdad fue en el fondo.",
+      "files": [
+        "app/src/lib/dialogMotion.ts"
+      ],
+      "tests": [
+        "app/src/lib/dialogMotion.test.ts"
+      ]
+    },
+    {
+      "id": "r31-ae169e4",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "ae169e4 (fase 7b)",
+      "task": "Escritura más cómoda en el editor, alias configurables y la línea en blanco como separador.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/messages/settings.ts",
+        "app/src/lib/sqlStatements.ts",
+        "app/src/lib/stores/editorSettings.ts"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts"
+      ]
+    },
+    {
+      "id": "r32-6e53c18",
+      "kind": "feature",
+      "split": "train",
+      "source": "6e53c18 (fase 7b)",
+      "task": "Diagnósticos al estilo Error Lens: fondo de línea y mensaje al final.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r33-5059cf1",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "5059cf1 (fase 7b)",
+      "task": "Mostrar los errores de ejecución en su columna, con una flecha bajo la línea.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/i18n/messages/shortcuts.ts",
+        "crates/engine/src/error_position.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r34-b914381",
+      "kind": "feature",
+      "split": "validation4",
+      "source": "b914381 (fase 7b)",
+      "task": "En los scripts mostrar cada sentencia con su marca y su tiempo en el editor.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/components/Workspace.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r35-f04fb26",
+      "kind": "feature",
+      "split": "train",
+      "source": "f04fb26 (fase 7b)",
+      "task": "Hoja de atajos con F1: los vigentes, con filtro y acceso a Personalizar.",
+      "files": [
+        "app/src/lib/components/ShortcutSheet.svelte",
+        "app/src/lib/i18n/messages/shell.ts",
+        "app/src/lib/i18n/messages/shortcuts.ts",
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r36-b9b636e",
+      "kind": "modify",
+      "split": "validation4",
+      "source": "b9b636e (fase 7b)",
+      "task": "El explorador debe desvanecer los bordes al hacer scroll.",
+      "files": [
+        "app/src/lib/components/SchemaTree.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r37-0524c44",
+      "kind": "bug",
+      "split": "validation4",
+      "source": "0524c44 (fase 7b)",
+      "task": "En el explorador los nombres largos deben terminar en … antes del alfiler.",
+      "files": [
+        "app/src/lib/components/SchemaTree.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r38-4e8b0b2",
+      "kind": "modify",
+      "split": "train",
+      "source": "4e8b0b2 (fase 7b)",
+      "task": "El formulario de conexión debe ser compacto y sin desbordes.",
+      "files": [
+        "app/src/lib/components/ConnectionForm.svelte",
+        "app/src/lib/components/Field.svelte",
+        "app/src/lib/components/Select.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "r39-ad21e1d",
+      "kind": "refactor",
+      "split": "validation4",
+      "source": "ad21e1d (fase 7b)",
+      "task": "Quitar el modo SQL de los filtros de tabla y dejar solo el constructor visual.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/components/results/TableFilters.svelte",
+        "app/src/lib/i18n/messages/results.ts",
+        "app/src/lib/stores/queryConsoles.ts"
+      ],
+      "tests": [
+        "app/src/lib/stores/queryConsoles.test.ts"
+      ]
+    },
+    {
+      "id": "r40-9081c27",
+      "kind": "refactor",
+      "split": "train",
+      "source": "9081c27 (fase 7b)",
+      "task": "Alinear la documentación y retirar tree-sitter y el opener que no se usan.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "crates/driver-core/src/lib.rs",
+        "crates/engine-lsp/src/main.rs",
+        "crates/engine/src/catalog.rs",
+        "crates/engine/src/parser.rs"
       ],
       "tests": []
     }

@@ -1,0 +1,113 @@
+{
+  "format": 1,
+  "about": "Tareas de una o dos palabras con algo relevante en el repositorio. Miden que una consulta corta no acabe en NO MATCH: se espera que al menos un archivo correcto este entre los propuestos. Las seis primeras son `train`; las otras seis `validation4`, que no se mira hasta el final.",
+  "tasks": [
+    {
+      "id": "short-01",
+      "task": "historial",
+      "files": [
+        "app/src/lib/components/QueryHistory.svelte",
+        "app/src/lib/stores/queryHistory.ts"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-02",
+      "task": "exportar",
+      "files": [
+        "app/src/lib/components/results/ExportDialog.svelte",
+        "app/src-tauri/src/services/export.rs"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-03",
+      "task": "atajos",
+      "files": [
+        "app/src/lib/keybindings.ts",
+        "app/src/lib/stores/shortcuts.ts",
+        "app/src/lib/components/ShortcutSheet.svelte"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-04",
+      "task": "paginación",
+      "files": [
+        "app/src/lib/components/results/ResultPager.svelte",
+        "crates/engine/src/pagination.rs"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-05",
+      "task": "explorador",
+      "files": [
+        "app/src/lib/components/SchemaTree.svelte"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-06",
+      "task": "parámetros",
+      "files": [
+        "app/src/lib/components/ParametersDialog.svelte",
+        "app/src/lib/workspace/parameters.ts"
+      ],
+      "split": "train"
+    },
+    {
+      "id": "short-07",
+      "task": "idioma",
+      "files": [
+        "app/src/lib/i18n/index.ts",
+        "app/src/lib/i18n/locales.ts"
+      ],
+      "split": "validation4"
+    },
+    {
+      "id": "short-08",
+      "task": "actualizaciones",
+      "files": [
+        "app/src/lib/stores/updates.ts",
+        "app/src/lib/components/UpdatePrompt.svelte"
+      ],
+      "split": "validation4"
+    },
+    {
+      "id": "short-09",
+      "task": "formatear",
+      "files": [
+        "app/src/lib/editor/formatter.ts"
+      ],
+      "split": "validation4"
+    },
+    {
+      "id": "short-10",
+      "task": "terminal",
+      "files": [
+        "app/src/lib/components/Terminal.svelte",
+        "app/src-tauri/src/terminal.rs"
+      ],
+      "split": "validation4"
+    },
+    {
+      "id": "short-11",
+      "task": "autocompletado",
+      "files": [
+        "app/src/lib/editor/completionSource.ts",
+        "app/src/lib/editor/catalogCompletions.ts"
+      ],
+      "split": "validation4"
+    },
+    {
+      "id": "short-12",
+      "task": "credenciales",
+      "files": [
+        "app/src-tauri/src/credentials.rs",
+        "app/src/lib/credentials.ts"
+      ],
+      "split": "validation4"
+    }
+  ]
+}
