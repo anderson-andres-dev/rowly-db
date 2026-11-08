@@ -6,7 +6,7 @@ const model = {
   features: { items: [{ id: "grid", summary: "The results grid: virtual scrolling and more.", entry: ["app/Grid.svelte"] }] },
   rules: [{ id: "one-rule", rule: "Do the thing.", why: "Because.", check: "node tools/x.mjs --check" }, { id: "plain", rule: "Plain.", why: "Short." }],
 };
-const doc = (a = "x", b = "y") => `intro\n${marks("map").start}\n${a}\n${marks("map").end}\nmid\n${marks("rules").start}\n${b}\n${marks("rules").end}\nend\n`;
+const doc = (a = "x", b = "y") => `intro\n${marks("router").start}\n${marks("router").end}\n${marks("map").start}\n${a}\n${marks("map").end}\nmid\n${marks("rules").start}\n${b}\n${marks("rules").end}\nend\n`;
 
 test("renderMap y renderRules dan una linea por elemento y solo citan el check cuando existe", () => {
   assert.equal(renderMap(model), "- `grid` — The results grid → `app/Grid.svelte`");

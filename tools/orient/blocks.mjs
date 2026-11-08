@@ -1,6 +1,8 @@
 // Los bloques generados de AGENTS.md: el mapa de funcionalidades y las reglas. Salen de
 // tools/architecture/model.json (la unica fuente curada) y `features.mjs --write` los
 // escribe entre sus marcas; `--check` falla si quedaron atras.
+import { renderRouter } from "./playbooks.mjs";
+
 export const AGENTS = "AGENTS.md";
 export const marks = (name) => ({ start: `<!-- generated: ${name} (tools/orient/blocks.mjs) -->`, end: `<!-- /generated: ${name} -->` });
 
@@ -21,7 +23,7 @@ export function renderRules(model) {
     .join("\n");
 }
 
-const RENDERERS = { map: renderMap, rules: renderRules };
+const RENDERERS = { router: renderRouter, map: renderMap, rules: renderRules };
 
 // `text` es AGENTS.md; reemplaza lo que hay entre las marcas de cada bloque.
 export function applyBlocks(text, model, names = Object.keys(RENDERERS)) {
