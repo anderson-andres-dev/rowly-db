@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-10-09T04:12:04.066Z",
+        "reason": "User confirmed: keep existing Rowly DB fonts unless a visual need justifies changing them; Geist is the current self-hosted production font"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "mockups/rowly-redesign/**/*.html"
+        ],
+        "createdAt": "2026-10-09T04:12:04.072Z",
+        "reason": "Agent verified in rendered Firefox views: shared CSS provides 20-40px insets; static HTML analysis cannot resolve the linked stylesheet and reports flush children incorrectly"
+      }
+    ]
+  }
+}

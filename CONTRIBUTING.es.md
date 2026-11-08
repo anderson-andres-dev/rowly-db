@@ -57,7 +57,7 @@ El código nuevo va en la carpeta de su dominio ([docs/ARCHITECTURE.es.md](docs/
 `cargo test --workspace` no necesita ninguna base de datos. Las pruebas que sí la necesitan están marcadas con `#[ignore]` y corren contra los servidores de `tools/test-dbs` (MySQL, MariaDB y PostgreSQL con las bases de ejemplo Sakila / Pagila), un contenedor por versión exacta, fijado por digest en `tools/test-dbs/lines.json`:
 
 ```bash
-tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=13.23
+tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=14.24
 cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 

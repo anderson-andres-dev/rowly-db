@@ -104,11 +104,11 @@
 MySQL, MariaDB and PostgreSQL. Every release below passes the complete SQL quality matrix against a real server in CI; other releases connect with the rules of their version line and are shown as unverified ([SQL_ENGINE.md](SQL_ENGINE.md#5-version-lines)).
 
 <!-- generated: engines (tools/inventory/status.mjs) -->
-| Engine | Verified releases | Version lines |
-|---|---|---|
-| MySQL | 8.0.46, 8.4.11, 9.7.2 | 5.7, 8.0, 8.4, 9 |
-| MariaDB | 10.6.28, 11.8.9 | 10.3, 10.6, 11.7 |
-| PostgreSQL | 13.23, 14.24, 15.19, 16.15, 17.11, 18.6 | 10, 11, 12, 14, 15, 16, 17, 18 |
+| Engine | Verified releases | Previously verified (out of support, not advertised) | Version lines |
+|---|---|---|---|
+| MySQL | 8.0.46, 8.4.11, 9.7.2 | — | 5.7, 8.0, 8.4, 9 |
+| MariaDB | 10.6.28, 11.8.9 | — | 10.3, 10.6, 11.7 |
+| PostgreSQL | 14.24, 15.19, 16.15, 17.11, 18.6 | 13.23 (until 2026-11-13, evidence c74868d0f5d5) | 10, 11, 12, 14, 15, 16, 17, 18 |
 <!-- /generated: engines -->
 
 ## Install

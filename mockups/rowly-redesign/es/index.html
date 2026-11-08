@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Propuesta de rediseño de Rowly DB</title>
+  <meta name="description" content="Propuesta estática para rediseñar la web de Rowly DB.">
+  <link rel="icon" href="../assets/icon.svg">
+  <link rel="stylesheet" href="../assets/mockup.css">
+  <script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="./" aria-label="Inicio de Rowly DB">
+        <img src="../assets/icon.svg" alt="">
+        <span>Rowly <small>DB</small></span>
+      </a>
+      <nav class="desktop-nav" aria-label="Navegación principal">
+        <a href="#workflow">Flujo</a>
+        <a href="#workspace">Espacio de trabajo</a>
+        <a href="#download">Descargar</a>
+        <a href="comunidad/">Comunidad</a>
+        <a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentación</a>
+      </nav>
+      <div class="top-actions">
+        <a class="language-link" href="../" hreflang="en" lang="en">EN</a>
+        <button class="icon-button" type="button" data-theme-toggle aria-label="Cambiar tema de color">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v2m0 14v2M3 12h2m14 0h2m-3.6-6.4-1.4 1.4M8 16l-1.4 1.4m0-11.8L8 7m8 9 1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+          <span class="meta" data-theme-label hidden>Cambiar tema</span>
+        </button>
+        <a class="button primary small" href="#download">Descargar</a>
+        <button class="menu-button" type="button" data-menu-toggle aria-label="Abrir menú" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <nav class="wrap mobile-nav" data-mobile-nav data-open="false" aria-label="Navegación móvil">
+      <a href="#workflow">Flujo</a><a href="#workspace">Espacio de trabajo</a><a href="#download">Descargar</a><a href="comunidad/">Comunidad</a><a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentación</a><a href="../" hreflang="en" lang="en">English</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="wrap hero">
+      <h1>Cliente SQL gratuito y de código abierto</h1>
+      <div class="hero-status">Aplicación de escritorio · v0.4.2</div>
+      <div class="hero-copy">
+        <p>Escribe consultas, inspecciona datos y edita resultados. Rowly DB convierte los cambios pendientes en SQL para que los revises antes de aplicarlos.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#download"><span data-download-label>Ver descargas</span></a>
+          <a class="button" href="https://github.com/anderson-andres-dev/rowly-db">Ver código</a>
+        </div>
+      </div>
+      <div class="proof-window">
+        <div class="screenshot">
+          <img class="light-asset" src="../assets/shots/hero-light.webp" width="1600" height="1000" alt="Rowly DB con una consulta SQL, sus resultados y el explorador de bases de datos en el tema claro">
+          <img class="dark-asset" src="../assets/shots/hero-dark.webp" width="1600" height="1000" alt="Rowly DB con una consulta SQL, sus resultados y el explorador de bases de datos en el tema oscuro">
+        </div>
+        <p class="capture-label">Aplicación real · Conexión PostgreSQL · Temas claro y oscuro</p>
+      </div>
+    </section>
+
+    <div class="wrap fit-strip" aria-label="Product support">
+      <div><strong>PostgreSQL, MySQL, MariaDB</strong><span>Perfiles y dialectos propios para cada motor</span></div>
+      <div><strong>Windows, macOS, Linux</strong><span>Instaladores y paquetes de escritorio</span></div>
+      <div><strong>MIT o Apache 2.0</strong><span>No requiere una cuenta</span></div>
+    </div>
+
+    <section class="wrap section" id="workflow">
+      <div class="section-head">
+        <h2>Revisa los cambios como SQL antes de ejecutarlos</h2>
+        <p>Edita celdas, añade filas o marca registros para eliminarlos. Rowly DB prepara las sentencias y espera tu confirmación.</p>
+      </div>
+      <div class="review-layout">
+        <div class="screenshot">
+          <img class="light-asset" src="../assets/shots/review-light.webp" width="960" height="720" alt="Revisión de cambios con sentencias UPDATE, DELETE e INSERT antes de aplicarlas">
+          <img class="dark-asset" src="../assets/shots/review-dark.webp" width="960" height="720" alt="Revisión de cambios en el tema oscuro">
+        </div>
+        <div>
+          <dl class="flow-list">
+            <div><dt>Edita</dt><dd>Cambia datos directamente en resultados que incluyan una clave.</dd></div>
+            <div><dt>Revisa</dt><dd>Lee las sentencias exactas generadas para cada cambio pendiente.</dd></div>
+            <div><dt>Aplica</dt><dd>Ejecuta los cambios revisados. Las conexiones de producción añaden una confirmación.</dd></div>
+          </dl>
+          <div class="sql-ops" aria-label="Generated statement types"><span class="insert">INSERT</span><span>UPDATE</span><span class="delete">DELETE</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap section">
+      <div class="section-head">
+        <h2>Escribe SQL con el esquema conectado en contexto</h2>
+        <p>El autocompletado usa tablas, columnas y claves foráneas de la base activa. Los diagnósticos señalan nombres desconocidos antes de ejecutar.</p>
+      </div>
+      <div class="editor-pair">
+        <figure>
+          <div class="screenshot">
+            <img class="light-asset" src="../assets/shots/editor-autocomplete-light.webp" width="720" height="405" alt="Autocompletado SQL que sugiere un JOIN a partir de una clave foránea">
+            <img class="dark-asset" src="../assets/shots/editor-autocomplete-dark.webp" width="720" height="405" alt="Autocompletado SQL en el tema oscuro">
+          </div>
+          <figcaption><strong>Autocompletado con el esquema</strong><span>Incluye sugerencias de JOIN basadas en claves foráneas.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="screenshot">
+            <img class="light-asset" src="../assets/shots/editor-diagnostics-light.webp" width="720" height="405" alt="Editor SQL que marca una columna desconocida y sugiere una corrección">
+            <img class="dark-asset" src="../assets/shots/editor-diagnostics-dark.webp" width="720" height="405" alt="Diagnósticos del editor SQL en el tema oscuro">
+          </div>
+          <figcaption><strong>Diagnósticos antes de ejecutar</strong><span>Las tablas y columnas desconocidas incluyen correcciones sugeridas.</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="wrap section" id="workspace">
+      <div class="section-head">
+        <h2>Mantén juntas las consultas, los resultados y una terminal</h2>
+        <p>La versión 0.4.2 añade espacios divididos y sesiones de terminal persistentes. Los filtros consultan la base y permanecen en su pestaña.</p>
+      </div>
+      <div class="workspace-stage">
+        <div>
+          <figure class="workspace-panel" id="workspace-split" data-workspace-panel>
+            <div class="screenshot"><img src="../assets/shots/workspace-terminal-light.png" width="1280" height="800" alt="Rowly DB 0.4.2 con dos consolas SQL en paralelo y la terminal integrada debajo"></div>
+            <figcaption><strong>Organiza el trabajo, no solo las pestañas</strong><span>Divide y reúne consolas, resultados y terminales.</span></figcaption>
+          </figure>
+          <figure class="workspace-panel" id="workspace-filter" data-workspace-panel hidden>
+            <div class="screenshot"><img src="../assets/shots/workspace-filter-light.png" width="1280" height="800" alt="Filtro por valores aplicado a resultados reales de Pagila en Rowly DB 0.4.2"></div>
+            <figcaption><strong>Filtra en la base de datos</strong><span>El conteo y la paginación respetan los filtros de la pestaña.</span></figcaption>
+          </figure>
+          <p class="capture-label">Captura real de v0.4.2 · Base de demostración Pagila · Tema claro</p>
+        </div>
+        <div class="workspace-tabs" role="tablist" aria-label="Ejemplos del espacio de trabajo">
+          <button class="workspace-tab" type="button" role="tab" data-workspace-tab aria-selected="true" aria-controls="workspace-split"><strong>Espacio dividido</strong><span>Dos contextos de consulta y una terminal activa.</span></button>
+          <button class="workspace-tab" type="button" role="tab" data-workspace-tab aria-selected="false" aria-controls="workspace-filter"><strong>Filtros por columna</strong><span>Elige valores sin perder el contexto de la pestaña.</span></button>
+        </div>
+      </div>
+      <div class="compact-tools" aria-label="Everyday capabilities">
+        <div><strong>Archivos e historial</strong><span>Abre carpetas SQL, guarda consultas y revisa ejecuciones anteriores.</span></div>
+        <div><strong>Exportación</strong><span>TSV, CSV, JSON, Markdown y SQL INSERT.</span></div>
+        <div><strong>Acceso por teclado</strong><span>Ejecuta, navega, edita y gestiona pestañas con el teclado.</span></div>
+        <div><strong>Temas claro y oscuro</strong><span>Sigue el sistema o elige un tema en la aplicación.</span></div>
+      </div>
+    </section>
+
+    <section class="wrap section">
+      <div class="section-head">
+        <h2>Lo que admite hoy</h2>
+        <p>Un cliente de escritorio centrado en el trabajo habitual con bases relacionales. El código y la versión publicada confirman estos motores y plataformas.</p>
+      </div>
+      <div class="support-grid">
+        <article><h3>PostgreSQL</h3><p>Probado en el repositorio con versiones de la 13 a la 18.</p></article>
+        <article><h3>MySQL</h3><p>Probado con MySQL 8.0, 8.4 y 9.7.</p></article>
+        <article><h3>MariaDB</h3><p>Un perfil separado con comportamiento propio para su dialecto SQL.</p></article>
+        <article><h3>Paquetes de escritorio</h3><p>Instaladores para Windows, DMG para macOS y AppImage, DEB, RPM y Arch para Linux.</p></article>
+      </div>
+    </section>
+
+    <section class="wrap section" id="download">
+      <div class="download-band">
+        <div><h2>Descarga Rowly DB</h2><p>Elige el instalador para tu sistema. Las notas y sumas de comprobación permanecen en GitHub.</p></div>
+        <div class="band-actions">
+          <a class="button primary" href="https://github.com/anderson-andres-dev/rowly-db/releases/latest"><span data-download-label>Ver descargas</span></a>
+          <a class="button" href="https://github.com/anderson-andres-dev/rowly-db/releases/tag/v0.4.2">Leer las notas de v0.4.2</a>
+          <span class="release-meta">Versión publicada actual · v0.4.2</span>
+        </div>
+      </div>
+      <div class="community-band">
+        <div><h2>Habla sobre el producto</h2><p>Cuatro conversaciones para ideas, mejoras, errores y preguntas. Cada área tiene una página permanente y un hilo respaldado por GitHub.</p></div>
+        <div class="band-actions"><a class="button" href="comunidad/">Abrir la comunidad</a></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <a class="brand" href="./"><img src="../assets/icon.svg" alt=""><span>Rowly <small>DB</small></span></a>
+      <nav class="footer-links" aria-label="Pie"><a href="comunidad/">Comunidad</a><a href="https://github.com/anderson-andres-dev/rowly-db#readme">Documentación</a><a href="https://github.com/anderson-andres-dev/rowly-db">Código</a><a href="https://github.com/anderson-andres-dev/rowly-db/issues">Issues</a></nav>
+      <span class="footer-note">Prototipo para revisión · <span data-year>2026</span></span>
+    </div>
+  </footer>
+</body>
+</html>

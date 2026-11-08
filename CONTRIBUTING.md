@@ -57,7 +57,7 @@ New code goes in its domain folder ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#
 `cargo test --workspace` needs no database. Tests that do are marked `#[ignore]` and run against the servers of `tools/test-dbs` (MySQL, MariaDB and PostgreSQL with the Sakila / Pagila sample databases), one container per exact release, pinned by digest in `tools/test-dbs/lines.json`:
 
 ```bash
-tools/test-dbs/up.sh                       # or one verified release: tools/test-dbs/up.sh postgres=13.23
+tools/test-dbs/up.sh                       # or one verified release: tools/test-dbs/up.sh postgres=14.24
 cargo test -p rowly-server-tests -- --ignored --test-threads=1
 ```
 
