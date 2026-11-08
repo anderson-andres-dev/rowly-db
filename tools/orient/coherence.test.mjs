@@ -37,20 +37,20 @@ test("los registros de medicion corresponden al conjunto de oro actual", () => {
 
 const everything = () => [...loadGold().tasks, ...loadNegatives()];
 
-test("SUFFICIENT sale solo de la confianza alta, y PARTIAL, AMBIGUOUS y NO MATCH nunca se disfrazan de el", () => {
+test("LIKELY sale solo de la confianza alta, y PARTIAL, AMBIGUOUS y NO MATCH nunca se disfrazan de el", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
   const seen = new Set();
   for (const task of everything()) {
     const out = orient.run(task.task);
     const level = out.confidence.level;
     seen.add(level);
-    assert.equal(out.sufficient, level === "high", task.id);
+    assert.equal(out.likely, level === "high", task.id);
     const next = out.markdown.split("## Next\n")[1] ?? "";
-    if (level === "high") assert.match(next, /^SUFFICIENT:/, task.id);
+    if (level === "high") assert.match(next, /^LIKELY:/, task.id);
     else if (level === "medium") assert.match(next, /^PARTIAL:/, task.id);
     else if (level === "low") assert.match(next, /^AMBIGUOUS:/, task.id);
     else assert.match(out.markdown, /NO MATCH/, task.id);
-    if (level !== "high") assert.doesNotMatch(out.markdown, /SUFFICIENT:/, task.id);
+    if (level !== "high") assert.doesNotMatch(out.markdown, /LIKELY:/, task.id);
   }
   assert.deepEqual([...seen].sort(), ["high", "low", "medium", "none"]);
 });
@@ -58,12 +58,12 @@ test("SUFFICIENT sale solo de la confianza alta, y PARTIAL, AMBIGUOUS y NO MATCH
 test("el tipo de tarea cambia la forma de la tarjeta, nunca la confianza", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
   for (const task of loadGold().tasks.slice(0, 12)) {
-    const levels = new Set(["bug", "feature", "refactor", "analysis", "tests", "modify"].map((intent) => `${orient.run(task.task, { intent }).confidence.level}/${orient.run(task.task, { intent }).sufficient}`));
+    const levels = new Set(["bug", "feature", "refactor", "analysis", "tests", "modify"].map((intent) => `${orient.run(task.task, { intent }).confidence.level}/${orient.run(task.task, { intent }).likely}`));
     assert.equal(levels.size, 1, task.id);
   }
 });
 
-test("graphify solo agrega lineas: no cambia la confianza, ni lo que se propone, ni SUFFICIENT", () => {
+test("graphify solo agrega lineas: no cambia la confianza, ni lo que se propone, ni LIKELY", () => {
   const without = createOrient({ useCache: false, useGraph: false });
   const files = [...without.prepared.index.files.keys()];
   const graph = {
@@ -77,7 +77,7 @@ test("graphify solo agrega lineas: no cambia la confianza, ni lo que se propone,
     const a = without.run(task.task);
     const b = withGraph.run(task.task);
     if (b.markdown.includes("graphify (by name")) extra += 1;
-    assert.equal(b.sufficient, a.sufficient, task.id);
+    assert.equal(b.likely, a.likely, task.id);
     assert.deepEqual(b.confidence, a.confidence, task.id);
     assert.deepEqual(b.primary, a.primary, task.id);
   }
@@ -110,14 +110,22 @@ test("cada archivo del oro que el catalogo cubre y que no es una prueba esta ind
 
 test("los limites que documenta el README coinciden con lo registrado", () => {
   const record = json("tests/orient/orient.json");
-  const strong = Math.round(record.summary.sufficientStrong * 100);
+  const strong = Math.round(record.summary.likelyStrong * 100);
   const none = record.tasks.filter((task) => task.hit === 0).length;
   for (const [path, strongText, noneText] of [
     ["tools/orient/README.md", `${strong} %`, `${none} of ${record.tasks.length}`],
     ["tools/orient/README.es.md", `${strong} %`, `${none} de ${record.tasks.length}`],
   ]) {
     const text = read(path);
-    assert.ok(text.includes(strongText), `${path}: SUFFICIENT ${strongText}; actualiza los limites`);
+    assert.ok(text.includes(strongText), `${path}: LIKELY ${strongText}; actualiza los limites`);
     assert.ok(text.includes(noneText), `${path}: ${noneText} tareas sin archivo correcto; actualiza los limites`);
+  }
+});
+
+test("los archivos puntero de cada agente remiten a AGENTS.md y no llevan instrucciones propias", () => {
+  for (const path of ["CLAUDE.md", "GEMINI.md"]) {
+    const text = read(path).trim();
+    assert.ok(text.includes("AGENTS.md"), path);
+    assert.ok(text.split("\n").length <= 2, `${path}: un puntero no lleva instrucciones propias`);
   }
 });

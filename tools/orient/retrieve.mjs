@@ -51,7 +51,7 @@ export function prepare(index, { useTerms = true } = {}) {
   return { index, features, files, tests, maxIn };
 }
 
-// De las senales a un nivel: `high` es lo unico que permite decir SUFFICIENT. `evidence` es
+// De las senales a un nivel: `high` es lo unico que permite decir LIKELY. `evidence` es
 // la rareza (idf) sumada de las palabras de la tarea que aparecen en la funcionalidad o en
 // los primeros archivos: una palabra comun suelta no es evidencia; una rara si.
 export function levelOf({ margin, coverage, evidence }, rule) {

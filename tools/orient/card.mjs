@@ -237,7 +237,7 @@ function compose(prepared, result, intent, ctx, detail) {
   }
 
   const next = [];
-  if (result.confidence.level === "high") next.push("SUFFICIENT: read the ranges above, change them, run the tests listed.");
+  if (result.confidence.level === "high") next.push("LIKELY: probably the right area; read the ranges above, then check Impact and the tests. It does not promise every file is listed.");
   else if (result.confidence.level === "medium") next.push(`PARTIAL: if the files above do not hold the behaviour, run \`node tools/orient/orient.mjs --expand ${feature.id}\`.`);
   else next.push(`AMBIGUOUS: candidates ${result.features.slice(0, 3).map((item) => `\`${item.id}\``).join(", ")}. NEXT: \`node tools/orient/orient.mjs --expand ${feature.id}\`, or search the code.`);
 
@@ -261,7 +261,7 @@ export function card(prepared, result, task, { intent = detectIntent(task), budg
     if (estimate(markdown) <= budget || detail === 0) {
       // Si la tarjeta termina en NO MATCH, la confianza es `none` aunque las senales dieran otra cosa.
       const confidence = out.noMatch ? { ...result.confidence, level: "none" } : result.confidence;
-      return { markdown, tokens: estimate(markdown), intent, confidence, detail, ...out, sufficient: confidence.level === "high" };
+      return { markdown, tokens: estimate(markdown), intent, confidence, detail, ...out, likely: confidence.level === "high" };
     }
   }
 }

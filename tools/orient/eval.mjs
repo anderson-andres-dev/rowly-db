@@ -26,7 +26,7 @@
 //   MRR       1 / posicion del primer archivo correcto (0 si no sale)
 //   tests     de las pruebas correctas, cuantas aparecen en la respuesta
 //   tokens    tamano de la respuesta, caracteres / 4
-//   basta     (solo orient) cuantas veces declara "SUFFICIENT", y de esas cuantas
+//   basta     (solo orient) cuantas veces declara "LIKELY", y de esas cuantas
 //             acierto: `ok` = alguno de los 5 primeros es correcto, `fuerte` = al
 //             menos la mitad de los esperados
 //   ms        latencia por tarea; p95 sobre todas
@@ -57,7 +57,7 @@ export function tokens(text) {
 
 // `ranked`: archivos propuestos, sin repetir y en orden. `text`: lo que se le
 // entregaria al agente, para medir su tamano.
-export function score(task, { ranked, text, sufficient, ms, primary }) {
+export function score(task, { ranked, text, likely, ms, primary }) {
   // Si la herramienta distingue "lo que propone" de "lo demas que nombra", el orden y la
   // precision se miden solo sobre lo que propone; `todo` sigue contando toda la respuesta.
   const proposed = (primary ?? ranked).filter((path) => !isTestPath(path, task.files));
@@ -75,7 +75,7 @@ export function score(task, { ranked, text, sufficient, ms, primary }) {
     mrr: first < 0 ? 0 : 1 / (first + 1),
     tokens: tokens(text),
   };
-  if (sufficient !== undefined) out.sufficient = sufficient;
+  if (likely !== undefined) out.likely = likely;
   if (ms !== undefined) out.ms = ms;
   if (task.tests.length) {
     const all = new Set(ranked);
@@ -96,12 +96,12 @@ export function percentile(values, p) {
 
 export function summarize(rows) {
   const pick = (key) => mean(rows.filter((row) => row[key] !== undefined).map((row) => row[key]));
-  const claimed = rows.filter((row) => row.sufficient === true);
+  const claimed = rows.filter((row) => row.likely === true);
   const extra = {};
-  if (rows.some((row) => row.sufficient !== undefined)) {
-    extra.sufficientRate = claimed.length / rows.length;
-    extra.sufficientOk = claimed.length ? mean(claimed.map((row) => row.hit)) : null;
-    extra.sufficientStrong = claimed.length ? mean(claimed.map((row) => (row.recall >= 0.5 ? 1 : 0))) : null;
+  if (rows.some((row) => row.likely !== undefined)) {
+    extra.likelyRate = claimed.length / rows.length;
+    extra.likelyOk = claimed.length ? mean(claimed.map((row) => row.hit)) : null;
+    extra.likelyStrong = claimed.length ? mean(claimed.map((row) => (row.recall >= 0.5 ? 1 : 0))) : null;
   }
   const times = rows.filter((row) => row.ms !== undefined).map((row) => row.ms);
   if (times.length) extra.p95ms = percentile(times, 0.95);
@@ -146,7 +146,7 @@ const RUNNERS = {
       const out = orient.run(task.task);
       const ms = performance.now() - started;
       const rest = [...out.files, ...out.tests].filter((path) => !out.primary?.includes(path));
-      return { ranked: [...new Set([...(out.primary ?? []), ...rest])], primary: out.primary ?? [], text: out.markdown, sufficient: out.sufficient, noMatch: Boolean(out.noMatch), ms };
+      return { ranked: [...new Set([...(out.primary ?? []), ...rest])], primary: out.primary ?? [], text: out.markdown, likely: out.likely, noMatch: Boolean(out.noMatch), ms };
     };
   },
 };
@@ -156,12 +156,12 @@ export function loadNegatives() {
 }
 
 // Tareas fuera del alcance: no hay nada correcto que encontrar. Lo que importa es que no
-// declare SUFFICIENT; `noMatch` es lo ideal.
+// declare LIKELY; `noMatch` es lo ideal.
 export function scoreNegatives(rows) {
   const n = rows.length || 1;
   return {
     tasks: rows.length,
-    falseSufficient: rows.filter((row) => row.sufficient).length / n,
+    falseLikely: rows.filter((row) => row.likely).length / n,
     noMatch: rows.filter((row) => row.noMatch).length / n,
     tokens: mean(rows.map((row) => tokens(row.text))),
   };
@@ -178,8 +178,8 @@ export function compareRecords(recorded, current, tolerance) {
     ["hit", "hit@5", current.summary.hit, recorded.summary.hit, "down"],
     ["tests", "pruebas", current.summary.tests, recorded.summary.tests, "down"],
     ["precision", "precision", current.summary.precision, recorded.summary.precision, "down"],
-    ["sufficientStrong", "SUFFICIENT fuerte", current.summary.sufficientStrong, recorded.summary.sufficientStrong, "down"],
-    ["falseSufficient", "falsa confianza", current.negatives?.falseSufficient, recorded.negatives?.falseSufficient, "up"],
+    ["likelyStrong", "LIKELY fuerte", current.summary.likelyStrong, recorded.summary.likelyStrong, "down"],
+    ["falseLikely", "falsa confianza", current.negatives?.falseLikely, recorded.negatives?.falseLikely, "up"],
     ["tokens", "tokens", current.summary.tokens, recorded.summary.tokens, "up-relative"],
   ];
   for (const [key, label, now, before, direction] of rules) {
@@ -198,15 +198,15 @@ export function compareRecords(recorded, current, tolerance) {
 // Sale de los registros, asi que lo que se cite nunca se escribe a mano.
 export function report(orient, baseline) {
   const p = (value) => (value === null || value === undefined ? "-" : `${(value * 100).toFixed(0)} %`);
-  const lines = ["| | n | rec@5 | prec | hit@5 | tests | tokens | SUFFICIENT: rate / correct |", "|---|---|---|---|---|---|---|---|"];
+  const lines = ["| | n | rec@5 | prec | hit@5 | tests | tokens | LIKELY: rate / correct |", "|---|---|---|---|---|---|---|---|"];
   const row = (label, o, g) => {
-    lines.push(`| orient ${label} | ${o.tasks} | ${p(o.recall)} | ${p(o.precision)} | ${p(o.hit)} | ${p(o.tests)} | ${Math.round(o.tokens)} | ${p(o.sufficientRate)} / ${p(o.sufficientStrong)} |`);
+    lines.push(`| orient ${label} | ${o.tasks} | ${p(o.recall)} | ${p(o.precision)} | ${p(o.hit)} | ${p(o.tests)} | ${Math.round(o.tokens)} | ${p(o.likelyRate)} / ${p(o.likelyStrong)} |`);
     lines.push(`| graphify ${label} | ${g.tasks} | ${p(g.recall)} | - | ${p(g.hit)} | ${p(g.tests)} | ${Math.round(g.tokens)} | - |`);
   };
   for (const part of SPLITS) row(part, orient.bySplit[part], baseline.bySplit[part]);
   row("all", orient.summary, baseline.summary);
   const n = orient.negatives;
-  if (n) lines.push("", `Out-of-scope tasks (${n.tasks}): false SUFFICIENT ${p(n.falseSufficient)}, NO MATCH ${p(n.noMatch)}.`);
+  if (n) lines.push("", `Out-of-scope tasks (${n.tasks}): false LIKELY ${p(n.falseLikely)}, NO MATCH ${p(n.noMatch)}.`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -248,8 +248,8 @@ export const DEFAULT_TOLERANCE = {
   hit: { warn: 0.03, fail: 0.08 },
   tests: { warn: 0.04, fail: 0.1 },
   precision: { warn: 0.03, fail: 0.08 },
-  sufficientStrong: { warn: 0.05, fail: 0.12 },
-  falseSufficient: { warn: 0.05, fail: 0.15 },
+  likelyStrong: { warn: 0.05, fail: 0.12 },
+  falseLikely: { warn: 0.05, fail: 0.15 },
   tokens: { warn: 0.15, fail: 0.5 },
 };
 
@@ -294,7 +294,7 @@ function main(args) {
     const annotate = process.env.GITHUB_ACTIONS ? (kind, text) => `::${kind}::orient ${text}` : (kind, text) => `${kind === "error" ? "FALLA" : "aviso"}: ${text}`;
     for (const text of warnings) console.log(annotate("warning", text));
     for (const text of failures) console.error(annotate("error", text));
-    console.log(`orient: rec@5 ${pct(current.summary.recall).trim()} · hit@5 ${pct(current.summary.hit).trim()} · pruebas ${pct(current.summary.tests).trim()} · precision ${pct(current.summary.precision).trim()} · falsa confianza ${pct(negatives.falseSufficient).trim()} (registrado ${pct(recorded.summary.recall).trim()} rec@5)`);
+    console.log(`orient: rec@5 ${pct(current.summary.recall).trim()} · hit@5 ${pct(current.summary.hit).trim()} · pruebas ${pct(current.summary.tests).trim()} · precision ${pct(current.summary.precision).trim()} · falsa confianza ${pct(negatives.falseLikely).trim()} (registrado ${pct(recorded.summary.recall).trim()} rec@5)`);
     if (failures.length) {
       console.error("Empeoro mas que la tolerancia de tests/orient/orient.json. Si es intencional: node tools/orient/eval.mjs --runner orient --no-graph --write");
       process.exit(1);
@@ -328,16 +328,16 @@ function main(args) {
     for (const part of SPLITS) console.log(row(part, summarize(results.filter((result) => result.task.split === part))));
   }
   const total = summarize(results);
-  if (total.sufficientRate !== undefined) {
-    console.log(`basta: lo declara en ${pct(total.sufficientRate).trim()} de las tareas; de esas, ok ${pct(total.sufficientOk).trim()} · fuerte ${pct(total.sufficientStrong).trim()} · p95 ${Math.round(total.p95ms)} ms`);
+  if (total.likelyRate !== undefined) {
+    console.log(`basta: lo declara en ${pct(total.likelyRate).trim()} de las tareas; de esas, ok ${pct(total.likelyOk).trim()} · fuerte ${pct(total.likelyStrong).trim()} · p95 ${Math.round(total.p95ms)} ms`);
   }
   if (negatives) {
-    const part = (name) => (negatives.bySplit[name] ? ` · ${name} ${pct(negatives.bySplit[name].falseSufficient).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}` : "");
-    console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseSufficient).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH)${NEGATIVE_SPLITS.map(part).join("")}`);
+    const part = (name) => (negatives.bySplit[name] ? ` · ${name} ${pct(negatives.bySplit[name].falseLikely).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}` : "");
+    console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseLikely).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH)${NEGATIVE_SPLITS.map(part).join("")}`);
   }
   if (args.includes("--verbose")) {
     for (const result of results) {
-      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} prec ${pct(result.precision)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.sufficient === undefined ? "" : result.sufficient ? " basta" : ""}`);
+      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} prec ${pct(result.precision)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.likely === undefined ? "" : result.likely ? " basta" : ""}`);
     }
   }
 

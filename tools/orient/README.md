@@ -19,7 +19,7 @@ One hand-written source, everything else derived:
 - **Catalogue**: the `features` key of `tools/architecture/model.json` (what a task can name, with the words users and the interface use, in Spanish and English). `node tools/orient/features.mjs --check` validates it; `docs/map/FEATURES.md` is generated from it. Tests are not repeated: they come from `tests/inventory.json`.
 - **Index** (`index.mjs`): per file, its symbols with line ranges, imports, Tauri IPC calls and the interface texts it shows. Cached in `.orient/` (ignored by git); it rereads only what changed in size or date, is rebuilt when the extractor's code changes, includes new files not yet added to git, and gives the same cards with or without the cache.
 - **Retrieval** (`retrieve.mjs`): BM25 over features, files and tests; a feature reinforces its files; tasks that cross two areas keep room for the second one.
-- **Card** (`card.mjs`): a different shape per kind of task, always within the budget. The last line says how far to trust it: `SUFFICIENT` only with high confidence; `PARTIAL` or `AMBIGUOUS` say which level to ask for next; `NO MATCH` says nothing in the repository uses those words.
+- **Card** (`card.mjs`): a different shape per kind of task, always within the budget. The last line says how far to trust it: `LIKELY` only with high confidence and it means "probably the right area", not "nothing else to read"; `PARTIAL` or `AMBIGUOUS` say which level to ask for next; `NO MATCH` says nothing in the repository uses those words.
 - **Graphify** (`graphify.mjs`) is an optional extra: if `graphify-out/graph.json` exists, the card adds a line of neighbours marked "by name, may be off". It never changes confidence or what is proposed (a test checks it).
 
 ## Keeping the index fresh
@@ -34,9 +34,42 @@ node tools/orient/hooks.mjs uninstall              # removes only what install a
 
 Nothing installs them: no npm script, no workflow, no other tool. They append a marked block to an existing shell hook (never overwrite a hook that is not shell) and cannot make a commit fail: they print nothing and exit cleanly even without Node or without `tools/orient`. `--graphify` also runs `graphify update .` in the background if Graphify is installed.
 
+## How each agent finds the entry point
+
+`AGENTS.md` is the entry point. What the vendors document (checked on the pages linked; the status says how far):
+
+| Agent | Reads `AGENTS.md`? | In this repository |
+|---|---|---|
+| Claude Code | Yes, since v2.1.277, **only when there is no `CLAUDE.md`**; with one it reads that instead. Per its [memory docs](https://code.claude.com/docs/en/memory#agents-md) the official way to combine them is an `@AGENTS.md` import in `CLAUDE.md`. | `CLAUDE.md` is a one-line pointer to `AGENTS.md`, so it works either way. |
+| OpenAI Codex | Yes ([guide](https://developers.openai.com/codex/guides/agents-md); not read directly, from secondary sources). | Nothing to add. |
+| GitHub Copilot coding agent | Yes ([changelog](https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions)). Reports on Copilot CLI disagree. | Nothing to add. |
+| Gemini CLI | Not by default: it reads `GEMINI.md`; `context.fileName` can add `AGENTS.md` ([docs](https://www.geminicli.com/docs/cli/gemini-md)). | `GEMINI.md` is a one-line pointer. |
+| Cursor | Reported by third parties (rules docs: [cursor.com/docs/rules](https://cursor.com/docs/rules), not verified here). | Nothing to add. |
+
+Any other agent that can run a terminal command can use `node tools/orient/orient.mjs`; none of this is needed for that. The pointer files hold no instructions of their own, so there is nothing to keep in sync.
+
+## The `--json` contract
+
+`orient.mjs ... --json` prints one JSON object whose keys are fixed. Changing them means raising `schemaVersion` (a test pins the exact keys).
+
+| `kind` | keys |
+|---|---|
+| `card` | `schemaVersion`, `kind`, `intent`, `confidence` (`level`: `high`\|`medium`\|`low`\|`none`, plus `margin`, `coverage`, `evidence`), `likely` (true only with `high`), `noMatch`, `primary` (files to read, in order), `files` (everything the card names), `tests`, `tokens` |
+| `expand`, `impact` | `schemaVersion`, `kind`, `files`, `tests`, `tokens` |
+
+`--with-markdown` adds a `markdown` key with the card text. Paths are repository-relative with `/`.
+
+## Usage log and feedback (optional)
+
+Off by default. `--log` (or `ORIENT_LOG=<path>`) appends one JSON line per query to `.orient/log.jsonl` (ignored by git): time, kind, task, confidence, proposed files and tests. `node tools/orient/orient.mjs --feedback good|partial|bad [note]` marks the last logged query. It never leaves the machine and nothing reads it automatically: it is raw material to find where the card failed with real use.
+
+## With Claude Code and Graphify
+
+`.claude/settings.json` carries a hook installed by Graphify (`graphify hook-guard`) that tells Claude Code to run `graphify query` before searching. It is Graphify's, not orient's, and it was left as is. The two coexist: `AGENTS.md` says to start with `orient` (it needs nothing installed), and Graphify remains an optional second opinion when `graphify-out/graph.json` exists. If you want only one, remove the hook from your own settings; nothing in orient depends on it.
+
 ## Measuring it
 
-`tests/orient/gold.json` holds 113 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on) and `holdout`, `seen`, `seen2` and `validation3` (measured, never tuned on; the first three were looked at task by task in earlier phases, `validation3` was measured once, at the end of the last phase). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `SUFFICIENT`.
+`tests/orient/gold.json` holds 113 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on) and `holdout`, `seen`, `seen2` and `validation3` (measured, never tuned on; the first three were looked at task by task in earlier phases, `validation3` was measured once, at the end of the last phase). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `LIKELY`.
 
 ```bash
 node tools/orient/eval.mjs --report                       # orient vs graphify query, from the records
@@ -51,7 +84,7 @@ node tools/orient/eval.mjs --runner orient --no-graph --write   # after an inten
 
 Measured at the end of the work; the current numbers are always `--report`.
 
-- **`SUFFICIENT` is right 73 % of the time, not 90 %** (counting "at least half of the expected files were proposed"), and in 88 % at least one expected file was among those proposed; on the tasks measured only once (`validation3`) it was 60 % and 70 %. Earlier figures (87 %, 78 %) came from smaller sets and were optimistic. **The signals available do not predict it**: on `train` each signal separates right from wrong cards barely better than chance (AUC 0.49 to 0.67), and the best rule found there (93 %) fell to 69 % under leave-one-out, below the 75 % of the current rule, so no rule was added. Read `SUFFICIENT` as "probably the right area to start from", not as "nothing else to read"; `Impact` and the tests are still worth a look.
+- **`LIKELY` is right 73 % of the time, not 90 %** (counting "at least half of the expected files were proposed"), and in 88 % at least one expected file was among those proposed; on the tasks measured only once (`validation3`) it was 60 % and 70 %. Earlier figures (87 %, 78 %) came from smaller sets and were optimistic. **The signals available do not predict it**: on `train` each signal separates right from wrong cards barely better than chance (AUC 0.49 to 0.67), and the best rule found there (93 %) fell to 69 % under leave-one-out, below the 75 % of the current rule, so no rule was added. Read `LIKELY` as "probably the right area to start from", not as "nothing else to read" (the card says so too); `Impact` and the tests are still worth a look.
 - **Some tasks get no correct file** (23 of 113 in the last measurement): when the code names things differently from the description, when the work is a contract that crosses engine, backend and frontend, or when it is styling with no vocabulary of its own. These are left as they are; the `--check` tolerance is what protects against making them worse.
 - **Integration tests** (`contract.rs`, `safety.rs`) are now declared per feature in the catalogue (`tests`), which raised the tests found on `train` (60 → 70 %) and `holdout` (50 → 70 %) and left `seen2` unchanged (80 %); the ones whose feature is not among the two best matches are still missed.
 - **Files under `tests/` folders are treated as tests**, so a script such as `app/tests/e2e/resources.mjs` is listed as a test, never as a file to change.

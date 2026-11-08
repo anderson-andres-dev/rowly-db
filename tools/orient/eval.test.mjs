@@ -75,11 +75,11 @@ test("score mide orden y precision solo sobre lo que la herramienta propone, y `
 });
 
 test("scoreNegatives cuenta falsa confianza y NO MATCH", () => {
-  const rows = [{ sufficient: true, noMatch: false, text: "abcd" }, { sufficient: false, noMatch: true, text: "abcdefgh" }, { sufficient: false, noMatch: false, text: "" }];
-  assert.deepEqual(scoreNegatives(rows), { tasks: 3, falseSufficient: 1 / 3, noMatch: 1 / 3, tokens: 1 });
+  const rows = [{ likely: true, noMatch: false, text: "abcd" }, { likely: false, noMatch: true, text: "abcdefgh" }, { likely: false, noMatch: false, text: "" }];
+  assert.deepEqual(scoreNegatives(rows), { tasks: 3, falseLikely: 1 / 3, noMatch: 1 / 3, tokens: 1 });
 });
 
-const record = (over = {}) => ({ summary: { recall: 0.6, hit: 0.9, tests: 0.5, precision: 0.35, sufficientStrong: 0.9, tokens: 500, ...over.summary }, negatives: { falseSufficient: 0, ...over.negatives } });
+const record = (over = {}) => ({ summary: { recall: 0.6, hit: 0.9, tests: 0.5, precision: 0.35, likelyStrong: 0.9, tokens: 500, ...over.summary }, negatives: { falseLikely: 0, ...over.negatives } });
 
 test("compareRecords: mejorar o quedar igual no falla; empeorar poco avisa; empeorar mucho falla", () => {
   const before = record();
@@ -87,7 +87,7 @@ test("compareRecords: mejorar o quedar igual no falla; empeorar poco avisa; empe
   const small = compareRecords(before, record({ summary: { recall: 0.57 } }), DEFAULT_TOLERANCE);
   assert.equal(small.failures.length, 0);
   assert.match(small.warnings[0], /rec@5/);
-  const big = compareRecords(before, record({ summary: { recall: 0.5 }, negatives: { falseSufficient: 0.3 } }), DEFAULT_TOLERANCE);
+  const big = compareRecords(before, record({ summary: { recall: 0.5 }, negatives: { falseLikely: 0.3 } }), DEFAULT_TOLERANCE);
   assert.equal(big.failures.length, 2);
   assert.match(big.failures.join(" "), /falsa confianza/);
 });
@@ -98,12 +98,12 @@ test("compareRecords: los tokens fallan por crecimiento relativo y lo que falta 
 });
 
 test("report arma la tabla desde los registros, sin numeros escritos a mano", () => {
-  const part = (recall) => ({ tasks: 2, recall, precision: 0.3, hit: 0.9, tests: 0.5, tokens: 500.4, sufficientRate: 0.5, sufficientStrong: 0.9 });
+  const part = (recall) => ({ tasks: 2, recall, precision: 0.3, hit: 0.9, tests: 0.5, tokens: 500.4, likelyRate: 0.5, likelyStrong: 0.9 });
   const base = (recall) => ({ tasks: 2, recall, hit: 0.1, tests: 0.2, tokens: 1800 });
-  const orient = { summary: part(0.6), bySplit: { train: part(0.7), holdout: part(0.4), seen: part(0.5), seen2: part(0.55), validation3: part(0.6) }, negatives: { tasks: 12, falseSufficient: 0, noMatch: 0.5 } };
+  const orient = { summary: part(0.6), bySplit: { train: part(0.7), holdout: part(0.4), seen: part(0.5), seen2: part(0.55), validation3: part(0.6) }, negatives: { tasks: 12, falseLikely: 0, noMatch: 0.5 } };
   const baseline = { summary: base(0.1), bySplit: { train: base(0.16), holdout: base(0.06), seen: base(0.07), seen2: base(0.05), validation3: base(0.08) } };
   const table = report(orient, baseline);
   assert.match(table, /\| orient train \| 2 \| 70 % \| 30 % \| 90 % \| 50 % \| 500 \| 50 % \/ 90 % \|/);
   assert.match(table, /\| graphify validation3 \| 2 \| 8 % \| - \| 10 % \| 20 % \| 1800 \| - \|/);
-  assert.match(table, /false SUFFICIENT 0 %, NO MATCH 50 %/);
+  assert.match(table, /false LIKELY 0 %, NO MATCH 50 %/);
 });
