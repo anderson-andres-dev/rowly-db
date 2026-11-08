@@ -88,7 +88,7 @@ test("recuperar: por texto del codigo, por vocabulario curado y por el texto que
   assert.equal(retrieve(p, "falla la grilla").features[0].id, "results-grid");
   assert.equal(retrieve(p, "no deja insertar fila").files[0].path, "app/src/lib/components/results/Grid.svelte");
   const sin = prepare(build().index, { useTerms: false });
-  assert.notEqual(retrieve(sin, "falla la grilla", { ...PARAMS, synonyms: false }).features[0]?.id, "results-grid");
+  assert.notEqual(retrieve(sin, "falla la grilla").features[0]?.id, "results-grid");
 });
 
 test("la tarjeta dice donde, que leer, que depende y que pruebas correr", () => {
@@ -260,13 +260,6 @@ test("el cache se invalida solo cuando cambia el extractor: la firma sale de su 
   const signature = extractorSignature();
   assert.match(signature, /^\d+:[0-9a-f]{16}$/);
   assert.equal(signature, extractorSignature());
-});
-
-test("sinonimos: pedir en espanol encuentra codigo nombrado en ingles, y sin ellos no", () => {
-  const p = prepared();
-  assert.equal(retrieve(p, "desplazamiento al borde").files[0].path, "app/src/lib/results/gridScroll.ts");
-  const off = { ...PARAMS, synonyms: false };
-  assert.notEqual(retrieve(p, "desplazamiento al borde", off).files[0]?.path, "app/src/lib/results/gridScroll.ts");
 });
 
 test("pruebas de integracion declaradas en el catalogo aparecen aunque su dueno sea otro", () => {

@@ -36,37 +36,37 @@
     }
   },
   "summary": {
-    "sufficientRate": 0.45569620253164556,
-    "sufficientOk": 0.9444444444444444,
-    "sufficientStrong": 0.8333333333333334,
-    "p95ms": 1.9125190000000032,
+    "sufficientRate": 0.5063291139240507,
+    "sufficientOk": 0.925,
+    "sufficientStrong": 0.775,
+    "p95ms": 1.9273520000000133,
     "tasks": 79,
-    "recall": 0.5700421940928271,
-    "hit": 0.8481012658227848,
-    "precision": 0.25611814345991535,
-    "shown": 4.886075949367089,
-    "all": 0.6819971870604782,
-    "mrr": 0.5419831223628694,
-    "tests": 0.717948717948718,
-    "tokens": 503.6455696202532
+    "recall": 0.5672995780590717,
+    "hit": 0.8354430379746836,
+    "precision": 0.2563291139240504,
+    "shown": 4.7594936708860756,
+    "all": 0.6729254571026723,
+    "mrr": 0.5527426160337554,
+    "tests": 0.735042735042735,
+    "tokens": 484.59493670886076
   },
   "negatives": {
     "tasks": 24,
     "falseSufficient": 0,
-    "noMatch": 0.7083333333333334,
-    "tokens": 178.91666666666666,
+    "noMatch": 0.6666666666666666,
+    "tokens": 194.20833333333334,
     "bySplit": {
       "train": {
         "tasks": 12,
         "falseSufficient": 0,
-        "noMatch": 0.5833333333333334,
-        "tokens": 224.41666666666666
+        "noMatch": 0.5,
+        "tokens": 260.3333333333333
       },
       "seen": {
         "tasks": 6,
         "falseSufficient": 0,
         "noMatch": 0.6666666666666666,
-        "tokens": 202
+        "tokens": 191.33333333333334
       },
       "validation2": {
         "tasks": 6,
@@ -78,141 +78,141 @@
   },
   "byKind": {
     "bug": {
-      "sufficientRate": 0.5,
+      "sufficientRate": 0.42857142857142855,
       "sufficientOk": 1,
-      "sufficientStrong": 0.9285714285714286,
-      "p95ms": 2.6908650000000023,
+      "sufficientStrong": 1,
+      "p95ms": 3.0576639999999884,
       "tasks": 28,
-      "recall": 0.6279761904761905,
+      "recall": 0.6607142857142857,
       "hit": 0.8571428571428571,
-      "precision": 0.20000000000000004,
-      "shown": 5,
-      "all": 0.6815476190476192,
-      "mrr": 0.5279761904761905,
+      "precision": 0.22619047619047628,
+      "shown": 4.857142857142857,
+      "all": 0.6845238095238095,
+      "mrr": 0.5339285714285714,
       "tests": 0.71875,
-      "tokens": 496.32142857142856
+      "tokens": 485.89285714285717
     },
     "feature": {
-      "sufficientRate": 0.4722222222222222,
-      "sufficientOk": 0.8823529411764706,
-      "sufficientStrong": 0.8235294117647058,
-      "p95ms": 1.466844999999978,
+      "sufficientRate": 0.6111111111111112,
+      "sufficientOk": 0.8636363636363636,
+      "sufficientStrong": 0.6818181818181818,
+      "p95ms": 1.478239000000002,
       "tasks": 36,
-      "recall": 0.5722222222222223,
+      "recall": 0.5569444444444445,
       "hit": 0.8333333333333334,
-      "precision": 0.2898148148148148,
-      "shown": 4.75,
-      "all": 0.7118827160493828,
-      "mrr": 0.5486111111111112,
-      "tests": 0.7916666666666666,
-      "tokens": 503.72222222222223
+      "precision": 0.28101851851851856,
+      "shown": 4.583333333333333,
+      "all": 0.6785493827160494,
+      "mrr": 0.5851851851851851,
+      "tests": 0.8541666666666666,
+      "tokens": 476.1388888888889
     },
     "refactor": {
       "sufficientRate": 0.42857142857142855,
       "sufficientOk": 1,
       "sufficientStrong": 0.6666666666666666,
-      "p95ms": 1.6916020000000174,
+      "p95ms": 1.6982119999999838,
       "tasks": 7,
-      "recall": 0.41904761904761906,
+      "recall": 0.38333333333333336,
       "hit": 0.8571428571428571,
-      "precision": 0.37142857142857144,
+      "precision": 0.3428571428571429,
       "shown": 5,
-      "all": 0.4761904761904762,
-      "mrr": 0.6357142857142858,
-      "tests": 0.6388888888888888,
-      "tokens": 576.1428571428571
+      "all": 0.5333333333333334,
+      "mrr": 0.4261904761904762,
+      "tests": 0.5833333333333334,
+      "tokens": 565
     },
     "analysis": {
-      "sufficientRate": 0.3333333333333333,
+      "sufficientRate": 0.6666666666666666,
       "sufficientOk": 1,
-      "sufficientStrong": 0,
-      "p95ms": 1.9125190000000032,
+      "sufficientStrong": 0.5,
+      "p95ms": 1.758544999999998,
       "tasks": 3,
       "recall": 0.4444444444444444,
       "hit": 1,
       "precision": 0.26666666666666666,
       "shown": 5,
       "all": 0.8055555555555555,
-      "mrr": 0.6666666666666666,
+      "mrr": 1,
       "tests": 0,
-      "tokens": 386
+      "tokens": 358
     },
     "modify": {
       "sufficientRate": 0.2,
       "sufficientOk": 1,
       "sufficientStrong": 1,
-      "p95ms": 1.1775169999999946,
+      "p95ms": 1.0876499999999965,
       "tasks": 5,
-      "recall": 0.5166666666666666,
-      "hit": 0.8,
-      "precision": 0.16,
+      "recall": 0.45,
+      "hit": 0.6,
+      "precision": 0.12000000000000002,
       "shown": 5,
       "all": 0.6833333333333333,
-      "mrr": 0.36666666666666664,
+      "mrr": 0.3333333333333333,
       "tests": null,
-      "tokens": 513.2
+      "tokens": 501.6
     }
   },
   "bySplit": {
     "train": {
-      "sufficientRate": 0.47058823529411764,
-      "sufficientOk": 1,
-      "sufficientStrong": 0.9375,
-      "p95ms": 1.6916020000000174,
+      "sufficientRate": 0.5294117647058824,
+      "sufficientOk": 0.8888888888888888,
+      "sufficientStrong": 0.7777777777777778,
+      "p95ms": 3.0576639999999884,
       "tasks": 34,
-      "recall": 0.6397058823529411,
-      "hit": 0.9117647058823529,
-      "precision": 0.2980392156862745,
-      "shown": 4.823529411764706,
-      "all": 0.7316993464052287,
-      "mrr": 0.581862745098039,
-      "tests": 0.7045454545454546,
-      "tokens": 524.9705882352941
+      "recall": 0.6127450980392157,
+      "hit": 0.8529411764705882,
+      "precision": 0.2769607843137255,
+      "shown": 4.647058823529412,
+      "all": 0.6964052287581698,
+      "mrr": 0.5544117647058824,
+      "tests": 0.6893939393939393,
+      "tokens": 501.2647058823529
     },
     "holdout": {
-      "sufficientRate": 0.38461538461538464,
+      "sufficientRate": 0.46153846153846156,
       "sufficientOk": 1,
-      "sufficientStrong": 0.4,
-      "p95ms": 2.6908650000000023,
+      "sufficientStrong": 0.6666666666666666,
+      "p95ms": 1.9273520000000133,
       "tasks": 13,
-      "recall": 0.4,
+      "recall": 0.4410256410256411,
       "hit": 0.7692307692307693,
-      "precision": 0.23076923076923078,
+      "precision": 0.26153846153846155,
       "shown": 5,
-      "all": 0.5705128205128205,
-      "mrr": 0.43589743589743585,
+      "all": 0.5884615384615384,
+      "mrr": 0.5192307692307692,
       "tests": 0.7,
-      "tokens": 490.7692307692308
+      "tokens": 484.38461538461536
     },
     "seen": {
-      "sufficientRate": 0.5,
+      "sufficientRate": 0.4166666666666667,
       "sufficientOk": 1,
       "sufficientStrong": 1,
-      "p95ms": 1.466844999999978,
+      "p95ms": 1.3944779999999923,
       "tasks": 12,
-      "recall": 0.6319444444444444,
-      "hit": 1,
-      "precision": 0.2916666666666667,
-      "shown": 4.75,
-      "all": 0.7083333333333334,
-      "mrr": 0.6,
+      "recall": 0.625,
+      "hit": 0.9166666666666666,
+      "precision": 0.3027777777777778,
+      "shown": 4.583333333333333,
+      "all": 0.7291666666666665,
+      "mrr": 0.6069444444444444,
       "tests": 0.8571428571428571,
-      "tokens": 481.9166666666667
+      "tokens": 467.1666666666667
     },
     "validation2": {
-      "sufficientRate": 0.45,
-      "sufficientOk": 0.7777777777777778,
-      "sufficientStrong": 0.7777777777777778,
-      "p95ms": 0.9823509999999942,
+      "sufficientRate": 0.55,
+      "sufficientOk": 0.9090909090909091,
+      "sufficientStrong": 0.7272727272727273,
+      "p95ms": 0.9240139999999997,
       "tasks": 20,
-      "recall": 0.525,
-      "hit": 0.7,
-      "precision": 0.18000000000000002,
-      "shown": 5,
+      "recall": 0.5375,
+      "hit": 0.8,
+      "precision": 0.19,
+      "shown": 4.9,
       "all": 0.6541666666666666,
-      "mrr": 0.5083333333333334,
-      "tests": 0.6,
-      "tokens": 488.8
+      "mrr": 0.5391666666666668,
+      "tests": 0.8,
+      "tokens": 466.85
     }
   },
   "tasks": [
@@ -224,9 +224,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 487,
+      "tokens": 479,
       "sufficient": true,
-      "ms": 10.515163999999999,
+      "ms": 9.741365000000002,
       "tests": 1
     },
     {
@@ -237,9 +237,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 449,
+      "tokens": 477,
       "sufficient": false,
-      "ms": 1.7989140000000248,
+      "ms": 1.9273520000000133,
       "tests": 1
     },
     {
@@ -250,9 +250,9 @@
       "hit": 1,
       "all": 0.4444444444444444,
       "mrr": 0.25,
-      "tokens": 752,
+      "tokens": 740,
       "sufficient": false,
-      "ms": 1.2941920000000096,
+      "ms": 1.399376999999987,
       "tests": 0.6666666666666666
     },
     {
@@ -263,9 +263,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 454,
+      "tokens": 460,
       "sufficient": true,
-      "ms": 0.9941010000000006
+      "ms": 1.8521199999999851
     },
     {
       "id": "issue-107-terminal-conectada",
@@ -275,9 +275,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 640,
+      "tokens": 637,
       "sufficient": true,
-      "ms": 1.2518960000000163
+      "ms": 1.211826000000002
     },
     {
       "id": "pr-92-terminal-recursos",
@@ -287,9 +287,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.5,
-      "tokens": 510,
+      "tokens": 497,
       "sufficient": false,
-      "ms": 2.313400999999999
+      "ms": 1.107247000000001
     },
     {
       "id": "pr-87-pestana-esquina",
@@ -298,10 +298,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 530,
+      "mrr": 0.25,
+      "tokens": 525,
       "sufficient": true,
-      "ms": 1.53465700000001
+      "ms": 0.9871469999999931
     },
     {
       "id": "pr-78-portal-linux",
@@ -313,7 +313,7 @@
       "mrr": 1,
       "tokens": 397,
       "sufficient": true,
-      "ms": 2.6908650000000023
+      "ms": 0.9447260000000028
     },
     {
       "id": "pr-77-fuga-consola",
@@ -325,7 +325,7 @@
       "mrr": 0.2,
       "tokens": 464,
       "sufficient": false,
-      "ms": 1.1808550000000082,
+      "ms": 1.157713000000001,
       "tests": 1
     },
     {
@@ -336,35 +336,35 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 470,
+      "tokens": 464,
       "sufficient": false,
-      "ms": 1.0782000000000096,
+      "ms": 1.5567800000000034,
       "tests": 0
     },
     {
       "id": "pr-76-red-soporte",
       "recall": 0.5,
-      "precision": 0.2,
-      "shown": 5,
+      "precision": 0.3333333333333333,
+      "shown": 3,
       "hit": 1,
       "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 480,
+      "tokens": 330,
       "sufficient": true,
-      "ms": 1.0231430000000046,
+      "ms": 3.0576639999999884,
       "tests": 0
     },
     {
       "id": "pr-83-terminal-panel",
-      "recall": 0.4,
-      "precision": 0.4,
+      "recall": 0.6,
+      "precision": 0.6,
       "shown": 5,
       "hit": 1,
       "all": 0.8,
-      "mrr": 0.25,
-      "tokens": 649,
-      "sufficient": false,
-      "ms": 1.0823489999999936,
+      "mrr": 1,
+      "tokens": 614,
+      "sufficient": true,
+      "ms": 1.1726290000000006,
       "tests": 1
     },
     {
@@ -373,11 +373,11 @@
       "precision": 0.5,
       "shown": 4,
       "hit": 1,
-      "all": 0.8,
+      "all": 0.6,
       "mrr": 1,
-      "tokens": 563,
+      "tokens": 556,
       "sufficient": true,
-      "ms": 1.105150000000009,
+      "ms": 1.2060040000000072,
       "tests": 1
     },
     {
@@ -386,37 +386,37 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.3333333333333333,
-      "mrr": 0.5,
-      "tokens": 496,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 445,
       "sufficient": false,
-      "ms": 1.0297899999999913,
+      "ms": 1.0812130000000195,
       "tests": 1
     },
     {
       "id": "pr-61-primera-consola",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0.6666666666666666,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 1,
-      "tokens": 531,
+      "mrr": 0.5,
+      "tokens": 559,
       "sufficient": false,
-      "ms": 1.0280919999999867,
+      "ms": 1.1619029999999952,
       "tests": 1
     },
     {
       "id": "pr-46-confirmar-produccion",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0.6666666666666666,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.3333333333333333,
-      "tokens": 501,
+      "tokens": 507,
       "sufficient": true,
-      "ms": 1.4710880000000088
+      "ms": 1.1974749999999972
     },
     {
       "id": "pr-44-nombres-citados",
@@ -426,9 +426,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 537,
-      "sufficient": true,
-      "ms": 1.127426000000014,
+      "tokens": 535,
+      "sufficient": false,
+      "ms": 1.1000140000000158,
       "tests": 1
     },
     {
@@ -437,24 +437,24 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0.5,
+      "all": 0,
       "mrr": 0,
-      "tokens": 484,
+      "tokens": 573,
       "sufficient": false,
-      "ms": 1.1714080000000138
+      "ms": 1.0158089999999902
     },
     {
       "id": "pr-45-workspace-puro",
-      "recall": 0.5,
-      "precision": 0.4,
+      "recall": 0.25,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 1,
-      "tokens": 571,
+      "mrr": 0.2,
+      "tokens": 560,
       "sufficient": false,
-      "ms": 1.6916020000000174,
-      "tests": 0.6666666666666666
+      "ms": 1.1312110000000075,
+      "tests": 0.3333333333333333
     },
     {
       "id": "pr-48-workspace-parte-2",
@@ -462,11 +462,11 @@
       "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 0.4,
-      "mrr": 1,
-      "tokens": 729,
+      "all": 0.8,
+      "mrr": 0.3333333333333333,
+      "tokens": 708,
       "sufficient": false,
-      "ms": 1.5277180000000214,
+      "ms": 1.6982119999999838,
       "tests": 0.5
     },
     {
@@ -477,9 +477,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 1,
-      "tokens": 706,
+      "tokens": 696,
       "sufficient": true,
-      "ms": 1.333042000000006,
+      "ms": 1.537417000000005,
       "tests": 0.6666666666666666
     },
     {
@@ -490,9 +490,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 0.25,
-      "tokens": 490,
+      "tokens": 456,
       "sufficient": true,
-      "ms": 1.3631129999999985
+      "ms": 1.4857549999999833
     },
     {
       "id": "pr-79-ajustes",
@@ -502,9 +502,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 632,
+      "tokens": 624,
       "sufficient": true,
-      "ms": 1.544663000000014,
+      "ms": 1.478239000000002,
       "tests": 1
     },
     {
@@ -514,10 +514,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 0.5,
-      "tokens": 376,
+      "mrr": 1,
+      "tokens": 360,
       "sufficient": true,
-      "ms": 1.9125190000000032
+      "ms": 1.758544999999998
     },
     {
       "id": "analisis-sentencia-destructiva",
@@ -526,10 +526,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 407,
-      "sufficient": false,
-      "ms": 0.9957799999999963,
+      "mrr": 1,
+      "tokens": 375,
+      "sufficient": true,
+      "ms": 1.4998659999999973,
       "tests": 0
     },
     {
@@ -540,9 +540,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 375,
+      "tokens": 339,
       "sufficient": false,
-      "ms": 0.8303919999999891
+      "ms": 1.3767520000000104
     },
     {
       "id": "n01-salida-copiar-lineas",
@@ -552,22 +552,22 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 591,
-      "sufficient": true,
-      "ms": 1.0789410000000146,
+      "tokens": 604,
+      "sufficient": false,
+      "ms": 1.9965760000000046,
       "tests": 1
     },
     {
       "id": "n02-franja-grupos-angostos",
-      "recall": 0.25,
-      "precision": 0.2,
+      "recall": 0.5,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 0.25,
+      "all": 0.5,
       "mrr": 0.5,
-      "tokens": 540,
+      "tokens": 542,
       "sufficient": false,
-      "ms": 0.9723639999999989
+      "ms": 1.3944779999999923
     },
     {
       "id": "n03-arrastre-libre",
@@ -576,10 +576,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 482,
+      "mrr": 1,
+      "tokens": 470,
       "sufficient": true,
-      "ms": 0.9596319999999992,
+      "ms": 1.0931580000000167,
       "tests": 1
     },
     {
@@ -590,9 +590,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.5,
-      "tokens": 529,
+      "tokens": 508,
       "sufficient": true,
-      "ms": 1.122095999999999,
+      "ms": 1.2023460000000057,
       "tests": 1
     },
     {
@@ -602,10 +602,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 497,
+      "mrr": 1,
+      "tokens": 475,
       "sufficient": true,
-      "ms": 0.9656510000000083,
+      "ms": 0.9413659999999879,
       "tests": 0.5
     },
     {
@@ -615,10 +615,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.75,
-      "mrr": 0.25,
-      "tokens": 587,
+      "mrr": 1,
+      "tokens": 597,
       "sufficient": false,
-      "ms": 1.1018399999999815,
+      "ms": 0.9161469999999952,
       "tests": 1
     },
     {
@@ -629,9 +629,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 585,
+      "tokens": 571,
       "sufficient": false,
-      "ms": 1.455898000000019,
+      "ms": 0.9925709999999981,
       "tests": 1
     },
     {
@@ -642,9 +642,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 481,
-      "sufficient": true,
-      "ms": 1.1260110000000054
+      "tokens": 487,
+      "sufficient": false,
+      "ms": 0.924588
     },
     {
       "id": "n09-shell-cabecera",
@@ -653,10 +653,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 584,
+      "mrr": 1,
+      "tokens": 589,
       "sufficient": false,
-      "ms": 1.1920959999999923
+      "ms": 1.1131770000000074
     },
     {
       "id": "n10-aviso-imagen",
@@ -665,10 +665,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.25,
-      "tokens": 551,
+      "mrr": 0.3333333333333333,
+      "tokens": 565,
       "sufficient": true,
-      "ms": 1.1775169999999946
+      "ms": 1.0876499999999965
     },
     {
       "id": "n11-terminal-espacio-propio",
@@ -677,10 +677,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.5,
-      "tokens": 505,
+      "mrr": 1,
+      "tokens": 503,
       "sufficient": false,
-      "ms": 1.2145770000000198
+      "ms": 1.0527130000000113
     },
     {
       "id": "n12-un-dueno-por-comando",
@@ -692,7 +692,7 @@
       "mrr": 0.2,
       "tokens": 415,
       "sufficient": false,
-      "ms": 0.9520109999999988,
+      "ms": 0.9383719999999869,
       "tests": 1
     },
     {
@@ -703,9 +703,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 682,
+      "tokens": 672,
       "sufficient": false,
-      "ms": 1.2574799999999868,
+      "ms": 1.0731830000000002,
       "tests": 1
     },
     {
@@ -715,10 +715,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 586,
+      "mrr": 0.5,
+      "tokens": 540,
       "sufficient": false,
-      "ms": 1.466844999999978,
+      "ms": 1.072987999999981,
       "tests": 1
     },
     {
@@ -731,7 +731,7 @@
       "mrr": 1,
       "tokens": 465,
       "sufficient": false,
-      "ms": 0.8830389999999966,
+      "ms": 1.0570359999999823,
       "tests": 0
     },
     {
@@ -742,9 +742,9 @@
       "hit": 1,
       "all": 0.3333333333333333,
       "mrr": 0.25,
-      "tokens": 452,
+      "tokens": 400,
       "sufficient": false,
-      "ms": 0.891065000000026,
+      "ms": 1.1286869999999851,
       "tests": 1
     },
     {
@@ -753,37 +753,37 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 1,
-      "mrr": 0.5,
-      "tokens": 387,
+      "all": 0.5,
+      "mrr": 0.3333333333333333,
+      "tokens": 371,
       "sufficient": true,
-      "ms": 0.8200180000000046,
+      "ms": 1.2395260000000121,
       "tests": 1
     },
     {
       "id": "n18-checks-por-areas",
       "recall": 1,
-      "precision": 0.2,
-      "shown": 5,
+      "precision": 0.3333333333333333,
+      "shown": 3,
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 401,
+      "tokens": 320,
       "sufficient": true,
-      "ms": 0.8500899999999945,
+      "ms": 0.7785159999999962,
       "tests": 1
     },
     {
       "id": "n19-recursos-paralelo",
       "recall": 0.5,
-      "precision": 0.5,
-      "shown": 2,
+      "precision": 0.25,
+      "shown": 4,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.5,
-      "tokens": 316,
+      "mrr": 0.3333333333333333,
+      "tokens": 357,
       "sufficient": false,
-      "ms": 0.7249099999999942,
+      "ms": 0.7274869999999964,
       "tests": 1
     },
     {
@@ -796,7 +796,7 @@
       "mrr": 1,
       "tokens": 281,
       "sufficient": true,
-      "ms": 0.6407770000000141
+      "ms": 0.5939360000000136
     },
     {
       "id": "n21-sql-mode",
@@ -806,9 +806,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 416,
+      "tokens": 408,
       "sufficient": true,
-      "ms": 0.843291000000022
+      "ms": 0.7974390000000255
     },
     {
       "id": "n22-tests-driver-harness",
@@ -818,22 +818,22 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 440,
+      "tokens": 448,
       "sufficient": true,
-      "ms": 0.8302929999999833,
+      "ms": 0.7677209999999945,
       "tests": 0
     },
     {
       "id": "n24-pestanas-carpeta",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 0.6666666666666666,
-      "mrr": 0.25,
-      "tokens": 520,
+      "mrr": 0,
+      "tokens": 503,
       "sufficient": false,
-      "ms": 0.8991589999999974
+      "ms": 0.9277539999999931
     },
     {
       "id": "p01-sentencia-bajo-cursor",
@@ -843,9 +843,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 542,
+      "tokens": 527,
       "sufficient": true,
-      "ms": 0.9178569999999979,
+      "ms": 0.8957750000000146,
       "tests": 1
     },
     {
@@ -855,22 +855,22 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 0.5,
-      "tokens": 652,
-      "sufficient": true,
-      "ms": 0.8592709999999784
+      "mrr": 1,
+      "tokens": 627,
+      "sufficient": false,
+      "ms": 0.8359880000000146
     },
     {
       "id": "p03-idioma-primera-vez",
-      "recall": 0.5,
-      "precision": 0.4,
-      "shown": 5,
-      "hit": 1,
-      "all": 0.5,
-      "mrr": 0.5,
-      "tokens": 393,
+      "recall": 0,
+      "precision": 0,
+      "shown": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 73,
       "sufficient": false,
-      "ms": 0.7232190000000003
+      "ms": 0.43631600000000503
     },
     {
       "id": "p04-menu-contextual-nativo",
@@ -882,7 +882,7 @@
       "mrr": 0,
       "tokens": 345,
       "sufficient": true,
-      "ms": 0.9185509999999795
+      "ms": 0.8117450000000019
     },
     {
       "id": "p05-pastillas-cambios",
@@ -892,9 +892,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 501,
+      "tokens": 466,
       "sufficient": true,
-      "ms": 0.9430189999999925
+      "ms": 0.8143489999999929
     },
     {
       "id": "p06-error-aplicar-cambios",
@@ -904,9 +904,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 493,
+      "tokens": 499,
       "sufficient": true,
-      "ms": 1.0673089999999945
+      "ms": 0.9450720000000103
     },
     {
       "id": "p07-editar-conexion",
@@ -915,10 +915,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 1,
-      "tokens": 501,
+      "mrr": 0.5,
+      "tokens": 489,
       "sufficient": false,
-      "ms": 0.8458050000000128
+      "ms": 0.8649149999999963
     },
     {
       "id": "p08-formulario-entornos",
@@ -927,10 +927,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.25,
-      "mrr": 0.3333333333333333,
-      "tokens": 566,
-      "sufficient": false,
-      "ms": 0.8680830000000128,
+      "mrr": 0.2,
+      "tokens": 505,
+      "sufficient": true,
+      "ms": 0.8393330000000105,
       "tests": 1
     },
     {
@@ -940,36 +940,36 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.3333333333333333,
-      "tokens": 751,
+      "mrr": 0.25,
+      "tokens": 718,
       "sufficient": false,
-      "ms": 1.4850140000000067,
+      "ms": 1.1708710000000053,
       "tests": 0
     },
     {
       "id": "p10-estados-resultado",
-      "recall": 1,
-      "precision": 0.4,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 733,
+      "mrr": 0.25,
+      "tokens": 691,
       "sufficient": false,
-      "ms": 1.2109319999999855
+      "ms": 0.8835250000000201
     },
     {
       "id": "p11-filtros-compactos",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 1,
-      "mrr": 0,
-      "tokens": 554,
-      "sufficient": false,
-      "ms": 0.789293999999984,
-      "tests": 0
+      "mrr": 1,
+      "tokens": 530,
+      "sufficient": true,
+      "ms": 0.8584529999999972,
+      "tests": 1
     },
     {
       "id": "p12-grupo-ssl",
@@ -979,21 +979,21 @@
       "hit": 1,
       "all": 0.3333333333333333,
       "mrr": 0.5,
-      "tokens": 568,
-      "sufficient": false,
-      "ms": 0.9384979999999814
+      "tokens": 505,
+      "sufficient": true,
+      "ms": 0.8312139999999886
     },
     {
       "id": "p13-catalogo-conexion",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.25,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 0.25,
-      "mrr": 0,
-      "tokens": 534,
+      "mrr": 0.3333333333333333,
+      "tokens": 470,
       "sufficient": true,
-      "ms": 0.8789119999999855
+      "ms": 1.1761099999999942
     },
     {
       "id": "p14-release-paralelo",
@@ -1003,9 +1003,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 378,
+      "tokens": 383,
       "sufficient": true,
-      "ms": 0.857720999999998,
+      "ms": 0.9240139999999997,
       "tests": 1
     },
     {
@@ -1018,7 +1018,7 @@
       "mrr": 0,
       "tokens": 382,
       "sufficient": false,
-      "ms": 0.9050569999999993,
+      "ms": 0.951722999999987,
       "tests": 0
     },
     {
@@ -1029,9 +1029,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 395,
+      "tokens": 349,
       "sufficient": false,
-      "ms": 0.8281389999999931
+      "ms": 0.7842899999999986
     },
     {
       "id": "p17-grafo-desde-codigo",
@@ -1041,33 +1041,33 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 408,
+      "tokens": 399,
       "sufficient": true,
-      "ms": 0.809552999999994
+      "ms": 0.8180680000000109
     },
     {
       "id": "p18-ciclos-recursos",
       "recall": 0,
       "precision": 0,
-      "shown": 5,
+      "shown": 4,
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 414,
-      "sufficient": false,
-      "ms": 0.8192689999999914
+      "tokens": 343,
+      "sufficient": true,
+      "ms": 0.7839109999999891
     },
     {
       "id": "p19-motor-sin-lineas",
       "recall": 0,
       "precision": 0,
-      "shown": 5,
+      "shown": 3,
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 373,
+      "tokens": 334,
       "sufficient": false,
-      "ms": 0.809472999999997
+      "ms": 0.8152370000000246
     },
     {
       "id": "p20-prueba-huerfana",
@@ -1077,9 +1077,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 411,
+      "tokens": 401,
       "sufficient": false,
-      "ms": 0.812010999999984
+      "ms": 0.8017910000000086
     },
     {
       "id": "p21-paquetes-soporte",
@@ -1088,10 +1088,10 @@
       "shown": 3,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 494,
+      "mrr": 0.5,
+      "tokens": 490,
       "sufficient": true,
-      "ms": 0.8769820000000266
+      "ms": 0.7969449999999938
     },
     {
       "id": "p22-servidores-digest",
@@ -1100,10 +1100,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 427,
-      "sufficient": false,
-      "ms": 0.84873300000001,
+      "mrr": 0.3333333333333333,
+      "tokens": 396,
+      "sufficient": true,
+      "ms": 0.8444070000000181,
       "tests": 0
     },
     {
@@ -1113,10 +1113,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 394,
+      "mrr": 0.3333333333333333,
+      "tokens": 371,
       "sufficient": true,
-      "ms": 0.801164
+      "ms": 0.7821250000000077
     },
     {
       "id": "p24-na-con-prueba",
@@ -1125,10 +1125,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.3333333333333333,
-      "tokens": 469,
+      "mrr": 0.2,
+      "tokens": 428,
       "sufficient": false,
-      "ms": 0.7822299999999984,
+      "ms": 0.7755349999999908,
       "tests": 1
     },
     {
@@ -1141,7 +1141,7 @@
       "mrr": 0.5,
       "tokens": 390,
       "sufficient": true,
-      "ms": 0.872097999999994
+      "ms": 0.8582739999999944
     },
     {
       "id": "p26-rebranding",
@@ -1151,21 +1151,21 @@
       "hit": 1,
       "all": 0.25,
       "mrr": 0.3333333333333333,
-      "tokens": 564,
+      "tokens": 551,
       "sufficient": false,
-      "ms": 0.8886339999999961
+      "ms": 0.8153810000000021
     },
     {
       "id": "p27-tema-rowly",
-      "recall": 0.5,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 1,
-      "mrr": 0.3333333333333333,
-      "tokens": 591,
-      "sufficient": false,
-      "ms": 0.8463930000000062
+      "mrr": 0,
+      "tokens": 563,
+      "sufficient": true,
+      "ms": 0.7673829999999953
     },
     {
       "id": "p28-fabrica-drivers",
@@ -1175,9 +1175,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 572,
+      "tokens": 573,
       "sufficient": false,
-      "ms": 0.8576329999999928
+      "ms": 0.8263680000000022
     },
     {
       "id": "p29-pestanas-consola-resaltado",
@@ -1187,9 +1187,9 @@
       "hit": 0,
       "all": 0.5,
       "mrr": 0,
-      "tokens": 536,
+      "tokens": 540,
       "sufficient": false,
-      "ms": 0.9823509999999942
+      "ms": 0.8189849999999979
     },
     {
       "id": "p30-resumen-vista-previa",
@@ -1199,9 +1199,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 484,
+      "tokens": 477,
       "sufficient": true,
-      "ms": 1.066568000000018
+      "ms": 0.8349450000000047
     }
   ]
 }

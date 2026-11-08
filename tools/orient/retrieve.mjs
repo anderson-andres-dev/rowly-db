@@ -5,7 +5,6 @@
 // contra la particion `train` de la prueba de oro.
 import { covers } from "./features.mjs";
 import { fieldsOf } from "./index.mjs";
-import { expand } from "./synonyms.mjs";
 import { Bm25, tokens } from "./text.mjs";
 
 export const PARAMS = {
@@ -17,8 +16,6 @@ export const PARAMS = {
   neighbor: 0.1,
   test: { name: 2, property: 2, owner: 1 },
   perFeature: 3,
-  synonyms: true,
-  synonymWeight: 0.5,
   keep: 0.5,
   confidence: { margin: 0.2, coverage: 0.35, none: 4, high: 10 },
 };
@@ -69,11 +66,8 @@ export function retrieve(prepared, task, params = PARAMS) {
   const { index, features, files, tests, maxIn } = prepared;
   const said = tokens(task);
   const unique = [...new Set(said)];
-  // Se busca con lo dicho y sus equivalentes es/en; los equivalentes pesan menos para que un
-  // concepto dicho una vez no cuente dos veces. La cobertura y la evidencia cuentan lo dicho.
-  const query = new Map(said.map((term) => [term, 1]));
-  if (params.synonyms) for (const term of expand(said)) if (!query.has(term)) query.set(term, params.synonymWeight);
-  const queryTerms = new Set(query.keys());
+  const query = said;
+  const queryTerms = new Set(query);
 
   const featureScores = [...features.score(query).entries()].map(([id, hit]) => ({ id, ...hit })).sort((a, b) => b.score - a.score);
   const topFeature = featureScores[0]?.score ?? 0;
@@ -122,16 +116,11 @@ export function retrieve(prepared, task, params = PARAMS) {
   const second = featureScores[1]?.score ?? 0;
   const margin = topFeature ? (topFeature - second) / topFeature : 0;
   const seen = new Set([...(featureScores[0]?.matched ?? []), ...(ranked[0]?.matched ?? [])]);
-  const coverage = unique.length ? unique.filter((term) => seen.has(term) || (params.synonyms && expand([term]).some((other) => seen.has(other)))).length / unique.length : 0;
+  const coverage = unique.length ? unique.filter((term) => seen.has(term)).length / unique.length : 0;
   const matchedAll = new Set([...(featureScores[0]?.matched ?? []), ...ranked.slice(0, 3).flatMap((item) => item.matched)]);
-  // Cada palabra dicha cuenta una vez, con la rareza de su mejor variante es/en que aparezca.
-  const evidence = unique.reduce((sum, term) => {
-    const hits = (params.synonyms ? expand([term]) : [term]).filter((variant) => matchedAll.has(variant));
-    return hits.length ? sum + Math.max(...hits.map((variant) => files.idf(variant))) : sum;
-  }, 0);
+  const evidence = [...matchedAll].reduce((sum, term) => sum + files.idf(term), 0);
   const signals = { margin, coverage, evidence };
   const level = levelOf(signals, params.confidence);
-  // Las pruebas se buscan con lo dicho: sus nombres y propiedades ya estan en espanol o en ingles claros.
   const testHits = tests.score(said);
 
   return {
