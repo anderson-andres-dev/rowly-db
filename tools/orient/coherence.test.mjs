@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { isTestPath, loadGold, loadNegatives } from "./eval.mjs";
+import { covers } from "./features.mjs";
 import { createOrient } from "./orient.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -92,11 +93,18 @@ test("el indice con cache y sin cache da exactamente las mismas tarjetas, y la s
   for (const task of loadGold().tasks) assert.equal(cached.run(task.task).markdown, fresh.run(task.task).markdown, task.id);
 });
 
-test("cada archivo del oro que no es una prueba esta indexado: el orientador puede, en principio, encontrarlo", () => {
+test("cada archivo del oro que el catalogo cubre y que no es una prueba esta indexado: el orientador puede, en principio, encontrarlo", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
-  const { files } = orient.prepared.index;
+  const { files, model } = orient.prepared.index;
+  const entries = model.features.items.flatMap((feature) => feature.entry);
   const outside = [];
-  for (const task of loadGold().tasks) for (const path of task.files) if (/\.(ts|svelte|rs|mjs|js)$/.test(path) && !isTestPath(path, []) && !files.has(path)) outside.push(`${task.id}: ${path}`);
+  // Un archivo que ninguna funcionalidad cubre (p. ej. `app/vitest.config.ts`) queda fuera del
+  // alcance del catalogo por diseno; el oro lo trae porque sale tal cual de lo que toco un commit.
+  for (const task of loadGold().tasks) {
+    for (const path of task.files) {
+      if (/\.(ts|svelte|rs|mjs|js)$/.test(path) && !isTestPath(path, []) && entries.some((entry) => covers(entry, path)) && !files.has(path)) outside.push(`${task.id}: ${path}`);
+    }
+  }
   assert.deepEqual(outside, []);
 });
 
