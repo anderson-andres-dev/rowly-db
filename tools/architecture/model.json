@@ -717,6 +717,9 @@
         "related": [
           "sql-editor",
           "explorer-tree"
+        ],
+        "tests": [
+          "crates/server-tests/tests/generated.rs"
         ]
       },
       {
@@ -760,6 +763,9 @@
         "related": [
           "sql-editor",
           "execution-guard"
+        ],
+        "tests": [
+          "crates/server-tests/tests/analysis.rs"
         ]
       },
       {
@@ -859,6 +865,9 @@
           "query-parameters",
           "result-tabs",
           "sql-editor"
+        ],
+        "tests": [
+          "app/tests/e2e/run.mjs"
         ]
       },
       {
@@ -894,6 +903,10 @@
         "related": [
           "statement-execution",
           "results-editing"
+        ],
+        "tests": [
+          "crates/server-tests/tests/safety.rs",
+          "app/tests/e2e/run.mjs"
         ]
       },
       {
@@ -1685,6 +1698,9 @@
           "driver-mysql",
           "driver-postgres",
           "engine-registration"
+        ],
+        "tests": [
+          "crates/server-tests/tests/contract.rs"
         ]
       },
       {
@@ -1718,6 +1734,10 @@
         "related": [
           "driver-core",
           "driver-postgres"
+        ],
+        "tests": [
+          "crates/server-tests/tests/contract.rs",
+          "crates/server-tests/tests/version_lines.rs"
         ]
       },
       {
@@ -1751,6 +1771,10 @@
         "related": [
           "driver-core",
           "driver-mysql"
+        ],
+        "tests": [
+          "crates/server-tests/tests/contract.rs",
+          "crates/server-tests/tests/version_lines.rs"
         ]
       },
       {

@@ -72,9 +72,10 @@ export class Bm25 {
     return Math.log(1 + (n - df + 0.5) / (df + 0.5));
   }
 
-  // `query`: [terminos] (con repeticiones). Devuelve Map id -> { score, matched }.
+  // `query`: [terminos] (con repeticiones) o Map termino -> peso. Devuelve Map id -> { score, matched }.
   score(query) {
-    const unique = [...new Set(query)];
+    const weights = query instanceof Map ? query : new Map([...new Set(query)].map((term) => [term, 1]));
+    const unique = [...weights.keys()];
     const out = new Map();
     for (const [id, { tf, length }] of this.docs) {
       let score = 0;
@@ -82,7 +83,7 @@ export class Bm25 {
       for (const term of unique) {
         const f = tf.get(term);
         if (!f) continue;
-        score += (this.idf(term) * f * (this.k1 + 1)) / (f + this.k1 * (1 - this.b + (this.b * length) / this.avg));
+        score += (weights.get(term) * this.idf(term) * f * (this.k1 + 1)) / (f + this.k1 * (1 - this.b + (this.b * length) / this.avg));
         matched.push(term);
       }
       if (score > 0) out.set(id, { score, matched });
