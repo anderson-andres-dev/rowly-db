@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BUDGET, card, detectIntent, estimate, expand, impact, pickPrimary, testCommand } from "./card.mjs";
+import { BUDGET, card, detectIntent, estimate, expand, impact, pickPrimary, pickTests, testCommand } from "./card.mjs";
 import { graphNeighbors, loadGraph } from "./graphify.mjs";
 import { buildIndex, CACHE_VERSION, headings } from "./index.mjs";
 import { createOrient } from "./orient.mjs";
-import { prepare, retrieve } from "./retrieve.mjs";
+import { levelOf, PARAMS, prepare, retrieve } from "./retrieve.mjs";
 import { loadGold } from "./eval.mjs";
 
 const FILES = {
@@ -155,9 +155,9 @@ test("detectIntent distingue bug, funcionalidad, refactor, analisis y pruebas", 
 
 test("pickPrimary reserva lugar a una segunda funcionalidad cercana", () => {
   const files = [..."abcde"].map((n, i) => ({ path: n, feature: "uno", score: 10 - i })).concat([{ path: "z", feature: "dos", score: 3 }]);
-  assert.deepEqual(pickPrimary(files, 5, 3).map((item) => item.path), ["a", "b", "c", "d", "z"]);
-  assert.deepEqual(pickPrimary(files, 5, 9).map((item) => item.path), ["a", "b", "c", "d", "e"]);
-  assert.deepEqual(pickPrimary(files, 3, 3).map((item) => item.path), ["a", "b", "c"]);
+  assert.deepEqual(pickPrimary(files, 5, 3, 0).map((item) => item.path), ["a", "b", "c", "d", "z"]);
+  assert.deepEqual(pickPrimary(files, 5, 9, 0).map((item) => item.path), ["a", "b", "c", "d", "e"]);
+  assert.deepEqual(pickPrimary(files, 3, 3, 0).map((item) => item.path), ["a", "b", "c"]);
 });
 
 test("testCommand elige vitest, cargo o node segun la prueba", () => {
@@ -212,4 +212,45 @@ test("orient no cambia con el orden en que se piden las cosas: mismo texto, mism
   assert.equal(orient.run(task).markdown, orient.run(task).markdown);
   assert.deepEqual(expand(orient.prepared, "terminal").files, expand(orient.prepared, "terminal").files);
   assert.equal(impact(orient.prepared, "terminal").markdown, impact(orient.prepared, "terminal").markdown);
+});
+
+test("pickPrimary no muestra lo que queda muy por debajo del mejor (corte relativo)", () => {
+  const files = [{ path: "a", feature: "uno", score: 10 }, { path: "b", feature: "uno", score: 6 }, { path: "c", feature: "uno", score: 2 }];
+  assert.deepEqual(pickPrimary(files, 5, 9, 0.5).map((item) => item.path), ["a", "b"]);
+  assert.deepEqual(pickPrimary(files, 5, 9, 0).map((item) => item.path), ["a", "b", "c"]);
+  assert.equal(PARAMS.keep, 0.5);
+});
+
+test("levelOf: sin evidencia no hay nada, y solo margen, cobertura y evidencia juntos dan high", () => {
+  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10 };
+  assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 3 }, rule), "none");
+  assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 12 }, rule), "high");
+  assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 6 }, rule), "medium");
+  assert.equal(levelOf({ margin: 0.9, coverage: 0.1, evidence: 12 }, rule), "medium");
+  assert.equal(levelOf({ margin: 0.1, coverage: 0.1, evidence: 12 }, rule), "low");
+});
+
+test("una palabra comun suelta no basta para fingir que sabe: sin evidencia dice NO MATCH", () => {
+  const p = prepared();
+  const out = card(p, retrieve(p, "cuenta"), "cuenta");
+  assert.equal(out.sufficient, false);
+  assert.equal(out.noMatch, true);
+});
+
+test("pickTests da a cada archivo principal su mejor prueba, aunque el inventario la atribuya a otro dueno", () => {
+  const p = prepared();
+  const task = "la grilla no hace scroll al arrastrar";
+  const tests = pickTests(p.index, retrieve(p, task));
+  assert.equal(tests[0].path, "app/src/lib/results/gridScroll.test.ts");
+});
+
+test("sobre el repo real las tareas fuera de alcance nunca declaran SUFFICIENT", () => {
+  const orient = createOrient({ useCache: false, useGraph: false });
+  const negatives = JSON.parse(readFileSync(new URL("../../tests/orient/negatives.json", import.meta.url), "utf8")).tasks;
+  assert.ok(negatives.length >= 12);
+  for (const task of negatives) {
+    const out = orient.run(task.task);
+    assert.equal(out.sufficient, false, task.id);
+    assert.ok(out.tokens <= BUDGET, task.id);
+  }
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
-import { gold_problems, isTestPath, loadGold, parseGraphify, score, summarize } from "./eval.mjs";
+import { compareRecords, DEFAULT_TOLERANCE, gold_problems, isTestPath, loadGold, parseGraphify, score, scoreNegatives, summarize } from "./eval.mjs";
 
 const task = { files: ["a/x.ts", "a/y.ts", "a/z.ts"], tests: ["a/x.test.ts"] };
 
@@ -63,4 +63,36 @@ test("gold_problems senala id repetido, rutas inexistentes y valores fuera de li
   ] };
   const problems = gold_problems(bad, new Set()).join("\n");
   for (const expected of ["repetido", "no existe", "kind", "split", "muy corto", "sin archivos"]) assert.match(problems, new RegExp(expected));
+});
+
+test("score mide orden y precision solo sobre lo que la herramienta propone, y `todo` sobre toda la respuesta", () => {
+  const result = score(task, { ranked: ["b/1.ts", "a/x.ts", "a/y.ts", "a/z.ts"], primary: ["b/1.ts", "a/x.ts"], text: "" });
+  assert.equal(result.precision, 1 / 2);
+  assert.equal(result.shown, 2);
+  assert.equal(result.recall, 1 / 3);
+  assert.equal(result.mrr, 1 / 2);
+  assert.equal(result.all, 1);
+});
+
+test("scoreNegatives cuenta falsa confianza y NO MATCH", () => {
+  const rows = [{ sufficient: true, noMatch: false, text: "abcd" }, { sufficient: false, noMatch: true, text: "abcdefgh" }, { sufficient: false, noMatch: false, text: "" }];
+  assert.deepEqual(scoreNegatives(rows), { tasks: 3, falseSufficient: 1 / 3, noMatch: 1 / 3, tokens: 1 });
+});
+
+const record = (over = {}) => ({ summary: { recall: 0.6, hit: 0.9, tests: 0.5, precision: 0.35, sufficientStrong: 0.9, tokens: 500, ...over.summary }, negatives: { falseSufficient: 0, ...over.negatives } });
+
+test("compareRecords: mejorar o quedar igual no falla; empeorar poco avisa; empeorar mucho falla", () => {
+  const before = record();
+  assert.deepEqual(compareRecords(before, record({ summary: { recall: 0.7 } }), DEFAULT_TOLERANCE), { failures: [], warnings: [] });
+  const small = compareRecords(before, record({ summary: { recall: 0.57 } }), DEFAULT_TOLERANCE);
+  assert.equal(small.failures.length, 0);
+  assert.match(small.warnings[0], /rec@5/);
+  const big = compareRecords(before, record({ summary: { recall: 0.5 }, negatives: { falseSufficient: 0.3 } }), DEFAULT_TOLERANCE);
+  assert.equal(big.failures.length, 2);
+  assert.match(big.failures.join(" "), /falsa confianza/);
+});
+
+test("compareRecords: los tokens fallan por crecimiento relativo y lo que falta en el registro se ignora", () => {
+  assert.equal(compareRecords(record(), record({ summary: { tokens: 800 } }), DEFAULT_TOLERANCE).failures.length, 1);
+  assert.deepEqual(compareRecords({ summary: {} }, record(), DEFAULT_TOLERANCE), { failures: [], warnings: [] });
 });

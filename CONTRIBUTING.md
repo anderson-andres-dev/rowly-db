@@ -43,6 +43,7 @@ node tools/inventory/dependencies.mjs       # only published releases of depende
 node tools/inventory/status.mjs             # generated state of README and SQL_ENGINE up to date
 node tools/architecture/graph.mjs --check   # dependencies allowed and architecture graph up to date
 node tools/orient/features.mjs --check      # feature catalogue valid and docs/map/FEATURES.md up to date
+node tools/orient/eval.mjs --check          # orient has not got worse than tests/orient/orient.json (tolerance inside)
 ```
 
 Blocks between `<!-- generated: … -->` markers are written by those tools; never edit them by hand. `status.mjs --write` and `graph.mjs --write` regenerate them. `graphify-out/` is the optional exploratory symbol graph. It is not versioned: build it with `graphify update .` if you have [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` on PyPI) installed, or download the `graphify-out` artifact of the `Graph` workflow, which rebuilds it from `develop`. Agents start from [AGENTS.md](AGENTS.md).

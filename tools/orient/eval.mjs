@@ -10,6 +10,7 @@
 //   node tools/orient/eval.mjs --check-gold                 valida el conjunto de oro
 //   node tools/orient/eval.mjs --runner graphify            mide `graphify query`
 //   node tools/orient/eval.mjs --runner graphify --write    guarda tests/orient/baseline.json
+//   node tools/orient/eval.mjs --check                           control de regresiones (CI): compara con tests/orient/orient.json
 //   node tools/orient/eval.mjs --runner orient --split train     mide el orientador (solo train mientras se ajusta)
 //   node tools/orient/eval.mjs --runner orient --no-terms        sin el vocabulario curado
 //   node tools/orient/eval.mjs --runner orient --no-graph        sin graphify
@@ -36,6 +37,7 @@ import { createOrient } from "./orient.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLD = join(ROOT, "tests/orient/gold.json");
+const NEGATIVES = join(ROOT, "tests/orient/negatives.json");
 const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
 const KINDS = ["bug", "feature", "refactor", "analysis", "modify"];
 const SPLITS = ["train", "holdout", "validation"];
@@ -54,14 +56,19 @@ export function tokens(text) {
 
 // `ranked`: archivos propuestos, sin repetir y en orden. `text`: lo que se le
 // entregaria al agente, para medir su tamano.
-export function score(task, { ranked, text, sufficient, ms }) {
+export function score(task, { ranked, text, sufficient, ms, primary }) {
+  // Si la herramienta distingue "lo que propone" de "lo demas que nombra", el orden y la
+  // precision se miden solo sobre lo que propone; `todo` sigue contando toda la respuesta.
+  const proposed = (primary ?? ranked).filter((path) => !isTestPath(path, task.files));
   const source = ranked.filter((path) => !isTestPath(path, task.files));
-  const top = source.slice(0, TOP);
+  const top = proposed.slice(0, TOP);
   const wanted = new Set(task.files);
   const found = top.filter((path) => wanted.has(path)).length;
-  const first = source.findIndex((path) => wanted.has(path));
+  const first = proposed.findIndex((path) => wanted.has(path));
   const out = {
     recall: found / Math.min(TOP, wanted.size),
+    precision: top.length ? found / top.length : 0,
+    shown: top.length,
     hit: found > 0 ? 1 : 0,
     all: task.files.filter((path) => source.includes(path)).length / wanted.size,
     mrr: first < 0 ? 0 : 1 / (first + 1),
@@ -102,6 +109,8 @@ export function summarize(rows) {
     tasks: rows.length,
     recall: pick("recall"),
     hit: pick("hit"),
+    precision: pick("precision"),
+    shown: pick("shown"),
     all: pick("all"),
     mrr: pick("mrr"),
     tests: pick("tests"),
@@ -136,10 +145,53 @@ const RUNNERS = {
       const out = orient.run(task.task);
       const ms = performance.now() - started;
       const rest = [...out.files, ...out.tests].filter((path) => !out.primary?.includes(path));
-      return { ranked: [...new Set([...(out.primary ?? []), ...rest])], text: out.markdown, sufficient: out.sufficient, ms };
+      return { ranked: [...new Set([...(out.primary ?? []), ...rest])], primary: out.primary ?? [], text: out.markdown, sufficient: out.sufficient, noMatch: Boolean(out.noMatch), ms };
     };
   },
 };
+
+export function loadNegatives() {
+  return JSON.parse(readFileSync(NEGATIVES, "utf8")).tasks;
+}
+
+// Tareas fuera del alcance: no hay nada correcto que encontrar. Lo que importa es que no
+// declare SUFFICIENT; `noMatch` es lo ideal.
+export function scoreNegatives(rows) {
+  const n = rows.length || 1;
+  return {
+    tasks: rows.length,
+    falseSufficient: rows.filter((row) => row.sufficient).length / n,
+    noMatch: rows.filter((row) => row.noMatch).length / n,
+    tokens: mean(rows.map((row) => tokens(row.text))),
+  };
+}
+
+// Compara una medicion con la registrada. Falla solo si algo empeora mas que la tolerancia
+// de `fail`; entre `warn` y `fail` avisa. Mejorar nunca falla. Mira los totales, no tarea
+// por tarea: renombrar un archivo no debe romper el CI por una tarea.
+export function compareRecords(recorded, current, tolerance) {
+  const failures = [];
+  const warnings = [];
+  const rules = [
+    ["recall", "rec@5", current.summary.recall, recorded.summary.recall, "down"],
+    ["hit", "hit@5", current.summary.hit, recorded.summary.hit, "down"],
+    ["tests", "pruebas", current.summary.tests, recorded.summary.tests, "down"],
+    ["precision", "precision", current.summary.precision, recorded.summary.precision, "down"],
+    ["sufficientStrong", "SUFFICIENT fuerte", current.summary.sufficientStrong, recorded.summary.sufficientStrong, "down"],
+    ["falseSufficient", "falsa confianza", current.negatives?.falseSufficient, recorded.negatives?.falseSufficient, "up"],
+    ["tokens", "tokens", current.summary.tokens, recorded.summary.tokens, "up-relative"],
+  ];
+  for (const [key, label, now, before, direction] of rules) {
+    if (now === undefined || now === null || before === undefined || before === null) continue;
+    const tol = tolerance[key];
+    if (!tol) continue;
+    const worse = direction === "down" ? before - now : direction === "up" ? now - before : (now - before) / before;
+    const text = `${label}: ${(before * (direction === "up-relative" ? 1 : 100)).toFixed(direction === "up-relative" ? 0 : 1)}${direction === "up-relative" ? "" : " %"} -> ${(now * (direction === "up-relative" ? 1 : 100)).toFixed(direction === "up-relative" ? 0 : 1)}${direction === "up-relative" ? "" : " %"}`;
+    if (worse > tol.fail) failures.push(text);
+    else if (worse > tol.warn) warnings.push(text);
+  }
+  return { failures, warnings };
+}
 
 export function loadGold() {
   return JSON.parse(readFileSync(GOLD, "utf8"));
@@ -171,7 +223,28 @@ function trackedFiles() {
 
 const pct = (value) => (value === null || value === undefined ? "  -  " : `${(value * 100).toFixed(0).padStart(3)}% `);
 const row = (label, s) =>
-  `${label.padEnd(10)} ${String(s.tasks).padStart(3)}  ${pct(s.recall)} ${pct(s.hit)} ${pct(s.all)} ${(s.mrr ?? 0).toFixed(2)}  ${pct(s.tests)} ${String(Math.round(s.tokens)).padStart(6)}`;
+  `${label.padEnd(10)} ${String(s.tasks).padStart(3)}  ${pct(s.recall)} ${pct(s.precision)} ${pct(s.hit)} ${pct(s.all)} ${(s.mrr ?? 0).toFixed(2)}  ${pct(s.tests)} ${String(Math.round(s.tokens)).padStart(6)}${s.shown === undefined || s.shown === null ? "" : `  ${s.shown.toFixed(1)}`}`;
+
+// Tolerancias del control de regresiones: caer mas que `warn` avisa; mas que `fail` falla.
+export const DEFAULT_TOLERANCE = {
+  recall: { warn: 0.02, fail: 0.06 },
+  hit: { warn: 0.03, fail: 0.08 },
+  tests: { warn: 0.04, fail: 0.1 },
+  precision: { warn: 0.03, fail: 0.08 },
+  sufficientStrong: { warn: 0.05, fail: 0.12 },
+  falseSufficient: { warn: 0.05, fail: 0.15 },
+  tokens: { warn: 0.15, fail: 0.5 },
+};
+
+function measure(name, run, tasks) {
+  const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
+  let negatives = null;
+  if (name === "orient") {
+    const rows = loadNegatives().map((task) => ({ split: task.split, ...run(task) }));
+    negatives = { ...scoreNegatives(rows), bySplit: Object.fromEntries(["train", "validation"].map((part) => [part, scoreNegatives(rows.filter((row) => row.split === part))])) };
+  }
+  return { results, negatives };
+}
 
 function main(args) {
   const gold = loadGold();
@@ -188,19 +261,38 @@ function main(args) {
     return;
   }
 
+  // Control de regresiones: mide el orientador (sin graphify, reproducible) y lo compara con
+  // lo registrado en tests/orient/orient.json. Mejorar nunca falla; empeorar mas que la
+  // tolerancia del registro, si. Tras un cambio intencional: --runner orient --no-graph --write.
+  if (args.includes("--check")) {
+    const recorded = JSON.parse(readFileSync(OUT.orient, "utf8"));
+    const run = RUNNERS.orient(["--no-graph"]);
+    const { results, negatives } = measure("orient", run, gold.tasks);
+    const current = { summary: summarize(results), negatives };
+    const { failures, warnings } = compareRecords(recorded, current, recorded.tolerance ?? DEFAULT_TOLERANCE);
+    const annotate = process.env.GITHUB_ACTIONS ? (kind, text) => `::${kind}::orient ${text}` : (kind, text) => `${kind === "error" ? "FALLA" : "aviso"}: ${text}`;
+    for (const text of warnings) console.log(annotate("warning", text));
+    for (const text of failures) console.error(annotate("error", text));
+    console.log(`orient: rec@5 ${pct(current.summary.recall).trim()} · hit@5 ${pct(current.summary.hit).trim()} · pruebas ${pct(current.summary.tests).trim()} · precision ${pct(current.summary.precision).trim()} · falsa confianza ${pct(negatives.falseSufficient).trim()} (registrado ${pct(recorded.summary.recall).trim()} rec@5)`);
+    if (failures.length) {
+      console.error("Empeoro mas que la tolerancia de tests/orient/orient.json. Si es intencional: node tools/orient/eval.mjs --runner orient --no-graph --write");
+      process.exit(1);
+    }
+    return;
+  }
+
   const name = args[args.indexOf("--runner") + 1];
   const runner = RUNNERS[name];
   if (!args.includes("--runner") || !runner) {
-    console.error(`Uso: eval.mjs --check-gold | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout] [--verbose] [--write]`);
+    console.error(`Uso: eval.mjs --check-gold | --check | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|validation] [--verbose] [--write]`);
     process.exit(2);
   }
   const split = args.includes("--split") ? args[args.indexOf("--split") + 1] : null;
   const tasks = gold.tasks.filter((task) => !split || task.split === split);
 
-  const run = runner(args);
-  const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
+  const { results, negatives } = measure(name, runner(args), tasks);
   console.log(`Runner: ${name}${split ? ` · ${split}` : ""}`);
-  console.log(`${"".padEnd(10)} ${"n".padStart(3)}  ${`rec@${TOP}`.padEnd(5)} ${`hit@${TOP}`.padEnd(5)} todo  MRR   tests  tokens`);
+  console.log(`${"".padEnd(10)} ${"n".padStart(3)}  ${`rec@${TOP}`.padEnd(5)} prec  ${`hit@${TOP}`.padEnd(5)} todo  MRR   tests  tokens  shown`);
   console.log(row("todas", summarize(results)));
   for (const kind of KINDS) {
     const rows = results.filter((result) => result.task.kind === kind);
@@ -213,23 +305,32 @@ function main(args) {
   if (total.sufficientRate !== undefined) {
     console.log(`basta: lo declara en ${pct(total.sufficientRate).trim()} de las tareas; de esas, ok ${pct(total.sufficientOk).trim()} · fuerte ${pct(total.sufficientStrong).trim()} · p95 ${Math.round(total.p95ms)} ms`);
   }
+  if (negatives) {
+    const part = (name) => `${name} ${pct(negatives.bySplit[name].falseSufficient).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}`;
+    console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseSufficient).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH) ${part("train")} · ${part("validation")}`);
+  }
   if (args.includes("--verbose")) {
     for (const result of results) {
-      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.sufficient === undefined ? "" : result.sufficient ? " basta" : ""}`);
+      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} prec ${pct(result.precision)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.sufficient === undefined ? "" : result.sufficient ? " basta" : ""}`);
     }
   }
 
   if (args.includes("--write")) {
     const graph = name === "graphify" ? JSON.parse(readFileSync(join(ROOT, "graphify-out/graph.json"), "utf8")) : null;
+    let tolerance = DEFAULT_TOLERANCE;
+    try {
+      tolerance = JSON.parse(readFileSync(OUT[name], "utf8")).tolerance ?? DEFAULT_TOLERANCE;
+    } catch {}
     const record = {
-      format: 1,
+      format: 2,
       about:
         name === "graphify"
           ? "Linea de referencia: lo que mide `graphify query` sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner graphify --write`; el orientador se compara contra esto."
-          : "Lo que mide el orientador sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner orient --write`. Los pesos de tools/orient/retrieve.mjs se ajustaron solo contra `train`; `holdout` solo se mide.",
+          : "Lo que mide el orientador sobre tests/orient/gold.json y negatives.json. Se regenera con `node tools/orient/eval.mjs --runner orient --no-graph --write`; `eval.mjs --check` (CI) compara contra esto con `tolerance`. Los pesos de tools/orient/retrieve.mjs se ajustaron solo contra `train`.",
       runner: name,
-      ...(graph ? { graphBuiltAt: graph.built_at_commit ?? null, graphNodes: graph.nodes.length } : { variant: args.filter((arg) => arg.startsWith("--no-")) }),
+      ...(graph ? { graphBuiltAt: graph.built_at_commit ?? null, graphNodes: graph.nodes.length } : { variant: args.filter((arg) => arg.startsWith("--no-")), tolerance }),
       summary: summarize(results),
+      ...(negatives ? { negatives } : {}),
       byKind: Object.fromEntries(KINDS.map((kind) => [kind, summarize(results.filter((result) => result.task.kind === kind))])),
       bySplit: Object.fromEntries(SPLITS.map((part) => [part, summarize(results.filter((result) => result.task.split === part))])),
       tasks: results.map(({ task, ...metrics }) => ({ id: task.id, ...metrics })),

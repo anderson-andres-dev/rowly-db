@@ -106,5 +106,8 @@ jobs:
       - name: El conjunto de oro del orientador apunta a archivos que existen
         run: node tools/orient/eval.mjs --check-gold
 
+      - name: El orientador no empeora mas que la tolerancia de tests/orient/orient.json
+        run: node tools/orient/eval.mjs --check
+
       - name: Evidencia de la release, latest.json y el planner de CI
         run: node --test tools/test-dbs/*.test.mjs tools/ci/*.test.mjs tools/release/*.test.mjs tools/orient/*.test.mjs
