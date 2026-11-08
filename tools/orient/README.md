@@ -111,6 +111,16 @@ On `validation5` both conditions found every file; on `seen4` (SQL guard and ana
 Limits of this measurement: one run per condition and 20 tasks; the agents work on HEAD, where each fix already exists, and the copy still contains the architecture documents and `tools/architecture/model.json`, which are themselves a map; the token figure includes about 40 000 tokens of fixed overhead of each subagent, so small savings cannot show; it measures localization, not solving the task.
 
 
+
+**Generic requests with the map in `AGENTS.md`** (4 Haiku subagents, one run each, two requests: "analyze the repository and tell me how it is organized" and "how could I make query results exportable to a JSON file: files, reuse, tests"; A = copy without `AGENTS.md` or orient, B = the repository as it is now):
+
+| request | A: tokens / tool calls / files read | B: tokens / tool calls / files read |
+|---|---|---|
+| analyze the repository | 58 227 / 6 / 4 | 46 852 / 5 / 2 |
+| make results exportable to JSON | 57 250 / 8 / 3 | 45 002 / 6 / 3 |
+
+Both conditions answered correctly (both found that JSON export already exists and named the same files); B used about 20 % fewer tokens and 17 to 25 % fewer tool calls and its answer was taken from the map. One run each and two requests: it points in the right direction, it does not prove it. The tokens include the same fixed overhead as above, so the real saving in exploration is larger than the percentage.
+
 ## Portability and performance
 
 It uses only Node's standard library and `git`; Node 20 or later. Repository paths are handled as `/` paths whatever the system, CRLF line endings are tolerated, and the only parts that need a POSIX `sh` are the optional git hooks (their tests are skipped on Windows). The `orient-portable` job in `node.yml` runs the tests and `eval.mjs --check` on Ubuntu, macOS and Windows with Node 20 and 22. **It was added here but has not run yet**: until it does, it is verified only on Linux with Node 24, and the macOS and Windows entries are advisory (a failure there does not block CI) until they have run green once.

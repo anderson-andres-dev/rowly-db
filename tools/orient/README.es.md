@@ -111,6 +111,16 @@ En `validation5` ambas condiciones encontraron todos los archivos; en `seen4` (g
 Límites de la medición: una corrida por condición y 20 tareas; los agentes trabajan sobre HEAD, donde cada arreglo ya existe, y la copia conserva los documentos de arquitectura y `tools/architecture/model.json`, que ya son un mapa; la cifra de tokens incluye unos 40 000 tokens de sobrecarga fija de cada subagente, así que los ahorros pequeños no se ven; mide localización, no resolver la tarea.
 
 
+
+**Peticiones genéricas con el mapa en `AGENTS.md`** (4 subagentes Haiku, una corrida cada uno, dos peticiones: «analiza el repositorio y dime cómo está organizado» y «cómo podría hacer que los resultados de una consulta se exporten a un archivo JSON: archivos, qué reutilizar, pruebas»; A = copia sin `AGENTS.md` ni orient, B = el repositorio tal como está ahora):
+
+| petición | A: tokens / llamadas / archivos leídos | B: tokens / llamadas / archivos leídos |
+|---|---|---|
+| analizar el repositorio | 58 227 / 6 / 4 | 46 852 / 5 / 2 |
+| exportar resultados a JSON | 57 250 / 8 / 3 | 45 002 / 6 / 3 |
+
+Ambas condiciones respondieron bien (las dos encontraron que la exportación a JSON ya existe y nombraron los mismos archivos); B usó un 20 % menos de tokens y entre un 17 y un 25 % menos de llamadas, y su respuesta salió del mapa. Una corrida cada una y dos peticiones: apunta en la dirección correcta, no lo demuestra. Los tokens incluyen la misma sobrecarga fija de arriba, así que el ahorro real en exploración es mayor que el porcentaje.
+
 ## Portabilidad y rendimiento
 
 Usa solo la biblioteca estándar de Node y `git`; Node 20 o superior. Las rutas del repositorio se manejan como rutas con `/` en cualquier sistema, se toleran los finales de línea CRLF, y lo único que necesita un `sh` POSIX son los hooks de git opcionales (sus pruebas se omiten en Windows). El job `orient-portable` de `node.yml` ejecuta las pruebas y `eval.mjs --check` en Ubuntu, macOS y Windows con Node 20 y 22. **Se añadió aquí pero todavía no ha corrido**: hasta que corra, solo está verificado en Linux con Node 24, y las entradas de macOS y Windows son informativas (un fallo ahí no bloquea el CI) hasta que corran en verde una vez.
