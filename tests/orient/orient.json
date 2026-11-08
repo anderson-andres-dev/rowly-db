@@ -36,230 +36,245 @@
     }
   },
   "summary": {
-    "likelyRate": 0.38562091503267976,
-    "likelyOk": 0.847457627118644,
-    "likelyStrong": 0.6610169491525424,
-    "p95ms": 2.83698899999996,
-    "tasks": 153,
-    "recall": 0.46089324618736394,
-    "hit": 0.7189542483660131,
-    "precision": 0.2160130718954246,
-    "shown": 4.712418300653595,
-    "all": 0.6167003838572466,
-    "mrr": 0.4979302832244011,
-    "tests": 0.5849462365591398,
-    "tokens": 480.55555555555554
+    "likelyRate": 0.423728813559322,
+    "likelyOk": 0.84,
+    "likelyStrong": 0.64,
+    "p95ms": 2.7493369999999686,
+    "tasks": 177,
+    "recall": 0.466478342749529,
+    "hit": 0.7175141242937854,
+    "precision": 0.20960451977401134,
+    "shown": 4.785310734463277,
+    "all": 0.6435319702268855,
+    "mrr": 0.5150659133709982,
+    "tests": 0.5393939393939394,
+    "tokens": 580.0508474576271
   },
   "negatives": {
     "tasks": 48,
-    "falseLikely": 0.020833333333333332,
-    "noMatch": 0.5833333333333334,
-    "tokens": 235.625,
+    "falseLikely": 0,
+    "noMatch": 0.4791666666666667,
+    "tokens": 338.7916666666667,
     "bySplit": {
       "train": {
         "tasks": 24,
         "falseLikely": 0,
-        "noMatch": 0.4583333333333333,
-        "tokens": 296.7916666666667
+        "noMatch": 0.4166666666666667,
+        "tokens": 379.8333333333333
       },
       "seen": {
         "tasks": 6,
         "falseLikely": 0,
         "noMatch": 0.6666666666666666,
-        "tokens": 191.33333333333334
+        "tokens": 213.66666666666666
       },
       "seen2": {
         "tasks": 6,
         "falseLikely": 0,
-        "noMatch": 1,
-        "tokens": 64.83333333333333
+        "noMatch": 0.8333333333333334,
+        "tokens": 142.33333333333334
       },
       "seen3": {
         "tasks": 6,
         "falseLikely": 0,
-        "noMatch": 0.8333333333333334,
-        "tokens": 144
+        "noMatch": 0.6666666666666666,
+        "tokens": 255.33333333333334
       },
-      "validation4": {
+      "seen4": {
         "tasks": 6,
-        "falseLikely": 0.16666666666666666,
-        "noMatch": 0.3333333333333333,
-        "tokens": 297.6666666666667
+        "falseLikely": 0,
+        "noMatch": 0,
+        "tokens": 579.6666666666666
       }
     }
   },
   "short": {
     "tasks": 12,
-    "hit": 0.75,
-    "noMatch": 0.08333333333333333
+    "hit": 0.8333333333333334,
+    "noMatch": 0
   },
   "byKind": {
     "bug": {
-      "likelyRate": 0.32608695652173914,
-      "likelyOk": 0.9333333333333333,
-      "likelyStrong": 0.9333333333333333,
-      "p95ms": 3.593279999999993,
-      "tasks": 46,
-      "recall": 0.5525362318840579,
-      "hit": 0.782608695652174,
-      "precision": 0.19094202898550727,
-      "shown": 4.826086956521739,
-      "all": 0.6322463768115942,
-      "mrr": 0.4894927536231884,
-      "tests": 0.5952380952380952,
-      "tokens": 480.5
+      "likelyRate": 0.37254901960784315,
+      "likelyOk": 0.8421052631578947,
+      "likelyStrong": 0.7894736842105263,
+      "p95ms": 3.141286999999977,
+      "tasks": 51,
+      "recall": 0.46895424836601307,
+      "hit": 0.6274509803921569,
+      "precision": 0.15392156862745107,
+      "shown": 4.784313725490196,
+      "all": 0.5751633986928104,
+      "mrr": 0.434640522875817,
+      "tests": 0.4772727272727273,
+      "tokens": 548.156862745098
     },
     "feature": {
-      "likelyRate": 0.4931506849315068,
-      "likelyOk": 0.8055555555555556,
-      "likelyStrong": 0.5555555555555556,
-      "p95ms": 2.122795999999994,
-      "tasks": 73,
-      "recall": 0.44977168949771695,
-      "hit": 0.726027397260274,
-      "precision": 0.23447488584474876,
-      "shown": 4.657534246575342,
-      "all": 0.6165905631659058,
-      "mrr": 0.5477168949771689,
-      "tests": 0.7238095238095238,
-      "tokens": 481.5068493150685
+      "likelyRate": 0.5487804878048781,
+      "likelyOk": 0.8444444444444444,
+      "likelyStrong": 0.6222222222222222,
+      "p95ms": 2.357642999999996,
+      "tasks": 82,
+      "recall": 0.5111788617886179,
+      "hit": 0.8048780487804879,
+      "precision": 0.25020325203252014,
+      "shown": 4.7560975609756095,
+      "all": 0.6846883468834688,
+      "mrr": 0.5754065040650406,
+      "tests": 0.6922222222222222,
+      "tokens": 584.3536585365854
     },
     "refactor": {
-      "likelyRate": 0.3076923076923077,
-      "likelyOk": 1,
-      "likelyStrong": 0.75,
-      "p95ms": 3.2065600000000245,
-      "tasks": 13,
-      "recall": 0.3910256410256411,
-      "hit": 0.7692307692307693,
-      "precision": 0.35000000000000003,
-      "shown": 4.538461538461538,
-      "all": 0.5072344322344322,
-      "mrr": 0.4858974358974359,
-      "tests": 0.3888888888888889,
-      "tokens": 504.61538461538464
+      "likelyRate": 0.35714285714285715,
+      "likelyOk": 0.8,
+      "likelyStrong": 0.6,
+      "p95ms": 2.472139000000027,
+      "tasks": 14,
+      "recall": 0.3345238095238095,
+      "hit": 0.7142857142857143,
+      "precision": 0.2857142857142857,
+      "shown": 4.642857142857143,
+      "all": 0.47814625850340126,
+      "mrr": 0.5202380952380953,
+      "tests": 0.37037037037037035,
+      "tokens": 573.6428571428571
     },
     "analysis": {
       "likelyRate": 0.6666666666666666,
       "likelyOk": 1,
       "likelyStrong": 0.5,
-      "p95ms": 2.484080000000006,
+      "p95ms": 3.329238000000032,
       "tasks": 3,
       "recall": 0.4444444444444444,
       "hit": 1,
-      "precision": 0.26666666666666666,
-      "shown": 5,
+      "precision": 0.3111111111111111,
+      "shown": 4.333333333333333,
       "all": 0.8055555555555555,
-      "mrr": 1,
+      "mrr": 0.8333333333333334,
       "tests": 0,
-      "tokens": 368
+      "tokens": 354.3333333333333
     },
     "modify": {
-      "likelyRate": 0.1111111111111111,
-      "likelyOk": 0.5,
-      "likelyStrong": 0.5,
-      "p95ms": 2.0505719999999883,
-      "tasks": 18,
-      "recall": 0.32499999999999996,
-      "hit": 0.4444444444444444,
-      "precision": 0.09999999999999999,
-      "shown": 4.722222222222222,
-      "all": 0.625,
-      "mrr": 0.2425925925925926,
-      "tests": 0,
-      "tokens": 478.22222222222223
+      "likelyRate": 0.14814814814814814,
+      "likelyOk": 0.75,
+      "likelyStrong": 0.25,
+      "p95ms": 2.5489809999999693,
+      "tasks": 27,
+      "recall": 0.39691358024691364,
+      "hit": 0.5925925925925926,
+      "precision": 0.1407407407407408,
+      "shown": 5,
+      "all": 0.715432098765432,
+      "mrr": 0.4456790123456789,
+      "tests": 0.25,
+      "tokens": 655.6296296296297
     }
   },
   "bySplit": {
     "train": {
-      "likelyRate": 0.36666666666666664,
-      "likelyOk": 0.8636363636363636,
-      "likelyStrong": 0.6818181818181818,
-      "p95ms": 2.59921700000001,
+      "likelyRate": 0.43333333333333335,
+      "likelyOk": 0.9230769230769231,
+      "likelyStrong": 0.7692307692307693,
+      "p95ms": 2.9082840000000374,
       "tasks": 60,
-      "recall": 0.48611111111111105,
-      "hit": 0.75,
-      "precision": 0.223611111111111,
-      "shown": 4.633333333333334,
-      "all": 0.6132804232804233,
-      "mrr": 0.4916666666666666,
-      "tests": 0.6264367816091954,
-      "tokens": 489.05
+      "recall": 0.5405555555555555,
+      "hit": 0.8,
+      "precision": 0.251111111111111,
+      "shown": 4.7,
+      "all": 0.6566137566137566,
+      "mrr": 0.5666666666666667,
+      "tests": 0.6206896551724138,
+      "tokens": 568.45
     },
     "holdout": {
-      "likelyRate": 0.46153846153846156,
+      "likelyRate": 0.38461538461538464,
       "likelyOk": 1,
-      "likelyStrong": 0.6666666666666666,
-      "p95ms": 7.201086999999973,
+      "likelyStrong": 0.6,
+      "p95ms": 3.531663999999978,
       "tasks": 13,
-      "recall": 0.4410256410256411,
+      "recall": 0.4102564102564103,
       "hit": 0.7692307692307693,
-      "precision": 0.26153846153846155,
+      "precision": 0.2307692307692308,
       "shown": 5,
-      "all": 0.5884615384615384,
-      "mrr": 0.5192307692307692,
-      "tests": 0.7,
-      "tokens": 491.38461538461536
+      "all": 0.5679487179487179,
+      "mrr": 0.4897435897435897,
+      "tests": 0.4,
+      "tokens": 530.0769230769231
     },
     "seen": {
-      "likelyRate": 0.4166666666666667,
+      "likelyRate": 0.5,
       "likelyOk": 1,
-      "likelyStrong": 1,
-      "p95ms": 2.83698899999996,
+      "likelyStrong": 0.8333333333333334,
+      "p95ms": 2.7493369999999686,
       "tasks": 12,
-      "recall": 0.625,
-      "hit": 0.9166666666666666,
-      "precision": 0.3027777777777778,
+      "recall": 0.548611111111111,
+      "hit": 0.75,
+      "precision": 0.25277777777777777,
       "shown": 4.583333333333333,
-      "all": 0.7291666666666665,
-      "mrr": 0.6069444444444444,
-      "tests": 0.8571428571428571,
-      "tokens": 473.5833333333333
+      "all": 0.6944444444444443,
+      "mrr": 0.513888888888889,
+      "tests": 0.7142857142857143,
+      "tokens": 531.5
     },
     "seen2": {
-      "likelyRate": 0.55,
-      "likelyOk": 0.9090909090909091,
-      "likelyStrong": 0.7272727272727273,
-      "p95ms": 1.6448289999999588,
+      "likelyRate": 0.6,
+      "likelyOk": 0.8333333333333334,
+      "likelyStrong": 0.6666666666666666,
+      "p95ms": 1.7128450000000157,
       "tasks": 20,
-      "recall": 0.5375,
-      "hit": 0.8,
-      "precision": 0.19,
+      "recall": 0.47916666666666663,
+      "hit": 0.75,
+      "precision": 0.16000000000000003,
       "shown": 5,
-      "all": 0.6541666666666666,
-      "mrr": 0.5391666666666668,
+      "all": 0.6208333333333333,
+      "mrr": 0.5016666666666667,
       "tests": 0.8,
-      "tokens": 476.6
+      "tokens": 578.2
     },
     "seen3": {
-      "likelyRate": 0.43478260869565216,
-      "likelyOk": 0.7,
-      "likelyStrong": 0.6,
-      "p95ms": 2.0505719999999883,
+      "likelyRate": 0.5217391304347826,
+      "likelyOk": 0.6666666666666666,
+      "likelyStrong": 0.5833333333333334,
+      "p95ms": 2.3711849999999686,
       "tasks": 23,
-      "recall": 0.45869565217391306,
-      "hit": 0.6521739130434783,
-      "precision": 0.23478260869565218,
-      "shown": 4.913043478260869,
-      "all": 0.7634057971014493,
-      "mrr": 0.5579710144927535,
-      "tests": 0.52,
-      "tokens": 495.3478260869565
+      "recall": 0.5297101449275362,
+      "hit": 0.7391304347826086,
+      "precision": 0.25217391304347825,
+      "shown": 5,
+      "all": 0.8286231884057971,
+      "mrr": 0.5884057971014492,
+      "tests": 0.32,
+      "tokens": 618.7391304347826
     },
-    "validation4": {
+    "seen4": {
       "likelyRate": 0.2,
       "likelyOk": 0.6,
-      "likelyStrong": 0.2,
-      "p95ms": 1.9629400000000032,
+      "likelyStrong": 0,
+      "p95ms": 2.0510570000000143,
       "tasks": 25,
-      "recall": 0.27266666666666667,
+      "recall": 0.2606666666666667,
       "hit": 0.52,
-      "precision": 0.136,
+      "precision": 0.14400000000000002,
       "shown": 4.4,
-      "all": 0.42066666666666663,
-      "mrr": 0.36133333333333334,
+      "all": 0.46199999999999997,
+      "mrr": 0.39799999999999996,
       "tests": 0.18181818181818182,
-      "tokens": 447.44
+      "tokens": 578.64
+    },
+    "validation5": {
+      "likelyRate": 0.375,
+      "likelyOk": 0.7777777777777778,
+      "likelyStrong": 0.5555555555555556,
+      "p95ms": 1.8721500000000333,
+      "tasks": 24,
+      "recall": 0.4138888888888889,
+      "hit": 0.625,
+      "precision": 0.1416666666666667,
+      "shown": 5,
+      "all": 0.6569444444444444,
+      "mrr": 0.46319444444444446,
+      "tests": 0.75,
+      "tokens": 626.3333333333334
     }
   },
   "tasks": [
@@ -273,7 +288,7 @@
       "mrr": 1,
       "tokens": 494,
       "likely": true,
-      "ms": 17.137745000000052,
+      "ms": 23.42560400000002,
       "tests": 1
     },
     {
@@ -284,10 +299,10 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 477,
+      "tokens": 368,
       "likely": false,
-      "ms": 3.5064139999999497,
-      "tests": 1
+      "ms": 3.531663999999978,
+      "tests": 0
     },
     {
       "id": "issue-105-sin-base",
@@ -296,10 +311,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.4444444444444444,
-      "mrr": 0.25,
-      "tokens": 740,
+      "mrr": 0.3333333333333333,
+      "tokens": 736,
       "likely": false,
-      "ms": 2.366710000000012,
+      "ms": 2.3753409999999917,
       "tests": 0.6666666666666666
     },
     {
@@ -310,9 +325,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 475,
+      "tokens": 479,
       "likely": true,
-      "ms": 3.593279999999993
+      "ms": 2.223774999999989
     },
     {
       "id": "issue-107-terminal-conectada",
@@ -322,9 +337,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 652,
+      "tokens": 639,
       "likely": true,
-      "ms": 2.59921700000001
+      "ms": 2.357642999999996
     },
     {
       "id": "pr-92-terminal-recursos",
@@ -334,21 +349,21 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.5,
-      "tokens": 497,
+      "tokens": 494,
       "likely": false,
-      "ms": 7.201086999999973
+      "ms": 2.078713999999991
     },
     {
       "id": "pr-87-pestana-esquina",
-      "recall": 1,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 1,
-      "mrr": 0.25,
-      "tokens": 540,
-      "likely": true,
-      "ms": 2.281542999999999
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 509,
+      "likely": false,
+      "ms": 2.2439379999999574
     },
     {
       "id": "pr-78-portal-linux",
@@ -360,7 +375,7 @@
       "mrr": 1,
       "tokens": 412,
       "likely": true,
-      "ms": 2.0421330000000353
+      "ms": 2.37838499999998
     },
     {
       "id": "pr-77-fuga-consola",
@@ -369,10 +384,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.2,
-      "tokens": 464,
+      "mrr": 0.25,
+      "tokens": 474,
       "likely": false,
-      "ms": 2.311924000000033,
+      "ms": 2.574741999999958,
       "tests": 1
     },
     {
@@ -383,22 +398,22 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 464,
+      "tokens": 655,
       "likely": false,
-      "ms": 2.01186899999999,
+      "ms": 2.513046000000031,
       "tests": 0
     },
     {
       "id": "pr-76-red-soporte",
       "recall": 0.5,
-      "precision": 0.3333333333333333,
-      "shown": 3,
+      "precision": 0.25,
+      "shown": 4,
       "hit": 1,
       "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 346,
+      "tokens": 392,
       "likely": true,
-      "ms": 2.0981840000000034,
+      "ms": 2.9082840000000374,
       "tests": 0
     },
     {
@@ -409,9 +424,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 1,
-      "tokens": 629,
-      "likely": true,
-      "ms": 1.9917439999999829,
+      "tokens": 681,
+      "likely": false,
+      "ms": 3.133699999999976,
       "tests": 1
     },
     {
@@ -420,11 +435,11 @@
       "precision": 0.5,
       "shown": 4,
       "hit": 1,
-      "all": 0.6,
+      "all": 1,
       "mrr": 1,
-      "tokens": 572,
+      "tokens": 587,
       "likely": true,
-      "ms": 2.2403429999999958,
+      "ms": 3.060692999999958,
       "tests": 1
     },
     {
@@ -433,25 +448,25 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.6666666666666666,
+      "all": 1,
       "mrr": 1,
-      "tokens": 445,
+      "tokens": 607,
       "likely": false,
-      "ms": 2.651014000000032,
+      "ms": 2.2288790000000063,
       "tests": 1
     },
     {
       "id": "pr-61-primera-consola",
-      "recall": 0.6666666666666666,
-      "precision": 0.4,
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 0.5,
-      "tokens": 559,
+      "mrr": 1,
+      "tokens": 543,
       "likely": false,
-      "ms": 2.4420430000000124,
-      "tests": 1
+      "ms": 2.764203000000009,
+      "tests": 0
     },
     {
       "id": "pr-46-confirmar-produccion",
@@ -461,9 +476,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.3333333333333333,
-      "tokens": 523,
+      "tokens": 676,
       "likely": true,
-      "ms": 2.595308999999986
+      "ms": 2.2943900000000212
     },
     {
       "id": "pr-44-nombres-citados",
@@ -472,10 +487,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 535,
+      "mrr": 0.3333333333333333,
+      "tokens": 531,
       "likely": false,
-      "ms": 2.2020219999999995,
+      "ms": 1.5812660000000278,
       "tests": 1
     },
     {
@@ -486,9 +501,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 573,
+      "tokens": 628,
       "likely": false,
-      "ms": 2.104959000000008
+      "ms": 1.7202899999999772
     },
     {
       "id": "pr-45-workspace-puro",
@@ -497,24 +512,24 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.2,
-      "tokens": 560,
+      "mrr": 0.25,
+      "tokens": 735,
       "likely": false,
-      "ms": 2.5189699999999675,
-      "tests": 0.3333333333333333
+      "ms": 1.8161310000000412,
+      "tests": 0.6666666666666666
     },
     {
       "id": "pr-48-workspace-parte-2",
-      "recall": 0.4,
-      "precision": 0.4,
+      "recall": 0.2,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.8,
-      "mrr": 0.3333333333333333,
-      "tokens": 708,
+      "all": 0.4,
+      "mrr": 0.5,
+      "tokens": 674,
       "likely": false,
-      "ms": 2.86150600000002,
-      "tests": 0.5
+      "ms": 2.2939369999999712,
+      "tests": 0
     },
     {
       "id": "pr-50-editor",
@@ -522,36 +537,36 @@
       "precision": 0.8,
       "shown": 5,
       "hit": 1,
-      "all": 0.8,
+      "all": 1,
       "mrr": 1,
-      "tokens": 711,
+      "tokens": 710,
       "likely": true,
-      "ms": 2.605523000000005,
+      "ms": 2.073520999999971,
       "tests": 0.6666666666666666
     },
     {
       "id": "pr-47-piso-compatibilidad",
-      "recall": 0.4,
-      "precision": 0.4,
+      "recall": 0.2,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.8,
-      "mrr": 0.25,
-      "tokens": 471,
+      "all": 0.6,
+      "mrr": 0.2,
+      "tokens": 492,
       "likely": true,
-      "ms": 3.2065600000000245
+      "ms": 2.472139000000027
     },
     {
       "id": "pr-79-ajustes",
-      "recall": 1,
-      "precision": 1,
+      "recall": 0.8,
+      "precision": 0.8,
       "shown": 5,
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 640,
+      "tokens": 663,
       "likely": true,
-      "ms": 2.028500000000008,
+      "ms": 2.571257000000003,
       "tests": 1
     },
     {
@@ -561,22 +576,22 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 1,
+      "mrr": 0.5,
       "tokens": 375,
       "likely": true,
-      "ms": 2.484080000000006
+      "ms": 3.329238000000032
     },
     {
       "id": "analisis-sentencia-destructiva",
       "recall": 0.5,
-      "precision": 0.2,
-      "shown": 5,
+      "precision": 0.3333333333333333,
+      "shown": 3,
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 390,
+      "tokens": 338,
       "likely": true,
-      "ms": 1.9165069999999673,
+      "ms": 2.1471389999999815,
       "tests": 0
     },
     {
@@ -587,9 +602,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 339,
+      "tokens": 350,
       "likely": false,
-      "ms": 1.5564260000000445
+      "ms": 1.9568229999999858
     },
     {
       "id": "n01-salida-copiar-lineas",
@@ -599,22 +614,22 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 604,
-      "likely": false,
-      "ms": 2.122795999999994,
+      "tokens": 689,
+      "likely": true,
+      "ms": 2.213977,
       "tests": 1
     },
     {
       "id": "n02-franja-grupos-angostos",
-      "recall": 0.5,
-      "precision": 0.4,
+      "recall": 0.25,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.5,
+      "all": 0.25,
       "mrr": 0.5,
-      "tokens": 542,
-      "likely": false,
-      "ms": 2.1206430000000296
+      "tokens": 711,
+      "likely": true,
+      "ms": 2.4914549999999736
     },
     {
       "id": "n03-arrastre-libre",
@@ -626,7 +641,7 @@
       "mrr": 1,
       "tokens": 486,
       "likely": true,
-      "ms": 1.7550010000000498,
+      "ms": 2.1067659999999933,
       "tests": 1
     },
     {
@@ -639,7 +654,7 @@
       "mrr": 0.5,
       "tokens": 524,
       "likely": true,
-      "ms": 2.83698899999996,
+      "ms": 2.558879000000047,
       "tests": 1
     },
     {
@@ -650,9 +665,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 490,
+      "tokens": 652,
       "likely": true,
-      "ms": 2.5431159999999977,
+      "ms": 3.141286999999977,
       "tests": 0.5
     },
     {
@@ -663,9 +678,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 597,
+      "tokens": 612,
       "likely": false,
-      "ms": 2.097123999999951,
+      "ms": 1.767120000000034,
       "tests": 1
     },
     {
@@ -676,9 +691,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 571,
+      "tokens": 573,
       "likely": false,
-      "ms": 2.347266999999988,
+      "ms": 2.0026560000000018,
       "tests": 1
     },
     {
@@ -688,10 +703,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 487,
+      "mrr": 0.3333333333333333,
+      "tokens": 514,
       "likely": false,
-      "ms": 2.0625
+      "ms": 1.8417220000000043
     },
     {
       "id": "n09-shell-cabecera",
@@ -701,9 +716,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 589,
+      "tokens": 586,
       "likely": false,
-      "ms": 2.071595000000002
+      "ms": 1.4889540000000352
     },
     {
       "id": "n10-aviso-imagen",
@@ -713,33 +728,33 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 581,
+      "tokens": 590,
       "likely": true,
-      "ms": 1.9163679999999772
+      "ms": 1.504320000000007
     },
     {
       "id": "n11-terminal-espacio-propio",
-      "recall": 0.25,
-      "precision": 0.2,
+      "recall": 0.5,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 1,
-      "tokens": 503,
+      "mrr": 0.5,
+      "tokens": 659,
       "likely": false,
-      "ms": 1.8044509999999718
+      "ms": 1.8369880000000194
     },
     {
       "id": "n12-un-dueno-por-comando",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 0.3333333333333333,
-      "mrr": 0.2,
-      "tokens": 415,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 433,
       "likely": false,
-      "ms": 2.1482469999999694,
+      "ms": 1.5208350000000337,
       "tests": 1
     },
     {
@@ -750,9 +765,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 672,
-      "likely": false,
-      "ms": 1.5584380000000237,
+      "tokens": 673,
+      "likely": true,
+      "ms": 1.473831999999959,
       "tests": 1
     },
     {
@@ -763,9 +778,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 540,
+      "tokens": 552,
       "likely": false,
-      "ms": 1.4284260000000017,
+      "ms": 1.4305400000000077,
       "tests": 1
     },
     {
@@ -776,23 +791,23 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 465,
+      "tokens": 481,
       "likely": false,
-      "ms": 1.5778059999999527,
+      "ms": 1.5047449999999571,
       "tests": 0
     },
     {
       "id": "n16-ventana-calidad",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 0.3333333333333333,
-      "mrr": 0.25,
-      "tokens": 400,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 398,
       "likely": false,
-      "ms": 1.5667950000000133,
-      "tests": 1
+      "ms": 1.5288029999999821,
+      "tests": 0
     },
     {
       "id": "n17-release-evidencia",
@@ -800,11 +815,11 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.5,
-      "mrr": 0.3333333333333333,
-      "tokens": 386,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 543,
       "likely": true,
-      "ms": 1.5127140000000168,
+      "ms": 1.4177400000000375,
       "tests": 1
     },
     {
@@ -815,9 +830,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 335,
+      "tokens": 463,
       "likely": true,
-      "ms": 1.3369990000000485,
+      "ms": 1.567809000000011,
       "tests": 1
     },
     {
@@ -828,9 +843,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 357,
+      "tokens": 478,
       "likely": false,
-      "ms": 1.2701399999999694,
+      "ms": 1.455034000000012,
       "tests": 1
     },
     {
@@ -841,9 +856,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 296,
+      "tokens": 346,
       "likely": true,
-      "ms": 1.0835539999999924
+      "ms": 1.277353000000005
     },
     {
       "id": "n21-sql-mode",
@@ -853,9 +868,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 424,
+      "tokens": 584,
       "likely": true,
-      "ms": 1.3748350000000187
+      "ms": 1.5464709999999968
     },
     {
       "id": "n22-tests-driver-harness",
@@ -863,11 +878,11 @@
       "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 0.5,
+      "all": 1,
       "mrr": 1,
-      "tokens": 463,
+      "tokens": 623,
       "likely": true,
-      "ms": 1.472545000000025,
+      "ms": 1.4031609999999546,
       "tests": 0
     },
     {
@@ -878,9 +893,9 @@
       "hit": 0,
       "all": 0.6666666666666666,
       "mrr": 0,
-      "tokens": 503,
+      "tokens": 612,
       "likely": false,
-      "ms": 1.6648869999999647
+      "ms": 2.7493369999999686
     },
     {
       "id": "p01-sentencia-bajo-cursor",
@@ -890,22 +905,22 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 542,
+      "tokens": 733,
       "likely": true,
-      "ms": 1.5563070000000039,
+      "ms": 1.7128450000000157,
       "tests": 1
     },
     {
       "id": "p02-restablecer-atajos",
-      "recall": 0.6666666666666666,
-      "precision": 0.4,
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.6666666666666666,
+      "all": 0.3333333333333333,
       "mrr": 1,
-      "tokens": 627,
+      "tokens": 617,
       "likely": false,
-      "ms": 1.4967730000000188
+      "ms": 1.829808000000014
     },
     {
       "id": "p03-idioma-primera-vez",
@@ -917,7 +932,7 @@
       "mrr": 0,
       "tokens": 73,
       "likely": false,
-      "ms": 0.7768379999999979
+      "ms": 0.9214699999999993
     },
     {
       "id": "p04-menu-contextual-nativo",
@@ -927,9 +942,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 360,
+      "tokens": 550,
       "likely": true,
-      "ms": 1.6036430000000337
+      "ms": 1.5909750000000145
     },
     {
       "id": "p05-pastillas-cambios",
@@ -939,9 +954,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 481,
+      "tokens": 631,
       "likely": true,
-      "ms": 1.5767020000000116
+      "ms": 1.4808050000000321
     },
     {
       "id": "p06-error-aplicar-cambios",
@@ -951,21 +966,21 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 515,
+      "tokens": 509,
       "likely": true,
-      "ms": 1.7969610000000102
+      "ms": 2.00208200000003
     },
     {
       "id": "p07-editar-conexion",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 0.6666666666666666,
-      "mrr": 0.5,
-      "tokens": 489,
-      "likely": false,
-      "ms": 1.42571700000002
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0,
+      "tokens": 735,
+      "likely": true,
+      "ms": 1.5910470000000032
     },
     {
       "id": "p08-formulario-entornos",
@@ -977,7 +992,7 @@
       "mrr": 0.2,
       "tokens": 520,
       "likely": true,
-      "ms": 1.5574629999999843,
+      "ms": 1.472016999999994,
       "tests": 1
     },
     {
@@ -987,23 +1002,23 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.25,
-      "tokens": 718,
+      "mrr": 0.3333333333333333,
+      "tokens": 712,
       "likely": false,
-      "ms": 2.8676660000000425,
+      "ms": 2.0903299999999945,
       "tests": 0
     },
     {
       "id": "p10-estados-resultado",
-      "recall": 0.5,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 1,
-      "mrr": 0.25,
-      "tokens": 691,
+      "mrr": 0,
+      "tokens": 672,
       "likely": false,
-      "ms": 1.5744609999999852
+      "ms": 1.6723289999999906
     },
     {
       "id": "p11-filtros-compactos",
@@ -1012,10 +1027,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 545,
+      "mrr": 0.5,
+      "tokens": 667,
       "likely": true,
-      "ms": 1.524359000000004,
+      "ms": 1.6430790000000002,
       "tests": 1
     },
     {
@@ -1026,9 +1041,9 @@
       "hit": 1,
       "all": 0.3333333333333333,
       "mrr": 0.5,
-      "tokens": 520,
+      "tokens": 691,
       "likely": true,
-      "ms": 1.450441000000012
+      "ms": 1.5574530000000095
     },
     {
       "id": "p13-catalogo-conexion",
@@ -1038,9 +1053,9 @@
       "hit": 1,
       "all": 0.25,
       "mrr": 0.3333333333333333,
-      "tokens": 486,
+      "tokens": 669,
       "likely": true,
-      "ms": 1.7212370000000305
+      "ms": 1.586355000000026
     },
     {
       "id": "p14-release-paralelo",
@@ -1050,23 +1065,23 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 398,
+      "tokens": 521,
       "likely": true,
-      "ms": 1.46411599999999,
+      "ms": 1.5617719999999622,
       "tests": 1
     },
     {
       "id": "p15-semillas-fuzz",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
-      "all": 0,
-      "mrr": 0,
-      "tokens": 382,
-      "likely": false,
-      "ms": 1.6057409999999663,
-      "tests": 0
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 1,
+      "tokens": 507,
+      "likely": true,
+      "ms": 1.5190510000000472,
+      "tests": 0.5
     },
     {
       "id": "p16-imagenes-una-vez",
@@ -1076,9 +1091,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 350,
+      "tokens": 536,
       "likely": false,
-      "ms": 1.5210690000000113
+      "ms": 1.3913029999999935
     },
     {
       "id": "p17-grafo-desde-codigo",
@@ -1087,10 +1102,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 415,
+      "mrr": 0.5,
+      "tokens": 412,
       "likely": true,
-      "ms": 1.4090039999999817
+      "ms": 1.4375099999999748
     },
     {
       "id": "p18-ciclos-recursos",
@@ -1100,9 +1115,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 358,
+      "tokens": 375,
       "likely": true,
-      "ms": 1.424900999999977
+      "ms": 1.3968399999999974
     },
     {
       "id": "p19-motor-sin-lineas",
@@ -1112,9 +1127,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 365,
+      "tokens": 353,
       "likely": false,
-      "ms": 1.477070000000026
+      "ms": 1.4843099999999936
     },
     {
       "id": "p20-prueba-huerfana",
@@ -1124,9 +1139,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 401,
-      "likely": false,
-      "ms": 1.4269160000000056
+      "tokens": 394,
+      "likely": true,
+      "ms": 1.3957840000000488
     },
     {
       "id": "p21-paquetes-soporte",
@@ -1136,21 +1151,21 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 506,
+      "tokens": 524,
       "likely": true,
-      "ms": 1.5242549999999824
+      "ms": 2.2907450000000154
     },
     {
       "id": "p22-servidores-digest",
-      "recall": 1,
-      "precision": 0.4,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 1,
+      "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 406,
-      "likely": true,
-      "ms": 1.468088000000023,
+      "tokens": 395,
+      "likely": false,
+      "ms": 1.5050089999999727,
       "tests": 0
     },
     {
@@ -1161,9 +1176,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 386,
+      "tokens": 573,
       "likely": true,
-      "ms": 1.4389390000000049
+      "ms": 1.6585830000000215
     },
     {
       "id": "p24-na-con-prueba",
@@ -1172,10 +1187,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.2,
-      "tokens": 428,
+      "mrr": 0.3333333333333333,
+      "tokens": 592,
       "likely": false,
-      "ms": 1.4425449999999955,
+      "ms": 1.5983340000000226,
       "tests": 1
     },
     {
@@ -1184,11 +1199,11 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 1,
-      "mrr": 0.5,
-      "tokens": 406,
+      "all": 0.5,
+      "mrr": 0.3333333333333333,
+      "tokens": 401,
       "likely": true,
-      "ms": 1.6448289999999588
+      "ms": 1.6061260000000175
     },
     {
       "id": "p26-rebranding",
@@ -1197,22 +1212,22 @@
       "shown": 5,
       "hit": 1,
       "all": 0.25,
-      "mrr": 0.3333333333333333,
-      "tokens": 551,
+      "mrr": 0.5,
+      "tokens": 707,
       "likely": false,
-      "ms": 1.4155020000000036
+      "ms": 1.6377970000000346
     },
     {
       "id": "p27-tema-rowly",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 1,
-      "mrr": 0,
-      "tokens": 578,
+      "mrr": 0.25,
+      "tokens": 562,
       "likely": true,
-      "ms": 1.4022239999999897
+      "ms": 1.4044419999999604
     },
     {
       "id": "p28-fabrica-drivers",
@@ -1220,71 +1235,71 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0,
+      "all": 0.5,
       "mrr": 0,
-      "tokens": 573,
+      "tokens": 772,
       "likely": false,
-      "ms": 1.59026300000005
+      "ms": 1.5311930000000302
     },
     {
       "id": "p29-pestanas-consola-resaltado",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
-      "all": 0.5,
-      "mrr": 0,
-      "tokens": 540,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 706,
       "likely": false,
-      "ms": 1.4670100000000161
+      "ms": 1.6734749999999963
     },
     {
       "id": "p30-resumen-vista-previa",
+      "recall": 1,
+      "precision": 0.6,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.5,
+      "tokens": 651,
+      "likely": true,
+      "ms": 1.8308209999999576
+    },
+    {
+      "id": "q01-3fb2fef",
+      "recall": 1,
+      "precision": 0.4,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.5,
+      "tokens": 751,
+      "likely": false,
+      "ms": 2.0020750000000476
+    },
+    {
+      "id": "q02-b5f994d",
       "recall": 0.6666666666666666,
       "precision": 0.4,
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.5,
-      "tokens": 492,
-      "likely": true,
-      "ms": 1.9833409999999958
-    },
-    {
-      "id": "q01-3fb2fef",
-      "recall": 0,
-      "precision": 0,
-      "shown": 5,
-      "hit": 0,
-      "all": 1,
-      "mrr": 0,
-      "tokens": 548,
-      "likely": false,
-      "ms": 1.9456759999999917
-    },
-    {
-      "id": "q02-b5f994d",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
-      "shown": 5,
-      "hit": 1,
-      "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 527,
-      "likely": false,
-      "ms": 1.86740599999996
+      "tokens": 723,
+      "likely": true,
+      "ms": 2.0983889999999974
     },
     {
       "id": "q03-147cb7c",
-      "recall": 0.4,
-      "precision": 0.4,
+      "recall": 0.6,
+      "precision": 0.6,
       "shown": 5,
       "hit": 1,
-      "all": 0.6,
+      "all": 0.8,
       "mrr": 0.5,
-      "tokens": 549,
+      "tokens": 721,
       "likely": false,
-      "ms": 1.8748059999999782,
+      "ms": 2.060571999999979,
       "tests": 0
     },
     {
@@ -1295,9 +1310,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 715,
+      "tokens": 697,
       "likely": false,
-      "ms": 2.0799799999999777
+      "ms": 1.8653940000000375
     },
     {
       "id": "q05-e8ab84b",
@@ -1307,9 +1322,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 468,
+      "tokens": 476,
       "likely": true,
-      "ms": 1.5488619999999855
+      "ms": 1.6083619999999996
     },
     {
       "id": "q06-a28139a",
@@ -1317,11 +1332,11 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.5,
-      "mrr": 1,
-      "tokens": 486,
+      "all": 1,
+      "mrr": 0.3333333333333333,
+      "tokens": 635,
       "likely": false,
-      "ms": 1.5554850000000329,
+      "ms": 1.751497000000029,
       "tests": 0
     },
     {
@@ -1332,9 +1347,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 547,
+      "tokens": 563,
       "likely": false,
-      "ms": 1.6182019999999966
+      "ms": 1.8459379999999896
     },
     {
       "id": "q08-68fb03f",
@@ -1344,9 +1359,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 445,
+      "tokens": 577,
       "likely": true,
-      "ms": 1.470011999999997,
+      "ms": 1.5974039999999832,
       "tests": 0
     },
     {
@@ -1357,9 +1372,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.5,
-      "tokens": 621,
+      "tokens": 598,
       "likely": false,
-      "ms": 1.6976379999999835
+      "ms": 2.227787000000035
     },
     {
       "id": "q10-c59cb22",
@@ -1369,9 +1384,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 450,
+      "tokens": 578,
       "likely": true,
-      "ms": 1.5087859999999864
+      "ms": 1.5417450000000485
     },
     {
       "id": "q11-5ece585",
@@ -1381,9 +1396,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 487,
-      "likely": false,
-      "ms": 1.4709940000000188
+      "tokens": 711,
+      "likely": true,
+      "ms": 2.5489809999999693
     },
     {
       "id": "q12-34ac668",
@@ -1393,9 +1408,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 498,
+      "tokens": 683,
       "likely": true,
-      "ms": 1.5156750000000443
+      "ms": 1.5871759999999995
     },
     {
       "id": "q13-d36ef4d",
@@ -1405,9 +1420,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 519,
+      "tokens": 706,
       "likely": false,
-      "ms": 1.426433999999972
+      "ms": 1.5120650000000069
     },
     {
       "id": "q14-760a464",
@@ -1417,22 +1432,22 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 524,
+      "tokens": 541,
       "likely": false,
-      "ms": 1.554048000000023,
+      "ms": 1.561173999999994,
       "tests": 1
     },
     {
       "id": "q15-ef649e6",
-      "recall": 0.5,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 0.5,
-      "mrr": 0.25,
-      "tokens": 521,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 540,
       "likely": false,
-      "ms": 1.5423190000000204
+      "ms": 1.5363709999999742
     },
     {
       "id": "q16-f8c905d",
@@ -1442,9 +1457,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 555,
+      "tokens": 727,
       "likely": false,
-      "ms": 2.0505719999999883
+      "ms": 2.3711849999999686
     },
     {
       "id": "q17-44ab672",
@@ -1454,9 +1469,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 397,
+      "tokens": 544,
       "likely": false,
-      "ms": 1.4893299999999954
+      "ms": 1.5385780000000295
     },
     {
       "id": "q18-9597b7d",
@@ -1466,9 +1481,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 479,
+      "tokens": 523,
       "likely": false,
-      "ms": 1.2461490000000026
+      "ms": 1.4154589999999985
     },
     {
       "id": "q19-81aa10b",
@@ -1478,9 +1493,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 516,
+      "tokens": 677,
       "likely": false,
-      "ms": 1.347188000000017
+      "ms": 1.3170749999999884
     },
     {
       "id": "q20-f8a495b",
@@ -1490,33 +1505,33 @@
       "hit": 1,
       "all": 0.6,
       "mrr": 1,
-      "tokens": 353,
+      "tokens": 496,
       "likely": false,
-      "ms": 1.743628000000001
+      "ms": 1.313065999999992
     },
     {
       "id": "q21-f5486f2",
-      "recall": 0.3333333333333333,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 0.6666666666666666,
-      "mrr": 0.2,
-      "tokens": 391,
+      "mrr": 0,
+      "tokens": 445,
       "likely": false,
-      "ms": 1.4772199999999884
+      "ms": 1.5775859999999966
     },
     {
       "id": "q22-8e967e5",
       "recall": 0.5,
-      "precision": 0.25,
-      "shown": 4,
+      "precision": 0.2,
+      "shown": 5,
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 464,
+      "tokens": 640,
       "likely": true,
-      "ms": 1.5512449999999944
+      "ms": 2.057499000000007
     },
     {
       "id": "q23-79a1c7a",
@@ -1526,9 +1541,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 479,
+      "tokens": 602,
       "likely": true,
-      "ms": 1.5185960000000023
+      "ms": 1.539572000000021
     },
     {
       "id": "q24-25086ea",
@@ -1537,10 +1552,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.3333333333333333,
-      "tokens": 499,
-      "likely": false,
-      "ms": 1.5307449999999676,
+      "mrr": 0.25,
+      "tokens": 508,
+      "likely": true,
+      "ms": 1.7190139999999587,
       "tests": 1
     },
     {
@@ -1551,9 +1566,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 440,
+      "tokens": 618,
       "likely": false,
-      "ms": 1.5304419999999936
+      "ms": 1.5083819999999832
     },
     {
       "id": "q26-21d6136",
@@ -1561,11 +1576,11 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0,
+      "all": 1,
       "mrr": 0,
-      "tokens": 521,
+      "tokens": 713,
       "likely": true,
-      "ms": 1.6335960000000114
+      "ms": 1.8469050000000493
     },
     {
       "id": "q27-817354e",
@@ -1575,9 +1590,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 505,
+      "tokens": 661,
       "likely": false,
-      "ms": 1.5577859999999646
+      "ms": 1.7490549999999985
     },
     {
       "id": "q28-7cd0bcb",
@@ -1589,19 +1604,19 @@
       "mrr": 0,
       "tokens": 702,
       "likely": true,
-      "ms": 1.516379000000029
+      "ms": 1.617719999999963
     },
     {
       "id": "q29-4563a96",
-      "recall": 0.8,
-      "precision": 0.8,
+      "recall": 0.6,
+      "precision": 0.6,
       "shown": 5,
       "hit": 1,
       "all": 0.8333333333333334,
       "mrr": 1,
-      "tokens": 481,
+      "tokens": 619,
       "likely": true,
-      "ms": 1.392532000000017,
+      "ms": 1.418608000000006,
       "tests": 0.6
     },
     {
@@ -1611,10 +1626,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.2857142857142857,
-      "mrr": 0.3333333333333333,
-      "tokens": 415,
+      "mrr": 1,
+      "tokens": 580,
       "likely": false,
-      "ms": 1.570229999999981,
+      "ms": 1.8152880000000096,
       "tests": 0
     },
     {
@@ -1625,47 +1640,47 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 438,
+      "tokens": 596,
       "likely": true,
-      "ms": 1.510310000000004,
-      "tests": 1
+      "ms": 1.5700459999999907,
+      "tests": 0
     },
     {
       "id": "q32-9ed2c93",
       "recall": 0.6,
-      "precision": 0.75,
-      "shown": 4,
+      "precision": 0.6,
+      "shown": 5,
       "hit": 1,
       "all": 0.375,
       "mrr": 1,
-      "tokens": 463,
+      "tokens": 553,
       "likely": true,
-      "ms": 1.420759999999973,
+      "ms": 1.4057350000000497,
       "tests": 0
     },
     {
       "id": "q33-db6d68a",
-      "recall": 0.5,
-      "precision": 0.2,
+      "recall": 1,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 416,
+      "tokens": 562,
       "likely": true,
-      "ms": 1.2940120000000093
+      "ms": 2.2825209999999743
     },
     {
       "id": "q34-16308b2",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
-      "all": 0,
-      "mrr": 0,
-      "tokens": 354,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.2,
+      "tokens": 421,
       "likely": false,
-      "ms": 1.2710670000000164
+      "ms": 1.3709359999999151
     },
     {
       "id": "r01-12bfef8",
@@ -1673,23 +1688,23 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.4,
-      "mrr": 0.5,
-      "tokens": 506,
-      "likely": false,
-      "ms": 1.6069249999999897
+      "all": 0.6,
+      "mrr": 1,
+      "tokens": 715,
+      "likely": true,
+      "ms": 1.9728320000000394
     },
     {
       "id": "r02-cb4a9cc",
       "recall": 0,
       "precision": 0,
-      "shown": 0,
+      "shown": 5,
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 69,
+      "tokens": 509,
       "likely": false,
-      "ms": 0.7411730000000034,
+      "ms": 2.004238999999984,
       "tests": 0
     },
     {
@@ -1700,9 +1715,9 @@
       "hit": 1,
       "all": 0.4,
       "mrr": 1,
-      "tokens": 413,
+      "tokens": 511,
       "likely": false,
-      "ms": 1.5176189999999679
+      "ms": 1.5306370000000697
     },
     {
       "id": "r04-512793b",
@@ -1712,22 +1727,22 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 484,
+      "tokens": 658,
       "likely": false,
-      "ms": 1.3824779999999919,
+      "ms": 1.6417780000000448,
       "tests": 0
     },
     {
       "id": "r05-07f0ef5",
-      "recall": 0.5,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 0.5,
-      "mrr": 0.25,
-      "tokens": 440,
-      "likely": true,
-      "ms": 1.5269590000000335
+      "mrr": 0,
+      "tokens": 627,
+      "likely": false,
+      "ms": 1.4368729999999914
     },
     {
       "id": "r06-d1c272d",
@@ -1737,35 +1752,35 @@
       "hit": 0,
       "all": 0.5,
       "mrr": 0,
-      "tokens": 591,
+      "tokens": 561,
       "likely": false,
-      "ms": 1.4111650000000395,
+      "ms": 1.396368999999936,
       "tests": 1
     },
     {
       "id": "r07-f998f0a",
-      "recall": 1,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
-      "all": 1,
-      "mrr": 0.2,
-      "tokens": 409,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 531,
       "likely": false,
-      "ms": 1.678941000000009,
+      "ms": 1.531833000000006,
       "tests": 0
     },
     {
       "id": "r08-d0750c5",
-      "recall": 0,
-      "precision": 0,
-      "shown": 0,
-      "hit": 0,
-      "all": 0,
-      "mrr": 0,
-      "tokens": 73,
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.5,
+      "tokens": 642,
       "likely": false,
-      "ms": 0.6303249999999707
+      "ms": 1.5686640000000125
     },
     {
       "id": "r09-702513f",
@@ -1773,36 +1788,36 @@
       "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 1,
-      "mrr": 1,
-      "tokens": 487,
+      "all": 0.75,
+      "mrr": 0.5,
+      "tokens": 738,
       "likely": false,
-      "ms": 1.7869719999999916,
+      "ms": 1.8251149999999825,
       "tests": 0
     },
     {
       "id": "r10-a781c04",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 0.5,
-      "mrr": 0,
-      "tokens": 481,
-      "likely": true,
-      "ms": 1.6480880000000298
+      "mrr": 1,
+      "tokens": 663,
+      "likely": false,
+      "ms": 1.6875159999999596
     },
     {
       "id": "r11-c541dea",
-      "recall": 0,
-      "precision": 0,
+      "recall": 1,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 1,
-      "mrr": 0,
-      "tokens": 451,
-      "likely": false,
-      "ms": 1.5197430000000622
+      "mrr": 1,
+      "tokens": 636,
+      "likely": true,
+      "ms": 1.5206399999999576
     },
     {
       "id": "r12-82838ed",
@@ -1811,10 +1826,10 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 0.25,
-      "tokens": 447,
+      "mrr": 1,
+      "tokens": 571,
       "likely": false,
-      "ms": 1.5083819999999832
+      "ms": 1.756279999999947
     },
     {
       "id": "r13-8d67a0a",
@@ -1822,23 +1837,23 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.3333333333333333,
+      "all": 0.6666666666666666,
       "mrr": 0.5,
-      "tokens": 466,
+      "tokens": 641,
       "likely": false,
-      "ms": 1.4181069999999636
+      "ms": 1.4302549999999883
     },
     {
       "id": "r14-bdb977f",
-      "recall": 0.25,
-      "precision": 0.2,
+      "recall": 0.5,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 0.25,
+      "all": 0.75,
       "mrr": 1,
-      "tokens": 493,
+      "tokens": 496,
       "likely": false,
-      "ms": 1.6316649999999981
+      "ms": 1.7002809999999045
     },
     {
       "id": "r15-13c1bb2",
@@ -1846,11 +1861,11 @@
       "precision": 0.2,
       "shown": 5,
       "hit": 1,
-      "all": 0.3333333333333333,
+      "all": 1,
       "mrr": 1,
-      "tokens": 557,
+      "tokens": 594,
       "likely": true,
-      "ms": 1.5884290000000192
+      "ms": 1.573301000000015
     },
     {
       "id": "r16-9fe8e94",
@@ -1860,22 +1875,22 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 609,
-      "likely": false,
-      "ms": 1.7798310000000583,
+      "tokens": 627,
+      "likely": true,
+      "ms": 2.094961000000012,
       "tests": 1
     },
     {
       "id": "r17-c9bf339",
       "recall": 0,
       "precision": 0,
-      "shown": 5,
+      "shown": 0,
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 451,
+      "tokens": 68,
       "likely": false,
-      "ms": 1.32817,
+      "ms": 0.6592410000000655,
       "tests": 0
     },
     {
@@ -1888,20 +1903,20 @@
       "mrr": 0,
       "tokens": 71,
       "likely": false,
-      "ms": 0.6579560000000129,
+      "ms": 0.6761970000000019,
       "tests": 0
     },
     {
       "id": "r19-1c2ca38",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.6,
+      "precision": 0.6,
       "shown": 5,
-      "hit": 0,
-      "all": 0,
-      "mrr": 0,
-      "tokens": 504,
+      "hit": 1,
+      "all": 0.8,
+      "mrr": 1,
+      "tokens": 653,
       "likely": false,
-      "ms": 1.8598869999999579
+      "ms": 1.725336000000084
     },
     {
       "id": "r20-df690e5",
@@ -1909,11 +1924,11 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0.25,
+      "all": 0.5,
       "mrr": 0,
-      "tokens": 469,
+      "tokens": 694,
       "likely": false,
-      "ms": 1.3565039999999726
+      "ms": 1.681291999999985
     },
     {
       "id": "r21-2a56629",
@@ -1921,11 +1936,11 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0,
+      "all": 0.3333333333333333,
       "mrr": 0,
-      "tokens": 511,
+      "tokens": 677,
       "likely": false,
-      "ms": 1.5276000000000067,
+      "ms": 2.4062509999999975,
       "tests": 0
     },
     {
@@ -1935,10 +1950,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 0.2,
-      "tokens": 528,
+      "mrr": 0.5,
+      "tokens": 662,
       "likely": false,
-      "ms": 1.4598849999999857
+      "ms": 1.4616989999999532
     },
     {
       "id": "r23-7e1ac96",
@@ -1948,9 +1963,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 686,
+      "tokens": 699,
       "likely": false,
-      "ms": 1.5271260000000666
+      "ms": 1.591195999999968
     },
     {
       "id": "r24-719e36c",
@@ -1960,9 +1975,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 490,
+      "tokens": 684,
       "likely": false,
-      "ms": 1.5914960000000065
+      "ms": 1.9955639999999448
     },
     {
       "id": "r25-84eb032",
@@ -1972,9 +1987,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 521,
+      "tokens": 611,
       "likely": false,
-      "ms": 1.9629400000000032,
+      "ms": 1.9142160000000104,
       "tests": 1
     },
     {
@@ -1985,9 +2000,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 520,
+      "tokens": 714,
       "likely": true,
-      "ms": 1.594426999999996
+      "ms": 1.6950539999999137
     },
     {
       "id": "r27-0b5d181",
@@ -1997,9 +2012,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 481,
+      "tokens": 641,
       "likely": false,
-      "ms": 1.4729859999999917
+      "ms": 1.7689739999999574
     },
     {
       "id": "r28-bef6b9a",
@@ -2008,10 +2023,10 @@
       "shown": 5,
       "hit": 1,
       "all": 1,
-      "mrr": 1,
-      "tokens": 504,
+      "mrr": 0.5,
+      "tokens": 694,
       "likely": false,
-      "ms": 1.4792690000000448
+      "ms": 1.6948619999999437
     },
     {
       "id": "r29-f393cab",
@@ -2021,9 +2036,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 498,
+      "tokens": 621,
       "likely": false,
-      "ms": 1.7663220000000592,
+      "ms": 2.0510570000000143,
       "tests": 1
     },
     {
@@ -2034,35 +2049,35 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 422,
+      "tokens": 624,
       "likely": false,
-      "ms": 1.2117769999999837,
+      "ms": 1.4628470000000107,
       "tests": 0
     },
     {
       "id": "r31-ae169e4",
-      "recall": 0.2,
-      "precision": 0.2,
+      "recall": 0.4,
+      "precision": 0.4,
       "shown": 5,
       "hit": 1,
-      "all": 0.4,
-      "mrr": 0.3333333333333333,
-      "tokens": 533,
+      "all": 0.6,
+      "mrr": 0.25,
+      "tokens": 733,
       "likely": true,
-      "ms": 2.103627999999958,
+      "ms": 1.7417110000000093,
       "tests": 0
     },
     {
       "id": "r32-6e53c18",
-      "recall": 0,
-      "precision": 0,
+      "recall": 1,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
+      "hit": 1,
       "all": 1,
-      "mrr": 0,
-      "tokens": 513,
-      "likely": true,
-      "ms": 1.7016270000000304
+      "mrr": 0.3333333333333333,
+      "tokens": 553,
+      "likely": false,
+      "ms": 1.8168380000000752
     },
     {
       "id": "r33-5059cf1",
@@ -2070,23 +2085,23 @@
       "precision": 0,
       "shown": 5,
       "hit": 0,
-      "all": 0.2,
+      "all": 0,
       "mrr": 0,
-      "tokens": 514,
-      "likely": false,
-      "ms": 1.696032999999943
+      "tokens": 535,
+      "likely": true,
+      "ms": 1.6947390000000269
     },
     {
       "id": "r34-b914381",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.5,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
-      "all": 0.5,
-      "mrr": 0,
-      "tokens": 522,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.2,
+      "tokens": 726,
       "likely": false,
-      "ms": 1.5788270000000466
+      "ms": 1.709844999999973
     },
     {
       "id": "r35-f04fb26",
@@ -2096,9 +2111,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 472,
+      "tokens": 615,
       "likely": true,
-      "ms": 1.4525039999999763
+      "ms": 1.4901599999999462
     },
     {
       "id": "r36-b9b636e",
@@ -2108,9 +2123,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 425,
+      "tokens": 623,
       "likely": false,
-      "ms": 1.2694500000000062
+      "ms": 1.6032350000000406
     },
     {
       "id": "r37-0524c44",
@@ -2122,7 +2137,7 @@
       "mrr": 0,
       "tokens": 69,
       "likely": false,
-      "ms": 1.19376299999999
+      "ms": 1.374967999999967
     },
     {
       "id": "r38-4e8b0b2",
@@ -2132,9 +2147,9 @@
       "hit": 0,
       "all": 0.3333333333333333,
       "mrr": 0,
-      "tokens": 535,
+      "tokens": 727,
       "likely": false,
-      "ms": 1.4003430000000208
+      "ms": 1.5289229999999634
     },
     {
       "id": "r39-ad21e1d",
@@ -2144,9 +2159,9 @@
       "hit": 0,
       "all": 0.6,
       "mrr": 0,
-      "tokens": 546,
+      "tokens": 684,
       "likely": false,
-      "ms": 1.4369540000000143,
+      "ms": 1.5406860000000506,
       "tests": 0
     },
     {
@@ -2159,7 +2174,299 @@
       "mrr": 0,
       "tokens": 68,
       "likely": false,
-      "ms": 0.755751000000032
+      "ms": 0.7820220000000973
+    },
+    {
+      "id": "s01-3dc8700",
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 713,
+      "likely": false,
+      "ms": 1.8721500000000333
+    },
+    {
+      "id": "s02-2513052",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0,
+      "tokens": 644,
+      "likely": false,
+      "ms": 1.5155490000000782
+    },
+    {
+      "id": "s03-9efd978",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0,
+      "tokens": 629,
+      "likely": false,
+      "ms": 1.5880130000000463
+    },
+    {
+      "id": "s04-341c2e7",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.25,
+      "tokens": 634,
+      "likely": true,
+      "ms": 1.7067250000000058
+    },
+    {
+      "id": "s05-b504aa5",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.5,
+      "tokens": 649,
+      "likely": true,
+      "ms": 1.9180709999999408
+    },
+    {
+      "id": "s06-7c467a3",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 473,
+      "likely": false,
+      "ms": 1.4482920000000377,
+      "tests": 0
+    },
+    {
+      "id": "s07-e0ff437",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 456,
+      "likely": false,
+      "ms": 1.563853999999992,
+      "tests": 1
+    },
+    {
+      "id": "s08-2fc3910",
+      "recall": 0.6,
+      "precision": 0.6,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6,
+      "mrr": 1,
+      "tokens": 717,
+      "likely": false,
+      "ms": 1.8703570000000127
+    },
+    {
+      "id": "s09-a0ded77",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 519,
+      "likely": false,
+      "ms": 1.483816000000047
+    },
+    {
+      "id": "s10-00419dd",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 596,
+      "likely": false,
+      "ms": 1.468166999999994
+    },
+    {
+      "id": "s11-0c5a002",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 590,
+      "likely": true,
+      "ms": 1.5800110000000132,
+      "tests": 1
+    },
+    {
+      "id": "s12-6576b22",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 1,
+      "tokens": 611,
+      "likely": true,
+      "ms": 1.6604889999999841
+    },
+    {
+      "id": "s13-396bc52",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0,
+      "tokens": 679,
+      "likely": false,
+      "ms": 1.339996000000042
+    },
+    {
+      "id": "s14-c46e604",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0,
+      "tokens": 674,
+      "likely": false,
+      "ms": 1.528283999999985
+    },
+    {
+      "id": "s15-48e8a5a",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 716,
+      "likely": false,
+      "ms": 1.6256449999999631,
+      "tests": 1
+    },
+    {
+      "id": "s16-dd803ae",
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.3333333333333333,
+      "mrr": 0.3333333333333333,
+      "tokens": 613,
+      "likely": false,
+      "ms": 1.754370999999992
+    },
+    {
+      "id": "s17-2013f67",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.2,
+      "tokens": 481,
+      "likely": false,
+      "ms": 1.4587920000000167
+    },
+    {
+      "id": "s18-6b49eb6",
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 702,
+      "likely": true,
+      "ms": 1.7566630000000032
+    },
+    {
+      "id": "s19-e5dd986",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 688,
+      "likely": true,
+      "ms": 1.5053870000000416
+    },
+    {
+      "id": "s20-7e39edb",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.3333333333333333,
+      "tokens": 718,
+      "likely": false,
+      "ms": 1.4217780000000175
+    },
+    {
+      "id": "s21-3babb3d",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.5,
+      "tokens": 606,
+      "likely": true,
+      "ms": 1.6588860000000523
+    },
+    {
+      "id": "s22-0e68418",
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 591,
+      "likely": true,
+      "ms": 1.557728000000111
+    },
+    {
+      "id": "s23-a03fe3c",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0,
+      "tokens": 594,
+      "likely": false,
+      "ms": 1.4435040000000754
+    },
+    {
+      "id": "s24-0777ab4",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 739,
+      "likely": true,
+      "ms": 1.7714300000000094
     }
   ]
 }

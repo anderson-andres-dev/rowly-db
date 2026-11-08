@@ -9,6 +9,7 @@ A trailing `/` is a folder. The terms are what a user or the interface calls it,
 ## Index
 
 - [`app-shell`](#app-shell): The app shell: Tauri startup and state, the IPC between frontend and backend (one owner module per command), shared types.
+- [`build-config`](#build-config): Project configuration files: Cargo workspace and app manifests, Vite, Vitest, Svelte and TypeScript config, and the Tauri configuration.
 - [`ci-release`](#ci-release): Continuous integration and releases: the workflows, the area planner, release evidence, packaging and signing.
 - [`connection-profiles`](#connection-profiles): Saved connections: the form, the landing page, the switcher, colours, environments and the stored password.
 - [`console-files`](#console-files): SQL files and folders: open, save and watch .sql files, the file tree, the text of each console and encodings.
@@ -59,6 +60,17 @@ The app shell: Tauri startup and state, the IPC between frontend and backend (on
 - Tests: `app/src-tauri/src/desktop_portal.rs`, `app/src-tauri/src/engine_context.rs`, `app/src-tauri/src/lib.rs`, `app/src-tauri/src/state.rs`, `app/src-tauri/src/webkit_env.rs`, `app/src/lib/backend.test.ts`
 - Related: [`engine-registration`](#engine-registration), [`connection-profiles`](#connection-profiles)
 - Docs: [docs/ARCHITECTURE.md#rules-for-the-app](../../docs/ARCHITECTURE.md#rules-for-the-app)
+
+## build-config
+
+Project configuration files: Cargo workspace and app manifests, Vite, Vitest, Svelte and TypeScript config, and the Tauri configuration.
+
+- Terms (es): cargo, tsconfig, vitest, svelte.config, tauri.conf, package.json, manifiesto
+- Terms (en): cargo, tsconfig, vitest, svelte.config, tauri.conf, package.json, manifest
+- Files: `Cargo.toml`, `app/package.json`, `app/vite.config.js`, `app/vitest.config.ts`, `app/svelte.config.js`, `app/tsconfig.json`, `app/src-tauri/tauri.conf.json`, `app/src-tauri/tauri.release.conf.json`, `app/src-tauri/Cargo.toml`
+- Tests: none (configuration files: checked by the build and by CI, not by an inventoried test)
+- Related: [`ci-release`](#ci-release), [`app-shell`](#app-shell)
+- Docs: [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ## ci-release
 
