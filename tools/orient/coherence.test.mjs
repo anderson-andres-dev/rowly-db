@@ -141,3 +141,10 @@ test("AGENTS.md es el mapa: cabe en un presupuesto, trae el protocolo para petic
 test("CLAUDE.md importa AGENTS.md con la sintaxis oficial de Claude Code", () => {
   assert.equal(read("CLAUDE.md").trim(), "@AGENTS.md");
 });
+
+test("cada regla del catalogo esta en AGENTS.md y el catalogo valido no tiene problemas de reglas", () => {
+  const text = read("AGENTS.md");
+  const model = json("tools/architecture/model.json");
+  assert.ok(model.rules.length >= 10);
+  for (const rule of model.rules) assert.ok(text.includes(`**${rule.id}**`), `falta la regla ${rule.id}`);
+});
