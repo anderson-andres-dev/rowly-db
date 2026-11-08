@@ -12,6 +12,20 @@ node tools/orient/orient.mjs --impact app/src/lib/results/gridAutoScroll.ts   # 
 
 `--intent bug|feature|refactor|analysis|tests|modify` forces the kind of task (otherwise it is detected, and it only changes the shape of the card, never its confidence), `--budget <tokens>` the size, `--json` the output, `--no-graph` ignores Graphify even if present.
 
+## Status in one page
+
+What it is and what is proven, in plain terms (numbers: `node tools/orient/eval.mjs --report`; limits in detail further down):
+
+| Question | Answer |
+|---|---|
+| Does it point to the right files? | Often, not always: better than `graphify query` on every measured split, and weaker on new, varied tasks than the headline average. |
+| Does it help an agent? | Little for locating files: a small model that can search this repository finds them by itself in about ten tool calls (see "With real agents"). It is a hint, not a substitute. What *Impact* and *Tests* add was not measured. |
+| Can I trust `LIKELY`? | Only as "probably the right area": it is right about two times in three. |
+| Does it work with any AI? | Yes: Node and `git`, a Markdown card or versioned JSON, no provider, optional hooks and log. Each agent finds `AGENTS.md` its own way (table below). |
+| Is it solid on other systems and bigger repositories? | Linux with Node 24 is verified; macOS, Windows and Node 20 are set up in CI but have not run yet. A synthetic 20 000-file repository indexes in under 2 s. |
+
+**Not closed**, on purpose or for lack of means: recall on varied tasks is about half; precision is low because the card proposes up to five files for answers of about three; `LIKELY` cannot be predicted better with the signals we have; only Spanish and English; the evaluation set is small (177 tasks) and partly spent, so tuning again needs new real work (collect it with `--log` and `--feedback`); no MCP server or skill is shipped.
+
 ## How it works
 
 One hand-written source, everything else derived:

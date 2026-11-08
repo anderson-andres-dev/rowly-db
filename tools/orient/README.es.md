@@ -12,6 +12,20 @@ node tools/orient/orient.mjs --impact app/src/lib/results/gridAutoScroll.ts     
 
 `--intent bug|feature|refactor|analysis|tests|modify` fuerza el tipo de tarea (si no, se detecta; solo cambia la forma de la tarjeta, nunca su confianza), `--budget <tokens>` el tamaño, `--json` la salida y `--no-graph` ignora Graphify aunque exista.
 
+## Estado en una página
+
+Qué es y qué está demostrado, en claro (números: `node tools/orient/eval.mjs --report`; los límites en detalle más abajo):
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Apunta a los archivos correctos? | A menudo, no siempre: mejor que `graphify query` en todas las particiones medidas, y más débil con tareas nuevas y variadas de lo que sugiere el promedio. |
+| ¿Ayuda a un agente? | Poco para localizar archivos: un modelo pequeño que puede buscar en este repositorio los encuentra solo en unas diez llamadas (ver «Con agentes reales»). Es una pista, no un sustituto. Lo que aportan *Impact* y *Tests* no se midió. |
+| ¿Puedo fiarme de `LIKELY`? | Solo como «probablemente el área correcta»: acierta unas dos de cada tres veces. |
+| ¿Funciona con cualquier IA? | Sí: Node y `git`, una tarjeta en Markdown o JSON versionado, sin proveedor, con hooks y registro opcionales. Cada agente encuentra `AGENTS.md` a su manera (tabla más abajo). |
+| ¿Es sólido en otros sistemas y en repositorios más grandes? | Está verificado en Linux con Node 24; macOS, Windows y Node 20 están preparados en el CI pero todavía no han corrido. Un repositorio sintético de 20 000 archivos se indexa en menos de 2 s. |
+
+**No se cierra**, a propósito o por falta de medios: el recall con tareas variadas ronda la mitad; la precisión es baja porque la tarjeta propone hasta cinco archivos para respuestas de unos tres; `LIKELY` no se puede predecir mejor con las señales que tenemos; solo español e inglés; el conjunto de evaluación es pequeño (177 tareas) y en parte gastado, así que ajustar de nuevo exige trabajo real nuevo (recógelo con `--log` y `--feedback`); no se entrega servidor MCP ni skill.
+
 ## Cómo funciona
 
 Una sola fuente escrita a mano; todo lo demás se deriva:
