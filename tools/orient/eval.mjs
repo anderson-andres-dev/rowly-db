@@ -10,6 +10,7 @@
 //   node tools/orient/eval.mjs --check-gold                 valida el conjunto de oro
 //   node tools/orient/eval.mjs --runner graphify            mide `graphify query`
 //   node tools/orient/eval.mjs --runner graphify --write    guarda tests/orient/baseline.json
+//   node tools/orient/eval.mjs --report                          tabla de lo registrado: orient frente a graphify
 //   node tools/orient/eval.mjs --check                           control de regresiones (CI): compara con tests/orient/orient.json
 //   node tools/orient/eval.mjs --runner orient --split train     mide el orientador (solo train mientras se ajusta)
 //   node tools/orient/eval.mjs --runner orient --no-terms        sin el vocabulario curado
@@ -193,6 +194,22 @@ export function compareRecords(recorded, current, tolerance) {
   return { failures, warnings };
 }
 
+// Tabla de Markdown con lo registrado: orient frente a la linea de graphify, por particion.
+// Sale de los registros, asi que lo que se cite nunca se escribe a mano.
+export function report(orient, baseline) {
+  const p = (value) => (value === null || value === undefined ? "-" : `${(value * 100).toFixed(0)} %`);
+  const lines = ["| | n | rec@5 | prec | hit@5 | tests | tokens | SUFFICIENT: rate / correct |", "|---|---|---|---|---|---|---|---|"];
+  const row = (label, o, g) => {
+    lines.push(`| orient ${label} | ${o.tasks} | ${p(o.recall)} | ${p(o.precision)} | ${p(o.hit)} | ${p(o.tests)} | ${Math.round(o.tokens)} | ${p(o.sufficientRate)} / ${p(o.sufficientStrong)} |`);
+    lines.push(`| graphify ${label} | ${g.tasks} | ${p(g.recall)} | - | ${p(g.hit)} | ${p(g.tests)} | ${Math.round(g.tokens)} | - |`);
+  };
+  for (const part of SPLITS) row(part, orient.bySplit[part], baseline.bySplit[part]);
+  row("all", orient.summary, baseline.summary);
+  const n = orient.negatives;
+  if (n) lines.push("", `Out-of-scope tasks (${n.tasks}): false SUFFICIENT ${p(n.falseSufficient)}, NO MATCH ${p(n.noMatch)}.`);
+  return `${lines.join("\n")}\n`;
+}
+
 export function loadGold() {
   return JSON.parse(readFileSync(GOLD, "utf8"));
 }
@@ -278,6 +295,11 @@ function main(args) {
       console.error("Empeoro mas que la tolerancia de tests/orient/orient.json. Si es intencional: node tools/orient/eval.mjs --runner orient --no-graph --write");
       process.exit(1);
     }
+    return;
+  }
+
+  if (args.includes("--report")) {
+    process.stdout.write(report(JSON.parse(readFileSync(OUT.orient, "utf8")), JSON.parse(readFileSync(OUT.graphify, "utf8"))));
     return;
   }
 

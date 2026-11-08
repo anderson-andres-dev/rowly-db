@@ -1,0 +1,115 @@
+// El conjunto, no cada pieza: que AGENTS.md, el catalogo, el orientador, las evaluaciones y
+// el indice cuenten lo mismo y no se contradigan.
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { isTestPath, loadGold, loadNegatives } from "./eval.mjs";
+import { createOrient } from "./orient.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (path) => readFileSync(join(ROOT, path), "utf8");
+const json = (path) => JSON.parse(read(path));
+
+test("AGENTS.md solo nombra archivos, comandos y enlaces que existen", () => {
+  const text = read("AGENTS.md");
+  const missing = [];
+  for (const [, path] of text.matchAll(/`((?:tools|docs|tests|app|crates)\/[\w./-]+?)(?:#[\w-]+)?`/g)) if (!existsSync(join(ROOT, path))) missing.push(path);
+  for (const [, command] of text.matchAll(/`node (tools\/[\w./-]+\.mjs)/g)) if (!existsSync(join(ROOT, command))) missing.push(command);
+  for (const [, link] of text.matchAll(/\]\((?!https?:)([^)#]+)(?:#[^)]*)?\)/g)) if (!existsSync(join(ROOT, link))) missing.push(link);
+  assert.deepEqual([...new Set(missing)], []);
+});
+
+test("CONTRIBUTING en espanol e ingles listan los mismos comandos de orient", () => {
+  const commands = (path) => [...read(path).matchAll(/^(node tools\/orient\/[\w.]+ [^\s#]+)/gm)].map((match) => match[1]);
+  assert.ok(commands("CONTRIBUTING.md").length >= 2);
+  assert.deepEqual(commands("CONTRIBUTING.es.md"), commands("CONTRIBUTING.md"));
+});
+
+test("los registros de medicion corresponden al conjunto de oro actual", () => {
+  const ids = loadGold().tasks.map((task) => task.id).sort();
+  for (const path of ["tests/orient/orient.json", "tests/orient/baseline.json"]) {
+    assert.deepEqual(json(path).tasks.map((task) => task.id).sort(), ids, `${path} quedo atras del oro: regeneralo con node tools/orient/eval.mjs --runner <orient --no-graph|graphify> --write`);
+  }
+});
+
+const everything = () => [...loadGold().tasks, ...loadNegatives()];
+
+test("SUFFICIENT sale solo de la confianza alta, y PARTIAL, AMBIGUOUS y NO MATCH nunca se disfrazan de el", () => {
+  const orient = createOrient({ useCache: false, useGraph: false });
+  const seen = new Set();
+  for (const task of everything()) {
+    const out = orient.run(task.task);
+    const level = out.confidence.level;
+    seen.add(level);
+    assert.equal(out.sufficient, level === "high", task.id);
+    const next = out.markdown.split("## Next\n")[1] ?? "";
+    if (level === "high") assert.match(next, /^SUFFICIENT:/, task.id);
+    else if (level === "medium") assert.match(next, /^PARTIAL:/, task.id);
+    else if (level === "low") assert.match(next, /^AMBIGUOUS:/, task.id);
+    else assert.match(out.markdown, /NO MATCH/, task.id);
+    if (level !== "high") assert.doesNotMatch(out.markdown, /SUFFICIENT:/, task.id);
+  }
+  assert.deepEqual([...seen].sort(), ["high", "low", "medium", "none"]);
+});
+
+test("el tipo de tarea cambia la forma de la tarjeta, nunca la confianza", () => {
+  const orient = createOrient({ useCache: false, useGraph: false });
+  for (const task of loadGold().tasks.slice(0, 12)) {
+    const levels = new Set(["bug", "feature", "refactor", "analysis", "tests", "modify"].map((intent) => `${orient.run(task.task, { intent }).confidence.level}/${orient.run(task.task, { intent }).sufficient}`));
+    assert.equal(levels.size, 1, task.id);
+  }
+});
+
+test("graphify solo agrega lineas: no cambia la confianza, ni lo que se propone, ni SUFFICIENT", () => {
+  const without = createOrient({ useCache: false, useGraph: false });
+  const files = [...without.prepared.index.files.keys()];
+  const graph = {
+    nodes: files.map((path) => ({ id: path, source_file: path })),
+    links: files.slice(1).map((path, i) => ({ source: files[i], target: path, relation: "calls" })),
+  };
+  const withGraph = createOrient({ useCache: false, graph });
+  assert.equal(withGraph.graph, true);
+  let extra = 0;
+  for (const task of loadGold().tasks) {
+    const a = without.run(task.task);
+    const b = withGraph.run(task.task);
+    if (b.markdown.includes("graphify (by name")) extra += 1;
+    assert.equal(b.sufficient, a.sufficient, task.id);
+    assert.deepEqual(b.confidence, a.confidence, task.id);
+    assert.deepEqual(b.primary, a.primary, task.id);
+  }
+  assert.ok(extra > 0, "el grafo de prueba debe notarse en alguna tarjeta, o la prueba no prueba nada");
+});
+
+test("el indice con cache y sin cache da exactamente las mismas tarjetas, y la segunda vez no relee nada", () => {
+  createOrient({ useCache: true });
+  const cached = createOrient({ useCache: true });
+  const fresh = createOrient({ useCache: false });
+  assert.equal(cached.stats.parsed, 0);
+  assert.equal(cached.stats.reused, fresh.stats.files);
+  for (const task of loadGold().tasks) assert.equal(cached.run(task.task).markdown, fresh.run(task.task).markdown, task.id);
+});
+
+test("cada archivo del oro que no es una prueba esta indexado: el orientador puede, en principio, encontrarlo", () => {
+  const orient = createOrient({ useCache: false, useGraph: false });
+  const { files } = orient.prepared.index;
+  const outside = [];
+  for (const task of loadGold().tasks) for (const path of task.files) if (/\.(ts|svelte|rs|mjs|js)$/.test(path) && !isTestPath(path, []) && !files.has(path)) outside.push(`${task.id}: ${path}`);
+  assert.deepEqual(outside, []);
+});
+
+test("los limites que documenta el README coinciden con lo registrado", () => {
+  const record = json("tests/orient/orient.json");
+  const strong = Math.round(record.summary.sufficientStrong * 100);
+  const none = record.tasks.filter((task) => task.hit === 0).length;
+  for (const [path, strongText, noneText] of [
+    ["tools/orient/README.md", `${strong} %`, `${none} of ${record.tasks.length}`],
+    ["tools/orient/README.es.md", `${strong} %`, `${none} de ${record.tasks.length}`],
+  ]) {
+    const text = read(path);
+    assert.ok(text.includes(strongText), `${path}: SUFFICIENT ${strongText}; actualiza los limites`);
+    assert.ok(text.includes(noneText), `${path}: ${noneText} tareas sin archivo correcto; actualiza los limites`);
+  }
+});
