@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { POOLS, prompt, scoreAnswer, select, summarize } from "./agent-eval.mjs";
 import { loadGold } from "./eval.mjs";
+import { readFileSync } from "node:fs";
 
 test("select es reproducible, toma de las dos particiones y respeta --per", () => {
   const gold = loadGold().tasks;
@@ -36,4 +37,12 @@ test("summarize promedia puntajes y uso solo de lo que existe", () => {
   const row = (recall, tokens) => ({ A: { score: { recall, precision: 0.2, hit: 1, tests: null }, usage: { tokens, toolUses: 10, durationMs: 4000 } } });
   const s = summarize([row(0.5, 100), row(1, 300), { B: {} }], "A");
   assert.deepEqual([s.tasks, s.recall, s.tokens, s.toolUses, s.seconds, s.tests], [2, 0.75, 200, 10, 4, null]);
+});
+
+test("el registro de la corrida con agentes corresponde a las tareas que elige select y trae las dos condiciones", () => {
+  const record = JSON.parse(readFileSync(new URL("../../tests/orient/agent-eval.json", import.meta.url), "utf8"));
+  assert.deepEqual(record.tasks.map((row) => row.id), select(loadGold().tasks, 10).map((task) => task.id));
+  for (const row of record.tasks) assert.ok(row.A?.answer && row.B?.answer, row.id);
+  assert.equal(record.summary.A.tasks, 20);
+  assert.equal(record.summary.B.tasks, 20);
 });

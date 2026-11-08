@@ -78,6 +78,19 @@ Retrieval metrics say whether the right file is in the card, not whether an agen
 
 It costs tokens, so it is not part of CI.
 
+**Result of the first run** (Claude Haiku subagents, one run per condition, 20 tasks: 10 from `validation5` and 10 from `seen4`; each agent had only Read, Grep and Glob on a copy with no git history, no gold files and no orient):
+
+| | recall@5 | precision | hit@5 | tests | tokens | tool calls | seconds |
+|---|---|---|---|---|---|---|---|
+| A: no card | 79 % | 33 % | 90 % | 71 % | 51 261 | 10.7 | 32.0 |
+| B: with card | 81 % | 38 % | 95 % | 71 % | 49 930 | 10.5 | 30.3 |
+| the card alone | 32 % | – | 55 % | – | – | – | – |
+
+On `validation5` both conditions found every file; on `seen4` (SQL guard and analyzer) B was 62 % against 58 %. By task, B was better in 1, worse in 0 and equal in 19. **Read it plainly: for locating files, a small model that can search this repository finds them by itself in about ten tool calls, and the card changes little** (+2 points of recall, +4 of precision, about 3 % fewer tokens, which is inside the noise of one run). The card alone is far worse than the agent (32 % against 79 %), so it is a hint, not a substitute. This run does not measure what the Impact and Tests sections add, or what the card does for agents that cannot search or work on repositories much larger than this one.
+
+Limits of this measurement: one run per condition and 20 tasks; the agents work on HEAD, where each fix already exists, and the copy still contains the architecture documents and `tools/architecture/model.json`, which are themselves a map; the token figure includes about 40 000 tokens of fixed overhead of each subagent, so small savings cannot show; it measures localization, not solving the task.
+
+
 ## Measuring it
 
 `tests/orient/gold.json` holds 177 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on) and `holdout`, `seen`, `seen2`, `seen3`, `seen4` and `validation5` (measured, never tuned on; all but the last were looked at in earlier rounds, `validation5` was measured once, at the end of the last one). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `LIKELY`, and `tests/orient/short.json` one- and two-word queries that must not end in `NO MATCH`.

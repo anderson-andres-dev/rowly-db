@@ -1,0 +1,1242 @@
+{
+  "format": 1,
+  "about": "Prueba con agentes reales (tools/orient/README, \"Con agentes reales\"). A = sin tarjeta, B = con tarjeta. Mide localizacion, una corrida por condicion.",
+  "model": "claude-haiku (subagent)",
+  "summary": {
+    "A": {
+      "tasks": 20,
+      "recall": 0.7925,
+      "precision": 0.3316666666666667,
+      "hit": 0.9,
+      "tests": 0.7142857142857143,
+      "tokens": 51260.6,
+      "toolUses": 10.7,
+      "seconds": 31.99595
+    },
+    "B": {
+      "tasks": 20,
+      "recall": 0.8091666666666667,
+      "precision": 0.3766666666666667,
+      "hit": 0.95,
+      "tests": 0.7142857142857143,
+      "tokens": 49930.3,
+      "toolUses": 10.45,
+      "seconds": 30.25075
+    },
+    "cardOnly": {
+      "recall": 0.3183333333333333,
+      "hit": 0.55
+    }
+  },
+  "tasks": [
+    {
+      "id": "s01-3dc8700",
+      "split": "validation5",
+      "card": {
+        "recall": 0.3333333333333333,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/styles/tabs.css",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/components/TabOutline.svelte"
+          ],
+          "tests": [
+            "app/src/lib/reorder.dom.test.ts",
+            "app/src/lib/dragGhost.dom.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.6,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 52101,
+          "toolUses": 13,
+          "durationMs": 45456
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/styles/tabs.css",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/tabScroll.ts"
+          ],
+          "tests": [
+            "app/src/lib/tabScroll.dom.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.6,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 51795,
+          "toolUses": 10,
+          "durationMs": 30342
+        }
+      }
+    },
+    {
+      "id": "s03-9efd978",
+      "split": "validation5",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/styles/tabs.css"
+          ],
+          "tests": [
+            "app/tests/e2e/resources.mjs"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 50157,
+          "toolUses": 9,
+          "durationMs": 27554
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/styles/tabs.css",
+            "app/src/lib/components/TabOutline.svelte"
+          ],
+          "tests": []
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.3333333333333333,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44942,
+          "toolUses": 10,
+          "durationMs": 31639
+        }
+      }
+    },
+    {
+      "id": "s05-b504aa5",
+      "split": "validation5",
+      "card": {
+        "recall": 1,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/motion.ts",
+            "app/src/lib/reorder.ts",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/styles/tabs.css"
+          ],
+          "tests": [
+            "app/src/lib/motion.dom.test.ts",
+            "app/src/lib/reorder.dom.test.ts",
+            "app/src/lib/terminal.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 48404,
+          "toolUses": 11,
+          "durationMs": 33592
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/Terminal.svelte",
+            "app/src/lib/motion.ts",
+            "app/src/lib/reorder.ts",
+            "app/src/lib/components/MosaicArea.svelte",
+            "app/src/lib/components/TerminalSession.svelte"
+          ],
+          "tests": [
+            "app/src/lib/motion.dom.test.ts",
+            "app/src/lib/reorder.dom.test.ts",
+            "app/src/lib/terminal.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 54221,
+          "toolUses": 11,
+          "durationMs": 37721
+        }
+      }
+    },
+    {
+      "id": "s07-e0ff437",
+      "split": "validation5",
+      "card": {
+        "recall": 1,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/focusZones.ts",
+            "app/src/lib/styles/controls.css",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/routes/+layout.svelte"
+          ],
+          "tests": [
+            "app/src/lib/focusZones.keys.test.ts",
+            "app/src/lib/focusZones.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.25,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 65999,
+          "toolUses": 9,
+          "durationMs": 28764
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/focusZones.ts",
+            "app/src/lib/styles/controls.css",
+            "app/src/routes/+layout.svelte",
+            "app/src/lib/components/Workspace.svelte"
+          ],
+          "tests": [
+            "app/src/lib/focusZones.keys.test.ts",
+            "app/src/lib/focusZones.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.25,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 53299,
+          "toolUses": 10,
+          "durationMs": 32303
+        }
+      }
+    },
+    {
+      "id": "s09-a0ded77",
+      "split": "validation5",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/editor/behavior.ts",
+            "app/src/lib/theming/codemirrorTheme.ts",
+            "app/src/lib/editor/diagnostics.ts",
+            "app/src/lib/SqlEditor.svelte",
+            "app/src/lib/theming/palettes.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/behavior.test.ts",
+            "app/src/lib/editor/blankLines.test.ts",
+            "app/src/lib/theming/codemirrorTheme.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 43965,
+          "toolUses": 10,
+          "durationMs": 30062
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/editor/behavior.ts",
+            "app/src/lib/theming/codemirrorTheme.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/behavior.test.ts",
+            "app/src/lib/editor/blankLines.test.ts",
+            "app/src/lib/theming/codemirrorTheme.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44732,
+          "toolUses": 10,
+          "durationMs": 25636
+        }
+      }
+    },
+    {
+      "id": "s11-0c5a002",
+      "split": "validation5",
+      "card": {
+        "recall": 1,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/focusZones.ts",
+            "app/src/lib/workspace/commands.ts",
+            "app/src/lib/styles/controls.css",
+            "app/src/lib/keybindings.ts",
+            "app/src/lib/i18n/messages/shortcuts.ts"
+          ],
+          "tests": [
+            "app/src/lib/focusZones.keys.test.ts",
+            "app/src/lib/focusZones.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 50075,
+          "toolUses": 12,
+          "durationMs": 28788
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/focusZones.ts",
+            "app/src/lib/keybindings.ts",
+            "app/src/lib/workspace/commands.ts",
+            "app/src/lib/styles/controls.css",
+            "app/src/lib/components/Workspace.svelte"
+          ],
+          "tests": [
+            "app/src/lib/focusZones.keys.test.ts",
+            "app/src/lib/focusZones.test.ts",
+            "app/src/lib/workspace/commands.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 59151,
+          "toolUses": 10,
+          "durationMs": 27824
+        }
+      }
+    },
+    {
+      "id": "s13-396bc52",
+      "split": "validation5",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/routes/+layout.svelte",
+            "app/src/lib/components/RowlyMark.svelte"
+          ],
+          "tests": [
+            "app/tests/e2e/webdriver.mjs"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 46525,
+          "toolUses": 13,
+          "durationMs": 31279
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/routes/+layout.svelte",
+            "app/src/lib/components/ConnectionLanding.svelte",
+            "app/src/lib/components/RowlyMark.svelte"
+          ],
+          "tests": []
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.3333333333333333,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44264,
+          "toolUses": 10,
+          "durationMs": 25582
+        }
+      }
+    },
+    {
+      "id": "s15-48e8a5a",
+      "split": "validation5",
+      "card": {
+        "recall": 0.5,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/results/TableFilters.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/stores/queryConsoles.ts",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/results/filterBuilder.ts"
+          ],
+          "tests": [
+            "app/src/lib/stores/queryConsoles.test.ts",
+            "app/src/lib/results/filterBuilder.test.ts",
+            "app/src/lib/workspace/tableQueries.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.4,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 58903,
+          "toolUses": 16,
+          "durationMs": 42333
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/results/TableFilters.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/stores/queryConsoles.ts",
+            "app/src/lib/components/Workspace.svelte"
+          ],
+          "tests": [
+            "app/src/lib/stores/queryConsoles.test.ts",
+            "app/src/lib/workspace/tableQueries.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 54856,
+          "toolUses": 14,
+          "durationMs": 37132
+        }
+      }
+    },
+    {
+      "id": "s17-2013f67",
+      "split": "validation5",
+      "card": {
+        "recall": 0.5,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/iconOptics.ts",
+            "app/src/lib/components/results/ToolbarButton.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/components/results/ResultPager.svelte"
+          ],
+          "tests": []
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44410,
+          "toolUses": 10,
+          "durationMs": 30079
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/iconOptics.ts",
+            "app/src/lib/components/results/ToolbarButton.svelte",
+            "app/src/lib/components/results/ResultPane.svelte"
+          ],
+          "tests": []
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.6666666666666666,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 43254,
+          "toolUses": 10,
+          "durationMs": 26617
+        }
+      }
+    },
+    {
+      "id": "s19-e5dd986",
+      "split": "validation5",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/routes/+layout.svelte",
+            "app/src/lib/stores/connection.ts",
+            "app/src/lib/components/ConnectionSwitcher.svelte",
+            "app/src/lib/components/EnvironmentBadge.svelte",
+            "app/src/lib/connectionColors.ts"
+          ],
+          "tests": [
+            "app/tests/e2e/run.mjs",
+            "app/src/lib/connections/connectionIdentity.test.ts",
+            "app/src/lib/stores/connectionProfiles.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 63647,
+          "toolUses": 14,
+          "durationMs": 42614
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/routes/+layout.svelte",
+            "app/src/lib/components/EnvironmentBadge.svelte",
+            "app/src/lib/stores/connection.ts",
+            "app/src/lib/stores/connectionProfiles.ts",
+            "app/src/lib/components/ConnectionSwitcher.svelte"
+          ],
+          "tests": [
+            "app/src/lib/connections/connectionIdentity.test.ts",
+            "app/src/lib/stores/connectionProfiles.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 55173,
+          "toolUses": 12,
+          "durationMs": 33769
+        }
+      }
+    },
+    {
+      "id": "r01-12bfef8",
+      "split": "seen4",
+      "card": {
+        "recall": 0.2,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/motion.ts",
+            "app/src/lib/stores/queryConsoles.ts",
+            "app/src/lib/workspace/executionSession.ts"
+          ],
+          "tests": [
+            "app/src/lib/motion.dom.test.ts",
+            "app/src/lib/stores/queryConsoles.test.ts",
+            "app/src/lib/workspace/executionSession.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.6,
+          "precision": 0.6,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 55145,
+          "toolUses": 10,
+          "durationMs": 29713
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/results/ResultPane.svelte",
+            "app/src/lib/motion.ts",
+            "app/src/lib/components/Workspace.svelte",
+            "app/src/lib/stores/queryConsoles.ts",
+            "app/src/lib/results/columnFilters.ts"
+          ],
+          "tests": [
+            "app/src/lib/motion.dom.test.ts",
+            "app/src/lib/results/columnFilters.test.ts",
+            "app/src/lib/workspace/resultTabs.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.6,
+          "precision": 0.6,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 47240,
+          "toolUses": 9,
+          "durationMs": 25345
+        }
+      }
+    },
+    {
+      "id": "r04-512793b",
+      "split": "seen4",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "SQL_ENGINE.md",
+            "SQL_ENGINE.es.md",
+            "ENGINE_GUIDE.md",
+            "docs/ARCHITECTURE.md",
+            "tests/engines/contract.json"
+          ],
+          "tests": [
+            "app/src/lib/engines/contract.test.ts",
+            "crates/server-tests/tests/contract.rs",
+            "tools/ci/select.test.mjs"
+          ]
+        },
+        "score": {
+          "recall": 0,
+          "precision": 0,
+          "hit": 0,
+          "tests": 0
+        },
+        "usage": {
+          "tokens": 48029,
+          "toolUses": 10,
+          "durationMs": 29241
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "SQL_ENGINE.md",
+            "SQL_ENGINE.es.md",
+            "docs/ARCHITECTURE.md",
+            "tests/engines/contract.json",
+            "docs/ARCHITECTURE.es.md"
+          ],
+          "tests": [
+            "app/src/lib/engines/contract.test.ts",
+            "tools/test-dbs/evidence.test.mjs",
+            "tools/test-dbs/window.test.mjs"
+          ]
+        },
+        "score": {
+          "recall": 0,
+          "precision": 0,
+          "hit": 0,
+          "tests": 0
+        },
+        "usage": {
+          "tokens": 53184,
+          "toolUses": 9,
+          "durationMs": 26893
+        }
+      }
+    },
+    {
+      "id": "r07-f998f0a",
+      "split": "seen4",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "crates/engine/src/diagnostics.rs",
+            "app/src/lib/editor/analysisSession.ts",
+            "app/src/lib/editor/diagnostics.ts",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/analysisRunner.ts"
+          ],
+          "tests": [
+            "crates/engine/tests/corpus.rs",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/analysisSession.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": 0
+        },
+        "usage": {
+          "tokens": 58653,
+          "toolUses": 9,
+          "durationMs": 29536
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "crates/engine/src/diagnostics.rs",
+            "crates/engine/tests/corpus.rs",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/diagnostics.ts"
+          ],
+          "tests": [
+            "crates/engine/tests/corpus.rs",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/diagnostics.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.25,
+          "hit": 1,
+          "tests": 0
+        },
+        "usage": {
+          "tokens": 49549,
+          "toolUses": 11,
+          "durationMs": 33625
+        }
+      }
+    },
+    {
+      "id": "r10-a781c04",
+      "split": "seen4",
+      "card": {
+        "recall": 0.5,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/editor/commentStyle.ts",
+            "app/src/lib/editor/commentStyle.dom.test.ts",
+            "app/src/lib/theming/codemirrorTheme.ts",
+            "app/src/lib/SqlEditor.svelte",
+            "app/src/lib/editor/commentHighlight.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/commentStyle.dom.test.ts",
+            "app/src/lib/editor/commentHighlight.test.ts",
+            "app/src/lib/editor/commentEditing.dom.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.4,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44483,
+          "toolUses": 9,
+          "durationMs": 30883
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/editor/commentStyle.ts",
+            "app/src/lib/theming/codemirrorTheme.ts",
+            "app/src/lib/SqlEditor.svelte"
+          ],
+          "tests": [
+            "app/src/lib/editor/commentStyle.dom.test.ts",
+            "app/src/lib/editor/commentHighlight.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.6666666666666666,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 42686,
+          "toolUses": 8,
+          "durationMs": 21025
+        }
+      }
+    },
+    {
+      "id": "r13-8d67a0a",
+      "split": "seen4",
+      "card": {
+        "recall": 0.3333333333333333,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "crates/server-tests/tests/generated.rs",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/catalogCompletions.server.test.ts",
+            "app/src/lib/editor/catalogCompletions.ts",
+            "app/src/lib/editor/diagnostics.ts"
+          ],
+          "tests": [
+            "crates/server-tests/tests/generated.rs",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/catalogCompletions.server.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0,
+          "precision": 0,
+          "hit": 0,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 53373,
+          "toolUses": 11,
+          "durationMs": 32702
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "crates/server-tests/tests/generated.rs",
+            "app/src/lib/editor/catalogCompletions.server.test.ts",
+            "crates/server-tests/tests/analysis.rs",
+            "app/src/lib/editor/catalogCompletions.ts",
+            "crates/server-tests/src/lib.rs"
+          ],
+          "tests": [
+            "crates/server-tests/tests/generated.rs",
+            "app/src/lib/editor/catalogCompletions.server.test.ts",
+            "crates/server-tests/tests/analysis.rs"
+          ]
+        },
+        "score": {
+          "recall": 0.3333333333333333,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 61415,
+          "toolUses": 13,
+          "durationMs": 41310
+        }
+      }
+    },
+    {
+      "id": "r17-c9bf339",
+      "split": "seen4",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/sqlStatements.ts",
+            "app/src/lib/sqlMixedCorpus.test.ts",
+            "app/src/lib/editor/statementIndex.ts"
+          ],
+          "tests": [
+            "app/src/lib/sqlStatements.test.ts",
+            "app/src/lib/sqlMixedCorpus.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.3333333333333333,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 52649,
+          "toolUses": 9,
+          "durationMs": 28795
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/sqlStatements.ts",
+            "app/src/lib/editor/statementIndex.ts"
+          ],
+          "tests": [
+            "app/src/lib/sqlStatements.test.ts",
+            "app/src/lib/editor/statementIndex.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 45633,
+          "toolUses": 9,
+          "durationMs": 26927
+        }
+      }
+    },
+    {
+      "id": "r20-df690e5",
+      "split": "seen4",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/editor/catalogCompletions.ts",
+            "app/src/lib/editor/completionSource.ts",
+            "app/src/lib/SqlEditor.svelte",
+            "app/src/lib/editor/completionPolicy.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/catalogCompletions.test.ts",
+            "app/src/lib/editor/completionSource.test.ts",
+            "app/src/lib/editor/catalogCompletions.server.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.25,
+          "precision": 0.25,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 49521,
+          "toolUses": 9,
+          "durationMs": 29073
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/SqlEditor.svelte",
+            "app/src/lib/editor/catalogCompletions.ts",
+            "app/src/lib/editor/completionSource.ts",
+            "app/src/lib/editor/configuration.ts",
+            "app/src/lib/editor/callHints.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/catalogCompletions.test.ts",
+            "app/src/lib/editor/completionSource.test.ts",
+            "app/src/lib/editor/configuration.dom.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.25,
+          "precision": 0.2,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 53301,
+          "toolUses": 11,
+          "durationMs": 29129
+        }
+      }
+    },
+    {
+      "id": "r23-7e1ac96",
+      "split": "seen4",
+      "card": {
+        "recall": 0.5,
+        "precision": 0.2,
+        "hit": 1,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/TableDefinitionModal.svelte",
+            "app/src/lib/editor/formatLayout.ts"
+          ],
+          "tests": [
+            "app/src/lib/editor/formatLayout.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.5,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 44002,
+          "toolUses": 9,
+          "durationMs": 26495
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/TableDefinitionModal.svelte",
+            "app/src/lib/editor/formatLayout.ts",
+            "app/src/lib/results/gridClipboard.ts"
+          ],
+          "tests": [
+            "app/src/lib/results/gridClipboard.test.ts",
+            "app/src/lib/editor/formatLayout.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.5,
+          "precision": 0.3333333333333333,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 46400,
+          "toolUses": 11,
+          "durationMs": 30464
+        }
+      }
+    },
+    {
+      "id": "r26-51e07a2",
+      "split": "seen4",
+      "card": {
+        "recall": 0,
+        "precision": 0,
+        "hit": 0,
+        "tests": null
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "crates/drivers/mysql/src/lib.rs",
+            "crates/drivers/postgres/src/lib.rs",
+            "crates/server-tests/tests/contract.rs",
+            "crates/driver-core/src/console.rs",
+            "crates/driver-core/src/lib.rs"
+          ],
+          "tests": [
+            "crates/server-tests/tests/contract.rs",
+            "crates/drivers/mysql/src/lib.rs"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.4,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 54551,
+          "toolUses": 14,
+          "durationMs": 41107
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "crates/drivers/postgres/src/lib.rs",
+            "crates/drivers/mysql/src/lib.rs",
+            "crates/server-tests/tests/contract.rs",
+            "app/src-tauri/src/state.rs"
+          ],
+          "tests": [
+            "crates/server-tests/tests/contract.rs",
+            "app/src-tauri/src/state.rs"
+          ]
+        },
+        "score": {
+          "recall": 1,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": null
+        },
+        "usage": {
+          "tokens": 49559,
+          "toolUses": 13,
+          "durationMs": 38004
+        }
+      }
+    },
+    {
+      "id": "r29-f393cab",
+      "split": "seen4",
+      "card": {
+        "recall": 0.5,
+        "precision": 0.4,
+        "hit": 1,
+        "tests": 0
+      },
+      "A": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/results/DataGrid.svelte",
+            "app/src/lib/results/resultEditing.ts",
+            "app/src/lib/numpadKeys.ts",
+            "app/src/lib/results/gridNavigation.ts",
+            "app/src/lib/stores/resultEdits.ts"
+          ],
+          "tests": [
+            "app/src/lib/results/resultEditing.test.ts",
+            "app/src/lib/numpadKeys.test.ts",
+            "app/src/lib/results/gridNavigation.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.5,
+          "precision": 0.4,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 40620,
+          "toolUses": 7,
+          "durationMs": 21853
+        }
+      },
+      "B": {
+        "answer": {
+          "files": [
+            "app/src/lib/components/results/DataGrid.svelte",
+            "app/src/lib/results/gridNavigation.ts",
+            "app/src/lib/results/resultEditing.ts",
+            "app/src/lib/numpadKeys.ts"
+          ],
+          "tests": [
+            "app/src/lib/results/gridNavigation.test.ts",
+            "app/src/lib/results/resultEditing.test.ts",
+            "app/src/lib/numpadKeys.test.ts"
+          ]
+        },
+        "score": {
+          "recall": 0.5,
+          "precision": 0.5,
+          "hit": 1,
+          "tests": 1
+        },
+        "usage": {
+          "tokens": 43952,
+          "toolUses": 8,
+          "durationMs": 23728
+        }
+      }
+    }
+  ]
+}

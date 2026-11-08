@@ -78,6 +78,19 @@ Las métricas de recuperación dicen si el archivo correcto está en la tarjeta,
 
 Cuesta tokens, así que no forma parte del CI.
 
+**Resultado de la primera corrida** (subagentes Claude Haiku, una corrida por condición, 20 tareas: 10 de `validation5` y 10 de `seen4`; cada agente tenía solo Read, Grep y Glob sobre una copia sin historial de git, sin los archivos del oro y sin orient):
+
+| | recall@5 | precisión | hit@5 | pruebas | tokens | llamadas | segundos |
+|---|---|---|---|---|---|---|---|
+| A: sin tarjeta | 79 % | 33 % | 90 % | 71 % | 51 261 | 10,7 | 32,0 |
+| B: con tarjeta | 81 % | 38 % | 95 % | 71 % | 49 930 | 10,5 | 30,3 |
+| la tarjeta sola | 32 % | – | 55 % | – | – | – | – |
+
+En `validation5` ambas condiciones encontraron todos los archivos; en `seen4` (guarda y analizador SQL) B tuvo 62 % frente a 58 %. Por tarea, B fue mejor en 1, peor en 0 e igual en 19. **Léelo sin adornos: para localizar archivos, un modelo pequeño que puede buscar en este repositorio los encuentra solo en unas diez llamadas y la tarjeta cambia poco** (+2 puntos de recall, +4 de precisión, un 3 % menos de tokens, dentro del ruido de una sola corrida). La tarjeta sola es mucho peor que el agente (32 % frente a 79 %), así que es una pista, no un sustituto. Esta corrida no mide lo que aportan las secciones Impact y Tests, ni lo que hace la tarjeta con agentes que no pueden buscar o con repositorios mucho más grandes que este.
+
+Límites de la medición: una corrida por condición y 20 tareas; los agentes trabajan sobre HEAD, donde cada arreglo ya existe, y la copia conserva los documentos de arquitectura y `tools/architecture/model.json`, que ya son un mapa; la cifra de tokens incluye unos 40 000 tokens de sobrecarga fija de cada subagente, así que los ahorros pequeños no se ven; mide localización, no resolver la tarea.
+
+
 ## Medirlo
 
 `tests/orient/gold.json` tiene 177 tareas sacadas de commits reales (`files` y `tests` son lo que tocó el cambio; el texto es como lo pediría alguien), repartidas en `train` (la única contra la que se pueden ajustar parámetros) y `holdout`, `seen`, `seen2`, `seen3`, `seen4` y `validation5` (se miden, nunca se ajusta contra ellas; todas menos la última se vieron en rondas anteriores, `validation5` se midió una sola vez, al final de la última). `tests/orient/negatives.json` tiene tareas fuera de alcance para las que jamás debe decir `LIKELY`, y `tests/orient/short.json` consultas de una o dos palabras que no deben acabar en `NO MATCH`.
