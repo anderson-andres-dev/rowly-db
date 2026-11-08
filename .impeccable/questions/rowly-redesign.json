@@ -1,0 +1,28 @@
+{
+  "title": "Approve the Rowly DB direction",
+  "question": "Review the single proposed visual system and open the navigable prototype before approving it or asking for a re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Change Review Sheet",
+      "kicker": "PROPOSAL",
+      "lineage": "code review change sets and precise desktop tools",
+      "thesis": "A compact product page that earns confidence through real captures and a visible edit, inspect, apply rhythm.",
+      "palette": ["#f7faf9", "#092532", "#00aaa6", "#cbd9d9"],
+      "materials": ["real application captures", "change rail", "plain paper surfaces"],
+      "viewport": "The exact product title leads into one factual paragraph, direct download action, and an offset application capture.",
+      "risk": "The precision can feel austere, so real captures and teal actions carry the product identity.",
+      "raised": [
+        {
+          "from": "calibrated-rail",
+          "raise": "One thin review rail carries continuity without introducing decorative color systems."
+        }
+      ],
+      "comp": "mockups/rowly-redesign/previews/landing-desktop-light.png"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "comp", "toggle": true},
+  "canon": false,
+  "steer": true
+}

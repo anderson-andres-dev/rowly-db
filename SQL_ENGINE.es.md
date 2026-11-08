@@ -133,7 +133,7 @@ El soporte del fabricante y la verificación de Rowly DB son datos distintos. **
 |  | 11.7 | 1 | — | 11.7–13.0; 11.8 (2028-06-04); 12.3 (2029-06-12); 5 de corta duración | 11.8.9 |
 | PostgreSQL | 10 | 1 | `catalogV10` desde 10 | 10; 10 (2022-11-10) | — |
 |  | 11 | 1 | `procedures` desde 11<br>`indexIncludeColumns` desde 11 | 11; 11 (2023-11-09) | — |
-|  | 12 | 1 | eliminada `… WITH OIDS` | 12–13; 12 (2024-11-21); 13 (2025-11-13) | 13.23 |
+|  | 12 | 1 | eliminada `… WITH OIDS` | 12–13; 12 (2024-11-21); 13 (2025-11-13) | — |
 |  | 14 | 1 | eliminada `… !` | 14; 14 (2026-11-12) | 14.24 |
 |  | 15 | 1 | — | 15; 15 (2027-11-11) | 15.19 |
 |  | 16 | 1 | — | 16; 16 (2028-11-09) | 16.15 |
@@ -278,7 +278,7 @@ node tools/inventory/tests.mjs --check
 # Recorridos E2E: solo en CI (.github/workflows/e2e.yml); necesitan WebKitWebDriver, tauri-driver, Xvfb y xdotool
 
 # Suite contra servidor real (levanta MySQL, MariaDB y PostgreSQL en Docker)
-tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=13.23
+tools/test-dbs/up.sh                       # o una versión verificada: tools/test-dbs/up.sh postgres=14.24
 ROWLY_EVIDENCE=evidence.jsonl cargo test -p rowly-server-tests -- --ignored --test-threads=1
 node tools/inventory/coverage.mjs          # cada fila de §6 asignada, ninguna prueba real huérfana
 

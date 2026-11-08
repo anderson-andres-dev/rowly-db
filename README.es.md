@@ -104,11 +104,11 @@
 MySQL, MariaDB y PostgreSQL. Cada versión de esta tabla pasa la matriz completa de calidad SQL contra un servidor real en el CI; las demás conectan con las reglas de su línea de versión y se muestran como no verificadas ([SQL_ENGINE.es.md](SQL_ENGINE.es.md#5-líneas-de-versión)).
 
 <!-- generated: engines (tools/inventory/status.mjs) -->
-| Motor | Versiones verificadas | Líneas de versión |
-|---|---|---|
-| MySQL | 8.0.46, 8.4.11, 9.7.2 | 5.7, 8.0, 8.4, 9 |
-| MariaDB | 10.6.28, 11.8.9 | 10.3, 10.6, 11.7 |
-| PostgreSQL | 13.23, 14.24, 15.19, 16.15, 17.11, 18.6 | 10, 11, 12, 14, 15, 16, 17, 18 |
+| Motor | Versiones verificadas | Verificadas antes (fuera de soporte, no se anuncian) | Líneas de versión |
+|---|---|---|---|
+| MySQL | 8.0.46, 8.4.11, 9.7.2 | — | 5.7, 8.0, 8.4, 9 |
+| MariaDB | 10.6.28, 11.8.9 | — | 10.3, 10.6, 11.7 |
+| PostgreSQL | 14.24, 15.19, 16.15, 17.11, 18.6 | 13.23 (hasta 2026-11-13, evidencia c74868d0f5d5) | 10, 11, 12, 14, 15, 16, 17, 18 |
 <!-- /generated: engines -->
 
 ## Instalación
