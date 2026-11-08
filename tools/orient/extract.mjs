@@ -110,6 +110,7 @@ export function extractFile(path, text, references, code) {
     invokes: [...new Set([...text.matchAll(/\binvoke(?:<[^>]*>)?\(\s*["'](\w+)["']/g)].map((match) => match[1]))],
     commands: [],
     literals: literalsOf(text),
+    uses: path.endsWith(".rs") ? [...new Set([...text.matchAll(/\b(?:crate|khipu_\w+)(?:::\w+)+/g)].map((match) => match[0]))] : [],
   };
   if (path.endsWith(".rs")) {
     for (let i = 0; i < lines.length; i += 1) {

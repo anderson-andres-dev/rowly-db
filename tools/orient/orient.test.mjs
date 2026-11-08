@@ -148,7 +148,7 @@ test("detectIntent distingue bug, funcionalidad, refactor, analisis y pruebas", 
     ["qué pruebas debo correr al tocar la paginación", "tests"],
     ["Mover a módulos puros el manejo de archivos, con sus pruebas", "refactor"],
     ["En PostgreSQL abrir la primera consola se cuenta como perder una sesión y avisa de un error", "bug"],
-    ["Cambiar el color del boton", "modify"],
+    ["Cambiar el color del boton", "feature"],
   ];
   for (const [task, intent] of cases) assert.equal(detectIntent(task), intent, task);
 });
@@ -177,9 +177,9 @@ test("graphify es opcional: sin grafo no hay nada, con grafo suma vecinos y no r
   assert.deepEqual(graphNeighbors(graph, ["x.ts"]), [{ path: "y.ts", edges: 2 }, { path: "z.ts", edges: 1 }]);
   assert.deepEqual(graphNeighbors(graph, ["x.ts"], { skip: new Set(["y.ts"]) }), [{ path: "z.ts", edges: 1 }]);
   const p = prepared();
-  const withGraph = card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { graph: { nodes: [{ id: "a", source_file: "app/src/lib/results/gridScroll.ts" }, { id: "b", source_file: "app/src/lib/terminal.ts" }], links: [{ source: "a", target: "b", relation: "calls" }] } });
+  const withGraph = card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { intent: "bug", graph: { nodes: [{ id: "a", source_file: "app/src/lib/results/gridScroll.ts" }, { id: "b", source_file: "app/src/lib/terminal.ts" }], links: [{ source: "a", target: "b", relation: "calls" }] } });
   assert.match(withGraph.markdown, /graphify \(by name, may be off\): `app\/src\/lib\/terminal\.ts` \(1\)/);
-  assert.doesNotMatch(card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar").markdown, /graphify/);
+  assert.doesNotMatch(card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { intent: "bug" }).markdown, /graphify/);
 });
 
 // --- Sobre el repositorio real -------------------------------------------
@@ -290,4 +290,42 @@ test("una palabra suelta que existe en el repositorio propone algo; una que no e
   assert.equal(found.likely, false);
   assert.ok(found.primary.length > 0);
   assert.equal(card(p, retrieve(p, "zzzzqqq"), "zzzzqqq").noMatch, true);
+});
+
+// --- Rust: dependencias por archivo -------------------------------------------
+
+const RUST = {
+  "crates/engine/Cargo.toml": '[package]\nname = "khipu-engine"\n',
+  "crates/engine/src/lib.rs": "pub mod guard;\n",
+  "crates/engine/src/guard.rs": "pub fn classify() {}\n",
+  "crates/engine/src/util/mod.rs": "pub fn helper() {}\n",
+  "app/src-tauri/Cargo.toml": '[package]\nname = "khipu-desktop"\n',
+  "app/src-tauri/src/commands/query.rs": "use khipu_engine::guard::classify;\nuse crate::state::Session;\nfn run() { khipu_engine::util::helper(); }\n",
+  "app/src-tauri/src/state.rs": "pub struct Session;\n",
+  "app/src-tauri/src/lib.rs": "mod state;\nmod commands;\n",
+};
+const rustModel = {
+  domains: [{ id: "backend", paths: ["app/src-tauri/src/"] }, { id: "engine", paths: ["crates/engine/src/"] }],
+  allowed: {},
+  features: { roots: ["app/src-tauri/src/", "crates/"], items: [{ id: "all", summary: "Everything.", terms: { es: ["todo", "cosa"], en: ["all", "thing"] }, entry: ["app/src-tauri/src/", "crates/engine/src/"], untested: "fixture" }] },
+};
+
+test("Rust: `use crate::` y `khipu_x::` se resuelven al archivo del modulo mas profundo y alimentan Impact, no la busqueda", () => {
+  const rfs = { read: (path) => RUST[path], stat: (path) => ({ size: RUST[path].length, mtimeMs: 1 }) };
+  const { index } = buildIndex({ tracked: Object.keys(RUST), model: rustModel, inventory: { tests: [] }, fs: rfs });
+  const query = index.files.get("app/src-tauri/src/commands/query.rs");
+  assert.deepEqual(query.rustUses.sort(), ["app/src-tauri/src/state.rs", "crates/engine/src/guard.rs", "crates/engine/src/util/mod.rs"]);
+  assert.deepEqual(index.files.get("crates/engine/src/guard.rs").rustUsedBy, ["app/src-tauri/src/commands/query.rs"]);
+  assert.deepEqual(query.deps, []);
+  assert.deepEqual(index.files.get("crates/engine/src/guard.rs").rdeps, ["crates/engine/src/lib.rs"], "solo la declaracion `mod`, no los `use`");
+  const p = prepare(index);
+  assert.match(impact(p, "crates/engine/src/guard.rs").markdown, /`app\/src-tauri\/src\/commands\/query\.rs`/);
+});
+
+test("el vocabulario de una funcionalidad tambien sale del codigo de sus archivos", () => {
+  const model2 = structuredClone(model);
+  model2.features.items[1].terms = { es: ["nada", "vacio"], en: ["none", "empty"] };
+  const { index } = buildIndex({ tracked, model: model2, inventory, fs });
+  const p = prepare(index);
+  assert.equal(retrieve(p, "openTerminal").features[0].id, "terminal");
 });

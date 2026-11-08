@@ -100,11 +100,11 @@ test("compareRecords: los tokens fallan por crecimiento relativo y lo que falta 
 test("report arma la tabla desde los registros, sin numeros escritos a mano", () => {
   const part = (recall) => ({ tasks: 2, recall, precision: 0.3, hit: 0.9, tests: 0.5, tokens: 500.4, likelyRate: 0.5, likelyStrong: 0.9 });
   const base = (recall) => ({ tasks: 2, recall, hit: 0.1, tests: 0.2, tokens: 1800 });
-  const orient = { summary: part(0.6), bySplit: { train: part(0.7), holdout: part(0.4), seen: part(0.5), seen2: part(0.55), seen3: part(0.5), validation4: part(0.6) }, negatives: { tasks: 12, falseLikely: 0, noMatch: 0.5 } };
-  const baseline = { summary: base(0.1), bySplit: { train: base(0.16), holdout: base(0.06), seen: base(0.07), seen2: base(0.05), seen3: base(0.06), validation4: base(0.08) } };
+  const orient = { summary: part(0.6), bySplit: { train: part(0.7), holdout: part(0.4), seen: part(0.5), seen2: part(0.55), seen3: part(0.5), seen4: part(0.4), validation5: part(0.6) }, negatives: { tasks: 12, falseLikely: 0, noMatch: 0.5 } };
+  const baseline = { summary: base(0.1), bySplit: { train: base(0.16), holdout: base(0.06), seen: base(0.07), seen2: base(0.05), seen3: base(0.06), seen4: base(0.07), validation5: base(0.08) } };
   const table = report(orient, baseline);
   assert.match(table, /\| orient train \| 2 \| 70 % \| 30 % \| 90 % \| 50 % \| 500 \| 50 % \/ 90 % \|/);
-  assert.match(table, /\| graphify validation4 \| 2 \| 8 % \| - \| 10 % \| 20 % \| 1800 \| - \|/);
+  assert.match(table, /\| graphify validation5 \| 2 \| 8 % \| - \| 10 % \| 20 % \| 1800 \| - \|/);
   assert.match(table, /false LIKELY 0 %, NO MATCH 50 %/);
 });
 

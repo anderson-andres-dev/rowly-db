@@ -8,7 +8,7 @@ import { fieldsOf } from "./index.mjs";
 import { Bm25, tokens } from "./text.mjs";
 
 export const PARAMS = {
-  feature: { terms: 3, id: 2, summary: 1, names: 1.5, docs: 0.5 },
+  feature: { terms: 3, id: 2, summary: 1, names: 1.5, docs: 0.5, members: 0.1 },
   file: { name: 3, path: 1.5, symbols: 2, ui: 1, lead: 1 },
   lambda: 1.5,
   exact: 0,
@@ -22,7 +22,19 @@ export const PARAMS = {
 
 const norm = (text) => tokens(text);
 
+// Lo que dicen los archivos de cada funcionalidad (nombres de simbolos y textos de interfaz):
+// el vocabulario sale del codigo, no de lo que alguien alcanzo a escribir en el catalogo.
+function memberTokens(index) {
+  const out = new Map();
+  for (const file of index.files.values()) {
+    const { symbols, ui } = fieldsOf(file);
+    for (const id of file.features) out.set(id, [...(out.get(id) ?? []), ...symbols, ...ui]);
+  }
+  return out;
+}
+
 function featureDocs(index, { useTerms }) {
+  const members = memberTokens(index);
   return index.model.features.items.map((feature) => ({
     id: feature.id,
     fields: {
@@ -30,6 +42,7 @@ function featureDocs(index, { useTerms }) {
       summary: norm(feature.summary),
       terms: useTerms ? [...feature.terms.es, ...feature.terms.en].flatMap(norm) : [],
       names: feature.entry.flatMap((entry) => norm(entry.replace(/\/$/, "").split("/").pop().replace(/\.[a-z]+$/, ""))),
+      members: members.get(feature.id) ?? [],
       docs: (feature.docs ?? []).flatMap((target) => norm(target.split("#")[1]?.replace(/-/g, " ") ?? "")),
     },
   }));
