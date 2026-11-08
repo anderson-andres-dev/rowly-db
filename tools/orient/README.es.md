@@ -28,6 +28,8 @@ Qué es y qué está demostrado, en claro (números: `node tools/orient/eval.mjs
 
 ## Cómo funciona
 
+`AGENTS.md` lleva un mapa generado del repositorio (una línea por funcionalidad, una descripción corta de las capas y una tabla de qué hacer ante una petición genérica), para que un agente empiece con el plano cargado y no recorra el repositorio. Se reconstruye desde el mismo catálogo con `features.mjs --write` y el CI comprueba que está al día.
+
 Una sola fuente escrita a mano; todo lo demás se deriva:
 
 - **Catálogo**: la clave `features` de `tools/architecture/model.json` (lo que una tarea puede nombrar, con las palabras de usuarios e interfaz, en español e inglés). `node tools/orient/features.mjs --check` lo valida y `docs/map/FEATURES.md` se genera de él. Las pruebas no se repiten: salen de `tests/inventory.json`.
@@ -58,7 +60,7 @@ No se construyó, a propósito: cualquier agente que pueda ejecutar un comando d
 
 | Agente | ¿Lee `AGENTS.md`? | En este repositorio |
 |---|---|---|
-| Claude Code | Sí, desde la v2.1.277, **solo si no hay `CLAUDE.md`**; si lo hay, lee ese. Según su [documentación de memoria](https://code.claude.com/docs/en/memory#agents-md), la forma oficial de combinarlos es un import `@AGENTS.md` en `CLAUDE.md`. | `CLAUDE.md` es un puntero de una línea a `AGENTS.md`, así que funciona en ambos casos. |
+| Claude Code | Sí, desde la v2.1.277, **solo si no hay `CLAUDE.md`**; si lo hay, lee ese. Según su [documentación de memoria](https://code.claude.com/docs/en/memory#agents-md), la forma oficial de combinarlos es un import `@AGENTS.md` en `CLAUDE.md`. | `CLAUDE.md` es ese import (`@AGENTS.md`), así que `AGENTS.md` se carga en cada sesión. |
 | OpenAI Codex | Sí ([guía](https://developers.openai.com/codex/guides/agents-md); no se leyó directamente, sale de fuentes secundarias). | Nada que añadir. |
 | GitHub Copilot coding agent | Sí ([changelog](https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions)). Los reportes sobre Copilot CLI se contradicen. | Nada que añadir. |
 | Gemini CLI | No por defecto: lee `GEMINI.md`; `context.fileName` puede sumar `AGENTS.md` ([documentación](https://www.geminicli.com/docs/cli/gemini-md)). | `GEMINI.md` es un puntero de una línea. |

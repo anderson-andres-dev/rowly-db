@@ -129,3 +129,15 @@ test("los archivos puntero de cada agente remiten a AGENTS.md y no llevan instru
     assert.ok(text.split("\n").length <= 2, `${path}: un puntero no lleva instrucciones propias`);
   }
 });
+
+test("AGENTS.md es el mapa: cabe en un presupuesto, trae el protocolo para peticiones genericas y una linea por funcionalidad", () => {
+  const text = read("AGENTS.md");
+  assert.ok(text.length <= 14000, `AGENTS.md pesa ${text.length} caracteres: se carga en cada sesion, mantenlo corto`);
+  for (const phrase of ["Analyze / explain the repo", "How could I make this change", "Fix this bug", "Where is X", "Refactor / review", "Budget:"]) assert.ok(text.includes(phrase), phrase);
+  const model = json("tools/architecture/model.json");
+  for (const feature of model.features.items) assert.ok(text.includes(`\`${feature.id}\``), `falta ${feature.id} en el mapa`);
+});
+
+test("CLAUDE.md importa AGENTS.md con la sintaxis oficial de Claude Code", () => {
+  assert.equal(read("CLAUDE.md").trim(), "@AGENTS.md");
+});
