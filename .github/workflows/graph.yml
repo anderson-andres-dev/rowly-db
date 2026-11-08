@@ -1,0 +1,43 @@
+name: Graph
+
+# El grafo de simbolos de graphify no se versiona (graphify-out/ esta en
+# .gitignore). Aqui se regenera desde develop y queda como artefacto, para quien
+# quiera bajarlo en lugar de construirlo: `graphify update .` tarda unos 10 s
+# y no usa API. Nada del repositorio ni del CI depende de este artefacto.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: graph
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar graphify
+        run: pip install graphifyy
+
+      - name: Construir el grafo
+        run: graphify update .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graphify-out
+          path: |
+            graphify-out/graph.json
+            graphify-out/GRAPH_REPORT.md
+          retention-days: 14
+          if-no-files-found: error
