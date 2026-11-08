@@ -96,7 +96,8 @@ Each line is `feature` — what it is → its main file or folder. Generated fro
 1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules between domains are data in `tools/architecture/model.json` and are checked in CI.
 2. Engines, drivers, generated SQL, analysis or execution: read [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
 3. Which tests protect an area: `tests/inventory.json`. A test sits next to the code it covers.
-4. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
+4. Real versions of every dependency and where to read the docs of that version: [docs/map/STACK.md](docs/map/STACK.md).
+5. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
 
 ## Rules
 
@@ -110,6 +111,7 @@ Persistent decisions, each with why it exists and the command that checks it (ge
 - **i18n-texts** — Text the user sees goes through `app/src/lib/i18n/messages/` in Spanish and English, never inline. *Why:* TypeScript requires every language to have the same keys. Check: `cd app && npm run check`.
 - **engine-neutral-common-code** — Common code never names a concrete engine; engine-specific code lives in its own domain. *Why:* Engines differ as declared data, so adding one leaves shared code alone. Check: `node tools/architecture/graph.mjs --check`.
 - **published-deps-only** — Dependencies are published releases only: no forks, git dependencies or patches. *Why:* A missing upstream feature is a documented gap, never a fork. Check: `node tools/inventory/dependencies.mjs`.
+- **dependency-versions** — Before using the API of a dependency, look up its resolved version in `docs/map/STACK.md` and read the documentation of that version. *Why:* Memory and "latest" docs describe other majors (Tauri 2, Svelte 5, Vite 8). Check: `node tools/orient/stack.mjs --check`.
 - **spanish-pairs** — Docs that have a Spanish pair (`*.es.md`) change together with it. *Why:* The two languages must not drift apart.
 - **one-owner-per-command** — A new backend command is registered in `lib.rs` and added with its single owner module to `app/src/lib/backend.test.ts`. *Why:* Each IPC command has one owner and the test pins the list. Check: `cd app && npx vitest run src/lib/backend.test.ts`.
 - **one-owner-per-state** — Each piece of state has one owner; others read it through its interface and keep no second mutable copy. *Why:* Connection, catalog, execution, tabs and editor live for different spans.
