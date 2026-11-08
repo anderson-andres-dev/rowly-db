@@ -215,32 +215,32 @@
     {
       "id": "neg-43",
       "task": "Conectar la aplicación con una impresora 3D para imprimir las tablas.",
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "neg-44",
       "task": "Predecir el precio de las acciones con una red neuronal.",
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "neg-45",
       "task": "Pedir un taxi desde la barra de estado.",
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "neg-46",
       "task": "Programar el riego automático del jardín con sensores de humedad.",
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "neg-47",
       "task": "Generar música a partir de los resultados de una consulta.",
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "neg-48",
       "task": "Verificar la identidad de los usuarios con reconocimiento facial.",
-      "split": "validation4"
+      "split": "seen4"
     }
   ]
 }

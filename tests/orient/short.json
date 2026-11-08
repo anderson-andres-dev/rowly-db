@@ -63,7 +63,7 @@
         "app/src/lib/i18n/index.ts",
         "app/src/lib/i18n/locales.ts"
       ],
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "short-08",
@@ -72,7 +72,7 @@
         "app/src/lib/stores/updates.ts",
         "app/src/lib/components/UpdatePrompt.svelte"
       ],
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "short-09",
@@ -80,7 +80,7 @@
       "files": [
         "app/src/lib/editor/formatter.ts"
       ],
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "short-10",
@@ -89,7 +89,7 @@
         "app/src/lib/components/Terminal.svelte",
         "app/src-tauri/src/terminal.rs"
       ],
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "short-11",
@@ -98,7 +98,7 @@
         "app/src/lib/editor/completionSource.ts",
         "app/src/lib/editor/catalogCompletions.ts"
       ],
-      "split": "validation4"
+      "split": "seen4"
     },
     {
       "id": "short-12",
@@ -107,7 +107,7 @@
         "app/src-tauri/src/credentials.rs",
         "app/src/lib/credentials.ts"
       ],
-      "split": "validation4"
+      "split": "seen4"
     }
   ]
 }

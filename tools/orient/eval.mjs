@@ -42,7 +42,7 @@ const NEGATIVES = join(ROOT, "tests/orient/negatives.json");
 const SHORT = join(ROOT, "tests/orient/short.json");
 const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
 const KINDS = ["bug", "feature", "refactor", "analysis", "modify"];
-const SPLITS = ["train", "holdout", "seen", "seen2", "seen3", "validation4"];
+const SPLITS = ["train", "holdout", "seen", "seen2", "seen3", "seen4", "validation5"];
 const TOP = 5;
 
 // Un archivo de prueba: por nombre o por carpeta, salvo que la tarea lo cuente
@@ -267,7 +267,7 @@ export const DEFAULT_TOLERANCE = {
   short: { warn: 0.1, fail: 0.25 },
 };
 
-const NEGATIVE_SPLITS = ["train", "seen", "seen2", "seen3", "validation4"];
+const NEGATIVE_SPLITS = ["train", "seen", "seen2", "seen3", "seen4"];
 
 function measure(name, run, tasks, only = null) {
   const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
@@ -334,7 +334,7 @@ function main(args) {
   const name = args[args.indexOf("--runner") + 1];
   const runner = RUNNERS[name];
   if (!args.includes("--runner") || !runner) {
-    console.error(`Uso: eval.mjs --check-gold | --check | --report | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|seen|seen2|seen3|validation4] [--verbose] [--write]`);
+    console.error(`Uso: eval.mjs --check-gold | --check | --report | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|seen|seen2|seen3|seen4|validation5] [--verbose] [--write]`);
     process.exit(2);
   }
   const split = args.includes("--split") ? args[args.indexOf("--split") + 1] : null;
