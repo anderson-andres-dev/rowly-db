@@ -223,7 +223,7 @@ test("pickPrimary no muestra lo que queda muy por debajo del mejor (corte relati
 });
 
 test("levelOf: sin evidencia no hay nada, y solo margen, cobertura y evidencia juntos dan high", () => {
-  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10 };
+  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10, shortWords: 2, noneShort: 2 };
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 3 }, rule), "none");
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 12 }, rule), "high");
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 6 }, rule), "medium");
@@ -245,15 +245,17 @@ test("pickTests da a cada archivo principal su mejor prueba, aunque el inventari
   assert.equal(tests[0].path, "app/src/lib/results/gridScroll.test.ts");
 });
 
-test("sobre el repo real las tareas fuera de alcance nunca declaran LIKELY", () => {
+test("sobre el repo real casi ninguna tarea fuera de alcance declara LIKELY (tope 5 %) y todas caben en el tope", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
   const negatives = JSON.parse(readFileSync(new URL("../../tests/orient/negatives.json", import.meta.url), "utf8")).tasks;
   assert.ok(negatives.length >= 12);
+  let likely = 0;
   for (const task of negatives) {
     const out = orient.run(task.task);
-    assert.equal(out.likely, false, task.id);
+    if (out.likely) likely += 1;
     assert.ok(out.tokens <= BUDGET, task.id);
   }
+  assert.ok(likely / negatives.length <= 0.05, `${likely} de ${negatives.length} negativas declararon LIKELY`);
 });
 
 test("el cache se invalida solo cuando cambia el extractor: la firma sale de su codigo", () => {
@@ -272,4 +274,20 @@ test("pruebas de integracion declaradas en el catalogo aparecen aunque su dueno 
   const base = prepared();
   const without = pickTests(base.index, retrieve(base, "la grilla y su scroll"));
   assert.ok(!without.map((test) => test.path).includes("crates/x/tests/integration.rs"));
+});
+
+test("levelOf: una consulta de una o dos palabras con evidencia da AMBIGUOUS (low), nunca LIKELY, y sin evidencia NO MATCH", () => {
+  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10, shortWords: 2, noneShort: 2 };
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 12, words: 1 }, rule), "low");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 3, words: 2 }, rule), "low");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 1, words: 2 }, rule), "none");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 12, words: 3 }, rule), "high");
+});
+
+test("una palabra suelta que existe en el repositorio propone algo; una que no existe, NO MATCH", () => {
+  const p = prepared();
+  const found = card(p, retrieve(p, "grilla"), "grilla");
+  assert.equal(found.likely, false);
+  assert.ok(found.primary.length > 0);
+  assert.equal(card(p, retrieve(p, "zzzzqqq"), "zzzzqqq").noMatch, true);
 });

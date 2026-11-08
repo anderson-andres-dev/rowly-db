@@ -17,7 +17,7 @@ export const PARAMS = {
   test: { name: 2, property: 2, owner: 1 },
   perFeature: 3,
   keep: 0.5,
-  confidence: { margin: 0.2, coverage: 0.35, none: 4, high: 10 },
+  confidence: { margin: 0.2, coverage: 0.35, none: 4, high: 10, shortWords: 2, noneShort: 2 },
 };
 
 const norm = (text) => tokens(text);
@@ -54,7 +54,10 @@ export function prepare(index, { useTerms = true } = {}) {
 // De las senales a un nivel: `high` es lo unico que permite decir LIKELY. `evidence` es
 // la rareza (idf) sumada de las palabras de la tarea que aparecen en la funcionalidad o en
 // los primeros archivos: una palabra comun suelta no es evidencia; una rara si.
-export function levelOf({ margin, coverage, evidence }, rule) {
+export function levelOf({ margin, coverage, evidence, words }, rule) {
+  // Una consulta de una o dos palabras no puede ser LIKELY, pero una palabra rara que aparece
+  // en el repositorio basta para proponer algo en vez de NO MATCH.
+  if (words !== undefined && words <= rule.shortWords) return evidence < rule.noneShort ? "none" : "low";
   if (evidence < rule.none) return "none";
   const strong = margin >= rule.margin;
   const covered = coverage >= rule.coverage;
@@ -119,7 +122,7 @@ export function retrieve(prepared, task, params = PARAMS) {
   const coverage = unique.length ? unique.filter((term) => seen.has(term)).length / unique.length : 0;
   const matchedAll = new Set([...(featureScores[0]?.matched ?? []), ...ranked.slice(0, 3).flatMap((item) => item.matched)]);
   const evidence = [...matchedAll].reduce((sum, term) => sum + files.idf(term), 0);
-  const signals = { margin, coverage, evidence };
+  const signals = { margin, coverage, evidence, words: unique.length };
   const level = levelOf(signals, params.confidence);
   const testHits = tests.score(said);
 
