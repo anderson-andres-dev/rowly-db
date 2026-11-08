@@ -67,6 +67,17 @@ Off by default. `--log` (or `ORIENT_LOG=<path>`) appends one JSON line per query
 
 `.claude/settings.json` carries a hook installed by Graphify (`graphify hook-guard`) that tells Claude Code to run `graphify query` before searching. It is Graphify's, not orient's, and it was left as is. The two coexist: `AGENTS.md` says to start with `orient` (it needs nothing installed), and Graphify remains an optional second opinion when `graphify-out/graph.json` exists. If you want only one, remove the hook from your own settings; nothing in orient depends on it.
 
+## With real agents
+
+Retrieval metrics say whether the right file is in the card, not whether an agent does better with it. `agent-eval.mjs` measures that for localization: given a task, an agent says which files it would change first and which tests it would run, with or without the card.
+
+1. Make a plain copy of the repository **without git history and without the answers**: `git archive HEAD | tar -x -C <snapshot>`, then delete `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.claude`, `tools/orient`, `tests/orient` and `docs/map`.
+2. `node tools/orient/agent-eval.mjs prompts --out <dir> --snapshot <snapshot>` writes `<id>.A.txt` (no card) and `<id>.B.txt` (with the card) for 20 tasks: 10 from `validation5` (UI work) and 10 from `seen4` (SQL guard and analyzer work), chosen by a fixed rule.
+3. Run each prompt with the agent or model you want, each in a fresh session, and have it write its JSON answer to `<id>.A.json` or `<id>.B.json`. Note tokens, tool calls and seconds in a `usage.json` (`{"<id>.A": {"tokens": n, "toolUses": n, "durationMs": n}}`).
+4. `node tools/orient/agent-eval.mjs score --answers <dir> --usage usage.json --write` scores files (recall@5, precision) and tests against what the task's commit touched and writes `tests/orient/agent-eval.json`.
+
+It costs tokens, so it is not part of CI.
+
 ## Measuring it
 
 `tests/orient/gold.json` holds 177 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on) and `holdout`, `seen`, `seen2`, `seen3`, `seen4` and `validation5` (measured, never tuned on; all but the last were looked at in earlier rounds, `validation5` was measured once, at the end of the last one). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `LIKELY`, and `tests/orient/short.json` one- and two-word queries that must not end in `NO MATCH`.

@@ -67,6 +67,17 @@ Apagado por defecto. `--log` (o `ORIENT_LOG=<ruta>`) agrega una línea JSON por 
 
 `.claude/settings.json` lleva un hook que instaló Graphify (`graphify hook-guard`) y que le dice a Claude Code que ejecute `graphify query` antes de buscar. Es de Graphify, no de orient, y se dejó como está. Conviven: `AGENTS.md` manda empezar con `orient` (no necesita nada instalado) y Graphify queda como segunda opinión opcional cuando existe `graphify-out/graph.json`. Si quieres solo uno, quita el hook de tu propia configuración; nada de orient depende de él.
 
+## Con agentes reales
+
+Las métricas de recuperación dicen si el archivo correcto está en la tarjeta, no si un agente trabaja mejor con ella. `agent-eval.mjs` lo mide para la localización: dada una tarea, un agente dice qué archivos cambiaría primero y qué pruebas correría, con o sin la tarjeta.
+
+1. Haz una copia simple del repositorio **sin historial de git y sin las respuestas**: `git archive HEAD | tar -x -C <snapshot>`, y borra `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.claude`, `tools/orient`, `tests/orient` y `docs/map`.
+2. `node tools/orient/agent-eval.mjs prompts --out <dir> --snapshot <snapshot>` escribe `<id>.A.txt` (sin tarjeta) y `<id>.B.txt` (con tarjeta) para 20 tareas: 10 de `validation5` (interfaz) y 10 de `seen4` (guarda y analizador SQL), elegidas con una regla fija.
+3. Ejecuta cada prompt con el agente o modelo que quieras, cada uno en una sesión nueva, y haz que escriba su respuesta JSON en `<id>.A.json` o `<id>.B.json`. Anota tokens, llamadas a herramientas y segundos en un `usage.json` (`{"<id>.A": {"tokens": n, "toolUses": n, "durationMs": n}}`).
+4. `node tools/orient/agent-eval.mjs score --answers <dir> --usage usage.json --write` puntúa archivos (recall@5, precisión) y pruebas contra lo que tocó el commit de la tarea y escribe `tests/orient/agent-eval.json`.
+
+Cuesta tokens, así que no forma parte del CI.
+
 ## Medirlo
 
 `tests/orient/gold.json` tiene 177 tareas sacadas de commits reales (`files` y `tests` son lo que tocó el cambio; el texto es como lo pediría alguien), repartidas en `train` (la única contra la que se pueden ajustar parámetros) y `holdout`, `seen`, `seen2`, `seen3`, `seen4` y `validation5` (se miden, nunca se ajusta contra ellas; todas menos la última se vieron en rondas anteriores, `validation5` se midió una sola vez, al final de la última). `tests/orient/negatives.json` tiene tareas fuera de alcance para las que jamás debe decir `LIKELY`, y `tests/orient/short.json` consultas de una o dos palabras que no deben acabar en `NO MATCH`.
