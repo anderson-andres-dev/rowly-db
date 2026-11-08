@@ -148,3 +148,22 @@ test("cada regla del catalogo esta en AGENTS.md y el catalogo valido no tiene pr
   assert.ok(model.rules.length >= 10);
   for (const rule of model.rules) assert.ok(text.includes(`**${rule.id}**`), `falta la regla ${rule.id}`);
 });
+
+test("docs/AI.md y su par en espanol tienen la misma estructura y sus enlaces y anclas existen", async () => {
+  const { anchors } = await import("./features.mjs");
+  const headings = (text) => [...text.matchAll(/^## /gm)].length;
+  const en = read("docs/AI.md");
+  const es = read("docs/AI.es.md");
+  assert.equal(headings(es), headings(en));
+  assert.equal([...es.matchAll(/^\| /gm)].length, [...en.matchAll(/^\| /gm)].length);
+  const broken = [];
+  for (const [path, text] of [["docs/AI.md", en], ["docs/AI.es.md", es]]) {
+    for (const [, target, anchor] of text.matchAll(/\]\((?!https?:)([^)#]+)(?:#([^)]+))?\)/g)) {
+      const file = join(dirname(join(ROOT, path)), target);
+      if (!existsSync(file)) broken.push(`${path}: ${target}`);
+      else if (anchor && file.endsWith(".md") && !anchors(readFileSync(file, "utf8")).has(anchor)) broken.push(`${path}: ${target}#${anchor}`);
+    }
+  }
+  assert.deepEqual(broken, []);
+  for (const path of ["AGENTS.md", "README.md", "README.es.md"]) assert.match(read(path), /docs\/AI(\.es)?\.md/, path);
+});

@@ -2,7 +2,7 @@
 
 [English](README.md) · **Español**
 
-Orientación para cualquier tarea y cualquier agente o persona: bug, funcionalidad nueva, cambio, refactor, pruebas o una pregunta sobre el proyecto. Lee el repositorio e imprime una tarjeta pequeña (unos 500 tokens, nunca más de 1 200): dónde vive lo que se pide, qué rangos de líneas leer, qué reutilizar, qué depende de eso, qué pruebas correr y si con eso basta. Solo necesita Node y el repositorio: sin servicio, sin modelo, sin dependencias, sin configuración de ningún proveedor. [AGENTS.md](../../AGENTS.md) es la entrada; todo lo de aquí es Markdown, JSON y comandos de terminal.
+Orientación para cualquier tarea y cualquier agente o persona: bug, funcionalidad nueva, cambio, refactor, pruebas o una pregunta sobre el proyecto. Lee el repositorio e imprime una tarjeta pequeña (unos 500 tokens, nunca más de 1 200): dónde vive lo que se pide, qué rangos de líneas leer, qué reutilizar, qué depende de eso, qué pruebas correr y si con eso basta. Solo necesita Node y el repositorio: sin servicio, sin modelo, sin dependencias, sin configuración de ningún proveedor. [AGENTS.md](../../AGENTS.md) es la entrada y [docs/AI.es.md](../../docs/AI.es.md) explica cómo encaja todo el toolkit (mapa, playbooks, reglas, esta herramienta, versiones); todo lo de aquí es Markdown, JSON y comandos de terminal.
 
 ```bash
 node tools/orient/orient.mjs "la grilla no hace scroll al arrastrar la selección"   # nivel 0: la tarjeta
@@ -24,7 +24,7 @@ Qué es y qué está demostrado, en claro (números: `node tools/orient/eval.mjs
 | ¿Funciona con cualquier IA? | Sí: Node y `git`, una tarjeta en Markdown o JSON versionado, sin proveedor, con hooks y registro opcionales. Cada agente encuentra `AGENTS.md` a su manera (tabla más abajo). |
 | ¿Es sólido en otros sistemas y en repositorios más grandes? | Está verificado en Linux con Node 24; macOS, Windows y Node 20 están preparados en el CI pero todavía no han corrido. Un repositorio sintético de 20 000 archivos se indexa en menos de 2 s. |
 
-**No se cierra**, a propósito o por falta de medios: el recall con tareas variadas ronda la mitad; la precisión es baja porque la tarjeta propone hasta cinco archivos para respuestas de unos tres; `LIKELY` no se puede predecir mejor con las señales que tenemos; solo español e inglés; el conjunto de evaluación es pequeño (177 tareas) y en parte gastado, así que ajustar de nuevo exige trabajo real nuevo (recógelo con `--log` y `--feedback`); no se entrega servidor MCP ni skill.
+**No se cierra**, a propósito o por falta de medios: el recall con tareas variadas ronda la mitad; la precisión es baja porque la tarjeta propone hasta cinco archivos para respuestas de unos tres; `LIKELY` no se puede predecir mejor con las señales que tenemos; solo español e inglés; el conjunto de evaluación es pequeño (177 tareas) y en parte gastado, así que ajustar de nuevo exige trabajo real nuevo (recógelo con `--log` y `--feedback`); no se entrega servidor MCP (las skills de los playbooks se generan desde `model.json`, ver abajo).
 
 ## Cómo funciona
 
@@ -52,7 +52,7 @@ Nada los instala: ningún script de npm, ningún workflow, ninguna otra herramie
 
 ## Envolverlo para otra herramienta (MCP, skill)
 
-No se construyó, a propósito: cualquier agente que pueda ejecutar un comando de terminal ya puede usar `orient.mjs`, y un envoltorio sería una cosa más que mantener sincronizada. Si quieres uno, `orient.mjs "<tarea>" --json` es toda la interfaz (ver el contrato de arriba): un servidor MCP necesita una herramienta, `orient`, que reciba `task` (y opcionalmente `intent`, `budget`) y devuelva ese JSON o la tarjeta con `--with-markdown`; una skill es un `SKILL.md` cuyo cuerpo dice que ejecute el comando y lea la línea `Next` de la tarjeta. Guarda en el envoltorio la versión del esquema para notar un cambio de contrato.
+Los playbooks ya se entregan como skills (`.claude/skills/rowly-<id>` y `.agents/skills/rowly-<id>`), generadas desde `tools/architecture/model.json` y comprobadas en CI; `orient.mjs --playbook "<petición>"` imprime el mismo procedimiento (`--json`: `kind: "playbook"`, versión de esquema 1). La tarjeta en sí no tiene envoltorio. No se construyó, a propósito: cualquier agente que pueda ejecutar un comando de terminal ya puede usar `orient.mjs`, y un envoltorio sería una cosa más que mantener sincronizada. Si quieres uno, `orient.mjs "<tarea>" --json` es toda la interfaz (ver el contrato de arriba): un servidor MCP necesita una herramienta, `orient`, que reciba `task` (y opcionalmente `intent`, `budget`) y devuelva ese JSON o la tarjeta con `--with-markdown`; una skill es un `SKILL.md` cuyo cuerpo dice que ejecute el comando y lea la línea `Next` de la tarjeta. Guarda en el envoltorio la versión del esquema para notar un cambio de contrato.
 
 ## Cómo encuentra cada agente la entrada
 
@@ -61,7 +61,7 @@ No se construyó, a propósito: cualquier agente que pueda ejecutar un comando d
 | Agente | ¿Lee `AGENTS.md`? | En este repositorio |
 |---|---|---|
 | Claude Code | Sí, desde la v2.1.277, **solo si no hay `CLAUDE.md`**; si lo hay, lee ese. Según su [documentación de memoria](https://code.claude.com/docs/en/memory#agents-md), la forma oficial de combinarlos es un import `@AGENTS.md` en `CLAUDE.md`. | `CLAUDE.md` es ese import (`@AGENTS.md`), así que `AGENTS.md` se carga en cada sesión. |
-| OpenAI Codex | Sí ([guía](https://developers.openai.com/codex/guides/agents-md); no se leyó directamente, sale de fuentes secundarias). | Nada que añadir. |
+| OpenAI Codex | Sí ([guía](https://developers.openai.com/codex/guides/agents-md); no se leyó directamente, sale de fuentes secundarias). Skills: recorre `.agents/skills` hasta la raíz del repositorio ([docs de skills](https://learn.chatgpt.com/docs/build-skills), comprobado). | Las skills de los playbooks generadas en `.agents/skills`. |
 | GitHub Copilot coding agent | Sí ([changelog](https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions)). Los reportes sobre Copilot CLI se contradicen. | Nada que añadir. |
 | Gemini CLI | No por defecto: lee `GEMINI.md`; `context.fileName` puede sumar `AGENTS.md` ([documentación](https://www.geminicli.com/docs/cli/gemini-md)). | `GEMINI.md` es un puntero de una línea. |
 | Cursor | Lo reportan terceros (documentación de reglas: [cursor.com/docs/rules](https://cursor.com/docs/rules), no verificada aquí). | Nada que añadir. |

@@ -42,11 +42,12 @@ node tools/inventory/coverage.mjs           # cada fila de SQL_ENGINE §6 respon
 node tools/inventory/dependencies.mjs       # solo versiones publicadas de las dependencias
 node tools/inventory/status.mjs             # el estado generado de README y SQL_ENGINE al día
 node tools/architecture/graph.mjs --check   # dependencias permitidas y grafo de arquitectura al día
-node tools/orient/features.mjs --check      # catálogo de funcionalidades válido y docs/map/FEATURES.md al día
+node tools/orient/features.mjs --check      # catálogo, reglas y playbooks válidos; mapa, router, skills y docs/map/* al día
+node tools/orient/stack.mjs --check         # docs/map/STACK.md coincide con los lockfiles
 node tools/orient/eval.mjs --check          # orient no empeoró respecto a tests/orient/orient.json (la tolerancia está dentro)
 ```
 
-Los bloques entre marcadores `<!-- generated: … -->` los escriben esas herramientas; nunca los edites a mano. `status.mjs --write` y `graph.mjs --write` los regeneran. `graphify-out/` es el grafo de símbolos opcional para explorar. No se versiona: constrúyelo con `graphify update .` si tienes [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` en PyPI) instalado, o baja el artefacto `graphify-out` del workflow `Graph`, que lo reconstruye desde `develop`. Los agentes parten de [AGENTS.md](AGENTS.md).
+Los bloques entre marcadores `<!-- generated: … -->` los escriben esas herramientas; nunca los edites a mano. `status.mjs --write` y `graph.mjs --write` los regeneran. `graphify-out/` es el grafo de símbolos opcional para explorar. No se versiona: constrúyelo con `graphify update .` si tienes [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` en PyPI) instalado, o baja el artefacto `graphify-out` del workflow `Graph`, que lo reconstruye desde `develop`. Los agentes parten de [AGENTS.md](AGENTS.md); para cambiar lo que se les dice (funcionalidades, reglas, playbooks), edita `tools/architecture/model.json` y corre `node tools/orient/features.mjs --write` ([docs/AI.es.md](docs/AI.es.md#cambiar-el-toolkit)); tras cambiar dependencias, `node tools/orient/stack.mjs --write`.
 
 El CI corre la misma compuerta con Rust 1.90 (`.github/workflows/rust.yml`, en los paquetes que toca un cambio y los que dependen de ellos; ver `tools/ci/README.es.md`); un clippy local más nuevo puede no ver un aviso que la 1.90 sí marca, así que `cargo +1.90 clippy --workspace --all-targets -- -D warnings` lo reproduce tal cual. Cada archivo de test necesita una entrada en `tests/inventory.json` con su dueño, la propiedad que protege, su riesgo, su compuerta y una decisión; el `--check` falla hasta que la tenga.
 

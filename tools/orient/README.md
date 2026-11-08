@@ -2,7 +2,7 @@
 
 **English** · [Español](README.es.md)
 
-Orientation for any task, for any agent or person: bug, new feature, change, refactor, tests, or a question about the project. It reads the repository and prints a small card (about 500 tokens, never more than 1 200): where the thing lives, which line ranges to read, what to reuse, what depends on it, which tests to run and whether that is enough. It needs only Node and the repository: no service, no model, no dependency, no provider-specific setup. [AGENTS.md](../../AGENTS.md) is the entry point; everything here is plain Markdown, JSON and terminal commands.
+Orientation for any task, for any agent or person: bug, new feature, change, refactor, tests, or a question about the project. It reads the repository and prints a small card (about 500 tokens, never more than 1 200): where the thing lives, which line ranges to read, what to reuse, what depends on it, which tests to run and whether that is enough. It needs only Node and the repository: no service, no model, no dependency, no provider-specific setup. [AGENTS.md](../../AGENTS.md) is the entry point and [docs/AI.md](../../docs/AI.md) explains how the whole toolkit (map, playbooks, rules, this tool, versions) fits together; everything here is plain Markdown, JSON and terminal commands.
 
 ```bash
 node tools/orient/orient.mjs "the grid does not scroll while drag-selecting"   # level 0: the card
@@ -24,7 +24,7 @@ What it is and what is proven, in plain terms (numbers: `node tools/orient/eval.
 | Does it work with any AI? | Yes: Node and `git`, a Markdown card or versioned JSON, no provider, optional hooks and log. Each agent finds `AGENTS.md` its own way (table below). |
 | Is it solid on other systems and bigger repositories? | Linux with Node 24 is verified; macOS, Windows and Node 20 are set up in CI but have not run yet. A synthetic 20 000-file repository indexes in under 2 s. |
 
-**Not closed**, on purpose or for lack of means: recall on varied tasks is about half; precision is low because the card proposes up to five files for answers of about three; `LIKELY` cannot be predicted better with the signals we have; only Spanish and English; the evaluation set is small (177 tasks) and partly spent, so tuning again needs new real work (collect it with `--log` and `--feedback`); no MCP server or skill is shipped.
+**Not closed**, on purpose or for lack of means: recall on varied tasks is about half; precision is low because the card proposes up to five files for answers of about three; `LIKELY` cannot be predicted better with the signals we have; only Spanish and English; the evaluation set is small (177 tasks) and partly spent, so tuning again needs new real work (collect it with `--log` and `--feedback`); no MCP server is shipped (the playbook skills are generated from `model.json`, see below).
 
 ## How it works
 
@@ -52,7 +52,7 @@ Nothing installs them: no npm script, no workflow, no other tool. They append a 
 
 ## Wrapping it for another tool (MCP, skill)
 
-Not built, on purpose: any agent that can run a terminal command can already use `orient.mjs`, and a wrapper would be one more thing to keep in step. If you want one, `orient.mjs "<task>" --json` is the whole interface (see the contract above): an MCP server needs one tool, `orient`, that takes `task` (and optionally `intent`, `budget`) and returns that JSON or the card with `--with-markdown`; a skill is a `SKILL.md` whose body says to run the command and to read the `Next` line of the card. Keep the schema version in the wrapper so a change in the contract is noticed.
+The playbooks are already shipped as skills (`.claude/skills/rowly-<id>` and `.agents/skills/rowly-<id>`), generated from `tools/architecture/model.json` and checked in CI; `orient.mjs --playbook "<request>"` prints the same procedure (`--json`: `kind: "playbook"`, schema version 1). The card itself has no wrapper. Not built, on purpose: any agent that can run a terminal command can already use `orient.mjs`, and a wrapper would be one more thing to keep in step. If you want one, `orient.mjs "<task>" --json` is the whole interface (see the contract above): an MCP server needs one tool, `orient`, that takes `task` (and optionally `intent`, `budget`) and returns that JSON or the card with `--with-markdown`; a skill is a `SKILL.md` whose body says to run the command and to read the `Next` line of the card. Keep the schema version in the wrapper so a change in the contract is noticed.
 
 ## How each agent finds the entry point
 
@@ -61,7 +61,7 @@ Not built, on purpose: any agent that can run a terminal command can already use
 | Agent | Reads `AGENTS.md`? | In this repository |
 |---|---|---|
 | Claude Code | Yes, since v2.1.277, **only when there is no `CLAUDE.md`**; with one it reads that instead. Per its [memory docs](https://code.claude.com/docs/en/memory#agents-md) the official way to combine them is an `@AGENTS.md` import in `CLAUDE.md`. | `CLAUDE.md` is that import (`@AGENTS.md`), so `AGENTS.md` is loaded into every session. |
-| OpenAI Codex | Yes ([guide](https://developers.openai.com/codex/guides/agents-md); not read directly, from secondary sources). | Nothing to add. |
+| OpenAI Codex | Yes ([guide](https://developers.openai.com/codex/guides/agents-md); not read directly, from secondary sources). Skills: it scans `.agents/skills` up to the repository root ([skills docs](https://learn.chatgpt.com/docs/build-skills), checked). | The generated playbook skills in `.agents/skills`. |
 | GitHub Copilot coding agent | Yes ([changelog](https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions)). Reports on Copilot CLI disagree. | Nothing to add. |
 | Gemini CLI | Not by default: it reads `GEMINI.md`; `context.fileName` can add `AGENTS.md` ([docs](https://www.geminicli.com/docs/cli/gemini-md)). | `GEMINI.md` is a one-line pointer. |
 | Cursor | Reported by third parties (rules docs: [cursor.com/docs/rules](https://cursor.com/docs/rules), not verified here). | Nothing to add. |
