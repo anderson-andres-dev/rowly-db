@@ -5,8 +5,10 @@
 //
 //   node tools/orient/index.mjs            arma o actualiza el indice y dice que reuso
 //   node tools/orient/index.mjs --rebuild  lo arma desde cero
+//   node tools/orient/index.mjs --quiet    sin salida (para los hooks de tools/orient/hooks.mjs)
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { code, createDomainOf, createReferences } from "../architecture/deps.mjs";
@@ -36,15 +38,25 @@ export function headings(file, text) {
   });
 }
 
-// `fs`: { read(path), stat(path) -> {size, mtimeMs} }. `cache`: lo guardado la vez anterior.
-export function buildIndex({ tracked, model, inventory, fs, cache }) {
+// Lo que decide si lo guardado sirve: la version del formato y el codigo que extrae. Si
+// cambia el extractor (o las referencias que comparte con graph.mjs), el cache se descarta
+// solo; nadie tiene que acordarse de subir una constante.
+export function extractorSignature(root = ROOT) {
+  const hash = createHash("sha256");
+  for (const file of ["tools/orient/extract.mjs", "tools/architecture/deps.mjs"]) hash.update(readFileSync(join(root, file)));
+  return `${CACHE_VERSION}:${hash.digest("hex").slice(0, 16)}`;
+}
+
+// `fs`: { read(path), stat(path) -> {size, mtimeMs} }. `cache`: lo guardado la vez anterior,
+// valido solo si su `signature` es la actual.
+export function buildIndex({ tracked, model, inventory, fs, cache, signature = String(CACHE_VERSION) }) {
   const references = createReferences(model);
   const domainOf = createDomainOf(model);
   const entries = model.features.items.flatMap((feature) => feature.entry.map((entry) => ({ feature: feature.id, entry })));
   const featuresOf = (path) => [...new Set(entries.filter(({ entry }) => covers(entry, path)).map(({ feature }) => feature))];
 
   const stats = { files: 0, reused: 0, parsed: 0, removed: 0 };
-  const previous = cache?.version === CACHE_VERSION ? cache.files : {};
+  const previous = cache?.signature === signature ? cache.files : {};
   const next = {};
   const files = new Map();
   for (const path of tracked) {
@@ -110,7 +122,7 @@ export function buildIndex({ tracked, model, inventory, fs, cache }) {
   const indegree = (path) => files.get(path).rdeps.length + files.get(path).callers.length;
   return {
     index: { files, keys, docs, packages, tests: testFiles, model, inventory, domainOf, indegree, featureById: new Map(model.features.items.map((f) => [f.id, f])) },
-    cache: { version: CACHE_VERSION, files: next },
+    cache: { signature, files: next },
     stats,
   };
 }
@@ -126,11 +138,19 @@ export function fieldsOf(file) {
   };
 }
 
+// Archivos del repositorio: los versionados y los nuevos que git no ignora, para que un
+// archivo recien creado por una tarea ya cuente aunque todavia no se haya agregado.
+function listFiles(root) {
+  const out = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return [...new Set(out.split("\n").filter(Boolean))].sort().filter((path) => existsSync(join(root, path)));
+}
+
 export function loadIndex({ root = ROOT, useCache = true, rebuild = false } = {}) {
   const read = (path) => readFileSync(join(root, path), "utf8");
   const model = JSON.parse(read("tools/architecture/model.json"));
   const inventory = JSON.parse(read("tests/inventory.json"));
-  const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean).filter((path) => existsSync(join(root, path)));
+  const tracked = listFiles(root);
+  const signature = extractorSignature(root);
   const cachePath = join(root, ".orient/files.json");
   let cache = null;
   if (useCache && !rebuild && existsSync(cachePath)) {
@@ -141,10 +161,14 @@ export function loadIndex({ root = ROOT, useCache = true, rebuild = false } = {}
     }
   }
   const fs = { read, stat: (path) => { const s = statSync(join(root, path)); return { size: s.size, mtimeMs: s.mtimeMs }; } };
-  const built = buildIndex({ tracked, model, inventory, fs, cache });
-  if (useCache) {
+  const built = buildIndex({ tracked, model, inventory, fs, cache, signature });
+  // Solo se reescribe si cambio algo, y de forma atomica: un proceso que lee a la vez nunca
+  // ve un archivo a medias.
+  if (useCache && (cache?.signature !== signature || built.stats.parsed > 0 || built.stats.removed > 0)) {
     mkdirSync(dirname(cachePath), { recursive: true });
-    writeFileSync(cachePath, JSON.stringify(built.cache));
+    const temp = `${cachePath}.${process.pid}.tmp`;
+    writeFileSync(temp, JSON.stringify(built.cache));
+    renameSync(temp, cachePath);
   }
   return built;
 }
@@ -152,5 +176,5 @@ export function loadIndex({ root = ROOT, useCache = true, rebuild = false } = {}
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const started = performance.now();
   const { stats } = loadIndex({ rebuild: process.argv.includes("--rebuild") });
-  console.log(`indice: ${stats.files} archivos (${stats.reused} reutilizados, ${stats.parsed} leidos, ${stats.removed} quitados) en ${Math.round(performance.now() - started)} ms`);
+  if (!process.argv.includes("--quiet")) console.log(`indice: ${stats.files} archivos (${stats.reused} reutilizados, ${stats.parsed} leidos, ${stats.removed} quitados) en ${Math.round(performance.now() - started)} ms`);
 }

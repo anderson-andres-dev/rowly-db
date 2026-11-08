@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { BUDGET, card, detectIntent, estimate, expand, impact, pickPrimary, pickTests, testCommand } from "./card.mjs";
 import { graphNeighbors, loadGraph } from "./graphify.mjs";
-import { buildIndex, CACHE_VERSION, headings } from "./index.mjs";
+import { buildIndex, extractorSignature, headings } from "./index.mjs";
 import { createOrient } from "./orient.mjs";
 import { levelOf, PARAMS, prepare, retrieve } from "./retrieve.mjs";
 import { loadGold } from "./eval.mjs";
@@ -70,7 +70,7 @@ test("actualizacion incremental: solo se lee de nuevo lo que cambio", () => {
   assert.deepEqual([touched.stats.parsed, touched.stats.reused], [1, 4]);
   const gone = buildIndex({ tracked: tracked.filter((path) => path !== "app/src/lib/terminal.ts"), model, inventory, fs, cache: touched.cache });
   assert.equal(gone.stats.removed, 1);
-  const stale = build({ ...touched.cache, version: CACHE_VERSION + 1 });
+  const stale = buildIndex({ tracked, model, inventory, fs, cache: touched.cache, signature: "otro-extractor" });
   assert.equal(stale.stats.reused, 0);
   clock["app/src/lib/results/gridScroll.ts"] = 1;
 });
@@ -253,4 +253,10 @@ test("sobre el repo real las tareas fuera de alcance nunca declaran SUFFICIENT",
     assert.equal(out.sufficient, false, task.id);
     assert.ok(out.tokens <= BUDGET, task.id);
   }
+});
+
+test("el cache se invalida solo cuando cambia el extractor: la firma sale de su codigo", () => {
+  const signature = extractorSignature();
+  assert.match(signature, /^\d+:[0-9a-f]{16}$/);
+  assert.equal(signature, extractorSignature());
 });
