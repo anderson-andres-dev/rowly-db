@@ -100,6 +100,9 @@ jobs:
       - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
         run: node tools/test-dbs/window.mjs
 
+      - name: El catalogo de funcionalidades es valido y docs/map/FEATURES.md esta al dia
+        run: node tools/orient/features.mjs --check
+
       - name: El conjunto de oro del orientador apunta a archivos que existen
         run: node tools/orient/eval.mjs --check-gold
 
