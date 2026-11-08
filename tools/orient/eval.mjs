@@ -10,6 +10,9 @@
 //   node tools/orient/eval.mjs --check-gold                 valida el conjunto de oro
 //   node tools/orient/eval.mjs --runner graphify            mide `graphify query`
 //   node tools/orient/eval.mjs --runner graphify --write    guarda tests/orient/baseline.json
+//   node tools/orient/eval.mjs --runner orient --split train     mide el orientador (solo train mientras se ajusta)
+//   node tools/orient/eval.mjs --runner orient --no-terms        sin el vocabulario curado
+//   node tools/orient/eval.mjs --runner orient --no-graph        sin graphify
 //   node tools/orient/eval.mjs --runner graphify --split holdout --verbose
 //
 // Metricas (por tarea, luego promedio):
@@ -21,14 +24,19 @@
 //   MRR       1 / posicion del primer archivo correcto (0 si no sale)
 //   tests     de las pruebas correctas, cuantas aparecen en la respuesta
 //   tokens    tamano de la respuesta, caracteres / 4
+//   basta     (solo orient) cuantas veces declara "SUFFICIENT", y de esas cuantas
+//             acierto: `ok` = alguno de los 5 primeros es correcto, `fuerte` = al
+//             menos la mitad de los esperados
+//   ms        latencia por tarea; p95 sobre todas
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createOrient } from "./orient.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLD = join(ROOT, "tests/orient/gold.json");
-const BASELINE = join(ROOT, "tests/orient/baseline.json");
+const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
 const KINDS = ["bug", "feature", "refactor", "analysis"];
 const SPLITS = ["train", "holdout"];
 const TOP = 5;
@@ -46,7 +54,7 @@ export function tokens(text) {
 
 // `ranked`: archivos propuestos, sin repetir y en orden. `text`: lo que se le
 // entregaria al agente, para medir su tamano.
-export function score(task, { ranked, text }) {
+export function score(task, { ranked, text, sufficient, ms }) {
   const source = ranked.filter((path) => !isTestPath(path, task.files));
   const top = source.slice(0, TOP);
   const wanted = new Set(task.files);
@@ -59,6 +67,8 @@ export function score(task, { ranked, text }) {
     mrr: first < 0 ? 0 : 1 / (first + 1),
     tokens: tokens(text),
   };
+  if (sufficient !== undefined) out.sufficient = sufficient;
+  if (ms !== undefined) out.ms = ms;
   if (task.tests.length) {
     const all = new Set(ranked);
     out.tests = task.tests.filter((path) => all.has(path)).length / task.tests.length;
@@ -70,9 +80,25 @@ export function mean(values) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
+export function percentile(values, p) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)];
+}
+
 export function summarize(rows) {
   const pick = (key) => mean(rows.filter((row) => row[key] !== undefined).map((row) => row[key]));
+  const claimed = rows.filter((row) => row.sufficient === true);
+  const extra = {};
+  if (rows.some((row) => row.sufficient !== undefined)) {
+    extra.sufficientRate = claimed.length / rows.length;
+    extra.sufficientOk = claimed.length ? mean(claimed.map((row) => row.hit)) : null;
+    extra.sufficientStrong = claimed.length ? mean(claimed.map((row) => (row.recall >= 0.5 ? 1 : 0))) : null;
+  }
+  const times = rows.filter((row) => row.ms !== undefined).map((row) => row.ms);
+  if (times.length) extra.p95ms = percentile(times, 0.95);
   return {
+    ...extra,
     tasks: rows.length,
     recall: pick("recall"),
     hit: pick("hit"),
@@ -93,12 +119,25 @@ export function parseGraphify(text) {
   return { ranked, text };
 }
 
+// Cada runner es una fabrica: recibe las banderas y devuelve `(tarea) -> { ranked, text, ... }`.
 const RUNNERS = {
-  graphify(task) {
-    const run = spawnSync("graphify", ["query", task.task], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (run.error) throw new Error(`no se pudo ejecutar graphify: ${run.error.message}`);
-    if (run.status !== 0) throw new Error(`graphify query fallo (${run.status}): ${run.stderr}`);
-    return parseGraphify(run.stdout);
+  graphify() {
+    return (task) => {
+      const run = spawnSync("graphify", ["query", task.task], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      if (run.error) throw new Error(`no se pudo ejecutar graphify: ${run.error.message}`);
+      if (run.status !== 0) throw new Error(`graphify query fallo (${run.status}): ${run.stderr}`);
+      return parseGraphify(run.stdout);
+    };
+  },
+  orient(flags) {
+    const orient = createOrient({ useCache: false, useTerms: !flags.includes("--no-terms"), useGraph: !flags.includes("--no-graph") });
+    return (task) => {
+      const started = performance.now();
+      const out = orient.run(task.task);
+      const ms = performance.now() - started;
+      const rest = [...out.files, ...out.tests].filter((path) => !out.primary?.includes(path));
+      return { ranked: [...new Set([...(out.primary ?? []), ...rest])], text: out.markdown, sufficient: out.sufficient, ms };
+    };
   },
 };
 
@@ -158,7 +197,8 @@ function main(args) {
   const split = args.includes("--split") ? args[args.indexOf("--split") + 1] : null;
   const tasks = gold.tasks.filter((task) => !split || task.split === split);
 
-  const results = tasks.map((task) => ({ task, ...score(task, runner(task)) }));
+  const run = runner(args);
+  const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
   console.log(`Runner: ${name}${split ? ` · ${split}` : ""}`);
   console.log(`${"".padEnd(10)} ${"n".padStart(3)}  ${`rec@${TOP}`.padEnd(5)} ${`hit@${TOP}`.padEnd(5)} todo  MRR   tests  tokens`);
   console.log(row("todas", summarize(results)));
@@ -169,27 +209,33 @@ function main(args) {
   if (!split) {
     for (const part of SPLITS) console.log(row(part, summarize(results.filter((result) => result.task.split === part))));
   }
+  const total = summarize(results);
+  if (total.sufficientRate !== undefined) {
+    console.log(`basta: lo declara en ${pct(total.sufficientRate).trim()} de las tareas; de esas, ok ${pct(total.sufficientOk).trim()} · fuerte ${pct(total.sufficientStrong).trim()} · p95 ${Math.round(total.p95ms)} ms`);
+  }
   if (args.includes("--verbose")) {
     for (const result of results) {
-      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}`);
+      console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.sufficient === undefined ? "" : result.sufficient ? " basta" : ""}`);
     }
   }
 
   if (args.includes("--write")) {
-    const graph = JSON.parse(readFileSync(join(ROOT, "graphify-out/graph.json"), "utf8"));
+    const graph = name === "graphify" ? JSON.parse(readFileSync(join(ROOT, "graphify-out/graph.json"), "utf8")) : null;
     const record = {
       format: 1,
-      about: "Linea de referencia: lo que mide `graphify query` sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner graphify --write`; el orientador se compara contra esto.",
+      about:
+        name === "graphify"
+          ? "Linea de referencia: lo que mide `graphify query` sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner graphify --write`; el orientador se compara contra esto."
+          : "Lo que mide el orientador sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner orient --write`. Los pesos de tools/orient/retrieve.mjs se ajustaron solo contra `train`; `holdout` solo se mide.",
       runner: name,
-      graphBuiltAt: graph.built_at_commit ?? null,
-      graphNodes: graph.nodes.length,
+      ...(graph ? { graphBuiltAt: graph.built_at_commit ?? null, graphNodes: graph.nodes.length } : { variant: args.filter((arg) => arg.startsWith("--no-")) }),
       summary: summarize(results),
       byKind: Object.fromEntries(KINDS.map((kind) => [kind, summarize(results.filter((result) => result.task.kind === kind))])),
       bySplit: Object.fromEntries(SPLITS.map((part) => [part, summarize(results.filter((result) => result.task.split === part))])),
       tasks: results.map(({ task, ...metrics }) => ({ id: task.id, ...metrics })),
     };
-    writeFileSync(BASELINE, `${JSON.stringify(record, null, 2)}\n`);
-    console.log(`Escrito ${BASELINE.replace(`${ROOT}/`, "")}`);
+    writeFileSync(OUT[name], `${JSON.stringify(record, null, 2)}\n`);
+    console.log(`Escrito ${OUT[name].replace(`${ROOT}/`, "")}`);
   }
 }
 
