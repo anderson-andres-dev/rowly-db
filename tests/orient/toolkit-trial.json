@@ -1,0 +1,95 @@
+{
+  "about": "Prueba corta con agentes Haiku (una corrida, 6 peticiones genericas, solo lectura): A = repositorio en el estado de #152 (AGENTS.md con mapa), B = con el toolkit (playbooks, reglas generadas, STACK, skills). Los tokens y llamadas son los del arnes; la lista de comprobacion la evaluo yo. Indicativa, no una medida estadistica.",
+  "model": "haiku",
+  "runs": 1,
+  "requests": [
+    {
+      "id": "analyze",
+      "a": {
+        "tokens": 52561,
+        "calls": 5
+      },
+      "b": {
+        "tokens": 46040,
+        "calls": 2
+      },
+      "checklist": "ambos nombran las capas; A ademas verifico tres secciones de ARCHITECTURE; B respondio solo desde AGENTS.md",
+      "verdict": "B mas barato, A mas verificado"
+    },
+    {
+      "id": "ipc-command",
+      "a": {
+        "tokens": 53048,
+        "calls": 7
+      },
+      "b": {
+        "tokens": 45404,
+        "calls": 2
+      },
+      "checklist": "ambos: lib.rs, commands/, backend.test.ts y un dueno por comando; A abrio lib.rs y backend.test.ts y cito rangos; B no abrio ningun archivo ni el playbook que nombro",
+      "verdict": "ambos cumplen; A mas concreto"
+    },
+    {
+      "id": "add-engine",
+      "a": {
+        "tokens": 56672,
+        "calls": 5
+      },
+      "b": {
+        "tokens": 56204,
+        "calls": 4
+      },
+      "checklist": "ambos: ENGINE_GUIDE, new.mjs, codigo comun sin motores, Done means, y detectaron que SQLite es embebido",
+      "verdict": "empate"
+    },
+    {
+      "id": "bug-paging",
+      "a": {
+        "tokens": 50757,
+        "calls": 6
+      },
+      "b": {
+        "tokens": 55286,
+        "calls": 11
+      },
+      "checklist": "ambos usaron orient y dieron archivos, rangos y pruebas; B nombro un mecanismo mas preciso (queryConsoles y executionSession); las dos hipotesis sin confirmar",
+      "verdict": "B algo mejor en precision (mecanismo mas exacto) pero con mas llamadas"
+    },
+    {
+      "id": "ui-text",
+      "a": {
+        "tokens": 49337,
+        "calls": 5
+      },
+      "b": {
+        "tokens": 45369,
+        "calls": 2
+      },
+      "checklist": "A: clave workspace.guard.run, ambos idiomas y el componente; B: solo la regla i18n-texts y la carpeta, sin localizar clave ni componente",
+      "verdict": "A cumple; B no localizo lo pedido"
+    },
+    {
+      "id": "run-tests",
+      "a": {
+        "tokens": 72872,
+        "calls": 6
+      },
+      "b": {
+        "tokens": 73817,
+        "calls": 5
+      },
+      "checklist": "ambos: npm test -- src/lib/results y los archivos del inventario; ninguno uso orient",
+      "verdict": "empate"
+    }
+  ],
+  "summary": {
+    "pairsWithBothTokens": 6,
+    "tokensA": 335247,
+    "tokensB": 322120,
+    "tokenChange": "-4 %",
+    "callsA": 34,
+    "callsB": 26,
+    "playbookUsed": 0,
+    "note": "Ninguno de los 6 agentes B ejecuto orient --playbook ni abrio una skill o PLAYBOOKS.md; B2 cito el playbook ipc-command sin abrirlo. El efecto medido es el del AGENTS.md reorganizado, no el de los playbooks."
+  }
+}

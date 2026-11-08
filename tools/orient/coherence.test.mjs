@@ -167,3 +167,13 @@ test("docs/AI.md y su par en espanol tienen la misma estructura y sus enlaces y 
   assert.deepEqual(broken, []);
   for (const path of ["AGENTS.md", "README.md", "README.es.md"]) assert.match(read(path), /docs\/AI(\.es)?\.md/, path);
 });
+
+test("el registro de la prueba con agentes suma lo que dice su resumen", () => {
+  const trial = json("tests/orient/toolkit-trial.json");
+  const sum = (side, key) => trial.requests.reduce((total, request) => total + request[side][key], 0);
+  assert.equal(trial.summary.tokensA, sum("a", "tokens"));
+  assert.equal(trial.summary.tokensB, sum("b", "tokens"));
+  assert.equal(trial.summary.callsA, sum("a", "calls"));
+  assert.equal(trial.summary.callsB, sum("b", "calls"));
+  assert.equal(trial.summary.tokenChange, `${Math.round(((trial.summary.tokensB - trial.summary.tokensA) / trial.summary.tokensA) * 100)} %`);
+});
