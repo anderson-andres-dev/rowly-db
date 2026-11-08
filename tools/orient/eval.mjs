@@ -41,7 +41,7 @@ const GOLD = join(ROOT, "tests/orient/gold.json");
 const NEGATIVES = join(ROOT, "tests/orient/negatives.json");
 const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
 const KINDS = ["bug", "feature", "refactor", "analysis", "modify"];
-const SPLITS = ["train", "holdout", "validation"];
+const SPLITS = ["train", "holdout", "seen", "validation2"];
 const TOP = 5;
 
 // Un archivo de prueba: por nombre o por carpeta, salvo que la tarea lo cuente
@@ -253,12 +253,16 @@ export const DEFAULT_TOLERANCE = {
   tokens: { warn: 0.15, fail: 0.5 },
 };
 
-function measure(name, run, tasks) {
+const NEGATIVE_SPLITS = ["train", "seen", "validation2"];
+
+function measure(name, run, tasks, only = null) {
   const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
   let negatives = null;
   if (name === "orient") {
-    const rows = loadNegatives().map((task) => ({ split: task.split, ...run(task) }));
-    negatives = { ...scoreNegatives(rows), bySplit: Object.fromEntries(["train", "validation"].map((part) => [part, scoreNegatives(rows.filter((row) => row.split === part))])) };
+    // Con `--split` solo se miden las negativas de esa particion: nada de la validacion se
+    // mira mientras se ajusta.
+    const rows = loadNegatives().filter((task) => !only || task.split === only).map((task) => ({ split: task.split, ...run(task) }));
+    negatives = { ...scoreNegatives(rows), bySplit: Object.fromEntries(NEGATIVE_SPLITS.filter((part) => rows.some((row) => row.split === part)).map((part) => [part, scoreNegatives(rows.filter((row) => row.split === part))])) };
   }
   return { results, negatives };
 }
@@ -306,13 +310,13 @@ function main(args) {
   const name = args[args.indexOf("--runner") + 1];
   const runner = RUNNERS[name];
   if (!args.includes("--runner") || !runner) {
-    console.error(`Uso: eval.mjs --check-gold | --check | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|validation] [--verbose] [--write]`);
+    console.error(`Uso: eval.mjs --check-gold | --check | --report | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|seen|validation2] [--verbose] [--write]`);
     process.exit(2);
   }
   const split = args.includes("--split") ? args[args.indexOf("--split") + 1] : null;
   const tasks = gold.tasks.filter((task) => !split || task.split === split);
 
-  const { results, negatives } = measure(name, runner(args), tasks);
+  const { results, negatives } = measure(name, runner(args), tasks, split);
   console.log(`Runner: ${name}${split ? ` · ${split}` : ""}`);
   console.log(`${"".padEnd(10)} ${"n".padStart(3)}  ${`rec@${TOP}`.padEnd(5)} prec  ${`hit@${TOP}`.padEnd(5)} todo  MRR   tests  tokens  shown`);
   console.log(row("todas", summarize(results)));
@@ -328,8 +332,8 @@ function main(args) {
     console.log(`basta: lo declara en ${pct(total.sufficientRate).trim()} de las tareas; de esas, ok ${pct(total.sufficientOk).trim()} · fuerte ${pct(total.sufficientStrong).trim()} · p95 ${Math.round(total.p95ms)} ms`);
   }
   if (negatives) {
-    const part = (name) => `${name} ${pct(negatives.bySplit[name].falseSufficient).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}`;
-    console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseSufficient).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH) ${part("train")} · ${part("validation")}`);
+    const part = (name) => (negatives.bySplit[name] ? ` · ${name} ${pct(negatives.bySplit[name].falseSufficient).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}` : "");
+    console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseSufficient).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH)${NEGATIVE_SPLITS.map(part).join("")}`);
   }
   if (args.includes("--verbose")) {
     for (const result of results) {
