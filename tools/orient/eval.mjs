@@ -37,8 +37,8 @@ import { createOrient } from "./orient.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLD = join(ROOT, "tests/orient/gold.json");
 const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
-const KINDS = ["bug", "feature", "refactor", "analysis"];
-const SPLITS = ["train", "holdout"];
+const KINDS = ["bug", "feature", "refactor", "analysis", "modify"];
+const SPLITS = ["train", "holdout", "validation"];
 const TOP = 5;
 
 // Un archivo de prueba: por nombre o por carpeta, salvo que la tarea lo cuente

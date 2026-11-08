@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "about": "Tareas fuera del alcance del proyecto: no hay nada correcto que encontrar. El orientador no debe declarar SUFFICIENT; lo ideal es NO MATCH. Se usan para vigilar la falsa confianza.",
+  "tasks": [
+    {
+      "id": "neg-01",
+      "task": "Enviar un correo de bienvenida cuando alguien crea una cuenta nueva."
+    },
+    {
+      "id": "neg-02",
+      "task": "Integrar el cobro con tarjeta de crédito usando Stripe."
+    },
+    {
+      "id": "neg-03",
+      "task": "Reconocer comandos por voz para dictar las consultas."
+    },
+    {
+      "id": "neg-04",
+      "task": "Agregar un modo multijugador en línea con salas y puntuaciones."
+    },
+    {
+      "id": "neg-05",
+      "task": "Entrenar un modelo de recomendación de películas con los datos de los usuarios."
+    },
+    {
+      "id": "neg-06",
+      "task": "Subir las fotos de perfil a un bucket de S3 y servirlas con una CDN."
+    },
+    {
+      "id": "neg-07",
+      "task": "Configurar un clúster de Kubernetes con autoscaling para el servicio de pagos."
+    },
+    {
+      "id": "neg-08",
+      "task": "Iniciar sesión con Google OAuth y manejar roles de administrador."
+    },
+    {
+      "id": "neg-09",
+      "task": "Animar el logo en 3D con WebGL al abrir la aplicación."
+    },
+    {
+      "id": "neg-10",
+      "task": "Cuál es la capital de Francia y cuántos habitantes tiene."
+    },
+    {
+      "id": "neg-11",
+      "task": "Programar recordatorios por WhatsApp para las reuniones del equipo."
+    },
+    {
+      "id": "neg-12",
+      "task": "Calcular el impuesto sobre las ventas según el país del cliente."
+    }
+  ]
+}
