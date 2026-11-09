@@ -39,24 +39,28 @@ The pointer and skill files hold no instructions of their own: they are generate
 
 ## The MCP server
 
-`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Nothing needs to be started by hand; the client launches it. Setup for Codex and others is in the [README](../README.md#working-with-ai-agents). `node tools/orient/mcp.mjs --check` exercises it without a client and prints the time of each call.
+`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Nothing needs to be started by hand; the client launches it. The entry is a `git` alias (`git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`) on purpose: git runs it from the repository root, so it works even if you open Claude Code inside `app/` (a plain `node tools/orient/mcp.mjs` failed there; checked, and the cost is about 6 ms). Setup for Codex and others is in the [README](../README.md#working-with-ai-agents). `node tools/orient/mcp.mjs --help` explains how to register it in each client; `--check` exercises it without a client and prints the time of each call; `ORIENT_MCP_DEBUG=1` logs every call and its duration to stderr (Claude Code shows it in `/mcp`).
 
-Six read-only tools, the same text as the command line:
+Eight read-only tools, the same text as the command line:
 
-| Tool | Does |
-| :--- | :--- |
-| `start` | **Call first.** The procedure for the request plus where it lives (files with line ranges, tests) and a stop rule (answer after about five reads): the same as `orient --playbook` |
-| `playbook` | Only the procedure (falls back to the card when none matches) |
-| `orient` | Only the orientation card |
-| `expand` | The files of one feature |
-| `impact` | Who uses a file or feature |
-| `stack` | The resolved version of a dependency and its docs link |
+| Tool | Does | Command line |
+| :--- | :--- | :--- |
+| `start` | **Call first.** The procedure for the request plus where it lives (files with line ranges, tests) and a stop rule (answer after about five reads). If the request quotes a text («Ejecutar») or names an IPC command, it answers that too | `orient --playbook` |
+| `ui_text` | Where a visible interface text or i18n key lives, in Spanish or English: key, both texts, messages file and line, components that use it | `orient --text` |
+| `ipc` | Backend commands: Rust file and line, registration in `lib.rs`, frontend owner, callers; flags inconsistencies | `orient --ipc [filter]` |
+| `stack` | The resolved version of a dependency and its docs link | (see `docs/map/STACK.md`) |
+| `playbook` | Only the procedure (falls back to the card when none matches) | `orient --playbook --json` |
+| `orient` | Only the orientation card | `orient "<task>"` |
+| `expand` | The files of one feature | `orient --expand` |
+| `impact` | Who uses a file or feature | `orient --impact` |
+
+`ui_text` and `ipc` come from what Laravel Boost does for routes and docs, scaled down to what this repository needs: they answer from the same index, with no extra service. They exist because the most frequent failure in the agent trials was changing a visible text (the card did not lead to the key). `ipc` also checks that every Rust command is registered and has an owner, so it doubles as a consistency check.
 
 **It must never make an agent worse.** The command line gives the same answers, `AGENTS.md` names both, and the server is only an easier way in. Three things make it cheap:
 
 - The index stays in memory and is rebuilt only when a file of the repository changes: a call costs about 20 ms warm (the command line, about 215 ms with its own process; the model's wait per turn is seconds).
 - It warms up as soon as the client connects, so the first call finds it ready.
-- `start` and `stack` are marked `anthropic/alwaysLoad`, which Claude Code documents for tools that should not wait behind `ToolSearch`. Without it, agents kept using the command line (0 of 4 used the server; with the tool deferred, 1 of 4). The Codex command in the README follows `codex mcp add --help`; it was not run here. Clients older than Claude Code 2.1.285 ignore the mark and the tool is still found through `ToolSearch`.
+- `start`, `ui_text`, `ipc` and `stack` are marked `anthropic/alwaysLoad`, which Claude Code documents for tools that should not wait behind `ToolSearch`. Without it, agents kept using the command line (0 of 4 used the server; with the tool deferred, 1 of 4). The Codex command in the README follows `codex mcp add --help`; it was not run here. Clients older than Claude Code 2.1.285 ignore the mark and the tool is still found through `ToolSearch`.
 
 ## Changing the toolkit
 

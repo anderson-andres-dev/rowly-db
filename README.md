@@ -173,7 +173,7 @@ Rowly DB ships an [MCP](https://modelcontextprotocol.io) server so an AI agent k
 | **Any other MCP client** | Run `node tools/orient/mcp.mjs` as a stdio server. |
 | **No MCP** | `node tools/orient/orient.mjs --playbook "<your request>"` gives the same answer; [AGENTS.md](AGENTS.md) tells agents to use either. |
 
-`node tools/orient/mcp.mjs --check` tests the server without a client. How it works, what was measured and its limits: [docs/AI.md](docs/AI.md).
+`node tools/orient/mcp.mjs --help` shows how to register it in each client and `--check` tests it without one. How it works, what was measured and its limits: [docs/AI.md](docs/AI.md).
 
 ## Contributing
 

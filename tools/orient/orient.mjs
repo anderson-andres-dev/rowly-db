@@ -11,6 +11,9 @@
 //
 //   node tools/orient/orient.mjs --playbook "<peticion>"   por donde empezar: el procedimiento del tipo de cambio y la tarjeta (--json: solo el procedimiento)
 //
+//   node tools/orient/orient.mjs --text "<texto>"   donde vive un texto de la interfaz (o una clave), en es y en
+//   node tools/orient/orient.mjs --ipc [filtro]   comandos IPC: Rust, registro, dueno y quien los invoca
+//
 //   --intent bug|feature|refactor|analysis|tests|modify   fuerza el tipo de tarea
 //   --budget <tokens>   tope de la tarjeta (1200 por defecto)
 //   --json              JSON con esquema versionado (README, "El contrato --json"); --with-markdown suma el texto
@@ -25,6 +28,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { BUDGET, card, expand, impact } from "./card.mjs";
 import { loadGraph } from "./graphify.mjs";
 import { loadIndex } from "./index.mjs";
+import { findText, hintsBlock, listCommands } from "./lookup.mjs";
 import { findPlaybook, playbookText } from "./playbooks.mjs";
 import { prepare, retrieve } from "./retrieve.mjs";
 
@@ -36,6 +40,7 @@ export function createOrient({ root = ROOT, useCache = true, rebuild = false, us
   const prepared = prepare(index, { useTerms });
   const graph = injected ?? (useGraph ? loadGraph(root) : null);
   return {
+    root,
     stats,
     prepared,
     graph: Boolean(graph),
@@ -87,8 +92,10 @@ export const STOP_RULE = "Stop rule: this is enough to start. Read about five li
 export function startAnswer(orient, request, { budget = 2000 } = {}) {
   const found = playbookFor(request, orient.prepared.index.model);
   const procedure = found ? `${playbookText(found.model, found.pb)}\n---\n\n` : "";
-  const card = orient.run(request, { budget: Math.max(700, budget - Math.ceil(procedure.length / 4)) }).markdown;
-  return `${procedure}${card}\n${STOP_RULE}\n`;
+  // Un texto entre comillas o un comando IPC exacto en la peticion: se contestan aqui mismo.
+  const hints = hintsBlock(orient, orient.root, request);
+  const card = orient.run(request, { budget: Math.max(700, budget - Math.ceil((procedure.length + hints.length) / 4)) }).markdown;
+  return `${procedure}${hints ? `${hints}\n---\n\n` : ""}${card}\n${STOP_RULE}\n`;
 }
 
 export function playbookJson(pb, model) {
@@ -128,8 +135,22 @@ function main(args) {
     }
     return;
   }
-  const valued = new Set(["--intent", "--budget", "--expand", "--impact", "--playbook"]);
+  const valued = new Set(["--intent", "--budget", "--expand", "--impact", "--playbook", "--text", "--ipc"]);
   const task = args.filter((arg, i) => !arg.startsWith("--") && !valued.has(args[i - 1])).join(" ").trim();
+  if (args.includes("--text") || args.includes("--ipc")) {
+    const orient = createOrient({ rebuild: args.includes("--rebuild"), useGraph: false });
+    try {
+      if (args.includes("--text")) process.stdout.write(findText(orient, ROOT, flag("--text") ?? ""));
+      else {
+        const next = flag("--ipc");
+        process.stdout.write(listCommands(orient, ROOT, next && !next.startsWith("--") ? next : ""));
+      }
+    } catch (error) {
+      console.error(error.message);
+      process.exit(2);
+    }
+    return;
+  }
   const asked = flag("--playbook");
   const request = asked && !asked.startsWith("--") ? asked : task;
   if (args.includes("--playbook") && request) {
@@ -148,7 +169,7 @@ function main(args) {
   const cardTask = task || request;
   const wantsCard = Boolean(cardTask);
   if (!wantsCard && !flag("--expand") && !flag("--impact")) {
-    console.error('Uso: orient.mjs "<tarea>" | --expand <feature> | --impact <ruta|feature>   [--intent T] [--budget N] [--json [--with-markdown]] [--log] [--no-graph] [--no-terms] [--rebuild]\n     orient.mjs --feedback good|partial|bad [nota]');
+    console.error('Uso: orient.mjs "<tarea>" | --playbook "<peticion>" | --text "<texto>" | --ipc [filtro] | --expand <feature> | --impact <ruta|feature>   [--intent T] [--budget N] [--json [--with-markdown]] [--log] [--no-graph] [--no-terms] [--rebuild]\n     orient.mjs --feedback good|partial|bad [nota]');
     process.exit(2);
   }
   const orient = createOrient({ rebuild: args.includes("--rebuild"), useTerms: !args.includes("--no-terms"), useGraph: !args.includes("--no-graph") });

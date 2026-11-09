@@ -2,14 +2,14 @@
 
 Rowly DB: a desktop SQL client (Tauri 2, Svelte, a Rust workspace) for MySQL, MariaDB and PostgreSQL. Khipu is the internal name of its engine; crates, identifiers and settings keys start with `khipu`, and everything the user sees says Rowly DB.
 
-This file is the entry point for any coding agent. It is a map of where the context is, not the context: **read it before exploring anything**. It points to the documents that own each fact and does not repeat them. [docs/AI.md](docs/AI.md) explains how the pieces fit.
+This file is the entry point for any coding agent. It is a map of where the context is, not the context: **read it before exploring anything**. It points to the documents that own each fact. [docs/AI.md](docs/AI.md) explains how the pieces fit.
 
 ## How this repo works with you
 
 1. **Playbooks**: every kind of change has a procedure (what to read, steps, rules, checks). **Start every change with one call:** the MCP tool `start` if your client lists it, otherwise `orient --playbook "<the request>"`.
-2. **Map**: every feature and its entry file, below. Never list directories to find one.
-3. **Rules**: the persistent decisions, each with why and the command that checks it.
-4. **Tools**: the MCP server `rowly-orient` (`.mcp.json`: `start`, `impact`, `expand`, `stack`) or the same from the command line, `node tools/orient/orient.mjs` (written `orient` below). Only Node.
+2. **Map**: every feature and its entry file, below. Do not list directories to find one.
+3. **Rules**: persistent decisions, each with its why and its check.
+4. **Tools**: the MCP server `rowly-orient` (`.mcp.json`: `start`, `ui_text`, `ipc`, `stack`, `impact`, `expand`) or the same from the command line, `node tools/orient/orient.mjs` (written `orient` below). Only Node.
 5. **Versions**: [docs/map/STACK.md](docs/map/STACK.md) has the real version of each dependency and its docs.
 
 ## The repository in one minute
@@ -50,7 +50,7 @@ Do not start by scanning. First `start` (or `orient --playbook "<the request>"`)
 | "Where is X / what does X do" | Find X in the map below, then `orient --expand <feature>`. | `find`, `ls -R`, broad greps. |
 | "Refactor / review" | `orient --impact <file or feature>`: who uses it, whom it uses, the tests of both. | Edit before knowing the dependants. |
 
-Budget: have a plan after about five files. If the map and the card do not answer, widen one step (`--expand`, then a targeted `grep` inside the folder they name), not the whole repository. The card is a hint: its first five files hold about half of the files a change touched, so verify. `LIKELY` means probably the right area; `PARTIAL`, `AMBIGUOUS` and `NO MATCH` say what to do next. `--json` is versioned; limits and measurements: [tools/orient/README.md](tools/orient/README.md).
+Budget: have a plan after about five files. If the map and the card do not answer, widen one step (`--expand`, then a targeted `grep` inside the folder they name), not the whole repository. The card is a hint (its first five files hold about half of what a change touched): verify. `LIKELY` means probably the right area; `PARTIAL`, `AMBIGUOUS` and `NO MATCH` say what to do next. Limits and measurements: [tools/orient/README.md](tools/orient/README.md). For a visible text or a backend command use `ui_text` / `ipc` (CLI: `orient --text`, `--ipc`).
 
 ## Map of features
 
@@ -104,7 +104,7 @@ Each line is `feature` — what it is → its main file or folder. The full tabl
 1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules are data in `tools/architecture/model.json`, checked in CI.
 2. Engines, drivers, generated SQL, analysis or execution: [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
 3. Which tests protect an area: `tests/inventory.json`. Real dependency versions and their docs: [docs/map/STACK.md](docs/map/STACK.md).
-4. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
+4. Optional symbol graph: `graphify query "<question>"`; not versioned (`graphify update .`). Nothing depends on it.
 
 ## Rules
 
@@ -130,4 +130,4 @@ Persistent decisions, each with why it exists and the command that checks it.
 
 ## Checks
 
-The full list to run before a pull request is in [CONTRIBUTING.md](CONTRIBUTING.md#workflow). CI runs only what a change touches; the plan is in the `Plan` job summary and the rules in `tools/ci/areas.json`. To change this toolkit, edit `tools/architecture/model.json` and run `node tools/orient/features.mjs --write` ([docs/AI.md](docs/AI.md#changing-the-toolkit)).
+The full list to run before a pull request is in [CONTRIBUTING.md](CONTRIBUTING.md#workflow). CI runs only what a change touches (`Plan` job summary, `tools/ci/areas.json`). To change this toolkit, edit `tools/architecture/model.json` and run `node tools/orient/features.mjs --write` ([docs/AI.md](docs/AI.md#changing-the-toolkit)).

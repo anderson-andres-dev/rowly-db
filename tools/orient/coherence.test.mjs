@@ -193,7 +193,8 @@ test("el README de la raiz explica como usar el servidor MCP en ingles y espanol
   const es = read("README.es.md");
   for (const [text, title] of [[en, "## Working with AI agents"], [es, "## Trabajar con agentes de IA"]]) {
     assert.ok(text.includes(title), title);
-    assert.match(text, /node tools\/orient\/mcp\.mjs --check/);
+    assert.match(text, /node tools\/orient\/mcp\.mjs --help/);
+    assert.match(text, /`--check`/);
     assert.match(text, /codex mcp add rowly-orient -- node/);
     assert.match(text, /claude mcp list/);
   }

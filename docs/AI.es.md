@@ -39,24 +39,28 @@ Los archivos de puntero y las skills no llevan instrucciones propias: se generan
 
 ## El servidor MCP
 
-`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. No hay nada que arrancar a mano; el cliente lo lanza. La configuración para Codex y otros está en el [README](../README.es.md#trabajar-con-agentes-de-ia). `node tools/orient/mcp.mjs --check` lo ejercita sin cliente y muestra el tiempo de cada llamada.
+`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. No hay nada que arrancar a mano; el cliente lo lanza. La entrada es un alias de `git` (`git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`) a propósito: git lo ejecuta desde la raíz del repositorio, así que funciona aunque abras Claude Code dentro de `app/` (un `node tools/orient/mcp.mjs` a secas fallaba ahí; comprobado, y cuesta unos 6 ms). La configuración para Codex y otros está en el [README](../README.es.md#trabajar-con-agentes-de-ia). `node tools/orient/mcp.mjs --help` explica cómo registrarlo en cada cliente; `--check` lo ejercita sin cliente y muestra el tiempo de cada llamada; `ORIENT_MCP_DEBUG=1` deja cada llamada y su duración en stderr (Claude Code lo muestra en `/mcp`).
 
-Seis herramientas de solo lectura, con el mismo texto que la línea de comandos:
+Ocho herramientas de solo lectura, con el mismo texto que la línea de comandos:
 
-| Herramienta | Hace |
-| :--- | :--- |
-| `start` | **Llamar primero.** El procedimiento de la petición más dónde está (archivos con rangos de líneas, pruebas) y una regla de parada (responder tras unas cinco lecturas): lo mismo que `orient --playbook` |
-| `playbook` | Solo el procedimiento (cae a la tarjeta si ninguno coincide) |
-| `orient` | Solo la tarjeta de orientación |
-| `expand` | Los archivos de una funcionalidad |
-| `impact` | Quién usa un archivo o una funcionalidad |
-| `stack` | La versión resuelta de una dependencia y el enlace a su documentación |
+| Herramienta | Hace | Línea de comandos |
+| :--- | :--- | :--- |
+| `start` | **Llamar primero.** El procedimiento de la petición más dónde está (archivos con rangos de líneas, pruebas) y una regla de parada (responder tras unas cinco lecturas). Si la petición cita un texto («Ejecutar») o nombra un comando IPC, también lo contesta | `orient --playbook` |
+| `ui_text` | Dónde vive un texto visible de la interfaz o su clave i18n, en español o inglés: clave, ambos textos, archivo y línea de mensajes, componentes que la usan | `orient --text` |
+| `ipc` | Comandos del backend: archivo y línea de Rust, registro en `lib.rs`, dueño en el frontend, quién los invoca; marca las inconsistencias | `orient --ipc [filtro]` |
+| `stack` | La versión resuelta de una dependencia y el enlace a su documentación | (ver `docs/map/STACK.md`) |
+| `playbook` | Solo el procedimiento (cae a la tarjeta si ninguno coincide) | `orient --playbook --json` |
+| `orient` | Solo la tarjeta de orientación | `orient "<tarea>"` |
+| `expand` | Los archivos de una funcionalidad | `orient --expand` |
+| `impact` | Quién usa un archivo o una funcionalidad | `orient --impact` |
+
+`ui_text` e `ipc` salen de lo que Laravel Boost hace con rutas y documentación, reducido a lo que este repositorio necesita: responden desde el mismo índice, sin ningún servicio más. Existen porque el fallo más frecuente en las pruebas con agentes era cambiar un texto visible (la tarjeta no llevaba a la clave). `ipc` además comprueba que cada comando de Rust esté registrado y tenga dueño, así que sirve también de comprobación de consistencia.
 
 **No debe empeorar nunca a un agente.** La línea de comandos da las mismas respuestas, `AGENTS.md` nombra las dos y el servidor es solo una entrada más cómoda. Tres cosas lo hacen barato:
 
 - El índice vive en memoria y se rehace solo cuando cambia un archivo del repositorio: una llamada cuesta unos 20 ms en caliente (la línea de comandos, unos 215 ms con su propio proceso; la espera del modelo por vuelta son segundos).
 - Se calienta en cuanto el cliente se conecta, así la primera llamada lo encuentra listo.
-- `start` y `stack` llevan la marca `anthropic/alwaysLoad`, que Claude Code documenta para las herramientas que no deben esperar tras `ToolSearch`. Sin ella los agentes seguían usando la línea de comandos (0 de 4 usaron el servidor; con la herramienta diferida, 1 de 4). La orden de Codex del README sigue `codex mcp add --help`; no se ejecutó aquí. Los clientes anteriores a Claude Code 2.1.285 ignoran la marca y la herramienta se encuentra igualmente con `ToolSearch`.
+- `start`, `ui_text`, `ipc` y `stack` llevan la marca `anthropic/alwaysLoad`, que Claude Code documenta para las herramientas que no deben esperar tras `ToolSearch`. Sin ella los agentes seguían usando la línea de comandos (0 de 4 usaron el servidor; con la herramienta diferida, 1 de 4). La orden de Codex del README sigue `codex mcp add --help`; no se ejecutó aquí. Los clientes anteriores a Claude Code 2.1.285 ignoran la marca y la herramienta se encuentra igualmente con `ToolSearch`.
 
 ## Cambiar el toolkit
 

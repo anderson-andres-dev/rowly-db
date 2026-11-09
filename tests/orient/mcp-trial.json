@@ -93,5 +93,47 @@
       "V1_V2_V3": "8, 9 y 2 vueltas, todas con respuesta"
     },
     "caveat": "G3, G5, S2 y S6 son las tareas con las que se diseno el arreglo; V1 a V3 son nuevas. Una corrida, un modelo pequeno."
+  },
+  "uiTextAndIpc": {
+    "about": "Prueba de ui_text e ipc con sesiones reales (Haiku, claude -p, solo lectura): 3 tareas de cambiar un texto de la interfaz y 3 de comandos IPC, 2 repeticiones, antes (el PR sin ellas) y despues. Una corrida; la calidad es la presencia de archivos o claves esperados (comprobacion burda: los 3 'fallos' de despues eran falsos negativos al leerlos).",
+    "ui": {
+      "before": {
+        "runs": 6,
+        "turns": 4.3,
+        "seconds": 9.3,
+        "tokensMean": 115000,
+        "quality": 1.0
+      },
+      "after": {
+        "runs": 6,
+        "turns": 3.2,
+        "seconds": 6.1,
+        "tokensMean": 82000,
+        "quality": 1.0,
+        "firstCallUiText": "6 de 6"
+      }
+    },
+    "ipc": {
+      "before": {
+        "runs": 6,
+        "turns": 5.3,
+        "seconds": 11.9,
+        "tokensMean": 127000
+      },
+      "after": {
+        "runs": 6,
+        "turns": 4.2,
+        "seconds": 7.6,
+        "tokensMean": 103000,
+        "firstCallIpc": "5 de 6"
+      }
+    },
+    "reading": "Los agentes usan las herramientas nuevas como primera llamada y bajan vueltas (-26 % y -21 %), tiempo (-34 % y -36 %) y tokens (-29 % y -19 %) sin perder calidad en esta comprobacion. En la pregunta de inconsistencias, el agente verifico igualmente con Bash tras responder ipc.",
+    "caveat": "Un modelo pequeno, una corrida, 6 sesiones por celda."
+  },
+  "entryFromSubfolder": {
+    "before": "con `node tools/orient/mcp.mjs` en .mcp.json, abrir Claude Code dentro de app/ dejaba el servidor en 'failed' (CONNECTION_CLOSED): la ruta relativa se resolvia contra la carpeta actual. `${CLAUDE_PROJECT_DIR:-.}` tampoco lo arregla (esa variable no existe en el proceso de Claude).",
+    "after": "la entrada es `git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`; git la ejecuta desde la raiz. Conectado desde app/ y desde la raiz (sesiones reales con --settings enableAllProjectMcpServers); sobrecoste ~6 ms.",
+    "caveat": "En Windows depende de que git traiga sh (Git for Windows lo trae); no se probo en Windows."
   }
 }

@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { INSTRUCTIONS, SERVER, SUPPORTED, TOOLS, callTool, handle, selfCheck } from "./mcp.mjs";
+import { HELP, INSTRUCTIONS, SERVER, SUPPORTED, TOOLS, callTool, handle, selfCheck } from "./mcp.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const call = (name, args) => handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
@@ -27,17 +27,17 @@ test("las notificaciones no se contestan; ping, metodo desconocido y mensaje inv
   assert.equal(handle({ jsonrpc: "2.0", method: "nope" }), null);
 });
 
-test("tools/list expone las seis herramientas con esquema, `start` la primera, y las obligatorias existen", () => {
+test("tools/list expone las ocho herramientas con esquema, `start` la primera, y las obligatorias existen", () => {
   const { tools } = handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result;
-  assert.deepEqual(tools.map((tool) => tool.name), ["start", "playbook", "orient", "expand", "impact", "stack"]);
+  assert.deepEqual(tools.map((tool) => tool.name), ["start", "ui_text", "ipc", "stack", "playbook", "orient", "expand", "impact"]);
   for (const tool of tools) {
     assert.equal(tool.inputSchema.type, "object");
     assert.ok(tool.description.length > 20);
     for (const key of tool.inputSchema.required ?? []) assert.ok(tool.inputSchema.properties[key], `${tool.name}.${key}`);
   }
-  assert.equal(TOOLS.length, 6);
+  assert.equal(TOOLS.length, 8);
   assert.match(INSTRUCTIONS, /Call `start` first/);
-  assert.deepEqual(tools.filter((tool) => tool._meta?.["anthropic/alwaysLoad"]).map((tool) => tool.name), ["start", "stack"]);
+  assert.deepEqual(tools.filter((tool) => tool._meta?.["anthropic/alwaysLoad"]).map((tool) => tool.name), ["start", "ui_text", "ipc", "stack"]);
 });
 
 test("playbook, orient, expand, impact y stack devuelven lo mismo que la linea de comandos", () => {
@@ -53,6 +53,42 @@ test("playbook, orient, expand, impact y stack devuelven lo mismo que la linea d
   assert.match(callTool("stack", { name: "no-existe-xyz" }), /Ninguna dependencia/);
 });
 
+test("las descripciones respetan los limites de Claude Code y las instrucciones nombran cada herramienta cargada al inicio", () => {
+  assert.ok(INSTRUCTIONS.length < 4096, `instructions ${INSTRUCTIONS.length}`);
+  for (const tool of TOOLS) assert.ok(tool.description.length < 2048, tool.name);
+  for (const tool of TOOLS.filter((item) => item._meta)) assert.ok(INSTRUCTIONS.includes(`\`${tool.name}\``), tool.name);
+});
+
+test("ui_text e ipc dan lo que la CLI y marcan lo que no existe", () => {
+  const cli = (...args) => execFileSync("node", [join(ROOT, "tools/orient/orient.mjs"), ...args], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(callTool("ui_text", { text: "Ejecutar" }), cli("--text", "Ejecutar"));
+  assert.equal(callTool("ipc", { filter: "export_query" }), cli("--ipc", "export_query"));
+  assert.equal(callTool("ipc", {}), cli("--ipc"));
+  assert.match(callTool("ui_text", { text: "zzzz-no-existe" }), /No interface text/);
+  assert.match(callTool("ipc", { filter: "comando_inventado_xyz" }), /No IPC command matches/);
+  assert.equal(call("ui_text", { text: "a" }).result.isError, true);
+});
+
+test("--help dice como registrarlo y que no hay que arrancarlo a mano", () => {
+  assert.match(HELP, /No hay que arrancarlo a mano/);
+  for (const needle of ["claude mcp list", "codex mcp add rowly-orient", "--check", "ORIENT_MCP_DEBUG"]) assert.ok(HELP.includes(needle), needle);
+  const out = execFileSync("node", [join(ROOT, "tools/orient/mcp.mjs"), "--help"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(out, HELP);
+});
+
+test("ORIENT_MCP_DEBUG deja cada llamada y su duracion en stderr, y stdout solo JSON", async () => {
+  const child = spawn("node", [join(ROOT, "tools/orient/mcp.mjs")], { cwd: ROOT, env: { ...process.env, ORIENT_MCP_DEBUG: "1" }, stdio: ["pipe", "pipe", "pipe"] });
+  let out = "";
+  let err = "";
+  child.stdout.on("data", (chunk) => (out += chunk));
+  child.stderr.on("data", (chunk) => (err += chunk));
+  child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "stack", arguments: { name: "tauri" } } })}\n`);
+  for (let waited = 0; !out.includes("\n") && waited < 5000; waited += 50) await new Promise((resolve) => setTimeout(resolve, 50));
+  child.kill();
+  assert.match(err, /\[rowly-orient\] tools\/call stack \d+ ms/);
+  assert.doesNotThrow(() => JSON.parse(out.trim()));
+});
+
 test("start junta el procedimiento y la tarjeta en una llamada, y sin procedimiento da solo la tarjeta", () => {
   const both = callTool("start", { request: "arregla el bug de la grilla que no hace scroll" });
   assert.match(both, /^# Playbook: fix-bug/);
@@ -60,6 +96,10 @@ test("start junta el procedimiento y la tarjeta en una llamada, y sin procedimie
   assert.ok(both.length / 4 < 2600, "cabe en el presupuesto de start");
   assert.match(both, /Stop rule:/);
   assert.match(callTool("playbook", { request: "arregla el bug de la grilla" }), /^(?![\s\S]*Stop rule)/, "el playbook solo no lleva la regla");
+  const hinted = callTool("start", { request: "Cambia el texto del botón «Ejecutar» del diálogo de confirmación" });
+  assert.match(hinted, /## Interface text `Ejecutar`[\s\S]*workspace\.guard\.run[\s\S]*ExecutionGuard\.svelte/);
+  assert.match(callTool("start", { request: "Dónde se registra export_query_to_file y quién es su dueño" }), /## export_query_to_file[\s\S]*lib\.rs:\d+/);
+  assert.doesNotMatch(both, /## Interface text/);
   const card = callTool("start", { request: "xyzzy plugh" });
   assert.match(card, /^# orient:/);
   assert.doesNotMatch(card, /# Playbook:/);
@@ -118,8 +158,12 @@ test(".mcp.json apunta a este servidor con un script que existe y ningun secreto
   const raw = readFileSync(join(ROOT, ".mcp.json"), "utf8");
   const config = JSON.parse(raw);
   const server = config.mcpServers["rowly-orient"];
-  assert.equal(server.command, "node");
-  assert.ok(existsSync(join(ROOT, server.args[0])));
+  // `git -c alias.x=!node ...` corre desde la raiz del repositorio aunque Claude se abra en `app/`:
+  // con `node tools/orient/mcp.mjs` a secas, desde una subcarpeta el servidor no arranca.
+  assert.equal(server.command, "git");
+  const script = /^alias\.rowly-orient=!node (tools\/orient\/mcp\.mjs)$/.exec(server.args[1])?.[1];
+  assert.deepEqual([server.args[0], server.args[2]], ["-c", "rowly-orient"]);
+  assert.ok(script && existsSync(join(ROOT, script)));
   assert.equal(Object.keys(config.mcpServers).length, 1);
   assert.doesNotMatch(raw, /token|key|secret|password/i);
 });
