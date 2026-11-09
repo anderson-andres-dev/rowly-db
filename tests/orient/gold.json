@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final. Fase 5: las `validation` de la fase 3 pasan a `seen` (ya se vieron tarea por tarea; se miden pero no deciden nada). Las tareas `p*` se anadieron antes de tocar el orientador: `train` si su numero es multiplo de 3 y `validation2` el resto; `validation2` no se mira hasta la medicion final.",
+  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final. Fase 5: las `validation` de la fase 3 pasan a `seen` (ya se vieron tarea por tarea; se miden pero no deciden nada). Las tareas `p*` se anadieron antes de tocar el orientador: `train` si su numero es multiplo de 3 y `validation2` el resto; `validation2` no se mira hasta la medicion final. Fase 6: las `validation2` de la fase 5 pasan a `seen2`. Las tareas `q*` se anadieron antes de tocar nada: `train` si su numero es multiplo de 3 y `validation3` el resto; `validation3` no se mira hasta la medicion final. Sus `files` y `tests` salen automaticamente de los archivos de codigo que tocó el commit (existentes hoy).",
   "tasks": [
     {
       "id": "issue-98-autoscroll",
@@ -704,7 +704,7 @@
     {
       "id": "p01-sentencia-bajo-cursor",
       "kind": "bug",
-      "split": "validation2",
+      "split": "seen2",
       "source": "b94d450 (fase 5)",
       "task": "Al ejecutar con Ctrl+Enter se manda el documento entero en vez de solo la sentencia que está bajo el cursor.",
       "files": [
@@ -718,7 +718,7 @@
     {
       "id": "p02-restablecer-atajos",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "6153988 (fase 5)",
       "task": "Agregar en Ajustes un botón para restablecer todos los atajos de teclado y un buscador de temas.",
       "files": [
@@ -745,7 +745,7 @@
     {
       "id": "p04-menu-contextual-nativo",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "eab741b (fase 5)",
       "task": "Bloquear el menú contextual nativo del navegador en toda la aplicación salvo dentro de los campos de texto.",
       "files": [
@@ -756,7 +756,7 @@
     {
       "id": "p05-pastillas-cambios",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "f21c33c (fase 5)",
       "task": "La vista previa de cambios debe mostrar pastillas DELETE, UPDATE e INSERT con la cantidad de cada una.",
       "files": [
@@ -778,7 +778,7 @@
     {
       "id": "p07-editar-conexion",
       "kind": "bug",
-      "split": "validation2",
+      "split": "seen2",
       "source": "adbca35 (fase 5)",
       "task": "Al editar una conexión solo debería guardarse, sin conectar; y el SSL automático no debe mostrar texto de más.",
       "files": [
@@ -791,7 +791,7 @@
     {
       "id": "p08-formulario-entornos",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "4f211e6 (fase 5)",
       "task": "En el formulario de conexión el desplegable se corta, el texto de ejemplo es largo y deberían existir tres entornos.",
       "files": [
@@ -821,7 +821,7 @@
     {
       "id": "p10-estados-resultado",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "8252a77 (fase 5)",
       "task": "Mostrar estados vacío, cargando y error en el panel de resultados y poder seleccionar todo en la grilla.",
       "files": [
@@ -833,7 +833,7 @@
     {
       "id": "p11-filtros-compactos",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "d99c04c (fase 5)",
       "task": "El constructor de filtros debería ser más compacto y el modo SQL del filtro no debe guardarse.",
       "files": [
@@ -860,7 +860,7 @@
     {
       "id": "p13-catalogo-conexion",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "4f354f1 (fase 5)",
       "task": "Endurecer la conexión a la base y ampliar el modelo del catálogo para que describa más objetos.",
       "files": [
@@ -874,7 +874,7 @@
     {
       "id": "p14-release-paralelo",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "650d0d7 (fase 5)",
       "task": "Compilar la release de cada plataforma en paralelo y publicar todo desde un solo job.",
       "files": [
@@ -902,7 +902,7 @@
     {
       "id": "p16-imagenes-una-vez",
       "kind": "modify",
-      "split": "validation2",
+      "split": "seen2",
       "source": "01c0207 (fase 5)",
       "task": "Bajar las imágenes de los servidores de prueba una sola vez por corrida en vez de por cada prueba.",
       "files": [
@@ -913,7 +913,7 @@
     {
       "id": "p17-grafo-desde-codigo",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "e5a7c9f (fase 5)",
       "task": "Generar el grafo de arquitectura desde el código y que el CI compruebe que el documento no queda atrás.",
       "files": [
@@ -935,7 +935,7 @@
     {
       "id": "p19-motor-sin-lineas",
       "kind": "bug",
-      "split": "validation2",
+      "split": "seen2",
       "source": "83d42f9 (fase 5)",
       "task": "Un motor sin líneas de versión ni fechas del fabricante debe hacer fallar el mapa de cobertura y no pasar.",
       "files": [
@@ -946,7 +946,7 @@
     {
       "id": "p20-prueba-huerfana",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "2cc084d (fase 5)",
       "task": "El reporte de cobertura debe fallar si hay una prueba huérfana o una versión sin evidencia.",
       "files": [
@@ -969,7 +969,7 @@
     {
       "id": "p22-servidores-digest",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "6afa87e (fase 5)",
       "task": "Fijar los servidores de prueba por digest, verificar la versión exacta y generar el mapa de cobertura.",
       "files": [
@@ -983,7 +983,7 @@
     {
       "id": "p23-matriz-un-motor",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "f97c0b6 (fase 5)",
       "task": "Cada job de la matriz de pruebas debe probar solo su motor, y las descargas deben reintentarse.",
       "files": [
@@ -1008,7 +1008,7 @@
     {
       "id": "p25-guia-motor",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "bc4c394 (fase 5)",
       "task": "Que SQL_ENGINE vuelva a ser el contrato y que ENGINE_GUIDE enseñe a añadir un motor con la plantilla.",
       "files": [
@@ -1020,7 +1020,7 @@
     {
       "id": "p26-rebranding",
       "kind": "modify",
-      "split": "validation2",
+      "split": "seen2",
       "source": "1062c00 (fase 5)",
       "task": "Cambiar el nombre del producto a Rowly DB en la ventana de conexión, el explorador y los ajustes.",
       "files": [
@@ -1046,7 +1046,7 @@
     {
       "id": "p28-fabrica-drivers",
       "kind": "feature",
-      "split": "validation2",
+      "split": "seen2",
       "source": "e7d37ec (fase 5)",
       "task": "Conectar de verdad a la base con una fábrica de drivers dentro de la aplicación, en vez de datos de ejemplo.",
       "files": [
@@ -1058,7 +1058,7 @@
     {
       "id": "p29-pestanas-consola-resaltado",
       "kind": "modify",
-      "split": "validation2",
+      "split": "seen2",
       "source": "53c092d (fase 5)",
       "task": "Las pestañas de consola deben tener el mismo resaltado liviano que las pestañas del resultado.",
       "files": [
@@ -1077,6 +1077,465 @@
         "app/src/lib/components/Workspace.svelte",
         "app/src/lib/components/results/ChangesPreview.svelte",
         "app/src/lib/sqlPreviewFormat.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q01-3fb2fef",
+      "kind": "modify",
+      "split": "validation3",
+      "source": "3fb2fef (fase 6)",
+      "task": "Dejar una sola línea de separación entre el editor y el resultado y poner el icono de la terminal en la fila.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q02-b5f994d",
+      "kind": "bug",
+      "split": "validation3",
+      "source": "b5f994d (fase 6)",
+      "task": "Al redimensionar el mosaico aparece una franja de más y la terminal debería ocupar todo el resultado.",
+      "files": [
+        "app/src/lib/components/MosaicArea.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q03-147cb7c",
+      "kind": "modify",
+      "split": "train",
+      "source": "147cb7c (fase 6)",
+      "task": "En el mosaico dejar un solo acento, el del foco, y que la fila del resultado no lleve carpeta.",
+      "files": [
+        "app/src/lib/components/MosaicArea.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPager.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/focusZones.ts"
+      ],
+      "tests": [
+        "app/src/lib/focusZones.keys.test.ts"
+      ]
+    },
+    {
+      "id": "q04-2e226af",
+      "kind": "refactor",
+      "split": "validation3",
+      "source": "2e226af (fase 6)",
+      "task": "Sacar la mecánica del mosaico a MosaicArea para poder usarla también en el resultado.",
+      "files": [
+        "app/src/lib/components/MosaicArea.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/workspace/mosaic.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q05-e8ab84b",
+      "kind": "bug",
+      "split": "validation3",
+      "source": "e8ab84b (fase 6)",
+      "task": "La vista previa del mosaico no muestra dónde queda de verdad la ventana al arrastrar.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q06-a28139a",
+      "kind": "feature",
+      "split": "train",
+      "source": "a28139a (fase 6)",
+      "task": "La terminal debería ser una pestaña a la derecha, con sesiones que se comporten como las pestañas de consola.",
+      "files": [
+        "app/src/lib/components/Terminal.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": [
+        "app/tests/e2e/resources.mjs"
+      ]
+    },
+    {
+      "id": "q07-b992356",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "b992356 (fase 6)",
+      "task": "Las pestañas de resultado deben desplazarse entre Salida y Terminal y quedar fijas.",
+      "files": [
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/tabScroll.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q08-68fb03f",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "68fb03f (fase 6)",
+      "task": "Ajustes con la cabecera fija, secciones agrupadas y los temas en una lista.",
+      "files": [
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/components/UpdatesSection.svelte",
+        "app/src/lib/i18n/messages/settings.ts",
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": [
+        "app/tests/e2e/resources.mjs"
+      ]
+    },
+    {
+      "id": "q09-2633c54",
+      "kind": "feature",
+      "split": "train",
+      "source": "2633c54 (fase 6)",
+      "task": "En Ajustes agregar un stepper numérico propio, desplegables visibles y atajos sin descripciones de relleno.",
+      "files": [
+        "app/src/lib/components/NumberStepper.svelte",
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/messages/settings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q10-c59cb22",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "c59cb22 (fase 6)",
+      "task": "Mostrar los temas en tres columnas con buscador y los nombres Tema y Modo en Ajustes.",
+      "files": [
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/messages/settings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q11-5ece585",
+      "kind": "modify",
+      "split": "validation3",
+      "source": "5ece585 (fase 6)",
+      "task": "Mostrar el icono de entorno también para Local y en el menú del selector de conexión.",
+      "files": [
+        "app/src/lib/components/ConnectionLanding.svelte",
+        "app/src/lib/components/ConnectionSwitcher.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q12-34ac668",
+      "kind": "feature",
+      "split": "train",
+      "source": "34ac668 (fase 6)",
+      "task": "En la tarjeta de conexión mostrar el entorno como icono, igual en cualquier idioma.",
+      "files": [
+        "app/src/lib/components/ConnectionLanding.svelte",
+        "app/src/lib/components/EnvironmentBadge.svelte",
+        "app/src/lib/i18n/messages/connections.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q13-d36ef4d",
+      "kind": "modify",
+      "split": "validation3",
+      "source": "d36ef4d (fase 6)",
+      "task": "La tarjeta de conexión debe ser más limpia: dos líneas y el logo del motor en la esquina.",
+      "files": [
+        "app/src/lib/components/ConnectionLanding.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q14-760a464",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "760a464 (fase 6)",
+      "task": "La vista previa de cambios debe mostrar el SQL formateado y no teñir de error el código de la sentencia fallida.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ChangesPreview.svelte",
+        "app/src/lib/sqlPreviewFormat.ts"
+      ],
+      "tests": [
+        "app/src/lib/sqlPreviewFormat.test.ts"
+      ]
+    },
+    {
+      "id": "q15-ef649e6",
+      "kind": "bug",
+      "split": "train",
+      "source": "ef649e6 (fase 6)",
+      "task": "Los iconos de la barra del resultado se ven desalineados; aplicar una corrección óptica medida y un trazo fijo.",
+      "files": [
+        "app/src/lib/components/results/ToolbarButton.svelte",
+        "app/src/lib/iconOptics.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q16-f8c905d",
+      "kind": "modify",
+      "split": "validation3",
+      "source": "f8c905d (fase 6)",
+      "task": "La cabecera del resultado no debe llevar cajas: pestañas livianas y grupos separados por aire.",
+      "files": [
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q17-44ab672",
+      "kind": "modify",
+      "split": "validation3",
+      "source": "44ab672 (fase 6)",
+      "task": "Cambiar el tema Rowly oscuro: fondos gris pizarra en lugar de teal saturado.",
+      "files": [
+        "app/src/lib/theming/palettes.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q18-9597b7d",
+      "kind": "feature",
+      "split": "train",
+      "source": "9597b7d (fase 6)",
+      "task": "Dar más contraste y más variedad de color al editor en el tema Rowly.",
+      "files": [
+        "app/src/lib/theming/codemirrorTheme.ts",
+        "app/src/lib/theming/palettes.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q19-81aa10b",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "81aa10b (fase 6)",
+      "task": "Usar los logotipos de cada base de datos en el selector de motor.",
+      "files": [
+        "app/src/lib/components/DriverPicker.svelte",
+        "app/src/lib/connections.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q20-f8a495b",
+      "kind": "refactor",
+      "split": "validation3",
+      "source": "f8a495b (fase 6)",
+      "task": "Un solo botón para toda la aplicación y diálogos más compactos.",
+      "files": [
+        "app/src/lib/components/Button.svelte",
+        "app/src/lib/components/ConfirmDialog.svelte",
+        "app/src/lib/components/results/ChangesPreview.svelte",
+        "app/src/lib/components/results/ExportDialog.svelte",
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q21-f5486f2",
+      "kind": "bug",
+      "split": "train",
+      "source": "f5486f2 (fase 6)",
+      "task": "El analizador no detecta un verbo mal escrito ni un END incorrecto dentro de una rutina.",
+      "files": [
+        "crates/engine/src/diagnostics.rs",
+        "crates/engine/src/execution_guard.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q22-8e967e5",
+      "kind": "bug",
+      "split": "validation3",
+      "source": "8e967e5 (fase 6)",
+      "task": "La guarda deja pasar sentencias destructivas sin confirmar: DO con datos, CTE y falsos positivos de DDL.",
+      "files": [
+        "crates/engine/src/execution_guard.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q23-79a1c7a",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "79a1c7a (fase 6)",
+      "task": "Las sentencias válidas que sqlparser no entiende deben juzgarse por su estructura en la guarda.",
+      "files": [
+        "crates/engine/src/execution_guard.rs",
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q24-25086ea",
+      "kind": "bug",
+      "split": "train",
+      "source": "25086ea (fase 6)",
+      "task": "La guarda y el divisor fallan con palabras después de un punto, comentarios con versión y handler.",
+      "files": [
+        "app/src/lib/sqlStatements.ts",
+        "crates/engine/src/execution_guard.rs"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts"
+      ]
+    },
+    {
+      "id": "q25-01b5249",
+      "kind": "bug",
+      "split": "validation3",
+      "source": "01b5249 (fase 6)",
+      "task": "El analizador marca falsos positivos con handlers, el operador := y SELECT INTO.",
+      "files": [
+        "crates/engine/src/diagnostics.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q26-21d6136",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "21d6136 (fase 6)",
+      "task": "La guarda de ejecución debe reconocer bloques por inicio de sentencia y comentarios ejecutables.",
+      "files": [
+        "crates/engine/src/execution_guard.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q27-817354e",
+      "kind": "bug",
+      "split": "train",
+      "source": "817354e (fase 6)",
+      "task": "Al escribir un CALL con argumentos aparecen avisos y el cursor se desplaza a medio escribir.",
+      "files": [
+        "crates/engine/src/diagnostics.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q28-7cd0bcb",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "7cd0bcb (fase 6)",
+      "task": "Poder conectar sin almacén de credenciales con perfiles que no guardan la contraseña.",
+      "files": [
+        "app/src-tauri/src/credentials.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q29-4563a96",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "4563a96 (fase 6)",
+      "task": "El aviso de actualización debe contar la novedad de la versión.",
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/release_highlight.rs",
+        "app/src-tauri/src/updates.rs",
+        "app/src/lib/components/UpdatePrompt.svelte",
+        "app/src/lib/i18n/messages/updates.ts",
+        "app/src/lib/stores/updates.ts"
+      ],
+      "tests": [
+        "app/src/lib/backend.test.ts",
+        "app/src/lib/stores/updates.test.ts",
+        "app/src/lib/stores/updatesCache.test.ts",
+        "app/src/lib/stores/updatesInstall.test.ts",
+        "app/src/lib/stores/updatesPrompt.test.ts"
+      ]
+    },
+    {
+      "id": "q30-a9a6aa9",
+      "kind": "refactor",
+      "split": "train",
+      "source": "a9a6aa9 (fase 6)",
+      "task": "Fijar con pruebas la superficie IPC y sus respuestas, y desconectar al volver.",
+      "files": [
+        "app/src-tauri/src/commands/connection.rs",
+        "app/src-tauri/src/commands/query.rs",
+        "app/src-tauri/src/commands/results.rs",
+        "app/src-tauri/src/lib.rs",
+        "app/src/lib/connectionWindow.ts",
+        "app/src/lib/stores/connection.ts",
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": [
+        "app/src/lib/stores/connectionCatalog.test.ts"
+      ]
+    },
+    {
+      "id": "q31-f477c38",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "f477c38 (fase 6)",
+      "task": "Demostrar las líneas de versión contra servidores reales en sus dos extremos.",
+      "files": [
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/version_lines.rs"
+      ]
+    },
+    {
+      "id": "q32-9ed2c93",
+      "kind": "refactor",
+      "split": "validation3",
+      "source": "9ed2c93 (fase 6)",
+      "task": "Mover el corpus a tests/sql y separar la suite de servidor real por propiedad.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/editor/analysisSession.ts",
+        "app/src/lib/editor/diagnosticPresentation.ts",
+        "app/src/lib/sqlParameterHints.ts",
+        "app/vitest.config.ts",
+        "crates/server-tests/examples/catalog_bench.rs",
+        "crates/server-tests/src/lib.rs",
+        "tools/test-dbs/evidence.mjs"
+      ],
+      "tests": [
+        "app/src/lib/__test-stubs__/app-environment.ts",
+        "app/src/lib/editor/blankLines.test.ts",
+        "app/src/lib/editor/statementIndex.test.ts",
+        "app/src/lib/sqlMixedCorpus.test.ts",
+        "app/src/lib/sqlStatements.test.ts",
+        "crates/engine/tests/corpus.rs",
+        "crates/server-tests/tests/analysis.rs",
+        "crates/server-tests/tests/generated.rs",
+        "crates/server-tests/tests/safety.rs",
+        "crates/server-tests/tests/version_lines.rs"
+      ]
+    },
+    {
+      "id": "q33-db6d68a",
+      "kind": "feature",
+      "split": "train",
+      "source": "db6d68a (fase 6)",
+      "task": "Un contrato y una plantilla de motor con inventarios que incluyan las líneas de versión.",
+      "files": [
+        "tools/engine/new.mjs",
+        "tools/inventory/coverage.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "q34-16308b2",
+      "kind": "feature",
+      "split": "validation3",
+      "source": "16308b2 (fase 6)",
+      "task": "Un mapa del estado actual y un inventario de todas las pruebas.",
+      "files": [
+        "tools/inventory/tests.mjs",
+        "tools/inventory/unused.mjs"
       ],
       "tests": []
     }

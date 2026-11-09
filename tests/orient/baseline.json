@@ -2,52 +2,52 @@
   "format": 2,
   "about": "Linea de referencia: lo que mide `graphify query` sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner graphify --write`; el orientador se compara contra esto.",
   "runner": "graphify",
-  "graphBuiltAt": "ab59f8a7ffad7b4ecb569810cea5019f4a315681",
-  "graphNodes": 5238,
+  "graphBuiltAt": "83316038d05ecf337816b134adc6c3b77969c0f5",
+  "graphNodes": 5446,
   "summary": {
-    "tasks": 79,
-    "recall": 0.07236286919831224,
-    "hit": 0.1518987341772152,
-    "precision": 0.0329113924050633,
-    "shown": 5,
-    "all": 0.25358649789029536,
-    "mrr": 0.10611571786367016,
-    "tests": 0.20085470085470086,
-    "tokens": 1720.2911392405063
+    "tasks": 113,
+    "recall": 0.06297935103244838,
+    "hit": 0.1415929203539823,
+    "precision": 0.031858407079646024,
+    "shown": 4.9734513274336285,
+    "all": 0.2548883270122208,
+    "mrr": 0.10225866225338813,
+    "tests": 0.15833333333333333,
+    "tokens": 1720.1858407079646
   },
   "byKind": {
     "bug": {
-      "tasks": 28,
-      "recall": 0.11904761904761904,
-      "hit": 0.17857142857142858,
-      "precision": 0.03571428571428571,
-      "shown": 5,
-      "all": 0.38690476190476186,
-      "mrr": 0.12017185662143645,
-      "tests": 0.1875,
-      "tokens": 1815.75
+      "tasks": 36,
+      "recall": 0.09259259259259259,
+      "hit": 0.1388888888888889,
+      "precision": 0.027777777777777776,
+      "shown": 4.972222222222222,
+      "all": 0.35648148148148145,
+      "mrr": 0.10751953656365422,
+      "tests": 0.11764705882352941,
+      "tokens": 1753.7222222222222
     },
     "feature": {
-      "tasks": 36,
-      "recall": 0.045370370370370366,
-      "hit": 0.1388888888888889,
-      "precision": 0.03333333333333333,
-      "shown": 5,
-      "all": 0.13194444444444445,
-      "mrr": 0.1016996352413019,
-      "tests": 0.15625,
-      "tokens": 1666.7777777777778
+      "tasks": 52,
+      "recall": 0.03397435897435897,
+      "hit": 0.09615384615384616,
+      "precision": 0.023076923076923075,
+      "shown": 4.961538461538462,
+      "all": 0.1217948717948718,
+      "mrr": 0.06350735886920097,
+      "tests": 0.11904761904761904,
+      "tokens": 1724.2115384615386
     },
     "refactor": {
-      "tasks": 7,
-      "recall": 0.10714285714285714,
-      "hit": 0.2857142857142857,
-      "precision": 0.05714285714285715,
+      "tasks": 11,
+      "recall": 0.18333333333333332,
+      "hit": 0.5454545454545454,
+      "precision": 0.12727272727272726,
       "shown": 5,
-      "all": 0.4571428571428572,
-      "mrr": 0.1522108843537415,
-      "tests": 0.38888888888888884,
-      "tokens": 1670.7142857142858
+      "all": 0.5441558441558442,
+      "mrr": 0.3531746031746032,
+      "tests": 0.2625,
+      "tokens": 1657.5454545454545
     },
     "analysis": {
       "tasks": 3,
@@ -58,31 +58,31 @@
       "all": 0.4166666666666667,
       "mrr": 0.09722222222222221,
       "tests": 0,
-      "tokens": 1647.6666666666667
+      "tokens": 1652.6666666666667
     },
     "modify": {
-      "tasks": 5,
+      "tasks": 11,
       "recall": 0,
       "hit": 0,
       "precision": 0,
       "shown": 5,
-      "all": 0,
-      "mrr": 0,
-      "tests": null,
-      "tokens": 1684
+      "all": 0.21818181818181817,
+      "mrr": 0.01868686868686869,
+      "tests": 1,
+      "tokens": 1672.4545454545455
     }
   },
   "bySplit": {
     "train": {
-      "tasks": 34,
-      "recall": 0.1142156862745098,
-      "hit": 0.2647058823529412,
-      "precision": 0.0588235294117647,
-      "shown": 5,
-      "all": 0.31176470588235294,
-      "mrr": 0.1531743909685086,
-      "tests": 0.2196969696969697,
-      "tokens": 1666.2941176470588
+      "tasks": 45,
+      "recall": 0.08703703703703704,
+      "hit": 0.2222222222222222,
+      "precision": 0.048888888888888885,
+      "shown": 4.977777777777778,
+      "all": 0.29153439153439153,
+      "mrr": 0.1305730319063652,
+      "tests": 0.21153846153846154,
+      "tokens": 1652.9555555555555
     },
     "holdout": {
       "tasks": 13,
@@ -91,9 +91,9 @@
       "precision": 0.03076923076923077,
       "shown": 5,
       "all": 0.4115384615384615,
-      "mrr": 0.11764346764346766,
+      "mrr": 0.11886724386724387,
       "tests": 0.2,
-      "tokens": 1976.7692307692307
+      "tokens": 1942.3846153846155
     },
     "seen": {
       "tasks": 12,
@@ -103,32 +103,43 @@
       "shown": 5,
       "all": 0.19444444444444442,
       "mrr": 0.11086309523809523,
-      "tests": 0.2857142857142857,
-      "tokens": 1672.1666666666667
+      "tests": 0.14285714285714285,
+      "tokens": 1666.5
     },
-    "validation2": {
+    "seen2": {
       "tasks": 20,
       "recall": 0,
       "hit": 0,
       "precision": 0,
       "shown": 5,
       "all": 0.0875,
-      "mrr": 0.015774509803921567,
+      "mrr": 0.014715612560813798,
       "tests": 0,
-      "tokens": 1674.25
+      "tokens": 1671.85
+    },
+    "validation3": {
+      "tasks": 23,
+      "recall": 0.05942028985507246,
+      "hit": 0.13043478260869565,
+      "precision": 0.034782608695652174,
+      "shown": 4.913043478260869,
+      "all": 0.2717391304347826,
+      "mrr": 0.10910864497821018,
+      "tests": 0.02,
+      "tokens": 1796.1739130434783
     }
   },
   "tasks": [
     {
       "id": "issue-98-autoscroll",
-      "recall": 0.5,
-      "precision": 0.2,
-      "shown": 5,
-      "hit": 1,
-      "all": 1,
-      "mrr": 0.5,
-      "tokens": 1640,
-      "tests": 1
+      "recall": 0,
+      "precision": 0,
+      "shown": 4,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1652,
+      "tests": 0
     },
     {
       "id": "issue-104-null",
@@ -137,8 +148,8 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6666666666666666,
-      "mrr": 0.2,
-      "tokens": 5715,
+      "mrr": 0.25,
+      "tokens": 5241,
       "tests": 0
     },
     {
@@ -149,7 +160,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1747,
+      "tokens": 1754,
       "tests": 0
     },
     {
@@ -160,7 +171,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1646
+      "tokens": 1650
     },
     {
       "id": "issue-107-terminal-conectada",
@@ -170,7 +181,7 @@
       "hit": 1,
       "all": 0.16666666666666666,
       "mrr": 0.5,
-      "tokens": 1673
+      "tokens": 1682
     },
     {
       "id": "pr-92-terminal-recursos",
@@ -180,7 +191,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1668
+      "tokens": 1651
     },
     {
       "id": "pr-87-pestana-esquina",
@@ -190,7 +201,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1631
+      "tokens": 1633
     },
     {
       "id": "pr-78-portal-linux",
@@ -200,7 +211,7 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.5,
-      "tokens": 1659
+      "tokens": 1693
     },
     {
       "id": "pr-77-fuga-consola",
@@ -210,7 +221,7 @@
       "hit": 0,
       "all": 1,
       "mrr": 0.125,
-      "tokens": 1652,
+      "tokens": 1657,
       "tests": 0
     },
     {
@@ -221,7 +232,7 @@
       "hit": 0,
       "all": 1,
       "mrr": 0.14285714285714285,
-      "tokens": 1665,
+      "tokens": 1678,
       "tests": 1
     },
     {
@@ -232,7 +243,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1659,
+      "tokens": 1633,
       "tests": 0
     },
     {
@@ -242,8 +253,8 @@
       "shown": 5,
       "hit": 0,
       "all": 0.4,
-      "mrr": 0.1111111111111111,
-      "tokens": 1675,
+      "mrr": 0.09090909090909091,
+      "tokens": 1671,
       "tests": 0
     },
     {
@@ -253,8 +264,8 @@
       "shown": 5,
       "hit": 1,
       "all": 0.6,
-      "mrr": 1,
-      "tokens": 1648,
+      "mrr": 0.5,
+      "tokens": 1664,
       "tests": 0
     },
     {
@@ -265,7 +276,7 @@
       "hit": 0,
       "all": 0.3333333333333333,
       "mrr": 0.1111111111111111,
-      "tokens": 1683,
+      "tokens": 1678,
       "tests": 0
     },
     {
@@ -276,7 +287,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1690,
+      "tokens": 1712,
       "tests": 0
     },
     {
@@ -287,7 +298,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1679
+      "tokens": 1678
     },
     {
       "id": "pr-44-nombres-citados",
@@ -297,7 +308,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1690,
+      "tokens": 1694,
       "tests": 0
     },
     {
@@ -308,7 +319,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1665
+      "tokens": 1658
     },
     {
       "id": "pr-45-workspace-puro",
@@ -318,7 +329,7 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 0.5,
-      "tokens": 1668,
+      "tokens": 1662,
       "tests": 0
     },
     {
@@ -328,20 +339,20 @@
       "shown": 5,
       "hit": 0,
       "all": 1,
-      "mrr": 0.125,
-      "tokens": 1703,
+      "mrr": 0.1111111111111111,
+      "tokens": 1718,
       "tests": 0
     },
     {
       "id": "pr-50-editor",
-      "recall": 0,
-      "precision": 0,
+      "recall": 0.2,
+      "precision": 0.2,
       "shown": 5,
-      "hit": 0,
-      "all": 0,
-      "mrr": 0,
-      "tokens": 1645,
-      "tests": 0.3333333333333333
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 1652,
+      "tests": 0
     },
     {
       "id": "pr-47-piso-compatibilidad",
@@ -351,17 +362,17 @@
       "hit": 0,
       "all": 0.2,
       "mrr": 0.047619047619047616,
-      "tokens": 1641
+      "tokens": 1637
     },
     {
       "id": "pr-79-ajustes",
-      "recall": 0.2,
-      "precision": 0.2,
+      "recall": 0,
+      "precision": 0,
       "shown": 5,
-      "hit": 1,
+      "hit": 0,
       "all": 0.16666666666666666,
-      "mrr": 0.2,
-      "tokens": 1668,
+      "mrr": 0.16666666666666666,
+      "tokens": 1671,
       "tests": 0
     },
     {
@@ -372,7 +383,7 @@
       "hit": 0,
       "all": 1,
       "mrr": 0.16666666666666666,
-      "tokens": 1653
+      "tokens": 1641
     },
     {
       "id": "analisis-sentencia-destructiva",
@@ -382,7 +393,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1644,
+      "tokens": 1660,
       "tests": 0
     },
     {
@@ -393,7 +404,7 @@
       "hit": 0,
       "all": 0.25,
       "mrr": 0.125,
-      "tokens": 1646
+      "tokens": 1657
     },
     {
       "id": "n01-salida-copiar-lineas",
@@ -403,7 +414,7 @@
       "hit": 1,
       "all": 0.3333333333333333,
       "mrr": 0.3333333333333333,
-      "tokens": 1673,
+      "tokens": 1659,
       "tests": 1
     },
     {
@@ -414,7 +425,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1685
+      "tokens": 1682
     },
     {
       "id": "n03-arrastre-libre",
@@ -424,7 +435,7 @@
       "hit": 0,
       "all": 1,
       "mrr": 0.1,
-      "tokens": 1656,
+      "tokens": 1641,
       "tests": 0
     },
     {
@@ -435,7 +446,7 @@
       "hit": 0,
       "all": 0.3333333333333333,
       "mrr": 0.125,
-      "tokens": 1684,
+      "tokens": 1681,
       "tests": 1
     },
     {
@@ -446,7 +457,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1669,
+      "tokens": 1681,
       "tests": 0
     },
     {
@@ -457,7 +468,7 @@
       "hit": 0,
       "all": 0.25,
       "mrr": 0.0625,
-      "tokens": 1673,
+      "tokens": 1671,
       "tests": 0
     },
     {
@@ -468,7 +479,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1691,
+      "tokens": 1692,
       "tests": 0
     },
     {
@@ -479,7 +490,7 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 1631
+      "tokens": 1641
     },
     {
       "id": "n09-shell-cabecera",
@@ -488,8 +499,8 @@
       "shown": 5,
       "hit": 1,
       "all": 0.5,
-      "mrr": 1,
-      "tokens": 1689
+      "mrr": 0.5,
+      "tokens": 1661
     },
     {
       "id": "n10-aviso-imagen",
@@ -499,7 +510,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1644
+      "tokens": 1641
     },
     {
       "id": "n11-terminal-espacio-propio",
@@ -509,7 +520,7 @@
       "hit": 0,
       "all": 0.25,
       "mrr": 0.09090909090909091,
-      "tokens": 1682
+      "tokens": 1679
     },
     {
       "id": "n12-un-dueno-por-comando",
@@ -519,7 +530,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1691,
+      "tokens": 1676,
       "tests": 0
     },
     {
@@ -530,7 +541,7 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.25,
-      "tokens": 1668,
+      "tokens": 1666,
       "tests": 1
     },
     {
@@ -541,7 +552,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1691,
+      "tokens": 1672,
       "tests": 0
     },
     {
@@ -551,8 +562,8 @@
       "shown": 5,
       "hit": 0,
       "all": 1,
-      "mrr": 0.1111111111111111,
-      "tokens": 1662,
+      "mrr": 0.125,
+      "tokens": 1665,
       "tests": 0
     },
     {
@@ -563,7 +574,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1713,
+      "tokens": 1691,
       "tests": 0
     },
     {
@@ -574,7 +585,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1674,
+      "tokens": 1671,
       "tests": 1
     },
     {
@@ -585,7 +596,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1644,
+      "tokens": 1639,
       "tests": 0
     },
     {
@@ -596,7 +607,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1656,
+      "tokens": 1660,
       "tests": 0
     },
     {
@@ -607,7 +618,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1670
+      "tokens": 1664
     },
     {
       "id": "n21-sql-mode",
@@ -627,8 +638,8 @@
       "hit": 0,
       "all": 0.75,
       "mrr": 0.14285714285714285,
-      "tokens": 1679,
-      "tests": 1
+      "tokens": 1666,
+      "tests": 0
     },
     {
       "id": "n24-pestanas-carpeta",
@@ -638,7 +649,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1661
+      "tokens": 1674
     },
     {
       "id": "p01-sentencia-bajo-cursor",
@@ -659,7 +670,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1659
+      "tokens": 1654
     },
     {
       "id": "p03-idioma-primera-vez",
@@ -669,7 +680,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1638
+      "tokens": 1649
     },
     {
       "id": "p04-menu-contextual-nativo",
@@ -679,7 +690,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1653
+      "tokens": 1671
     },
     {
       "id": "p05-pastillas-cambios",
@@ -689,7 +700,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1665
+      "tokens": 1660
     },
     {
       "id": "p06-error-aplicar-cambios",
@@ -699,7 +710,7 @@
       "hit": 0,
       "all": 1,
       "mrr": 0.09090909090909091,
-      "tokens": 1692
+      "tokens": 1690
     },
     {
       "id": "p07-editar-conexion",
@@ -709,7 +720,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1700
+      "tokens": 1699
     },
     {
       "id": "p08-formulario-entornos",
@@ -718,8 +729,8 @@
       "shown": 5,
       "hit": 0,
       "all": 0.25,
-      "mrr": 0.05,
-      "tokens": 1657,
+      "mrr": 0.05263157894736842,
+      "tokens": 1668,
       "tests": 0
     },
     {
@@ -730,7 +741,7 @@
       "hit": 0,
       "all": 0.5,
       "mrr": 0.1,
-      "tokens": 1706,
+      "tokens": 1713,
       "tests": 0
     },
     {
@@ -741,7 +752,7 @@
       "hit": 0,
       "all": 0.5,
       "mrr": 0.04,
-      "tokens": 1635
+      "tokens": 1620
     },
     {
       "id": "p11-filtros-compactos",
@@ -762,7 +773,7 @@
       "hit": 0,
       "all": 0.3333333333333333,
       "mrr": 0.04,
-      "tokens": 1641
+      "tokens": 1651
     },
     {
       "id": "p13-catalogo-conexion",
@@ -772,7 +783,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1657
+      "tokens": 1660
     },
     {
       "id": "p14-release-paralelo",
@@ -782,7 +793,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1690,
+      "tokens": 1656,
       "tests": 0
     },
     {
@@ -793,7 +804,7 @@
       "hit": 0,
       "all": 0.5,
       "mrr": 0.06666666666666667,
-      "tokens": 1665,
+      "tokens": 1655,
       "tests": 0.5
     },
     {
@@ -804,7 +815,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1715
+      "tokens": 1721
     },
     {
       "id": "p17-grafo-desde-codigo",
@@ -814,7 +825,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1658
+      "tokens": 1653
     },
     {
       "id": "p18-ciclos-recursos",
@@ -824,7 +835,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1660
+      "tokens": 1682
     },
     {
       "id": "p19-motor-sin-lineas",
@@ -834,7 +845,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1662
+      "tokens": 1646
     },
     {
       "id": "p20-prueba-huerfana",
@@ -844,7 +855,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1678
+      "tokens": 1686
     },
     {
       "id": "p21-paquetes-soporte",
@@ -854,7 +865,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1675
+      "tokens": 1678
     },
     {
       "id": "p22-servidores-digest",
@@ -864,7 +875,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1664,
+      "tokens": 1658,
       "tests": 0
     },
     {
@@ -875,7 +886,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1692
+      "tokens": 1682
     },
     {
       "id": "p24-na-con-prueba",
@@ -885,7 +896,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1648,
+      "tokens": 1656,
       "tests": 0
     },
     {
@@ -896,7 +907,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1660
+      "tokens": 1653
     },
     {
       "id": "p26-rebranding",
@@ -906,7 +917,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1714
+      "tokens": 1717
     },
     {
       "id": "p27-tema-rowly",
@@ -916,7 +927,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1630
+      "tokens": 1644
     },
     {
       "id": "p28-fabrica-drivers",
@@ -925,8 +936,8 @@
       "shown": 5,
       "hit": 0,
       "all": 0.5,
-      "mrr": 0.16666666666666666,
-      "tokens": 1692
+      "mrr": 0.14285714285714285,
+      "tokens": 1693
     },
     {
       "id": "p29-pestanas-consola-resaltado",
@@ -936,7 +947,7 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1686
+      "tokens": 1692
     },
     {
       "id": "p30-resumen-vista-previa",
@@ -946,7 +957,356 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 1649
+      "tokens": 1667
+    },
+    {
+      "id": "q01-3fb2fef",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.05,
+      "tokens": 1670
+    },
+    {
+      "id": "q02-b5f994d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.1111111111111111,
+      "tokens": 1659
+    },
+    {
+      "id": "q03-147cb7c",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.4,
+      "mrr": 0.1,
+      "tokens": 1683,
+      "tests": 1
+    },
+    {
+      "id": "q04-2e226af",
+      "recall": 0.6666666666666666,
+      "precision": 0.4,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.5,
+      "tokens": 1622
+    },
+    {
+      "id": "q05-e8ab84b",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1690
+    },
+    {
+      "id": "q06-a28139a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1651,
+      "tests": 0
+    },
+    {
+      "id": "q07-b992356",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1689
+    },
+    {
+      "id": "q08-68fb03f",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.25,
+      "mrr": 0.09090909090909091,
+      "tokens": 1688,
+      "tests": 0
+    },
+    {
+      "id": "q09-2633c54",
+      "recall": 0.3333333333333333,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 0.5,
+      "tokens": 1674
+    },
+    {
+      "id": "q10-c59cb22",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1686
+    },
+    {
+      "id": "q11-5ece585",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1650
+    },
+    {
+      "id": "q12-34ac668",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1657
+    },
+    {
+      "id": "q13-d36ef4d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.05555555555555555,
+      "tokens": 1684
+    },
+    {
+      "id": "q14-760a464",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.6666666666666666,
+      "mrr": 0.125,
+      "tokens": 1649,
+      "tests": 0
+    },
+    {
+      "id": "q15-ef649e6",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.5,
+      "mrr": 0.14285714285714285,
+      "tokens": 1690
+    },
+    {
+      "id": "q16-f8c905d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1648
+    },
+    {
+      "id": "q17-44ab672",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1617
+    },
+    {
+      "id": "q18-9597b7d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1625
+    },
+    {
+      "id": "q19-81aa10b",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1667
+    },
+    {
+      "id": "q20-f8a495b",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1654
+    },
+    {
+      "id": "q21-f5486f2",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.6666666666666666,
+      "mrr": 0.1111111111111111,
+      "tokens": 1697
+    },
+    {
+      "id": "q22-8e967e5",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.5,
+      "tokens": 1725
+    },
+    {
+      "id": "q23-79a1c7a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1674
+    },
+    {
+      "id": "q24-25086ea",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1623,
+      "tests": 0
+    },
+    {
+      "id": "q25-01b5249",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.07692307692307693,
+      "tokens": 1637
+    },
+    {
+      "id": "q26-21d6136",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 4794
+    },
+    {
+      "id": "q27-817354e",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1035
+    },
+    {
+      "id": "q28-7cd0bcb",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1644
+    },
+    {
+      "id": "q29-4563a96",
+      "recall": 0,
+      "precision": 0,
+      "shown": 3,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1614,
+      "tests": 0
+    },
+    {
+      "id": "q30-a9a6aa9",
+      "recall": 0.2,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.2857142857142857,
+      "mrr": 0.3333333333333333,
+      "tokens": 1634,
+      "tests": 1
+    },
+    {
+      "id": "q31-f477c38",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1654,
+      "tests": 0
+    },
+    {
+      "id": "q32-9ed2c93",
+      "recall": 0.2,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 1,
+      "tokens": 1646,
+      "tests": 0.1
+    },
+    {
+      "id": "q33-db6d68a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1653
+    },
+    {
+      "id": "q34-16308b2",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1651
     }
   ]
 }
