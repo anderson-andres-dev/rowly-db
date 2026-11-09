@@ -36,7 +36,7 @@ Nothing installs them: no npm script, no workflow, no other tool. They append a 
 
 ## Measuring it
 
-`tests/orient/gold.json` holds 49 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on), `holdout` and `validation` (measured, never tuned on). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `SUFFICIENT`.
+`tests/orient/gold.json` holds 79 tasks taken from real commits (`files` and `tests` are what the change touched; the text is how someone would ask for it), split into `train` (the only one parameters may be tuned on) and `holdout`, `seen` and `validation2` (measured, never tuned on; `seen` and `holdout` were looked at task by task in earlier phases, `validation2` was measured once, at the end). `tests/orient/negatives.json` holds out-of-scope tasks for which it must never say `SUFFICIENT`.
 
 ```bash
 node tools/orient/eval.mjs --report                       # orient vs graphify query, from the records
@@ -51,11 +51,11 @@ node tools/orient/eval.mjs --runner orient --no-graph --write   # after an inten
 
 Measured at the end of the work; the current numbers are always `--report`.
 
-- **`SUFFICIENT` is right 87 % of the time, not 90 %** (counting "at least half of the expected files were proposed"). It is always right about the area (some expected file is always among those proposed) but it does not know when a change spans several layers: the wrong ones were multi-file tasks across Rust and the frontend. Dispersion signals did not separate them, so none was added.
-- **Some tasks get no correct file** (5 of 49 in the last measurement): when the code names things differently from the description, when the work is a contract that crosses engine, backend and frontend, or when it is styling with no vocabulary of its own. These are left as they are; the `--check` tolerance is what protects against making them worse.
-- **Integration tests are often not found** (`contract.rs`, `safety.rs`): their owner is a crate, not the file being changed.
+- **`SUFFICIENT` is right 78 % of the time, not 90 %** (counting "at least half of the expected files were proposed"), and in 92 % at least one expected file was among those proposed. On the tasks measured only once (`validation2`) it was 73 % and 1 of its 11 claims had no correct file at all. It does not know when a change spans several layers or when the words of the task point at the wrong area. Dispersion signals did not separate the wrong ones on `train`, so none was added.
+- **Some tasks get no correct file** (13 of 79 in the last measurement): when the code names things differently from the description, when the work is a contract that crosses engine, backend and frontend, or when it is styling with no vocabulary of its own. These are left as they are; the `--check` tolerance is what protects against making them worse.
+- **Integration tests** (`contract.rs`, `safety.rs`) are now declared per feature in the catalogue (`tests`), which raised the tests found on `train` (60 → 70 %) and `holdout` (50 → 70 %) and left `validation2` unchanged (80 %); the ones whose feature is not among the two best matches are still missed.
 - **Files under `tests/` folders are treated as tests**, so a script such as `app/tests/e2e/resources.mjs` is listed as a test, never as a file to change.
 - **A short task made only of common words gets `NO MATCH`** even if something relevant exists: it is the price of not guessing.
 - **Precision is about 30 %**: expected answers have ~3 files and the card proposes up to 5. Cutting harder raises it by losing recall.
-- **Small and partly biased evidence**: 49 tasks; the catalogue vocabulary was written knowing the history (the 11 later `train` tasks and the `validation` set are the unbiased check); the index is built on HEAD, which already contains each fix (as it also does for Graphify's graph).
-- **Crude language handling**: accents and plural stripping plus a six-letter stem, in Spanish and English; symbols come from regular expressions, not parsers.
+- **Small and partly biased evidence**: 79 tasks; the catalogue vocabulary was written knowing the history (the 11 later `train` tasks and the `validation` set are the unbiased check); the index is built on HEAD, which already contains each fix (as it also does for Graphify's graph).
+- **Crude language handling**: accents and plural stripping plus a six-letter stem, in Spanish and English. A Spanish/English synonym table was tried and removed: it raised `train` but not the tasks measured once. Symbols come from regular expressions, not parsers.

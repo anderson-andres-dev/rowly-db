@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Tareas fuera del alcance del proyecto: no hay nada correcto que encontrar. El orientador no debe declarar SUFFICIENT; lo ideal es NO MATCH. Se usan para vigilar la falsa confianza. `split`: las primeras seis se usan al ajustar la confianza; las otras seis no se miran hasta la medicion final.",
+  "about": "Tareas fuera del alcance del proyecto: no hay nada correcto que encontrar. El orientador no debe declarar SUFFICIENT; lo ideal es NO MATCH. Se usan para vigilar la falsa confianza. `split`: las primeras seis se usan al ajustar la confianza; las otras seis no se miran hasta la medicion final. Fase 5: las seis `validation` de la fase 3 pasan a `seen` (se miraron al ajustar); las neg-13 a neg-18 son `train` y neg-19 a neg-24 `validation2` (no se miran hasta el final).",
   "tasks": [
     {
       "id": "neg-01",
@@ -35,32 +35,92 @@
     {
       "id": "neg-07",
       "task": "Configurar un clúster de Kubernetes con autoscaling para el servicio de pagos.",
-      "split": "validation"
+      "split": "seen"
     },
     {
       "id": "neg-08",
       "task": "Iniciar sesión con Google OAuth y manejar roles de administrador.",
-      "split": "validation"
+      "split": "seen"
     },
     {
       "id": "neg-09",
       "task": "Animar el logo en 3D con WebGL al abrir la aplicación.",
-      "split": "validation"
+      "split": "seen"
     },
     {
       "id": "neg-10",
       "task": "Cuál es la capital de Francia y cuántos habitantes tiene.",
-      "split": "validation"
+      "split": "seen"
     },
     {
       "id": "neg-11",
       "task": "Programar recordatorios por WhatsApp para las reuniones del equipo.",
-      "split": "validation"
+      "split": "seen"
     },
     {
       "id": "neg-12",
       "task": "Calcular el impuesto sobre las ventas según el país del cliente.",
-      "split": "validation"
+      "split": "seen"
+    },
+    {
+      "id": "neg-13",
+      "task": "Mostrar el clima actual de la ciudad en la barra superior.",
+      "split": "train"
+    },
+    {
+      "id": "neg-14",
+      "task": "Sincronizar las consultas guardadas con Dropbox automáticamente.",
+      "split": "train"
+    },
+    {
+      "id": "neg-15",
+      "task": "Cifrar las copias de seguridad con una llave de hardware USB.",
+      "split": "train"
+    },
+    {
+      "id": "neg-16",
+      "task": "Corregir el carrito de compras que duplica los productos al pagar.",
+      "split": "train"
+    },
+    {
+      "id": "neg-17",
+      "task": "Agregar un chat en vivo con el soporte técnico.",
+      "split": "train"
+    },
+    {
+      "id": "neg-18",
+      "task": "Detectar rostros en las fotos de perfil de los usuarios.",
+      "split": "train"
+    },
+    {
+      "id": "neg-19",
+      "task": "Medir la temperatura del servidor con un sensor externo.",
+      "split": "validation2"
+    },
+    {
+      "id": "neg-20",
+      "task": "Adaptar la aplicación para relojes inteligentes.",
+      "split": "validation2"
+    },
+    {
+      "id": "neg-21",
+      "task": "Reservar salas de reuniones desde el calendario del equipo.",
+      "split": "validation2"
+    },
+    {
+      "id": "neg-22",
+      "task": "Calcular la nómina de los empleados y las horas extra.",
+      "split": "validation2"
+    },
+    {
+      "id": "neg-23",
+      "task": "Alquilar bicicletas por geolocalización y pagar con un código QR.",
+      "split": "validation2"
+    },
+    {
+      "id": "neg-24",
+      "task": "Controlar un dron desde la aplicación con un mando de videojuegos.",
+      "split": "validation2"
     }
   ]
 }

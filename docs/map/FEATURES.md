@@ -103,7 +103,7 @@ The driver contract: the connector trait, sessions and consoles, query cancel, c
 - Terms (es): conector, driver, sesión, consola, cancelar consulta, error de conexión, ensamblado de resultados
 - Terms (en): connector, driver, session, console, cancel query, connection error, result assembly
 - Files: `crates/driver-core/src/`
-- Tests: `crates/driver-core/src/assembly.rs`, `crates/driver-core/src/connection_error.rs`, `crates/driver-core/src/console.rs`, `crates/driver-core/src/lib.rs`, `crates/driver-core/src/message.rs`, `crates/driver-core/src/query_cancel.rs`
+- Tests: `crates/driver-core/src/assembly.rs`, `crates/driver-core/src/connection_error.rs`, `crates/driver-core/src/console.rs`, `crates/driver-core/src/lib.rs`, `crates/driver-core/src/message.rs`, `crates/driver-core/src/query_cancel.rs`, `crates/server-tests/tests/contract.rs`
 - Related: [`driver-mysql`](#driver-mysql), [`driver-postgres`](#driver-postgres), [`engine-registration`](#engine-registration)
 - Docs: [ENGINE_GUIDE.md](../../ENGINE_GUIDE.md)
 
@@ -115,7 +115,7 @@ The MySQL and MariaDB driver: connection, TLS, version detection and introspecti
 - Terms (es): MySQL, MariaDB, TLS, versión del servidor, introspección, SSL
 - Terms (en): MySQL, MariaDB, TLS, server version, introspection, SSL
 - Files: `crates/drivers/mysql/src/`
-- Tests: `crates/drivers/mysql/src/introspect.rs`, `crates/drivers/mysql/src/lib.rs`, `crates/drivers/mysql/src/tls.rs`, `crates/drivers/mysql/src/version.rs`
+- Tests: `crates/drivers/mysql/src/introspect.rs`, `crates/drivers/mysql/src/lib.rs`, `crates/drivers/mysql/src/tls.rs`, `crates/drivers/mysql/src/version.rs`, `crates/server-tests/tests/contract.rs`, `crates/server-tests/tests/version_lines.rs`
 - Related: [`driver-core`](#driver-core), [`driver-postgres`](#driver-postgres)
 - Docs: [ENGINE_GUIDE.md](../../ENGINE_GUIDE.md)
 
@@ -127,7 +127,7 @@ The PostgreSQL driver: connection, TLS, version detection, introspection and lis
 - Terms (es): PostgreSQL, Postgres, TLS, versión del servidor, introspección, bases accesibles
 - Terms (en): PostgreSQL, Postgres, TLS, server version, introspection, accessible databases
 - Files: `crates/drivers/postgres/src/`
-- Tests: `crates/drivers/postgres/src/introspect.rs`, `crates/drivers/postgres/src/tls.rs`, `crates/drivers/postgres/src/version.rs`
+- Tests: `crates/drivers/postgres/src/introspect.rs`, `crates/drivers/postgres/src/tls.rs`, `crates/drivers/postgres/src/version.rs`, `crates/server-tests/tests/contract.rs`, `crates/server-tests/tests/version_lines.rs`
 - Related: [`driver-core`](#driver-core), [`driver-mysql`](#driver-mysql)
 - Docs: [ENGINE_GUIDE.md](../../ENGINE_GUIDE.md)
 
@@ -150,7 +150,7 @@ Autocompletion in the editor: catalog tables and columns, call hints, relations,
 - Terms (es): autocompletar, sugerencias, completado, columnas, tablas, pista de llamada, definición
 - Terms (en): autocomplete, completion, suggestions, columns, call hints, go to definition
 - Files: `app/src/lib/editor/catalogCompletions.ts`, `app/src/lib/editor/completionPolicy.ts`, `app/src/lib/editor/completionSource.ts`, `app/src/lib/editor/callHints.ts`, `app/src/lib/editor/relations.ts`, `app/src/lib/editor/createdTables.ts`, `app/src/lib/sqlDefinitionLink.ts`, `app/src/lib/usageStats.ts`
-- Tests: `app/src/lib/editor/backslashHighlight.test.ts`, `app/src/lib/editor/callHints.test.ts`, `app/src/lib/editor/catalogCompletions.server.test.ts`, `app/src/lib/editor/catalogCompletions.test.ts`, `app/src/lib/editor/completionPolicy.test.ts`, `app/src/lib/editor/completionSource.test.ts`, `app/src/lib/editor/createdTables.test.ts`, `app/src/lib/editor/relations.test.ts`, `app/src/lib/editor/writing.test.ts`
+- Tests: `app/src/lib/editor/backslashHighlight.test.ts`, `app/src/lib/editor/callHints.test.ts`, `app/src/lib/editor/catalogCompletions.server.test.ts`, `app/src/lib/editor/catalogCompletions.test.ts`, `app/src/lib/editor/completionPolicy.test.ts`, `app/src/lib/editor/completionSource.test.ts`, `app/src/lib/editor/createdTables.test.ts`, `app/src/lib/editor/relations.test.ts`, `app/src/lib/editor/writing.test.ts`, `crates/server-tests/tests/generated.rs`
 - Related: [`sql-editor`](#sql-editor), [`explorer-tree`](#explorer-tree)
 
 ## editor-formatting
@@ -207,7 +207,7 @@ The guard that classifies a statement as destructive and asks for confirmation f
 - Terms (es): sentencia destructiva, confirmación, producción, DELETE sin WHERE, guarda, modo seguro, confirmar
 - Terms (en): destructive statement, confirmation, production, DELETE without WHERE, guard, safe mode
 - Files: `crates/engine/src/execution_guard.rs`, `app/src/lib/components/ExecutionGuard.svelte`
-- Tests: `crates/engine/src/execution_guard.rs`
+- Tests: `app/tests/e2e/run.mjs`, `crates/engine/src/execution_guard.rs`, `crates/server-tests/tests/safety.rs`
 - Related: [`statement-execution`](#statement-execution), [`results-editing`](#results-editing)
 - Docs: [docs/ARCHITECTURE.md#how-sql-flows](../../docs/ARCHITECTURE.md#how-sql-flows)
 
@@ -389,7 +389,7 @@ Static analysis of SQL while typing: parser, diagnostics, error positions, popup
 - Terms (es): diagnósticos, errores, advertencias, análisis, parser, subrayado, ayuda del error
 - Terms (en): diagnostics, errors, warnings, analysis, parser, squiggles, error help
 - Files: `app/src/lib/editor/analysisRunner.ts`, `app/src/lib/editor/analysisSession.ts`, `app/src/lib/editor/diagnostics.ts`, `app/src/lib/editor/diagnosticPresentation.ts`, `app/src/lib/editor/errorHelp.ts`, `app/src/lib/components/DiagnosticPopup.svelte`, `crates/engine/src/parser.rs`, `crates/engine/src/diagnostics.rs`, `crates/engine/src/error_position.rs`
-- Tests: `app/src/lib/editor/analysisRunner.test.ts`, `app/src/lib/editor/analysisSession.test.ts`, `app/src/lib/editor/diagnosticPresentation.dom.test.ts`, `app/src/lib/editor/diagnostics.dom.test.ts`, `app/src/lib/editor/diagnostics.test.ts`, `app/src/lib/editor/errorHelp.test.ts`, `crates/engine/src/diagnostics.rs`, `crates/engine/src/error_position.rs`, `crates/engine/src/parser.rs`, `crates/engine/tests/corpus.rs`
+- Tests: `app/src/lib/editor/analysisRunner.test.ts`, `app/src/lib/editor/analysisSession.test.ts`, `app/src/lib/editor/diagnosticPresentation.dom.test.ts`, `app/src/lib/editor/diagnostics.dom.test.ts`, `app/src/lib/editor/diagnostics.test.ts`, `app/src/lib/editor/errorHelp.test.ts`, `crates/engine/src/diagnostics.rs`, `crates/engine/src/error_position.rs`, `crates/engine/src/parser.rs`, `crates/engine/tests/corpus.rs`, `crates/server-tests/tests/analysis.rs`
 - Related: [`sql-editor`](#sql-editor), [`execution-guard`](#execution-guard)
 - Docs: [docs/ARCHITECTURE.md#how-sql-flows](../../docs/ARCHITECTURE.md#how-sql-flows)
 
@@ -412,7 +412,7 @@ Running SQL: splitting statements, executing the selection or the statement unde
 - Terms (es): ejecutar, Ctrl+Enter, sentencia, consulta, cancelar, registro de ejecución, dividir sentencias
 - Terms (en): run, execute, statement, query, cancel, execution log, split statements
 - Files: `app/src/lib/workspace/executionSession.ts`, `app/src/lib/queryExecution.ts`, `app/src/lib/sqlStatements.ts`, `app/src/lib/editor/executionMarker.ts`, `app/src/lib/editor/statementIndex.ts`, `app/src/lib/stores/executionLog.ts`, `app/src-tauri/src/commands/query.rs`, `crates/driver-core/src/query_cancel.rs`
-- Tests: `app/src-tauri/src/commands/query.rs`, `app/src/lib/editor/blankLines.test.ts`, `app/src/lib/editor/executionMarker.test.ts`, `app/src/lib/editor/largeDocuments.test.ts`, `app/src/lib/editor/statementIndex.test.ts`, `app/src/lib/sqlMixedCorpus.test.ts`, `app/src/lib/sqlStatements.test.ts`, `app/src/lib/workspace/executionSession.test.ts`, `crates/driver-core/src/query_cancel.rs`
+- Tests: `app/src-tauri/src/commands/query.rs`, `app/src/lib/editor/blankLines.test.ts`, `app/src/lib/editor/executionMarker.test.ts`, `app/src/lib/editor/largeDocuments.test.ts`, `app/src/lib/editor/statementIndex.test.ts`, `app/src/lib/sqlMixedCorpus.test.ts`, `app/src/lib/sqlStatements.test.ts`, `app/src/lib/workspace/executionSession.test.ts`, `app/tests/e2e/run.mjs`, `crates/driver-core/src/query_cancel.rs`
 - Related: [`execution-guard`](#execution-guard), [`query-parameters`](#query-parameters), [`result-tabs`](#result-tabs), [`sql-editor`](#sql-editor)
 - Docs: [docs/ARCHITECTURE.md#how-sql-flows](../../docs/ARCHITECTURE.md#how-sql-flows)
 

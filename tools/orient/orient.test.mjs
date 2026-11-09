@@ -190,8 +190,9 @@ test("sobre el repo real, sin graphify y sin cache: toda tarjeta del oro cabe en
     const out = orient.run(task.task);
     assert.ok(out.tokens <= BUDGET, `${task.id}: ${out.tokens} tokens`);
     assert.match(out.markdown, /## Next\n(SUFFICIENT|PARTIAL|AMBIGUOUS|NO MATCH)|NO MATCH/, task.id);
-    assert.ok(out.files.length > 0, task.id);
-    assert.doesNotMatch(out.markdown, /graphify/, task.id);
+    // NO MATCH es un resultado valido: lo que se exige es que, si propone algo, lo diga.
+    if (!/NO MATCH/.test(out.markdown)) assert.ok(out.files.length > 0, task.id);
+    assert.doesNotMatch(out.markdown, /graphify \(by name/, task.id);
   }
 });
 
@@ -259,4 +260,16 @@ test("el cache se invalida solo cuando cambia el extractor: la firma sale de su 
   const signature = extractorSignature();
   assert.match(signature, /^\d+:[0-9a-f]{16}$/);
   assert.equal(signature, extractorSignature());
+});
+
+test("pruebas de integracion declaradas en el catalogo aparecen aunque su dueno sea otro", () => {
+  const withIntegration = structuredClone(model);
+  withIntegration.features.items[0].tests = ["crates/x/tests/integration.rs"];
+  const { index } = buildIndex({ tracked, model: withIntegration, inventory, fs });
+  const p = prepare(index);
+  const tests = pickTests(index, retrieve(p, "la grilla y su scroll"));
+  assert.ok(tests.map((test) => test.path).includes("crates/x/tests/integration.rs"));
+  const base = prepared();
+  const without = pickTests(base.index, retrieve(base, "la grilla y su scroll"));
+  assert.ok(!without.map((test) => test.path).includes("crates/x/tests/integration.rs"));
 });

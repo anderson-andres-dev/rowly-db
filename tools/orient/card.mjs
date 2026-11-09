@@ -85,10 +85,17 @@ export function pickTests(index, result) {
   const inNear = (owner) => index.files.get(owner)?.features.some((id) => near.has(id));
   const top = Math.max(1e-9, ...[...result.testHits.values()].map((hit) => hit.score));
   const candidates = new Map(testsOf(index, [...strength.keys()]).map((test) => [test.path, test]));
+  // Pruebas de integracion que el catalogo atribuye a las dos funcionalidades que mejor encajan:
+  // su dueno en el inventario es un crate o una carpeta, no el archivo que se cambia.
+  const declared = new Map();
+  result.features.slice(0, 2).forEach((item, rank) => {
+    for (const path of index.featureById.get(item.id)?.tests ?? []) declared.set(path, Math.max(declared.get(path) ?? 0, rank === 0 ? 0.5 : 0.3));
+  });
+  for (const path of declared.keys()) if (!candidates.has(path)) candidates.set(path, byPath.get(path) ?? { path });
   for (const path of result.testHits.keys()) if (!candidates.has(path) && inNear(byPath.get(path)?.owner)) candidates.set(path, byPath.get(path));
   // Un test vale lo que el archivo que protege, mas su coincidencia con la tarea.
   const ownerStrength = (test) => strength.get(test.owner) ?? [...strength].find(([path]) => test.path.startsWith(path.replace(/\.[a-z]+$/, ".")))?.[1] ?? 0;
-  const value = (test) => ownerStrength(test) + 0.7 * ((result.testHits.get(test.path)?.score ?? 0) / top) + (inNear(test.owner) ? 0.1 : 0);
+  const value = (test) => Math.max(ownerStrength(test), declared.get(test.path) ?? 0) + 0.7 * ((result.testHits.get(test.path)?.score ?? 0) / top) + (inNear(test.owner) ? 0.1 : 0);
   const ranked = [...candidates.values()].sort((a, b) => value(b) - value(a) || a.path.localeCompare(b.path));
   // Cada uno de los primeros archivos aporta su mejor prueba antes de que una sola
   // funcionalidad se quede con todos los lugares.

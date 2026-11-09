@@ -64,8 +64,10 @@ export function levelOf({ margin, coverage, evidence }, rule) {
 
 export function retrieve(prepared, task, params = PARAMS) {
   const { index, features, files, tests, maxIn } = prepared;
-  const query = tokens(task);
-  const unique = [...new Set(query)];
+  const said = tokens(task);
+  const unique = [...new Set(said)];
+  const query = said;
+  const queryTerms = new Set(query);
 
   const featureScores = [...features.score(query).entries()].map(([id, hit]) => ({ id, ...hit })).sort((a, b) => b.score - a.score);
   const topFeature = featureScores[0]?.score ?? 0;
@@ -109,16 +111,17 @@ export function retrieve(prepared, task, params = PARAMS) {
 
   const symbolsMatching = (path) => {
     const file = index.files.get(path);
-    return file.rec.symbols.filter((symbol) => tokens(symbol.name).some((token) => unique.includes(token)));
+    return file.rec.symbols.filter((symbol) => tokens(symbol.name).some((token) => queryTerms.has(token)));
   };
   const second = featureScores[1]?.score ?? 0;
   const margin = topFeature ? (topFeature - second) / topFeature : 0;
   const seen = new Set([...(featureScores[0]?.matched ?? []), ...(ranked[0]?.matched ?? [])]);
   const coverage = unique.length ? unique.filter((term) => seen.has(term)).length / unique.length : 0;
-  const evidence = [...new Set([...(featureScores[0]?.matched ?? []), ...ranked.slice(0, 3).flatMap((item) => item.matched)])].reduce((sum, term) => sum + files.idf(term), 0);
+  const matchedAll = new Set([...(featureScores[0]?.matched ?? []), ...ranked.slice(0, 3).flatMap((item) => item.matched)]);
+  const evidence = [...matchedAll].reduce((sum, term) => sum + files.idf(term), 0);
   const signals = { margin, coverage, evidence };
   const level = levelOf(signals, params.confidence);
-  const testHits = tests.score(query);
+  const testHits = tests.score(said);
 
   return {
     query: unique,

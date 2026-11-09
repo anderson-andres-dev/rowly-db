@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final.",
+  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final. Fase 5: las `validation` de la fase 3 pasan a `seen` (ya se vieron tarea por tarea; se miden pero no deciden nada). Las tareas `p*` se anadieron antes de tocar el orientador: `train` si su numero es multiplo de 3 y `validation2` el resto; `validation2` no se mira hasta la medicion final.",
   "tasks": [
     {
       "id": "issue-98-autoscroll",
@@ -406,7 +406,7 @@
     {
       "id": "n02-franja-grupos-angostos",
       "kind": "bug",
-      "split": "validation",
+      "split": "seen",
       "source": "5f356f0 (fase 3)",
       "task": "En los grupos angostos de pestañas aparece una franja que sobra, y copiar la Salida debería hacerse solo con el icono.",
       "files": [
@@ -433,7 +433,7 @@
     {
       "id": "n04-consola-al-lado",
       "kind": "bug",
-      "split": "validation",
+      "split": "seen",
       "source": "456bcfe (fase 3)",
       "task": "No se puede poner una consola al lado de otra cuando las pestañas están apiladas en el mosaico.",
       "files": [
@@ -463,7 +463,7 @@
     {
       "id": "n06-modo-mover",
       "kind": "feature",
-      "split": "validation",
+      "split": "seen",
       "source": "a93150b (fase 3)",
       "task": "Agregar el modo mover con Ctrl+Shift+W, también cuando el foco está en la terminal.",
       "files": [
@@ -492,7 +492,7 @@
     {
       "id": "n08-bash-historial",
       "kind": "bug",
-      "split": "validation",
+      "split": "seen",
       "source": "2456462 (fase 3)",
       "task": "Las pruebas de la terminal fallan porque bash expande el historial con el signo de exclamación.",
       "files": [
@@ -515,7 +515,7 @@
     {
       "id": "n10-aviso-imagen",
       "kind": "modify",
-      "split": "validation",
+      "split": "seen",
       "source": "3412c73 (fase 3)",
       "task": "En el aviso de nueva versión la imagen del destacado se ve angosta; hacerla más ancha.",
       "files": [
@@ -540,7 +540,7 @@
     {
       "id": "n12-un-dueno-por-comando",
       "kind": "refactor",
-      "split": "validation",
+      "split": "seen",
       "source": "7519f94 (fase 3)",
       "task": "Quitar código y textos que ya no se usan y dejar un solo dueño por cada comando del backend.",
       "files": [
@@ -569,7 +569,7 @@
     {
       "id": "n14-plantilla-motor",
       "kind": "feature",
-      "split": "validation",
+      "split": "seen",
       "source": "f89f238 (fase 3)",
       "task": "Una plantilla para agregar un motor nuevo y comprobaciones que no dejen nada a medias.",
       "files": [
@@ -597,7 +597,7 @@
     {
       "id": "n16-ventana-calidad",
       "kind": "bug",
-      "split": "validation",
+      "split": "seen",
       "source": "d360f16 (fase 3)",
       "task": "La ventana de soporte hace fallar la calidad del CI porque se confunde «verificada antes» con «soportada hoy», que son datos distintos.",
       "files": [
@@ -626,7 +626,7 @@
     {
       "id": "n18-checks-por-areas",
       "kind": "feature",
-      "split": "validation",
+      "split": "seen",
       "source": "6d72450 (fase 3)",
       "task": "Elegir qué checks del CI corren según las áreas que cambió el PR, con compuertas que siempre informen.",
       "files": [
@@ -653,7 +653,7 @@
     {
       "id": "n20-capturas-web",
       "kind": "feature",
-      "split": "validation",
+      "split": "seen",
       "source": "493e72b (fase 3)",
       "task": "Generar las capturas de la web desde la app real, con datos de ejemplo.",
       "files": [
@@ -675,7 +675,7 @@
     {
       "id": "n22-tests-driver-harness",
       "kind": "refactor",
-      "split": "validation",
+      "split": "seen",
       "source": "4b9f7ee (fase 3)",
       "task": "Pasar los tests de los drivers al harness de servidores reales, uno por cada versión exacta.",
       "files": [
@@ -691,13 +691,392 @@
     {
       "id": "n24-pestanas-carpeta",
       "kind": "modify",
-      "split": "validation",
+      "split": "seen",
       "source": "1d41187 (fase 3)",
       "task": "Las pestañas del panel inferior deben verse con estilo de carpeta, como las de las consolas.",
       "files": [
         "app/src/lib/components/Terminal.svelte",
         "app/src/lib/components/results/ResultPane.svelte",
         "app/src/lib/styles/tabs.css"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p01-sentencia-bajo-cursor",
+      "kind": "bug",
+      "split": "validation2",
+      "source": "b94d450 (fase 5)",
+      "task": "Al ejecutar con Ctrl+Enter se manda el documento entero en vez de solo la sentencia que está bajo el cursor.",
+      "files": [
+        "app/src/lib/SqlEditor.svelte",
+        "app/src/lib/sqlStatements.ts"
+      ],
+      "tests": [
+        "app/src/lib/sqlStatements.test.ts"
+      ]
+    },
+    {
+      "id": "p02-restablecer-atajos",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "6153988 (fase 5)",
+      "task": "Agregar en Ajustes un botón para restablecer todos los atajos de teclado y un buscador de temas.",
+      "files": [
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/messages/settings.ts",
+        "app/src/lib/stores/shortcuts.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p03-idioma-primera-vez",
+      "kind": "feature",
+      "split": "train",
+      "source": "5928aa8 (fase 5)",
+      "task": "El idioma no debería tener la opción «sistema»: que se detecte la primera vez y quede elegido.",
+      "files": [
+        "app/src/lib/components/SettingsPanel.svelte",
+        "app/src/lib/i18n/index.ts",
+        "app/src/lib/i18n/locales.ts",
+        "app/src/lib/i18n/messages/settings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p04-menu-contextual-nativo",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "eab741b (fase 5)",
+      "task": "Bloquear el menú contextual nativo del navegador en toda la aplicación salvo dentro de los campos de texto.",
+      "files": [
+        "app/src/routes/+layout.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p05-pastillas-cambios",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "f21c33c (fase 5)",
+      "task": "La vista previa de cambios debe mostrar pastillas DELETE, UPDATE e INSERT con la cantidad de cada una.",
+      "files": [
+        "app/src/lib/components/results/ChangesPreview.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p06-error-aplicar-cambios",
+      "kind": "bug",
+      "split": "train",
+      "source": "575a054 (fase 5)",
+      "task": "Cuando falla aplicar los cambios del resultado, el error mezcla la sentencia, el mensaje y el código; hay que separarlos.",
+      "files": [
+        "app/src/lib/components/results/ChangesPreview.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p07-editar-conexion",
+      "kind": "bug",
+      "split": "validation2",
+      "source": "adbca35 (fase 5)",
+      "task": "Al editar una conexión solo debería guardarse, sin conectar; y el SSL automático no debe mostrar texto de más.",
+      "files": [
+        "app/src/lib/components/ConnectionForm.svelte",
+        "app/src/lib/i18n/messages/connections.ts",
+        "app/src/routes/+page.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p08-formulario-entornos",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "4f211e6 (fase 5)",
+      "task": "En el formulario de conexión el desplegable se corta, el texto de ejemplo es largo y deberían existir tres entornos.",
+      "files": [
+        "app/src/lib/components/EnvironmentBadge.svelte",
+        "app/src/lib/components/Field.svelte",
+        "app/src/lib/i18n/messages/connections.ts",
+        "app/src/lib/stores/connectionProfiles.ts"
+      ],
+      "tests": [
+        "app/src/lib/stores/connectionProfiles.test.ts"
+      ]
+    },
+    {
+      "id": "p09-modal-cierre",
+      "kind": "bug",
+      "split": "train",
+      "source": "37d440b (fase 5)",
+      "task": "El modal de cierre de una consola no está centrado y al cerrar pestañas vacías se vuelve a crear una consola.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/stores/queryConsoles.ts"
+      ],
+      "tests": [
+        "app/src/lib/stores/queryConsoles.test.ts"
+      ]
+    },
+    {
+      "id": "p10-estados-resultado",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "8252a77 (fase 5)",
+      "task": "Mostrar estados vacío, cargando y error en el panel de resultados y poder seleccionar todo en la grilla.",
+      "files": [
+        "app/src/lib/components/results/DataGrid.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p11-filtros-compactos",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "d99c04c (fase 5)",
+      "task": "El constructor de filtros debería ser más compacto y el modo SQL del filtro no debe guardarse.",
+      "files": [
+        "app/src/lib/components/results/TableFilters.svelte",
+        "app/src/lib/stores/queryConsoles.ts"
+      ],
+      "tests": [
+        "app/src/lib/stores/queryConsoles.test.ts"
+      ]
+    },
+    {
+      "id": "p12-grupo-ssl",
+      "kind": "feature",
+      "split": "train",
+      "source": "f01313e (fase 5)",
+      "task": "En el formulario de conexión el grupo salta al elegirlo y el SSL debería ser un interruptor con sus opciones.",
+      "files": [
+        "app/src/lib/components/ConnectionForm.svelte",
+        "app/src/lib/components/GroupPicker.svelte",
+        "app/src/lib/i18n/messages/connections.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p13-catalogo-conexion",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "4f354f1 (fase 5)",
+      "task": "Endurecer la conexión a la base y ampliar el modelo del catálogo para que describa más objetos.",
+      "files": [
+        "crates/driver-core/src/lib.rs",
+        "crates/drivers/mysql/src/lib.rs",
+        "crates/drivers/postgres/src/lib.rs",
+        "crates/engine/src/catalog.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p14-release-paralelo",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "650d0d7 (fase 5)",
+      "task": "Compilar la release de cada plataforma en paralelo y publicar todo desde un solo job.",
+      "files": [
+        "tools/release/manifest.mjs"
+      ],
+      "tests": [
+        "tools/release/manifest.test.mjs"
+      ]
+    },
+    {
+      "id": "p15-semillas-fuzz",
+      "kind": "feature",
+      "split": "train",
+      "source": "32d4c11 (fase 5)",
+      "task": "Exigir las semillas de fuzz de la release y aceptar evidencia con alcance reducido en los PR.",
+      "files": [
+        "crates/server-tests/src/lib.rs",
+        "tools/test-dbs/evidence.mjs"
+      ],
+      "tests": [
+        "tools/test-dbs/evidence.test.mjs",
+        "crates/server-tests/tests/safety.rs"
+      ]
+    },
+    {
+      "id": "p16-imagenes-una-vez",
+      "kind": "modify",
+      "split": "validation2",
+      "source": "01c0207 (fase 5)",
+      "task": "Bajar las imágenes de los servidores de prueba una sola vez por corrida en vez de por cada prueba.",
+      "files": [
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p17-grafo-desde-codigo",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "e5a7c9f (fase 5)",
+      "task": "Generar el grafo de arquitectura desde el código y que el CI compruebe que el documento no queda atrás.",
+      "files": [
+        "tools/architecture/graph.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p18-ciclos-recursos",
+      "kind": "feature",
+      "split": "train",
+      "source": "fea70d0 (fase 5)",
+      "task": "Separar los ciclos de recursos del resto de las pruebas y que usen el inspector de WebKit.",
+      "files": [
+        "tools/inventory/tests.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p19-motor-sin-lineas",
+      "kind": "bug",
+      "split": "validation2",
+      "source": "83d42f9 (fase 5)",
+      "task": "Un motor sin líneas de versión ni fechas del fabricante debe hacer fallar el mapa de cobertura y no pasar.",
+      "files": [
+        "tools/inventory/coverage.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p20-prueba-huerfana",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "2cc084d (fase 5)",
+      "task": "El reporte de cobertura debe fallar si hay una prueba huérfana o una versión sin evidencia.",
+      "files": [
+        "tools/inventory/coverage.mjs",
+        "tools/test-dbs/evidence.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p21-paquetes-soporte",
+      "kind": "feature",
+      "split": "train",
+      "source": "0c1e2f5 (fase 5)",
+      "task": "Publicar los paquetes de soporte de versiones desde la carpeta support/, firmados.",
+      "files": [
+        "tools/support/publish.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p22-servidores-digest",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "6afa87e (fase 5)",
+      "task": "Fijar los servidores de prueba por digest, verificar la versión exacta y generar el mapa de cobertura.",
+      "files": [
+        "crates/server-tests/src/lib.rs",
+        "tools/inventory/coverage.mjs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/version_lines.rs"
+      ]
+    },
+    {
+      "id": "p23-matriz-un-motor",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "f97c0b6 (fase 5)",
+      "task": "Cada job de la matriz de pruebas debe probar solo su motor, y las descargas deben reintentarse.",
+      "files": [
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p24-na-con-prueba",
+      "kind": "feature",
+      "split": "train",
+      "source": "2a4fe77 (fase 5)",
+      "task": "Lo que una línea de versión no tiene se registra como N/A, con una prueba que lo demuestre.",
+      "files": [
+        "crates/server-tests/src/lib.rs",
+        "tools/inventory/tests.mjs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/version_lines.rs"
+      ]
+    },
+    {
+      "id": "p25-guia-motor",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "bc4c394 (fase 5)",
+      "task": "Que SQL_ENGINE vuelva a ser el contrato y que ENGINE_GUIDE enseñe a añadir un motor con la plantilla.",
+      "files": [
+        "tools/engine/new.mjs",
+        "tools/inventory/status.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p26-rebranding",
+      "kind": "modify",
+      "split": "validation2",
+      "source": "1062c00 (fase 5)",
+      "task": "Cambiar el nombre del producto a Rowly DB en la ventana de conexión, el explorador y los ajustes.",
+      "files": [
+        "app/src/lib/connectionWindow.ts",
+        "app/src/lib/i18n/messages/connections.ts",
+        "app/src/lib/i18n/messages/explorer.ts",
+        "app/src/lib/i18n/messages/settings.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p27-tema-rowly",
+      "kind": "feature",
+      "split": "train",
+      "source": "a006b5e (fase 5)",
+      "task": "Agregar el tema Rowly a las paletas y aplicarlo en la aplicación.",
+      "files": [
+        "app/src/lib/theming/palettes.ts",
+        "app/src/lib/theming/theme.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p28-fabrica-drivers",
+      "kind": "feature",
+      "split": "validation2",
+      "source": "e7d37ec (fase 5)",
+      "task": "Conectar de verdad a la base con una fábrica de drivers dentro de la aplicación, en vez de datos de ejemplo.",
+      "files": [
+        "app/src-tauri/src/drivers.rs",
+        "app/src-tauri/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p29-pestanas-consola-resaltado",
+      "kind": "modify",
+      "split": "validation2",
+      "source": "53c092d (fase 5)",
+      "task": "Las pestañas de consola deben tener el mismo resaltado liviano que las pestañas del resultado.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "p30-resumen-vista-previa",
+      "kind": "feature",
+      "split": "train",
+      "source": "7411b4b (fase 5)",
+      "task": "En la vista previa de cambios poner el resumen bajo el título y el tipo de sentencia en el margen.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ChangesPreview.svelte",
+        "app/src/lib/sqlPreviewFormat.ts"
       ],
       "tests": []
     }

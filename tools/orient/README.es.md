@@ -36,7 +36,7 @@ Nada los instala: ningún script de npm, ningún workflow, ninguna otra herramie
 
 ## Medirlo
 
-`tests/orient/gold.json` tiene 49 tareas sacadas de commits reales (`files` y `tests` son lo que tocó el cambio; el texto es como lo pediría alguien), repartidas en `train` (la única contra la que se pueden ajustar parámetros), `holdout` y `validation` (se miden, nunca se ajusta contra ellas). `tests/orient/negatives.json` tiene tareas fuera de alcance para las que jamás debe decir `SUFFICIENT`.
+`tests/orient/gold.json` tiene 79 tareas sacadas de commits reales (`files` y `tests` son lo que tocó el cambio; el texto es como lo pediría alguien), repartidas en `train` (la única contra la que se pueden ajustar parámetros) y `holdout`, `seen` y `validation2` (se miden, nunca se ajusta contra ellas; `seen` y `holdout` se vieron tarea por tarea en fases anteriores y `validation2` se midió una sola vez, al final). `tests/orient/negatives.json` tiene tareas fuera de alcance para las que jamás debe decir `SUFFICIENT`.
 
 ```bash
 node tools/orient/eval.mjs --report                       # orient frente a graphify query, desde los registros
@@ -51,11 +51,11 @@ node tools/orient/eval.mjs --runner orient --no-graph --write   # tras un cambio
 
 Medidos al cerrar el trabajo; los números vigentes salen siempre de `--report`.
 
-- **`SUFFICIENT` acierta el 87 % de las veces, no el 90 %** (contando «al menos la mitad de los archivos esperados fue propuesta»). Siempre acierta el área (algún archivo esperado está siempre entre los propuestos) pero no sabe cuándo un cambio abarca varias capas: las equivocadas fueron tareas de varios archivos entre Rust y el frontend. Las señales de dispersión no las separaron y no se añadió ninguna.
-- **Algunas tareas se quedan sin ningún archivo correcto** (5 de 49 en la última medición): cuando el código nombra distinto que la descripción, cuando el trabajo es un contrato que cruza motor, backend y frontend, o un cambio de estilo sin vocabulario propio. Se dejan así; lo que protege de empeorarlas es la tolerancia de `--check`.
-- **Las pruebas de integración muchas veces no aparecen** (`contract.rs`, `safety.rs`): su dueño es un crate, no el archivo que se cambia.
+- **`SUFFICIENT` acierta el 78 % de las veces, no el 90 %** (contando «al menos la mitad de los archivos esperados fue propuesta»), y en el 92 % hay al menos un archivo esperado entre los propuestos. En las tareas medidas una sola vez (`validation2`) fue 73 % y 1 de sus 11 declaraciones no tenía ningún archivo correcto. No sabe cuándo un cambio abarca varias capas ni cuándo las palabras de la tarea apuntan al área equivocada. Las señales de dispersión no separaron las equivocadas en `train` y no se añadió ninguna.
+- **Algunas tareas se quedan sin ningún archivo correcto** (13 de 79 en la última medición): cuando el código nombra distinto que la descripción, cuando el trabajo es un contrato que cruza motor, backend y frontend, o un cambio de estilo sin vocabulario propio. Se dejan así; lo que protege de empeorarlas es la tolerancia de `--check`.
+- **Pruebas de integración** (`contract.rs`, `safety.rs`): ahora se declaran por funcionalidad en el catálogo (`tests`); subió las pruebas encontradas en `train` (60 → 70 %) y `holdout` (50 → 70 %) y dejó igual `validation2` (80 %); las de una funcionalidad que no está entre las dos mejores siguen sin aparecer.
 - **Los archivos bajo carpetas `tests/` se tratan como pruebas**, así que un script como `app/tests/e2e/resources.mjs` se lista como prueba, nunca como archivo a cambiar.
 - **Una tarea corta hecha solo de palabras comunes da `NO MATCH`** aunque exista algo relevante: es el precio de no adivinar.
 - **La precisión ronda el 30 %**: las respuestas esperadas tienen ~3 archivos y la tarjeta propone hasta 5. Cortar más la sube a costa de recall.
-- **Evidencia pequeña y en parte sesgada**: 49 tareas; el vocabulario del catálogo se escribió conociendo el historial (las 11 tareas `train` posteriores y `validation` son el control sin sesgo); el índice se arma sobre HEAD, que ya contiene cada arreglo (igual que el grafo de Graphify).
-- **Lenguaje tosco**: sin acentos ni plurales y con raíz de seis letras, en español e inglés; los símbolos salen de expresiones regulares, no de parsers.
+- **Evidencia pequeña y en parte sesgada**: 79 tareas; el vocabulario del catálogo se escribió conociendo el historial (las 11 tareas `train` posteriores y `validation` son el control sin sesgo); el índice se arma sobre HEAD, que ya contiene cada arreglo (igual que el grafo de Graphify).
+- **Lenguaje tosco**: sin acentos ni plurales y con raíz de seis letras, en español e inglés. Se probó una tabla de sinónimos español/inglés y se quitó: subió `train` pero no las tareas medidas una sola vez. Los símbolos salen de expresiones regulares, no de parsers.
