@@ -8,7 +8,45 @@ Gracias por ayudar. El proyecto es joven y muchas decisiones de diseño siguen a
 
 Rowly DB es el producto. Khipu es el nombre interno de su motor, y por eso los crates, identificadores y claves de configuración empiezan con `khipu`. No los cambies. Todo lo que ve el usuario dice Rowly DB.
 
+## El stack
+
+Rowly DB es una app [Tauri 2](https://v2.tauri.app/): un backend en Rust y un frontend en WebView. El frontend es Svelte 5 con SvelteKit y Vite, TypeScript, CodeMirror 6 para el editor y xterm.js para la terminal. Los drivers de MySQL, MariaDB y PostgreSQL usan sqlx. Las versiones exactas y dónde leer su documentación están en [docs/map/STACK.md](docs/map/STACK.md).
+
+El workspace de Rust se divide en tres: `crates/engine` (parser, guarda y dialectos, sin Tauri ni drivers), `crates/drivers/*` (un crate por base de datos, sobre `crates/driver-core`) y `app/src-tauri` (la carcasa de escritorio y los comandos IPC). El código de Svelte está en `app/src/lib`. En [ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) está cómo encajan las piezas y dónde va cada tipo de cambio.
+
 ## Primeros pasos
+
+Instala las herramientas, luego los paquetes del sistema para tu SO y después ejecuta la app.
+
+Necesitas Rust 1.85+ ([rustup](https://rustup.rs/)) y Node.js 20.19+ con npm. `app/package-lock.json` está versionado: usa `npm install`, no otro gestor de paquetes.
+
+### Paquetes del sistema
+
+Tauri dibuja la ventana con el WebView del sistema, así que necesita algunas librerías nativas. La lista oficial para cada SO son los [requisitos de Tauri](https://v2.tauri.app/start/prerequisites/); esta es la versión corta.
+
+**Linux** (WebKitGTK 4.1 y GTK 3):
+
+```bash
+# Debian, Ubuntu
+sudo apt install build-essential curl wget file libssl-dev libgtk-3-dev \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+
+# Fedora
+sudo dnf install @development-tools curl wget file openssl-devel gtk3-devel \
+  webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel patchelf
+
+# Arch
+sudo pacman -S --needed base-devel curl wget file openssl gtk3 webkit2gtk-4.1 \
+  libappindicator-gtk3 librsvg xdotool patchelf
+```
+
+La CI instala `libappindicator3-dev` en lugar del paquete de Ayatana porque su runner de Ubuntu todavía lo trae; en una distribución actual usa las líneas de arriba.
+
+**macOS:** las Xcode Command Line Tools, con `xcode-select --install`. No hace falta nada más.
+
+**Windows:** las [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) con la carga de trabajo "Desarrollo para el escritorio con C++", y Rust con la toolchain MSVC (`rustup default stable-msvc`). El runtime WebView2 viene con Windows 10 (1803 y posteriores) y Windows 11; si el tuyo no lo tiene, instala el [runtime Evergreen](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+### Ejecutarla
 
 ```bash
 cargo build
@@ -17,7 +55,11 @@ npm install
 npm run tauri dev
 ```
 
-Necesitas Rust 1.85+ y Node.js 20.19+. En [ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) está cómo se organiza el código y dónde va cada tipo de cambio.
+La primera compilación construye todo el workspace y tarda varios minutos.
+
+### Por dónde empezar
+
+Los issues con la etiqueta [`good first issue`](https://github.com/anderson-andres-dev/rowly-db/labels/good%20first%20issue) son pequeños y autocontenidos; los de [`help wanted`](https://github.com/anderson-andres-dev/rowly-db/labels/help%20wanted) están abiertos a cualquiera. Si quieres tomar uno, dilo en el issue. Para algo más grande, abre primero un issue o inicia un hilo en las [discusiones](https://github.com/anderson-andres-dev/rowly-db/discussions), como se dice arriba.
 
 Si tocas un motor, un driver, SQL generado, análisis o ejecución, lee primero [SQL_ENGINE.es.md](SQL_ENGINE.es.md). Es el contrato permanente de calidad: matriz S/A/G/D, versiones, pruebas reales, compuertas y huecos conocidos. Añadir o cambiar un motor de base de datos, una línea de versión o una versión verificada sigue [ENGINE_GUIDE.es.md](ENGINE_GUIDE.es.md). Las notas de diseño son planes de trabajo y no sustituyen a ninguno de los dos.
 

@@ -8,7 +8,45 @@ Thanks for helping out. The project is young and many design decisions are still
 
 Rowly DB is the product. Khipu is the internal name of its engine, which is why crates, identifiers and settings keys start with `khipu`. Keep them that way. Everything the user sees says Rowly DB.
 
+## The stack
+
+Rowly DB is a [Tauri 2](https://v2.tauri.app/) app: a Rust backend and a WebView frontend. The frontend is Svelte 5 with SvelteKit and Vite, TypeScript, CodeMirror 6 for the editor and xterm.js for the terminal. The MySQL, MariaDB and PostgreSQL drivers use sqlx. The exact versions and where to read their docs are in [docs/map/STACK.md](docs/map/STACK.md).
+
+The Rust workspace is split in three: `crates/engine` (parser, guard and dialects, with no Tauri and no driver), `crates/drivers/*` (one crate per database, on top of `crates/driver-core`) and `app/src-tauri` (the desktop shell and the IPC commands). The Svelte code is in `app/src/lib`. [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit and where each kind of change goes.
+
 ## Getting started
+
+Install the tools, then the system packages for your OS, then run the app.
+
+You need Rust 1.85+ ([rustup](https://rustup.rs/)) and Node.js 20.19+ with npm. `app/package-lock.json` is committed: use `npm install`, not another package manager.
+
+### System packages
+
+Tauri draws the window with the system WebView, so it needs a few native libraries. The official list for each OS is [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/); this is the short version.
+
+**Linux** (WebKitGTK 4.1 and GTK 3):
+
+```bash
+# Debian, Ubuntu
+sudo apt install build-essential curl wget file libssl-dev libgtk-3-dev \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+
+# Fedora
+sudo dnf install @development-tools curl wget file openssl-devel gtk3-devel \
+  webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel patchelf
+
+# Arch
+sudo pacman -S --needed base-devel curl wget file openssl gtk3 webkit2gtk-4.1 \
+  libappindicator-gtk3 librsvg xdotool patchelf
+```
+
+CI installs `libappindicator3-dev` instead of the Ayatana package because its Ubuntu runner still ships it; on a current distribution use the lines above.
+
+**macOS:** the Xcode Command Line Tools, with `xcode-select --install`. Nothing else is needed.
+
+**Windows:** the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload, and Rust with the MSVC toolchain (`rustup default stable-msvc`). The WebView2 runtime ships with Windows 10 (1803 and later) and Windows 11; if yours does not have it, install the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+### Run it
 
 ```bash
 cargo build
@@ -17,7 +55,11 @@ npm install
 npm run tauri dev
 ```
 
-You need Rust 1.85+ and Node.js 20.19+. [ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is laid out and where each kind of change goes.
+The first build compiles the whole workspace and takes several minutes.
+
+### Where to start
+
+Issues labelled [`good first issue`](https://github.com/anderson-andres-dev/rowly-db/labels/good%20first%20issue) are small and self-contained; [`help wanted`](https://github.com/anderson-andres-dev/rowly-db/labels/help%20wanted) ones are open to anyone. If you want to take one, say so in the issue. For something larger, open an issue first or start a thread in the [discussions](https://github.com/anderson-andres-dev/rowly-db/discussions), as said above.
 
 If you change an engine, driver, generated SQL, analysis or execution, first read [SQL_ENGINE.md](SQL_ENGINE.md). It is the permanent quality contract: the S/A/G/D matrix, versions, real-server tests, gates and known gaps. Adding or changing a database engine, a version line or a verified release follows [ENGINE_GUIDE.md](ENGINE_GUIDE.md). Design notes are work plans and do not replace either.
 
