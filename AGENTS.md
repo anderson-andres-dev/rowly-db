@@ -6,7 +6,7 @@ This file is the entry point for any coding agent. It is a map of where the cont
 
 ## How this repo works with you
 
-1. **Playbooks**: every kind of change has a procedure (what to read, steps, rules, checks). Find it below or with `orient --playbook`.
+1. **Playbooks**: every kind of change has a procedure (what to read, steps, rules, checks). **Run `orient --playbook "<the request>"` first** for any change.
 2. **Map**: every feature and its entry file, below. Never list directories to find one.
 3. **Rules**: the persistent decisions, each with why and the command that checks it.
 4. **Tools**: `node tools/orient/orient.mjs` (written `orient` below) answers "where is it, what else changes, which tests". Only Node and the repository.
@@ -23,7 +23,7 @@ This file is the entry point for any coding agent. It is a map of where the cont
 
 ## Playbooks
 
-Find yours with `node tools/orient/orient.mjs --playbook "<the request>"`; the steps of all are in [docs/map/PLAYBOOKS.md](docs/map/PLAYBOOKS.md), and Claude Code and Codex load them as skills (`rowly-<id>`).
+**First step for any change, or any question about how to change something:** run `node tools/orient/orient.mjs --playbook "<the request>"`. It prints the procedure (what to read, steps, rules, checks) or says none matches and gives the card. Read that before opening files. The steps of all are in [docs/map/PLAYBOOKS.md](docs/map/PLAYBOOKS.md), and Claude Code and Codex load them as skills (`rowly-<id>`).
 
 <!-- generated: router (tools/orient/blocks.mjs) -->
 - `understand-repo` — Understand or explain the repository. Read: docs/ARCHITECTURE.md#the-idea
@@ -40,13 +40,13 @@ Find yours with `node tools/orient/orient.mjs --playbook "<the request>"`; the s
 
 ## What to do with a generic request
 
-Do not start by scanning. Use the playbook or this table and the orientation tool; open files only to confirm.
+Do not start by scanning. First `orient --playbook "<the request>"`, then this table; open files only to confirm.
 
 | You are asked | Do this | Do not |
 |---|---|---|
 | "Analyze / explain the repo" | Answer from this file; add [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) sections "The idea", "Layers and dependencies" and "How SQL flows" if depth is needed. | List directories, read every crate, grep the repository. |
-| "How could I make this change / implement X" | `orient "<the request>"`, read the line ranges it names, then `--impact <file>`. Answer with: files to touch, what to reuse, tests to run. | Read many files first and plan afterwards. |
-| "Fix this bug" | `orient "<the symptom>"`, read the ranges, run the tests it lists. | Run the whole suite or read whole files. |
+| "How could I make this change / implement X" | `orient --playbook "<the request>"`, then `orient "<the request>"` and read the line ranges it names, then `--impact <file>`. Answer with: files to touch, what to reuse, tests to run. | Read many files first and plan afterwards. |
+| "Fix this bug" | `orient --playbook "<the symptom>"`, then `orient "<the symptom>"`, read the ranges, run the tests it lists. | Run the whole suite or read whole files. |
 | "Where is X / what does X do" | Find X in the map below, then `orient --expand <feature>`. | `find`, `ls -R`, broad greps. |
 | "Refactor / review" | `orient --impact <file or feature>`: who uses it, whom it uses, the tests of both. | Edit before knowing the dependants. |
 
