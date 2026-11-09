@@ -27,7 +27,9 @@
   } from "$lib/results/gridClipboard";
   import {
     EMPTY_EDITS,
+    cellBlock,
     clearedCell,
+    currentValue,
     originalValue,
     resolveCell,
     sameValue,
@@ -1007,17 +1009,14 @@
   let editInput = $state<HTMLInputElement>();
 
   function valueAt(row: number, col: number): CellValue {
-    if (row >= rows.length) return edits.inserted[row - rows.length]?.[col] ?? { kind: "null" };
-    return edits.updates.get(row)?.get(col) ?? originalValue(rows[row][col]);
+    return currentValue(edits, rows, row, col);
   }
 
   function editableColumn(row: number, col: number): string | null {
-    if (!editInfo) return editBlockedReason ?? $t("grid.blocked.result");
-    const column = editInfo.columns[col];
-    if (!column) return $t("grid.blocked.computedColumn", { column: columns[col]?.name ?? "" });
-    if (column.generated) return $t("grid.blocked.generatedColumn", { column: column.name });
-    if (row < rows.length && edits.deleted.has(row)) return $t("grid.blocked.deletedRow");
-    return null;
+    const block = cellBlock(editInfo, edits, rows.length, row, col, columns[col]?.name ?? "");
+    if (!block) return null;
+    if (block.key === "blocked.result" && editBlockedReason) return editBlockedReason;
+    return $t(`grid.${block.key}`, block.params);
   }
 
   function requestEdit(row: number, col: number, typed?: string) {

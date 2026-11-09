@@ -95,6 +95,7 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: "delete-result-rows", zone: "results", group: "results", defaultKeys: "Ctrl+Delete" },
   { id: "revert-result-changes", zone: "results", group: "results", defaultKeys: "Ctrl+Z" },
   { id: "submit-result-changes", zone: "results", group: "results", defaultKeys: "Ctrl+Enter" },
+  { id: "toggle-record-view", zone: "results", group: "results", defaultKeys: "Ctrl+Shift+E" },
   // Actuan sobre el resultado, pero sirven tambien desde el editor, recien
   // ejecutada la consulta.
   { id: "next-result-page", zone: "global", group: "results", defaultKeys: "Alt+ArrowRight" },
