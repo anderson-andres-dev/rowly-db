@@ -43,6 +43,7 @@
         "LICENSE*",
         ".gitignore",
         ".claude/**",
+        ".agents/**",
         "tools/bench/**",
         "tools/site-shots/**",
         "tools/engine/**",

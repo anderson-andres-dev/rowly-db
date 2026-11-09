@@ -27,6 +27,23 @@ Do not start by scanning. Use the map below and the orientation tool; open files
 
 Budget: have a plan after about five files. If the map and the card do not answer, widen one step (`--expand`, then a targeted `grep` inside the folder they name), not the whole repository. The card is a hint, not an answer: on varied tasks its first five files hold about half of the files a change touched (at least one in about seven cases out of ten), so verify before relying on it. `LIKELY` means probably the right area, not that nothing else needs reading; `PARTIAL`, `AMBIGUOUS` and `NO MATCH` say what to do next. It needs only Node and the repository; `--json` gives a versioned JSON object; details, limits and measurements are in [tools/orient/README.md](tools/orient/README.md).
 
+## Playbooks
+
+Each kind of change has a procedure: what to read, the steps, the rules that apply and what to run. Find yours with `node tools/orient/orient.mjs --playbook "<the request>"`; the full text of every one is [docs/map/PLAYBOOKS.md](docs/map/PLAYBOOKS.md), and Claude Code and Codex load them as skills (`rowly-<id>`).
+
+<!-- generated: router (tools/orient/blocks.mjs) -->
+- `understand-repo` — Understand or explain the repository. Read: docs/ARCHITECTURE.md#the-idea
+- `fix-bug` — Fix a bug. Read: docs/ARCHITECTURE.md#rules-for-the-app
+- `ipc-command` — Add or change a backend command (IPC). Read: docs/ARCHITECTURE.md#rules-for-the-app
+- `ui-text` — Change the interface or its texts. Read: docs/ARCHITECTURE.md#rules-for-the-app
+- `sql-behavior` — Change how SQL is analyzed, guarded or generated. Read: SQL_ENGINE.md#6-the-matrix
+- `add-engine` — Add a database engine or a version line. Read: ENGINE_GUIDE.md#the-path-at-a-glance
+- `add-tests` — Add or fix tests. Read: SQL_ENGINE.md#102-rules
+- `tooling-ci` — Change CI, repository tools or architecture rules. Read: docs/ARCHITECTURE.md#boundaries-that-check-themselves
+- `write-docs` — Change documentation. Read: CONTRIBUTING.md#style
+- `release` — Publish a release. Read: CONTRIBUTING.md#releasing
+<!-- /generated: router -->
+
 ## Map of features
 
 Each line is `feature` — what it is → its main file or folder. Generated from `tools/architecture/model.json` (`node tools/orient/features.mjs --write`); the full table with terms, tests and neighbours is [docs/map/FEATURES.md](docs/map/FEATURES.md) (read its index only).

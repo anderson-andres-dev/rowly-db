@@ -2179,5 +2179,382 @@
       "why": "Every token there is paid on every request.",
       "check": "node --test tools/orient/coherence.test.mjs"
     }
+  ],
+  "playbooks": [
+    {
+      "id": "understand-repo",
+      "title": "Understand or explain the repository",
+      "when": {
+        "es": [
+          "analiza el repo",
+          "explícame el proyecto",
+          "cómo está organizado",
+          "qué hace este repositorio",
+          "arquitectura general"
+        ],
+        "en": [
+          "analyze the repo",
+          "explain the project",
+          "how is it organized",
+          "what does this repository do",
+          "overall architecture"
+        ]
+      },
+      "read": [
+        "docs/ARCHITECTURE.md#the-idea",
+        "docs/ARCHITECTURE.md#layers-and-dependencies",
+        "docs/ARCHITECTURE.md#how-sql-flows"
+      ],
+      "steps": [
+        "Answer from the map in AGENTS.md first; it already names every feature and its entry file.",
+        "Read only the sections above if more depth is needed.",
+        "For one feature run `node tools/orient/orient.mjs --expand <feature>`; open at most its entry file."
+      ],
+      "rules": [
+        "engine-neutral-common-code",
+        "one-owner-per-state"
+      ],
+      "checks": []
+    },
+    {
+      "id": "fix-bug",
+      "title": "Fix a bug",
+      "when": {
+        "es": [
+          "arregla este bug",
+          "corrige el error",
+          "falla cuando",
+          "no funciona",
+          "se rompe al"
+        ],
+        "en": [
+          "fix this bug",
+          "fix the error",
+          "it fails when",
+          "does not work",
+          "crashes when"
+        ]
+      },
+      "read": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ],
+      "steps": [
+        "Run `node tools/orient/orient.mjs \"<the symptom>\"` and read only the line ranges it names.",
+        "Write the failing test next to the code first; it stays as a permanent regression test.",
+        "Run the tests the card lists, not the whole suite.",
+        "Run `--impact <file>` before changing anything shared."
+      ],
+      "rules": [
+        "tests-in-inventory",
+        "one-path-to-run-sql"
+      ],
+      "checks": [
+        "node tools/inventory/tests.mjs --check"
+      ]
+    },
+    {
+      "id": "ipc-command",
+      "title": "Add or change a backend command (IPC)",
+      "when": {
+        "es": [
+          "añadir un comando",
+          "nuevo comando del backend",
+          "comando tauri",
+          "exponer al frontend",
+          "invoke nuevo"
+        ],
+        "en": [
+          "add a command",
+          "new backend command",
+          "tauri command",
+          "expose to the frontend",
+          "new invoke"
+        ]
+      },
+      "read": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ],
+      "steps": [
+        "Put the work in `services/` and the adapter in `commands/`; the command never repeats the guard, the catalog or the pools.",
+        "Register it in `lib.rs`.",
+        "Add it with its single owner module to `app/src/lib/backend.test.ts`.",
+        "Call it from the frontend only through `backend.ts`."
+      ],
+      "rules": [
+        "one-owner-per-command",
+        "one-path-to-run-sql",
+        "code-in-a-feature"
+      ],
+      "checks": [
+        "cd app && npx vitest run src/lib/backend.test.ts",
+        "node tools/orient/features.mjs --check"
+      ]
+    },
+    {
+      "id": "ui-text",
+      "title": "Change the interface or its texts",
+      "when": {
+        "es": [
+          "cambiar un texto",
+          "traducir",
+          "nuevo botón",
+          "cambiar la interfaz",
+          "mensaje de la ui"
+        ],
+        "en": [
+          "change a text",
+          "translate",
+          "new button",
+          "change the interface",
+          "ui message"
+        ]
+      },
+      "read": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ],
+      "steps": [
+        "Every visible text goes through `app/src/lib/i18n/messages/` in Spanish and English, never inline.",
+        "Reuse the shared UI pieces (tooltip, select, field, menu, checkbox, button); nothing native.",
+        "Everything must be operable by keyboard.",
+        "Say Rowly DB to the user, never Khipu."
+      ],
+      "rules": [
+        "i18n-texts",
+        "names",
+        "proportional-work"
+      ],
+      "checks": [
+        "cd app && npm run check"
+      ]
+    },
+    {
+      "id": "sql-behavior",
+      "title": "Change how SQL is analyzed, guarded or generated",
+      "when": {
+        "es": [
+          "cambiar la guarda",
+          "sentencia destructiva",
+          "diagnósticos del editor",
+          "paginación",
+          "sql generado"
+        ],
+        "en": [
+          "change the guard",
+          "destructive statement",
+          "editor diagnostics",
+          "pagination",
+          "generated sql"
+        ]
+      },
+      "read": [
+        "SQL_ENGINE.md#6-the-matrix",
+        "SQL_ENGINE.md#61-safety",
+        "docs/ARCHITECTURE.md#how-sql-flows"
+      ],
+      "steps": [
+        "Read SQL_ENGINE.md before touching engines, drivers, generated SQL, analysis or execution.",
+        "The UI never decides if a statement is safe; the backend guard does.",
+        "A new bug becomes a permanent fixture or test (SQL_ENGINE §13).",
+        "What differs by engine is data or its own crate, never an engine name in common code."
+      ],
+      "rules": [
+        "one-path-to-run-sql",
+        "engine-neutral-common-code",
+        "tests-in-inventory"
+      ],
+      "checks": [
+        "node tools/architecture/graph.mjs --check",
+        "node tools/inventory/coverage.mjs"
+      ]
+    },
+    {
+      "id": "add-engine",
+      "title": "Add a database engine or a version line",
+      "when": {
+        "es": [
+          "añadir un motor",
+          "nuevo motor de base de datos",
+          "nueva línea de versión",
+          "soportar sqlite",
+          "nueva versión del servidor"
+        ],
+        "en": [
+          "add an engine",
+          "new database engine",
+          "new version line",
+          "support sqlite",
+          "new server version"
+        ]
+      },
+      "read": [
+        "ENGINE_GUIDE.md#the-path-at-a-glance",
+        "ENGINE_GUIDE.md#a-new-line-of-an-existing-engine",
+        "ENGINE_GUIDE.md#done-means",
+        "CONTRIBUTING.md#adding-a-database-engine"
+      ],
+      "steps": [
+        "Start with `node tools/engine/new.mjs <id> --like <mysql|mariadb|postgres>`; the compiler and the tests name every step left.",
+        "Follow ENGINE_GUIDE.md in order; an engine without the full matrix is Experimental.",
+        "Run `node tools/inventory/status.mjs --write` for the generated tables.",
+        "A missing upstream feature is a documented gap, never a fork."
+      ],
+      "rules": [
+        "engine-neutral-common-code",
+        "published-deps-only",
+        "generated-blocks"
+      ],
+      "checks": [
+        "node tools/inventory/coverage.mjs",
+        "node tools/inventory/status.mjs",
+        "node tools/architecture/graph.mjs --check"
+      ]
+    },
+    {
+      "id": "add-tests",
+      "title": "Add or fix tests",
+      "when": {
+        "es": [
+          "añadir pruebas",
+          "escribir tests",
+          "cubrir con pruebas",
+          "prueba que falla",
+          "cómo correr las pruebas"
+        ],
+        "en": [
+          "add tests",
+          "write tests",
+          "cover with tests",
+          "failing test",
+          "how to run the tests"
+        ]
+      },
+      "read": [
+        "SQL_ENGINE.md#102-rules",
+        "CONTRIBUTING.md#workflow"
+      ],
+      "steps": [
+        "A test sits next to the code it covers (Vitest, `#[cfg(test)]`).",
+        "Add the test file to `tests/inventory.json` (owner, property, risk, gate).",
+        "Find what protects an area with `node tools/orient/orient.mjs --expand <feature>`; it lists its tests.",
+        "Real-server tests live in `crates/server-tests`; E2E in `app/tests/e2e`."
+      ],
+      "rules": [
+        "tests-in-inventory"
+      ],
+      "checks": [
+        "node tools/inventory/tests.mjs --check"
+      ]
+    },
+    {
+      "id": "tooling-ci",
+      "title": "Change CI, repository tools or architecture rules",
+      "when": {
+        "es": [
+          "cambiar el ci",
+          "workflow de github",
+          "herramienta del repo",
+          "reglas de arquitectura",
+          "dependencias permitidas"
+        ],
+        "en": [
+          "change the ci",
+          "github workflow",
+          "repository tool",
+          "architecture rules",
+          "allowed dependencies"
+        ]
+      },
+      "read": [
+        "docs/ARCHITECTURE.md#boundaries-that-check-themselves",
+        "docs/ARCHITECTURE.md#sources-of-truth",
+        "CONTRIBUTING.md#workflow"
+      ],
+      "steps": [
+        "Dependency rules and the feature catalogue are data in `tools/architecture/model.json`; edit the data, then run `--write`.",
+        "CI runs only what a change touches (`tools/ci/areas.json`); a new tool needs its path there.",
+        "Never edit generated blocks by hand."
+      ],
+      "rules": [
+        "generated-blocks",
+        "code-in-a-feature",
+        "tests-in-inventory"
+      ],
+      "checks": [
+        "node tools/architecture/graph.mjs --check",
+        "node tools/orient/features.mjs --check"
+      ]
+    },
+    {
+      "id": "write-docs",
+      "title": "Change documentation",
+      "when": {
+        "es": [
+          "actualizar la documentación",
+          "editar el readme",
+          "documentar",
+          "corregir la guía",
+          "traducir un documento"
+        ],
+        "en": [
+          "update the documentation",
+          "edit the readme",
+          "document this",
+          "fix the guide",
+          "translate a document"
+        ]
+      },
+      "read": [
+        "CONTRIBUTING.md#style",
+        "docs/ARCHITECTURE.md#sources-of-truth"
+      ],
+      "steps": [
+        "Public docs are in English with a Spanish copy `*.es.md`; change both together.",
+        "Do not edit what sits between `<!-- generated: ... -->` markers; rerun the tool with `--write`.",
+        "Point to the document that owns a fact instead of repeating it."
+      ],
+      "rules": [
+        "spanish-pairs",
+        "generated-blocks",
+        "small-entry-file"
+      ],
+      "checks": [
+        "node tools/inventory/status.mjs",
+        "node tools/orient/features.mjs --check"
+      ]
+    },
+    {
+      "id": "release",
+      "title": "Publish a release",
+      "when": {
+        "es": [
+          "publicar una versión",
+          "sacar un release",
+          "subir la versión",
+          "etiquetar",
+          "nueva versión de la app"
+        ],
+        "en": [
+          "publish a release",
+          "cut a release",
+          "bump the version",
+          "tag the release",
+          "new app version"
+        ]
+      },
+      "read": [
+        "CONTRIBUTING.md#releasing",
+        "CONTRIBUTING.md#release-highlight"
+      ],
+      "steps": [
+        "Bump the version in `Cargo.toml`, `app/package.json` and `app/src-tauri/tauri.conf.json` with their lockfiles.",
+        "Pull request `develop` into `main`; the maintainer merges it, never the agent.",
+        "Tag the merge commit `vX.Y.Z`; the tag must match `tauri.conf.json`.",
+        "Never delete a release."
+      ],
+      "rules": [
+        "branch-flow"
+      ],
+      "checks": []
+    }
   ]
 }

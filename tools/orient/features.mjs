@@ -7,7 +7,7 @@
 // codigo (pruebas de tests/inventory.json, vista docs/map/FEATURES.md).
 //
 //   node tools/orient/features.mjs             valida el catalogo
-//   node tools/orient/features.mjs --write     escribe docs/map/FEATURES.md y los bloques generados de AGENTS.md (mapa y reglas)
+//   node tools/orient/features.mjs --write     escribe docs/map/FEATURES.md y PLAYBOOKS.md, los bloques generados de AGENTS.md (router, mapa y reglas) y las skills
 //   node tools/orient/features.mjs --check     valida y falla si FEATURES.md quedo atras
 //   node tools/orient/features.mjs --uncovered lista los archivos de codigo sin funcionalidad
 //
@@ -22,10 +22,11 @@
 //   tests    pruebas extra que el inventario no atribuye por su `owner` (opcional)
 //   untested razon, si de verdad no tiene prueba (opcional; si no, se exige al menos una)
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AGENTS, applyBlocks, validateRules } from "./blocks.mjs";
+import { DOC as PLAYBOOKS_DOC, renderPlaybooks, skillFiles, validatePlaybooks } from "./playbooks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MODEL = join(ROOT, "tools/architecture/model.json");
@@ -126,6 +127,10 @@ export function validate(model, { tracked, inventory, read }) {
     }
   }
   if (model.rules) problems.push(...validateRules(model, { trackedSet, anchors: (file) => (file.endsWith(".md") ? anchors(read(file)) : null), exists: (path) => trackedSet.has(path) }));
+  if (model.playbooks) {
+    const docAnchors = (file) => (file.endsWith(".md") ? anchors(read(file)) : null);
+    problems.push(...validatePlaybooks(model, { trackedSet, anchors: docAnchors, exists: (path) => trackedSet.has(path) }));
+  }
   for (const path of coverage(model, tracked).uncovered) problems.push(`${path}: ninguna funcionalidad lo incluye; anadelo al \`entry\` de la que corresponda`);
   return problems;
 }
@@ -182,15 +187,19 @@ function main(args) {
   }
   const problems = validate(model, { tracked, inventory, read });
   const rendered = render(model, inventory);
-  const path = join(ROOT, DOC);
   const agentsPath = join(ROOT, AGENTS);
   const agents = readFileSync(agentsPath, "utf8");
+  // Todo lo que se genera: ruta -> contenido (las vistas, el router de AGENTS.md y las skills).
+  const generated = new Map([[DOC, rendered], [PLAYBOOKS_DOC, renderPlaybooks(model)], [AGENTS, applyBlocks(agents, model)], ...skillFiles(model)]);
   if (args.includes("--write")) {
-    writeFileSync(path, rendered);
-    writeFileSync(agentsPath, applyBlocks(agents, model));
+    for (const [file, content] of generated) {
+      mkdirSync(dirname(join(ROOT, file)), { recursive: true });
+      writeFileSync(join(ROOT, file), content);
+    }
   } else if (args.includes("--check")) {
-    if (!existsSync(path) || readFileSync(path, "utf8") !== rendered) problems.push(`${DOC} quedo atras; corre node tools/orient/features.mjs --write`);
-    if (applyBlocks(agents, model) !== agents) problems.push(`${AGENTS}: un bloque generado quedo atras; corre node tools/orient/features.mjs --write`);
+    for (const [file, content] of generated) {
+      if (!existsSync(join(ROOT, file)) || readFileSync(join(ROOT, file), "utf8") !== content) problems.push(`${file} quedo atras; corre node tools/orient/features.mjs --write`);
+    }
   }
   if (problems.length) {
     console.error(problems.join("\n"));
