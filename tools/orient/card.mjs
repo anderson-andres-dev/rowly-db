@@ -252,7 +252,9 @@ export function card(prepared, result, task, { intent = detectIntent(task), budg
     const out = compose(prepared, result, intent, { task, graph }, detail);
     const markdown = `${out.lines.join("\n")}\n`;
     if (estimate(markdown) <= budget || detail === 0) {
-      return { markdown, tokens: estimate(markdown), intent, confidence: result.confidence, detail, ...out, sufficient: result.confidence.level === "high" };
+      // Si la tarjeta termina en NO MATCH, la confianza es `none` aunque las senales dieran otra cosa.
+      const confidence = out.noMatch ? { ...result.confidence, level: "none" } : result.confidence;
+      return { markdown, tokens: estimate(markdown), intent, confidence, detail, ...out, sufficient: confidence.level === "high" };
     }
   }
 }

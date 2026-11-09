@@ -319,6 +319,7 @@ Terminal sessions use the same `TabGroups` and `MosaicArea` as consoles: each gr
 
 - **The architecture graph above** is the canonical one: generated from the code, checked in CI, with the semantic part (domains, allowed arrows, SQL flow anchors) in `tools/architecture/model.json`. Change the model when the design changes; never edit the generated blocks.
 - **`graphify-out/`** is a fine-grained symbol graph (thousands of nodes) for exploring the code: `graphify query "<question>"`, `graphify path "A" "B"`. It is not versioned: build it with `graphify update .` (AST, no LLM for code) or take the artifact of the `Graph` workflow. It is not CI evidence: the tool is not part of the build, its call edges are resolved by name, so they point you to code but do not prove a dependency (a graph built before this refactor showed `driver-postgres → driver-mysql`, which no code does), it does not see data files or runtime flow, and its freshness is the commit it records (`built_at_commit`). Use it to find code; use this document and its generated graph to know the rules.
+- **`docs/map/FEATURES.md` and `tools/orient/`** answer what a task asks: where does this live and what protects it. The catalogue is the `features` key of `model.json`, FEATURES.md is generated from it, and `node tools/orient/orient.mjs "<task>"` turns a task description into a small card ([tools/orient/README.md](../tools/orient/README.md)). Graphify is an optional extra to it, not its source.
 
 ## Known limits
 

@@ -24,10 +24,10 @@ import { prepare, retrieve } from "./retrieve.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-export function createOrient({ root = ROOT, useCache = true, rebuild = false, useTerms = true, useGraph = true, params } = {}) {
+export function createOrient({ root = ROOT, useCache = true, rebuild = false, useTerms = true, useGraph = true, params, graph: injected } = {}) {
   const { index, stats } = loadIndex({ root, useCache, rebuild });
   const prepared = prepare(index, { useTerms });
-  const graph = useGraph ? loadGraph(root) : null;
+  const graph = injected ?? (useGraph ? loadGraph(root) : null);
   return {
     stats,
     prepared,

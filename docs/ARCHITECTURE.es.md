@@ -319,6 +319,7 @@ Las sesiones de terminal usan los mismos `TabGroups` y `MosaicArea` que las cons
 
 - **El grafo de arquitectura de arriba** es el canónico: generado desde el código, comprobado en CI, con la parte semántica (dominios, flechas permitidas, anclas del flujo SQL) en `tools/architecture/model.json`. Cambia el modelo cuando cambie el diseño; nunca edites los bloques generados.
 - **`graphify-out/`** es un grafo fino de símbolos (miles de nodos) para explorar el código: `graphify query "<pregunta>"`, `graphify path "A" "B"`. No se versiona: constrúyelo con `graphify update .` (AST, sin LLM para el código) o toma el artefacto del workflow `Graph`. No es evidencia de CI: la herramienta no forma parte del build, sus aristas de llamada se resuelven por nombre, así que te llevan al código pero no demuestran una dependencia (un grafo anterior a esta reorganización mostraba `driver-postgres → driver-mysql`, que ningún código hace), no ve archivos de datos ni el flujo en ejecución, y su frescura es el commit que registra (`built_at_commit`). Úsalo para encontrar código; usa este documento y su grafo generado para conocer las reglas.
+- **`docs/map/FEATURES.md` y `tools/orient/`** responden lo que pide una tarea: dónde vive esto y qué lo protege. El catálogo es la clave `features` de `model.json`, FEATURES.md se genera de él y `node tools/orient/orient.mjs "<tarea>"` convierte la descripción de una tarea en una tarjeta pequeña ([tools/orient/README.es.md](../tools/orient/README.es.md)). Graphify es un extra opcional de eso, no su fuente.
 
 ## Límites conocidos
 
