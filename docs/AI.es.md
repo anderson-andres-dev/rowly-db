@@ -39,17 +39,24 @@ Los archivos de puntero y las skills no llevan instrucciones propias: se generan
 
 ## El servidor MCP
 
-`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. Sus instrucciones le dicen al agente que llame primero a `playbook`. Cinco herramientas de solo lectura devuelven el mismo texto que la línea de comandos:
+`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. No hay nada que arrancar a mano; el cliente lo lanza. La configuración para Codex y otros está en el [README](../README.es.md#trabajar-con-agentes-de-ia). `node tools/orient/mcp.mjs --check` lo ejercita sin cliente y muestra el tiempo de cada llamada.
+
+Seis herramientas de solo lectura, con el mismo texto que la línea de comandos:
 
 | Herramienta | Hace |
 | :--- | :--- |
-| `playbook` | El procedimiento de una petición (cae a la tarjeta si ninguno coincide) |
-| `orient` | La tarjeta de orientación: dónde, rangos de líneas, pruebas |
+| `start` | **Llamar primero.** El procedimiento de la petición más dónde está (archivos con rangos de líneas, pruebas): lo mismo que `orient --playbook` |
+| `playbook` | Solo el procedimiento (cae a la tarjeta si ninguno coincide) |
+| `orient` | Solo la tarjeta de orientación |
 | `expand` | Los archivos de una funcionalidad |
 | `impact` | Quién usa un archivo o una funcionalidad |
 | `stack` | La versión resuelta de una dependencia y el enlace a su documentación |
 
-Otros agentes que lean una configuración MCP pueden ejecutar `node tools/orient/mcp.mjs` como servidor stdio; el resto usa la línea de comandos, que no necesita nada.
+**No debe empeorar nunca a un agente.** La línea de comandos da las mismas respuestas, `AGENTS.md` nombra las dos y el servidor es solo una entrada más cómoda. Tres cosas lo hacen barato:
+
+- El índice vive en memoria y se rehace solo cuando cambia un archivo del repositorio: una llamada cuesta unos 20 ms en caliente (la línea de comandos, unos 215 ms con su propio proceso; la espera del modelo por vuelta son segundos).
+- Se calienta en cuanto el cliente se conecta, así la primera llamada lo encuentra listo.
+- `start` lleva la marca `anthropic/alwaysLoad`, que Claude Code documenta para las herramientas que no deben esperar tras `ToolSearch`. Sin ella los agentes seguían usando la línea de comandos (0 de 4 usaron el servidor; con la herramienta diferida, 1 de 4). La orden de Codex del README sigue `codex mcp add --help`; no se ejecutó aquí. Los clientes anteriores a Claude Code 2.1.285 ignoran la marca y la herramienta se encuentra igualmente con `ToolSearch`.
 
 ## Cambiar el toolkit
 
@@ -65,6 +72,6 @@ Otros agentes que lean una configuración MCP pueden ejecutar `node tools/orient
 - Con el toolkit completo, seis peticiones genéricas en un modelo pequeño (Haiku, una corrida, solo lectura; [registro](../tests/orient/toolkit-trial.json)) costaron un 4 % menos de tokens y 26 llamadas en vez de 34 respecto al estado anterior, con la misma lista de comprobación cumplida en cinco de seis y una petición (cambiar un texto de la UI) en la que la respuesta con el toolkit no encontró la clave ni el componente. Ninguna de las seis usó `--playbook` ni una skill: el efecto medido es el del `AGENTS.md` reorganizado, no el de los playbooks.
 - Una segunda corrida con seis peticiones nuevas, tras poner `--playbook` como primer paso en `AGENTS.md`: un 3 % menos de tokens y 30 llamadas en vez de 35 respecto al estado anterior; donde se permitía ejecutar comandos, 4 de 4 agentes usaron `--playbook` (3 de 4 antes, porque el texto anterior ya lo mencionaba). La diferencia está dentro del ruido de una corrida. Destapó un mal enrutado real (una petición sobre pruebas iba a `sql-behavior`), corregido con una prueba de regresión.
 - Los playbooks se eligen con una búsqueda por palabras comprobada con 20 frases escritas por los autores, no con peticiones independientes.
-- El servidor MCP se comprobó con una sesión real de Claude Code llamando a `playbook`; su utilidad para los agentes no está medida. No se construyó: un servicio de recuperación de documentación.
+- El servidor MCP, medido con sesiones reales de Claude Code en un modelo pequeño ([registro](../tests/orient/mcp-trial.json); 16 sesiones con él, 16 sin él, 8 peticiones dos veces): el agente llama a `start` primero 16 de 16 veces; mismas vueltas (4,0), algo más rápido (8,5 s contra 9,8 s), los archivos esperados nombrados en el 100 % de las respuestas contra el 94 % (comprobación burda). Las medianas de tokens son iguales; la media es mayor con el servidor por unas pocas sesiones largas. No es medible que sea mucho mejor que la línea de comandos; lo que aporta es descubrirse sin configurar nada y una sola llamada. Un primer lote de 32 sesiones se descartó: mi lanzador daba a cada sesión las demás peticiones. No se construyó: un servicio de recuperación de documentación.
 
 Mediciones y límites en detalle: [tools/orient/README.es.md](../tools/orient/README.es.md).

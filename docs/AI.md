@@ -39,17 +39,24 @@ The pointer and skill files hold no instructions of their own: they are generate
 
 ## The MCP server
 
-`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Its instructions tell the agent to call `playbook` first. Five read-only tools return the same text as the command line:
+`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Nothing needs to be started by hand; the client launches it. Setup for Codex and others is in the [README](../README.md#working-with-ai-agents). `node tools/orient/mcp.mjs --check` exercises it without a client and prints the time of each call.
+
+Six read-only tools, the same text as the command line:
 
 | Tool | Does |
 | :--- | :--- |
-| `playbook` | The procedure for a request (falls back to the card when none matches) |
-| `orient` | The orientation card: where, line ranges, tests |
+| `start` | **Call first.** The procedure for the request plus where it lives (files with line ranges, tests): the same as `orient --playbook` |
+| `playbook` | Only the procedure (falls back to the card when none matches) |
+| `orient` | Only the orientation card |
 | `expand` | The files of one feature |
 | `impact` | Who uses a file or feature |
 | `stack` | The resolved version of a dependency and its docs link |
 
-Other agents that read an MCP configuration can run `node tools/orient/mcp.mjs` as a stdio server; the rest use the command line, which needs nothing.
+**It must never make an agent worse.** The command line gives the same answers, `AGENTS.md` names both, and the server is only an easier way in. Three things make it cheap:
+
+- The index stays in memory and is rebuilt only when a file of the repository changes: a call costs about 20 ms warm (the command line, about 215 ms with its own process; the model's wait per turn is seconds).
+- It warms up as soon as the client connects, so the first call finds it ready.
+- `start` is marked `anthropic/alwaysLoad`, which Claude Code documents for tools that should not wait behind `ToolSearch`. Without it, agents kept using the command line (0 of 4 used the server; with the tool deferred, 1 of 4). The Codex command in the README follows `codex mcp add --help`; it was not run here. Clients older than Claude Code 2.1.285 ignore the mark and the tool is still found through `ToolSearch`.
 
 ## Changing the toolkit
 
@@ -65,6 +72,6 @@ Other agents that read an MCP configuration can run `node tools/orient/mcp.mjs` 
 - With the full toolkit, six generic requests on a small model (Haiku, one run, read-only; [record](../tests/orient/toolkit-trial.json)) cost 4 % fewer tokens and 26 tool calls instead of 34 than at the previous state, with the same checklist met on five of six and one request (change a UI text) where the toolkit answer did not find the key or the component. None of the six used `--playbook` or a skill: the measured effect is that of the reorganized `AGENTS.md`, not of the playbooks.
 - A second run with six new requests, after making `--playbook` the first step in `AGENTS.md`: 3 % fewer tokens and 30 tool calls instead of 35 against the previous state; where running commands was allowed, 4 of 4 agents used `--playbook` (3 of 4 before, since the previous text already mentioned it). The difference is within the noise of one run. It exposed a real misrouting (a request about tests went to `sql-behavior`), fixed with a regression test.
 - Playbooks are matched by a keyword search checked against 20 phrases written by the authors, not against independent requests.
-- The MCP server was checked with a real Claude Code session calling `playbook`; its usefulness to agents is not measured. Not built: a documentation retrieval service.
+- The MCP server, measured with real Claude Code sessions on a small model ([record](../tests/orient/mcp-trial.json); 16 sessions with it, 16 without, 8 requests twice): the agent calls `start` first 16 times out of 16; same turns (4.0), a little faster (8.5 s against 9.8 s), the expected files named in 100 % of the answers against 94 % (a crude check). Medians of tokens are equal; the mean is higher with the server because of a few long sessions. It is not measurably much better than the command line; what it adds is discovery without setup and a single call. A first batch of 32 sessions was discarded: my launcher fed every session the other requests. Not built: a documentation retrieval service.
 
 Measurements and limits in detail: [tools/orient/README.md](../tools/orient/README.md).

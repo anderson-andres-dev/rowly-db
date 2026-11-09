@@ -1,0 +1,18 @@
+{
+  "about": "Prueba del servidor MCP con sesiones reales de Claude Code (claude -p, modelo Haiku, solo lectura, misma maquina). A = sin MCP (el agente usa la CLI por Bash, como dice AGENTS.md); B = con .mcp.json. La calidad es solo la presencia de los archivos o claves esperados en la respuesta (comprobacion burda, no una evaluacion). Los numeros son de una corrida y de un modelo pequeno.",
+  "adoption": [
+    { "stage": "AGENTS.md solo nombra la CLI; el MCP esta conectado", "runs": 4, "usedMcp": 0, "note": "el agente prefirio el comando que AGENTS.md le daba" },
+    { "stage": "AGENTS.md dice 'start si esta listada'; las herramientas MCP quedan diferidas tras ToolSearch", "runs": 4, "usedMcp": 1, "note": "usar una herramienta diferida cuesta una vuelta de ToolSearch y la CLI no" },
+    { "stage": "start marcada con _meta anthropic/alwaysLoad (carga inicial)", "runs": 4, "usedMcp": 4, "note": "tras esto, 16 de 16 en la corrida final" }
+  ],
+  "final": {
+    "runsPerCondition": 16,
+    "prompts": 8,
+    "repetitions": 2,
+    "A": { "turns": 4.0, "seconds": 9.8, "tokensMean": 94022, "tokensMedian": 90744, "quality": 0.94, "usedMcp": "0/16", "firstCallBash": 14 },
+    "B": { "turns": 4.0, "seconds": 8.5, "tokensMean": 110675, "tokensMedian": 91852, "quality": 1.0, "usedMcp": "16/16", "firstCallStart": 16 }
+  },
+  "discarded": "32 sesiones anteriores: un bucle de shell dejo el archivo de peticiones como entrada estandar de cada sesion y cada una contesto todas. Error mio; se repitieron con la entrada aislada.",
+  "latencyMs": { "cliPerCall": 215, "mcpFirstCall": 157, "mcpWarmCall": 20, "mcpInitialize": 59, "note": "el servidor conserva el indice en memoria y lo rehace solo si cambia algun archivo; la espera del modelo (segundos por vuelta) domina sobre esto" },
+  "conclusion": "El MCP no empeora al agente: mismas vueltas, algo mas rapido, calidad igual o superior en esta comprobacion burda, y 16 de 16 lo usan primero. No es medible que sea mucho mejor que la CLI; su ventaja real es el descubrimiento sin configurar nada y una sola llamada. La media de tokens de B es mayor por unas pocas sesiones largas; las medianas son iguales."
+}

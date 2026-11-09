@@ -186,3 +186,24 @@ test("la segunda prueba con agentes suma lo que dice su resumen", () => {
   assert.equal(second.summary.callsA, sum("a", "calls"));
   assert.equal(second.summary.callsB, sum("b", "calls"));
 });
+
+test("el README de la raiz explica como usar el servidor MCP en ingles y espanol, con los mismos comandos", () => {
+  const commands = (text) => [...text.matchAll(/`((?:node|codex|claude)[^`]*(?:mcp|orient)[^`]*)`/g)].map((match) => match[1].replace(/<[^>]*>/g, "<x>")).sort();
+  const en = read("README.md");
+  const es = read("README.es.md");
+  for (const [text, title] of [[en, "## Working with AI agents"], [es, "## Trabajar con agentes de IA"]]) {
+    assert.ok(text.includes(title), title);
+    assert.match(text, /node tools\/orient\/mcp\.mjs --check/);
+    assert.match(text, /codex mcp add rowly-orient -- node/);
+    assert.match(text, /claude mcp list/);
+  }
+  const section = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to));
+  assert.deepEqual(commands(section(es, "## Trabajar con agentes de IA", "## Contribuir")), commands(section(en, "## Working with AI agents", "## Contributing")));
+});
+
+test("el registro de la prueba del MCP es coherente con lo que dice la documentacion", () => {
+  const trial = json("tests/orient/mcp-trial.json");
+  assert.equal(trial.final.runsPerCondition, trial.final.prompts * trial.final.repetitions);
+  assert.equal(trial.final.B.usedMcp, `${trial.final.runsPerCondition}/${trial.final.runsPerCondition}`);
+  for (const path of ["docs/AI.md", "docs/AI.es.md"]) assert.ok(read(path).includes("tests/orient/mcp-trial.json"), path);
+});

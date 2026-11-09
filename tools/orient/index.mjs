@@ -174,7 +174,7 @@ export function fieldsOf(file) {
 
 // Archivos del repositorio: los versionados y los nuevos que git no ignora, para que un
 // archivo recien creado por una tarea ya cuente aunque todavia no se haya agregado.
-function listFiles(root) {
+export function listFiles(root) {
   const out = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return [...new Set(out.split("\n").filter(Boolean))].sort().filter((path) => existsSync(join(root, path)));
 }

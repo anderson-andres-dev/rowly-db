@@ -9,7 +9,7 @@
 //   node tools/orient/orient.mjs --expand <feature>   sus archivos con simbolos (nivel 1)
 //   node tools/orient/orient.mjs --impact <ruta|feature>   quien la usa y a quien usa (nivel 2)
 //
-//   node tools/orient/orient.mjs --playbook "<peticion>"   el procedimiento del tipo de cambio (sin coincidencia: la tarjeta)
+//   node tools/orient/orient.mjs --playbook "<peticion>"   por donde empezar: el procedimiento del tipo de cambio y la tarjeta (--json: solo el procedimiento)
 //
 //   --intent bug|feature|refactor|analysis|tests|modify   fuerza el tipo de tarea
 //   --budget <tokens>   tope de la tarjeta (1200 por defecto)
@@ -77,6 +77,15 @@ export function playbookFor(request, model = loadModel()) {
   return match && ranked[0].matched.length >= 2 ? { pb: match, strong, model } : null;
 }
 
+// La respuesta de "por donde empiezo": el procedimiento si la peticion tiene uno, y donde esta
+// (la tarjeta, con lo que el procedimiento deje del presupuesto). La usan `--playbook` y la
+// herramienta `start` del servidor MCP, para que den lo mismo en una sola llamada.
+export function startAnswer(orient, request, { budget = 2000 } = {}) {
+  const found = playbookFor(request, orient.prepared.index.model);
+  const procedure = found ? `${playbookText(found.model, found.pb)}\n---\n\n` : "";
+  return `${procedure}${orient.run(request, { budget: Math.max(700, budget - Math.ceil(procedure.length / 4)) }).markdown}`;
+}
+
 export function playbookJson(pb, model) {
   const rules = new Map((model.rules ?? []).map((rule) => [rule.id, rule.rule]));
   return { schemaVersion: SCHEMA_VERSION, kind: "playbook", id: pb.id, title: pb.title, read: pb.read, steps: pb.steps, rules: (pb.rules ?? []).map((id) => ({ id, rule: rules.get(id) })), checks: pb.checks ?? [] };
@@ -120,9 +129,13 @@ function main(args) {
   const request = asked && !asked.startsWith("--") ? asked : task;
   if (args.includes("--playbook") && request) {
     const found = playbookFor(request);
-    if (found) {
-      if (args.includes("--json")) console.log(JSON.stringify(playbookJson(found.pb, found.model), null, 2));
-      else process.stdout.write(playbookText(found.model, found.pb));
+    if (found && args.includes("--json")) {
+      console.log(JSON.stringify(playbookJson(found.pb, found.model), null, 2));
+      return;
+    }
+    if (!args.includes("--json")) {
+      const orient = createOrient({ rebuild: args.includes("--rebuild"), useTerms: !args.includes("--no-terms"), useGraph: !args.includes("--no-graph") });
+      process.stdout.write(startAnswer(orient, request));
       return;
     }
     process.stderr.write("Ningun playbook coincide con la peticion; esta es la tarjeta.\n");

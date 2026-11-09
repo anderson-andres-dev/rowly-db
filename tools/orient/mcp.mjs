@@ -5,14 +5,18 @@
 //
 //   node tools/orient/mcp.mjs        habla por stdin/stdout; nada mas sale por stdout
 //
-// Herramientas: playbook, orient, expand, impact, stack. Todas de solo lectura; el
-// resultado es el mismo texto que imprime orient.mjs. Detalle: docs/AI.md.
-import { readFileSync } from "node:fs";
+//   node tools/orient/mcp.mjs --check   comprueba que el servidor responde y mide cada llamada
+//
+// Herramientas: start, playbook, orient, expand, impact, stack. Todas de solo lectura; el
+// resultado es el mismo texto que imprime orient.mjs, solo que aqui el indice vive en
+// memoria (session.mjs): la primera llamada lo construye, las siguientes cuestan ~35 ms.
+// Detalle: docs/AI.md.
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createOrient, playbookFor } from "./orient.mjs";
+import { playbookFor, startAnswer } from "./orient.mjs";
 import { playbookText } from "./playbooks.mjs";
+import { createSession } from "./session.mjs";
 import { GUIDES, load as loadStack, npmDocsUrl, rustDocsUrl } from "./stack.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -21,10 +25,14 @@ export const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const TEXT_MAX = 2000;
 
 export const INSTRUCTIONS =
-  "Rowly DB agent toolkit. For any change or question about how to change something, call `playbook` first with the user's request: it returns the procedure (what to read, steps, rules, checks) or says none matches. Then `orient` for where it lives, which line ranges to read and which tests to run; `expand` for one feature's files, `impact` for what else changes. Call `stack` before using the API of a dependency. Open files only to confirm, by line range.";
+  "Rowly DB agent toolkit. Call `start` first, with the user's request as written, for any change, bug or question about how the code works: one call returns the procedure to follow (what to read, steps, rules, checks) and where it lives (files with line ranges, what to reuse, tests to run). Then `impact` for what else changes before editing something shared, `expand` for one feature's files, and `stack` before using the API of a dependency. It is much cheaper than scanning the repository: open files only to confirm, by line range. The same answers are available from the command line (`node tools/orient/orient.mjs`) if this server is unavailable.";
 
 const string = (description, extra = {}) => ({ type: "string", description, ...extra });
+// Claude Code difiere las herramientas MCP detras de ToolSearch; esta marca (documentada en su guia
+// de MCP) hace que solo `start` se cargue desde el principio, sin una vuelta extra para encontrarla.
+const LOAD_UPFRONT = { "anthropic/alwaysLoad": true };
 export const TOOLS = [
+  { name: "start", description: "Call this FIRST for any change, bug or question about the code. One call: the procedure for that kind of change (what to read, steps, rules, checks) plus where it lives (files with line ranges, what to reuse, tests to run). Spanish or English.", inputSchema: { type: "object", properties: { request: string("The user's request, as they wrote it"), budget: { type: "number", description: "Token cap of the whole answer (default 2000)" } }, required: ["request"] }, _meta: LOAD_UPFRONT },
   { name: "playbook", description: "The procedure for a kind of change (what to read, steps, rules, checks), found from the user's request in Spanish or English. Falls back to the orientation card when none matches.", inputSchema: { type: "object", properties: { request: string("The user's request, as they wrote it") }, required: ["request"] } },
   { name: "orient", description: "Orientation card for a task: where it lives, line ranges to read, what to reuse, what depends on it, tests to run and whether that is enough.", inputSchema: { type: "object", properties: { task: string("The task or the symptom"), intent: string("Force the kind of task", { enum: ["bug", "feature", "refactor", "analysis", "tests", "modify"] }), budget: { type: "number", description: "Token cap of the card (default 1200)" } }, required: ["task"] } },
   { name: "expand", description: "All the files of one feature with their main symbols and line ranges.", inputSchema: { type: "object", properties: { feature: string("A feature id from the map in AGENTS.md, e.g. results-grid") }, required: ["feature"] } },
@@ -47,14 +55,37 @@ function stackText(name, root) {
   return `${picked.map((row) => `- ${row.kind} \`${row.name}\` declared \`${row.req}\`, resolved **${row.resolved ?? "none"}**${row.url ? ` · ${row.url}` : ""}${GUIDES[row.name] ? ` · guide ${GUIDES[row.name][1]}` : ""}`).join("\n")}\n\nThe guide usually follows the latest release: check its version selector against the resolved version.\n`;
 }
 
+const sessions = new Map();
+const sessionFor = (root) => {
+  if (!sessions.has(root)) sessions.set(root, createSession({ root }));
+  return sessions.get(root);
+};
+// Calienta el indice en segundo plano para que la primera llamada del agente ya lo encuentre listo.
+export function warm(root = ROOT) {
+  try {
+    sessionFor(root).get();
+  } catch {
+    // si falla, la primera llamada lo dira con un mensaje claro
+  }
+}
+
 // Ejecuta una herramienta y devuelve su texto. Lanza si los argumentos no sirven.
 export function callTool(name, args = {}, { root = ROOT } = {}) {
   if (name === "stack") return stackText(args.name, root);
-  const orient = createOrient({ root });
-  if (name === "playbook") {
+  let orient;
+  try {
+    orient = sessionFor(root).get();
+  } catch (error) {
+    throw new Error(`orient necesita Node y un repositorio git para indexar (${error.message.split("\n")[0]}). Alternativa sin servidor: leer AGENTS.md.`);
+  }
+  const model = orient.prepared.index.model;
+  if (name === "start" || name === "playbook") {
     const request = text(args.request, "request");
-    const found = playbookFor(request, JSON.parse(readFileSync(join(root, "tools/architecture/model.json"), "utf8")));
-    return found ? playbookText(found.model, found.pb) : `Ningun playbook coincide con la peticion; esta es la tarjeta.\n\n${orient.run(request).markdown}`;
+    const found = playbookFor(request, model);
+    if (name === "playbook") return found ? playbookText(found.model, found.pb) : `Ningun playbook coincide con la peticion; esta es la tarjeta.\n\n${orient.run(request).markdown}`;
+    const budget = args.budget === undefined ? 2000 : Number(args.budget);
+    if (!(budget >= 400 && budget <= 8000)) throw new Error("`budget` debe estar entre 400 y 8000");
+    return startAnswer(orient, request, { budget });
   }
   if (name === "orient") {
     const task = text(args.task, "task");
@@ -79,7 +110,10 @@ export function handle(message, options = {}) {
     const asked = params?.protocolVersion;
     return ok(id, { protocolVersion: SUPPORTED.includes(asked) ? asked : SUPPORTED[0], capabilities: { tools: {} }, serverInfo: SERVER, instructions: INSTRUCTIONS });
   }
-  if (notification) return null;
+  if (notification) {
+    if (method === "notifications/initialized" && options.warm !== false) setImmediate(() => warm(options.root));
+    return null;
+  }
   if (method === "ping") return ok(id, {});
   if (method === "tools/list") return ok(id, { tools: TOOLS });
   if (method === "tools/call") {
@@ -93,7 +127,37 @@ export function handle(message, options = {}) {
   return fail(id, -32601, `Method not found: ${method}`);
 }
 
+// `--check`: lo que haria un cliente, sin cliente. Sale con 1 si algo falla.
+export function selfCheck(root = ROOT, log = console.log) {
+  let failed = false;
+  const step = (label, fn) => {
+    const started = performance.now();
+    try {
+      const out = fn();
+      log(`ok    ${label.padEnd(34)} ${String(Math.round(performance.now() - started)).padStart(4)} ms  ${out}`);
+    } catch (error) {
+      failed = true;
+      log(`FALLA ${label}: ${error.message}`);
+    }
+  };
+  const rpc = (method, params) => handle({ jsonrpc: "2.0", id: 1, method, params }, { root, warm: false });
+  step("initialize", () => `${rpc("initialize", { protocolVersion: SUPPORTED[0] }).result.serverInfo.name}`);
+  step("tools/list", () => `${rpc("tools/list").result.tools.map((tool) => tool.name).join(", ")}`);
+  const call = (name, args) => () => {
+    const reply = rpc("tools/call", { name, arguments: args }).result;
+    if (reply.isError) throw new Error(reply.content[0].text);
+    return `${reply.content[0].text.split("\n")[0].slice(0, 60)}`;
+  };
+  step("start (construye el indice)", call("start", { request: "arregla el bug de la grilla" }));
+  step("start (indice en memoria)", call("start", { request: "cambiar un texto de la interfaz" }));
+  step("impact", call("impact", { target: "app/src/lib/results/gridAutoScroll.ts" }));
+  step("stack", call("stack", { name: "tauri" }));
+  log(failed ? "\nEl servidor NO esta bien." : "\nEl servidor esta bien: un cliente MCP puede usarlo con `node tools/orient/mcp.mjs`.");
+  return failed ? 1 : 0;
+}
+
 function main() {
+  if (process.argv.includes("--check")) process.exit(selfCheck());
   const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
   createInterface({ input: process.stdin }).on("line", (line) => {
     if (!line.trim()) return;
