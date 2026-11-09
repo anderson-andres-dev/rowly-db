@@ -28,6 +28,8 @@ What it is and what is proven, in plain terms (numbers: `node tools/orient/eval.
 
 ## How it works
 
+`AGENTS.md` carries a generated map of the repository (one line per feature, plus a short description of the layers and a table of what to do with a generic request), so an agent starts with the layout loaded and does not scan. It is rebuilt from the same catalogue by `features.mjs --write`, and CI checks it is up to date.
+
 One hand-written source, everything else derived:
 
 - **Catalogue**: the `features` key of `tools/architecture/model.json` (what a task can name, with the words users and the interface use, in Spanish and English). `node tools/orient/features.mjs --check` validates it; `docs/map/FEATURES.md` is generated from it. Tests are not repeated: they come from `tests/inventory.json`.
@@ -58,7 +60,7 @@ Not built, on purpose: any agent that can run a terminal command can already use
 
 | Agent | Reads `AGENTS.md`? | In this repository |
 |---|---|---|
-| Claude Code | Yes, since v2.1.277, **only when there is no `CLAUDE.md`**; with one it reads that instead. Per its [memory docs](https://code.claude.com/docs/en/memory#agents-md) the official way to combine them is an `@AGENTS.md` import in `CLAUDE.md`. | `CLAUDE.md` is a one-line pointer to `AGENTS.md`, so it works either way. |
+| Claude Code | Yes, since v2.1.277, **only when there is no `CLAUDE.md`**; with one it reads that instead. Per its [memory docs](https://code.claude.com/docs/en/memory#agents-md) the official way to combine them is an `@AGENTS.md` import in `CLAUDE.md`. | `CLAUDE.md` is that import (`@AGENTS.md`), so `AGENTS.md` is loaded into every session. |
 | OpenAI Codex | Yes ([guide](https://developers.openai.com/codex/guides/agents-md); not read directly, from secondary sources). | Nothing to add. |
 | GitHub Copilot coding agent | Yes ([changelog](https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions)). Reports on Copilot CLI disagree. | Nothing to add. |
 | Gemini CLI | Not by default: it reads `GEMINI.md`; `context.fileName` can add `AGENTS.md` ([docs](https://www.geminicli.com/docs/cli/gemini-md)). | `GEMINI.md` is a one-line pointer. |
@@ -108,6 +110,16 @@ On `validation5` both conditions found every file; on `seen4` (SQL guard and ana
 
 Limits of this measurement: one run per condition and 20 tasks; the agents work on HEAD, where each fix already exists, and the copy still contains the architecture documents and `tools/architecture/model.json`, which are themselves a map; the token figure includes about 40 000 tokens of fixed overhead of each subagent, so small savings cannot show; it measures localization, not solving the task.
 
+
+
+**Generic requests with the map in `AGENTS.md`** (4 Haiku subagents, one run each, two requests: "analyze the repository and tell me how it is organized" and "how could I make query results exportable to a JSON file: files, reuse, tests"; A = copy without `AGENTS.md` or orient, B = the repository as it is now):
+
+| request | A: tokens / tool calls / files read | B: tokens / tool calls / files read |
+|---|---|---|
+| analyze the repository | 58 227 / 6 / 4 | 46 852 / 5 / 2 |
+| make results exportable to JSON | 57 250 / 8 / 3 | 45 002 / 6 / 3 |
+
+Both conditions answered correctly (both found that JSON export already exists and named the same files); B used about 20 % fewer tokens and 17 to 25 % fewer tool calls and its answer was taken from the map. One run each and two requests: it points in the right direction, it does not prove it. The tokens include the same fixed overhead as above, so the real saving in exploration is larger than the percentage.
 
 ## Portability and performance
 

@@ -7,7 +7,7 @@
 // codigo (pruebas de tests/inventory.json, vista docs/map/FEATURES.md).
 //
 //   node tools/orient/features.mjs             valida el catalogo
-//   node tools/orient/features.mjs --write     escribe docs/map/FEATURES.md
+//   node tools/orient/features.mjs --write     escribe docs/map/FEATURES.md y el mapa corto de AGENTS.md
 //   node tools/orient/features.mjs --check     valida y falla si FEATURES.md quedo atras
 //   node tools/orient/features.mjs --uncovered lista los archivos de codigo sin funcionalidad
 //
@@ -30,6 +30,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MODEL = join(ROOT, "tools/architecture/model.json");
 const INVENTORY = join(ROOT, "tests/inventory.json");
 export const DOC = "docs/map/FEATURES.md";
+export const AGENTS = "AGENTS.md";
+export const MAP_START = "<!-- generated: map (tools/orient/features.mjs) -->";
+export const MAP_END = "<!-- /generated: map -->";
 const ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const CODE = /\.(ts|svelte|rs|mjs|js|css|html)$/;
 const SUMMARY_MAX = 140;
@@ -128,6 +131,25 @@ export function validate(model, { tracked, inventory, read }) {
   return problems;
 }
 
+// El mapa corto que va dentro de AGENTS.md: una linea por funcionalidad, para que un agente
+// tenga el plano cargado sin leer FEATURES.md (40 KB) ni recorrer el repositorio.
+const head = (summary) => {
+  const cut = summary.split(/[:.]/)[0].trim();
+  return cut.length > 78 ? `${cut.slice(0, 77)}…` : cut;
+};
+
+export function renderMap(model) {
+  return model.features.items.map((feature) => `- \`${feature.id}\` — ${head(feature.summary)} → \`${feature.entry[0]}\``).join("\n");
+}
+
+// `text` es AGENTS.md; reemplaza lo que hay entre las marcas.
+export function withMap(text, model) {
+  const start = text.indexOf(MAP_START);
+  const end = text.indexOf(MAP_END);
+  if (start < 0 || end < start) throw new Error(`${AGENTS}: faltan las marcas ${MAP_START} ... ${MAP_END}`);
+  return `${text.slice(0, start + MAP_START.length)}\n${renderMap(model)}\n${text.slice(end)}`;
+}
+
 const list = (paths) => paths.map((path) => `\`${path}\``).join(", ");
 
 // FEATURES.md: una vista para leer, generada; nadie la edita.
@@ -181,9 +203,14 @@ function main(args) {
   const problems = validate(model, { tracked, inventory, read });
   const rendered = render(model, inventory);
   const path = join(ROOT, DOC);
-  if (args.includes("--write")) writeFileSync(path, rendered);
-  else if (args.includes("--check") && (!existsSync(path) || readFileSync(path, "utf8") !== rendered)) {
-    problems.push(`${DOC} quedo atras; corre node tools/orient/features.mjs --write`);
+  const agentsPath = join(ROOT, AGENTS);
+  const agents = readFileSync(agentsPath, "utf8");
+  if (args.includes("--write")) {
+    writeFileSync(path, rendered);
+    writeFileSync(agentsPath, withMap(agents, model));
+  } else if (args.includes("--check")) {
+    if (!existsSync(path) || readFileSync(path, "utf8") !== rendered) problems.push(`${DOC} quedo atras; corre node tools/orient/features.mjs --write`);
+    if (withMap(agents, model) !== agents) problems.push(`${AGENTS}: el mapa quedo atras; corre node tools/orient/features.mjs --write`);
   }
   if (problems.length) {
     console.error(problems.join("\n"));
