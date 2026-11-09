@@ -2128,6 +2128,15 @@
       "check": "node tools/inventory/dependencies.mjs"
     },
     {
+      "id": "dependency-versions",
+      "rule": "Before using the API of a dependency, look up its resolved version in `docs/map/STACK.md` and read the documentation of that version.",
+      "why": "Memory and \"latest\" docs describe other majors (Tauri 2, Svelte 5, Vite 8).",
+      "check": "node tools/orient/stack.mjs --check",
+      "docs": [
+        "CONTRIBUTING.md#style"
+      ]
+    },
+    {
       "id": "spanish-pairs",
       "rule": "Docs that have a Spanish pair (`*.es.md`) change together with it.",
       "why": "The two languages must not drift apart."
