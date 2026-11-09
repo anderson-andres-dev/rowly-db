@@ -36,10 +36,10 @@
     }
   },
   "summary": {
-    "sufficientRate": 0.46017699115044247,
-    "sufficientOk": 0.8846153846153846,
-    "sufficientStrong": 0.7307692307692307,
-    "p95ms": 3.1477179999999976,
+    "likelyRate": 0.46017699115044247,
+    "likelyOk": 0.8846153846153846,
+    "likelyStrong": 0.7307692307692307,
+    "p95ms": 3.079905999999994,
     "tasks": 113,
     "recall": 0.5265486725663717,
     "hit": 0.7964601769911505,
@@ -48,35 +48,35 @@
     "all": 0.673496979912909,
     "mrr": 0.5393805309734515,
     "tests": 0.6722222222222222,
-    "tokens": 485.60176991150445
+    "tokens": 492.646017699115
   },
   "negatives": {
     "tasks": 36,
-    "falseSufficient": 0,
+    "falseLikely": 0,
     "noMatch": 0.6388888888888888,
     "tokens": 217.94444444444446,
     "bySplit": {
       "train": {
         "tasks": 18,
-        "falseSufficient": 0,
+        "falseLikely": 0,
         "noMatch": 0.4444444444444444,
         "tokens": 302.5
       },
       "seen": {
         "tasks": 6,
-        "falseSufficient": 0,
+        "falseLikely": 0,
         "noMatch": 0.6666666666666666,
         "tokens": 191.33333333333334
       },
       "seen2": {
         "tasks": 6,
-        "falseSufficient": 0,
+        "falseLikely": 0,
         "noMatch": 1,
         "tokens": 64.83333333333333
       },
       "validation3": {
         "tasks": 6,
-        "falseSufficient": 0,
+        "falseLikely": 0,
         "noMatch": 0.8333333333333334,
         "tokens": 144
       }
@@ -84,10 +84,10 @@
   },
   "byKind": {
     "bug": {
-      "sufficientRate": 0.3888888888888889,
-      "sufficientOk": 0.9285714285714286,
-      "sufficientStrong": 0.9285714285714286,
-      "p95ms": 6.1101620000000025,
+      "likelyRate": 0.3888888888888889,
+      "likelyOk": 0.9285714285714286,
+      "likelyStrong": 0.9285714285714286,
+      "p95ms": 5.925046000000009,
       "tasks": 36,
       "recall": 0.6018518518518517,
       "hit": 0.8333333333333334,
@@ -96,13 +96,13 @@
       "all": 0.6898148148148149,
       "mrr": 0.5018518518518519,
       "tests": 0.7352941176470589,
-      "tokens": 483.02777777777777
+      "tokens": 489.05555555555554
     },
     "feature": {
-      "sufficientRate": 0.5961538461538461,
-      "sufficientOk": 0.8387096774193549,
-      "sufficientStrong": 0.6451612903225806,
-      "p95ms": 2.656546999999989,
+      "likelyRate": 0.5961538461538461,
+      "likelyOk": 0.8387096774193549,
+      "likelyStrong": 0.6451612903225806,
+      "p95ms": 2.2730549999999994,
       "tasks": 52,
       "recall": 0.5339743589743591,
       "hit": 0.8076923076923077,
@@ -111,13 +111,13 @@
       "all": 0.6700854700854701,
       "mrr": 0.5942307692307692,
       "tests": 0.7746031746031745,
-      "tokens": 480.03846153846155
+      "tokens": 489.11538461538464
     },
     "refactor": {
-      "sufficientRate": 0.36363636363636365,
-      "sufficientOk": 1,
-      "sufficientStrong": 0.75,
-      "p95ms": 3.6080519999999865,
+      "likelyRate": 0.36363636363636365,
+      "likelyOk": 1,
+      "likelyStrong": 0.75,
+      "p95ms": 3.1514470000000188,
       "tasks": 11,
       "recall": 0.46212121212121215,
       "hit": 0.9090909090909091,
@@ -126,13 +126,13 @@
       "all": 0.5449134199134199,
       "mrr": 0.5742424242424242,
       "tests": 0.4375,
-      "tokens": 535
+      "tokens": 540.5454545454545
     },
     "analysis": {
-      "sufficientRate": 0.6666666666666666,
-      "sufficientOk": 1,
-      "sufficientStrong": 0.5,
-      "p95ms": 3.1477179999999976,
+      "likelyRate": 0.6666666666666666,
+      "likelyOk": 1,
+      "likelyStrong": 0.5,
+      "p95ms": 3.079905999999994,
       "tasks": 3,
       "recall": 0.4444444444444444,
       "hit": 1,
@@ -141,13 +141,13 @@
       "all": 0.8055555555555555,
       "mrr": 1,
       "tests": 0,
-      "tokens": 358
+      "tokens": 368
     },
     "modify": {
-      "sufficientRate": 0.09090909090909091,
-      "sufficientOk": 1,
-      "sufficientStrong": 1,
-      "p95ms": 2.0030680000000416,
+      "likelyRate": 0.09090909090909091,
+      "likelyOk": 1,
+      "likelyStrong": 1,
+      "p95ms": 2.058700999999985,
       "tasks": 11,
       "recall": 0.3318181818181818,
       "hit": 0.45454545454545453,
@@ -156,15 +156,15 @@
       "all": 0.7287878787878787,
       "mrr": 0.2424242424242424,
       "tests": 0,
-      "tokens": 505.72727272727275
+      "tokens": 507.1818181818182
     }
   },
   "bySplit": {
     "train": {
-      "sufficientRate": 0.4444444444444444,
-      "sufficientOk": 0.9,
-      "sufficientStrong": 0.75,
-      "p95ms": 3.0756680000000074,
+      "likelyRate": 0.4444444444444444,
+      "likelyOk": 0.9,
+      "likelyStrong": 0.75,
+      "p95ms": 2.765029000000027,
       "tasks": 45,
       "recall": 0.5548148148148148,
       "hit": 0.8444444444444444,
@@ -173,13 +173,13 @@
       "all": 0.6458553791887125,
       "mrr": 0.5177777777777777,
       "tests": 0.6217948717948717,
-      "tokens": 497.6222222222222
+      "tokens": 504.44444444444446
     },
     "holdout": {
-      "sufficientRate": 0.46153846153846156,
-      "sufficientOk": 1,
-      "sufficientStrong": 0.6666666666666666,
-      "p95ms": 6.1101620000000025,
+      "likelyRate": 0.46153846153846156,
+      "likelyOk": 1,
+      "likelyStrong": 0.6666666666666666,
+      "p95ms": 5.925046000000009,
       "tasks": 13,
       "recall": 0.4410256410256411,
       "hit": 0.7692307692307693,
@@ -188,13 +188,13 @@
       "all": 0.5884615384615384,
       "mrr": 0.5192307692307692,
       "tests": 0.7,
-      "tokens": 484.38461538461536
+      "tokens": 491.38461538461536
     },
     "seen": {
-      "sufficientRate": 0.4166666666666667,
-      "sufficientOk": 1,
-      "sufficientStrong": 1,
-      "p95ms": 2.340407999999968,
+      "likelyRate": 0.4166666666666667,
+      "likelyOk": 1,
+      "likelyStrong": 1,
+      "p95ms": 2.192799999999977,
       "tasks": 12,
       "recall": 0.625,
       "hit": 0.9166666666666666,
@@ -203,13 +203,13 @@
       "all": 0.7291666666666665,
       "mrr": 0.6069444444444444,
       "tests": 0.8571428571428571,
-      "tokens": 467.1666666666667
+      "tokens": 473.5833333333333
     },
     "seen2": {
-      "sufficientRate": 0.55,
-      "sufficientOk": 0.9090909090909091,
-      "sufficientStrong": 0.7272727272727273,
-      "p95ms": 1.7272880000000441,
+      "likelyRate": 0.55,
+      "likelyOk": 0.9090909090909091,
+      "likelyStrong": 0.7272727272727273,
+      "p95ms": 1.626275000000021,
       "tasks": 20,
       "recall": 0.5375,
       "hit": 0.8,
@@ -218,13 +218,13 @@
       "all": 0.6541666666666666,
       "mrr": 0.5391666666666668,
       "tests": 0.8,
-      "tokens": 466.85
+      "tokens": 475.25
     },
     "validation3": {
-      "sufficientRate": 0.43478260869565216,
-      "sufficientOk": 0.7,
-      "sufficientStrong": 0.6,
-      "p95ms": 2.07325400000002,
+      "likelyRate": 0.43478260869565216,
+      "likelyOk": 0.7,
+      "likelyStrong": 0.6,
+      "p95ms": 2.0387209999999527,
       "tasks": 23,
       "recall": 0.45869565217391306,
       "hit": 0.6521739130434783,
@@ -233,7 +233,7 @@
       "all": 0.7634057971014493,
       "mrr": 0.5579710144927535,
       "tests": 0.52,
-      "tokens": 488.69565217391306
+      "tokens": 495.3478260869565
     }
   },
   "tasks": [
@@ -245,9 +245,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 479,
-      "sufficient": true,
-      "ms": 16.971664000000033,
+      "tokens": 494,
+      "likely": true,
+      "ms": 17.25858400000004,
       "tests": 1
     },
     {
@@ -259,8 +259,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 477,
-      "sufficient": false,
-      "ms": 3.3156099999999924,
+      "likely": false,
+      "ms": 3.4888730000000123,
       "tests": 1
     },
     {
@@ -272,8 +272,8 @@
       "all": 0.4444444444444444,
       "mrr": 0.25,
       "tokens": 740,
-      "sufficient": false,
-      "ms": 4.015330000000006,
+      "likely": false,
+      "ms": 3.846424000000013,
       "tests": 0.6666666666666666
     },
     {
@@ -284,9 +284,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 460,
-      "sufficient": true,
-      "ms": 1.9215469999999755
+      "tokens": 475,
+      "likely": true,
+      "ms": 2.0255219999999667
     },
     {
       "id": "issue-107-terminal-conectada",
@@ -296,9 +296,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 637,
-      "sufficient": true,
-      "ms": 2.126532999999995
+      "tokens": 652,
+      "likely": true,
+      "ms": 2.2243500000000154
     },
     {
       "id": "pr-92-terminal-recursos",
@@ -309,8 +309,8 @@
       "all": 0.5,
       "mrr": 0.5,
       "tokens": 497,
-      "sufficient": false,
-      "ms": 1.9133409999999458
+      "likely": false,
+      "ms": 1.978211999999985
     },
     {
       "id": "pr-87-pestana-esquina",
@@ -320,9 +320,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.25,
-      "tokens": 525,
-      "sufficient": true,
-      "ms": 1.7604139999999688
+      "tokens": 540,
+      "likely": true,
+      "ms": 1.7427790000000414
     },
     {
       "id": "pr-78-portal-linux",
@@ -332,9 +332,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 397,
-      "sufficient": true,
-      "ms": 2.606999999999971
+      "tokens": 412,
+      "likely": true,
+      "ms": 2.420338000000015
     },
     {
       "id": "pr-77-fuga-consola",
@@ -345,8 +345,8 @@
       "all": 1,
       "mrr": 0.2,
       "tokens": 464,
-      "sufficient": false,
-      "ms": 2.5968930000000228,
+      "likely": false,
+      "ms": 2.674355999999989,
       "tests": 1
     },
     {
@@ -358,8 +358,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 464,
-      "sufficient": false,
-      "ms": 6.1101620000000025,
+      "likely": false,
+      "ms": 5.925046000000009,
       "tests": 0
     },
     {
@@ -370,9 +370,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 330,
-      "sufficient": true,
-      "ms": 2.7392060000000242,
+      "tokens": 346,
+      "likely": true,
+      "ms": 2.169050000000027,
       "tests": 0
     },
     {
@@ -383,9 +383,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 1,
-      "tokens": 614,
-      "sufficient": true,
-      "ms": 2.656546999999989,
+      "tokens": 629,
+      "likely": true,
+      "ms": 2.256919000000039,
       "tests": 1
     },
     {
@@ -396,9 +396,9 @@
       "hit": 1,
       "all": 0.6,
       "mrr": 1,
-      "tokens": 556,
-      "sufficient": true,
-      "ms": 2.7226210000000037,
+      "tokens": 572,
+      "likely": true,
+      "ms": 2.2069510000000037,
       "tests": 1
     },
     {
@@ -410,8 +410,8 @@
       "all": 0.6666666666666666,
       "mrr": 1,
       "tokens": 445,
-      "sufficient": false,
-      "ms": 2.5190109999999777,
+      "likely": false,
+      "ms": 1.9635379999999714,
       "tests": 1
     },
     {
@@ -423,8 +423,8 @@
       "all": 0.6666666666666666,
       "mrr": 0.5,
       "tokens": 559,
-      "sufficient": false,
-      "ms": 2.7623249999999757,
+      "likely": false,
+      "ms": 2.334233999999981,
       "tests": 1
     },
     {
@@ -435,9 +435,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.3333333333333333,
-      "tokens": 507,
-      "sufficient": true,
-      "ms": 2.5855339999999956
+      "tokens": 523,
+      "likely": true,
+      "ms": 2.0924679999999967
     },
     {
       "id": "pr-44-nombres-citados",
@@ -448,8 +448,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 535,
-      "sufficient": false,
-      "ms": 2.3814749999999663,
+      "likely": false,
+      "ms": 1.9523609999999962,
       "tests": 1
     },
     {
@@ -461,8 +461,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 573,
-      "sufficient": false,
-      "ms": 2.719286000000011
+      "likely": false,
+      "ms": 2.066043000000036
     },
     {
       "id": "pr-45-workspace-puro",
@@ -473,8 +473,8 @@
       "all": 0.5,
       "mrr": 0.2,
       "tokens": 560,
-      "sufficient": false,
-      "ms": 3.0756680000000074,
+      "likely": false,
+      "ms": 2.4517189999999687,
       "tests": 0.3333333333333333
     },
     {
@@ -486,8 +486,8 @@
       "all": 0.8,
       "mrr": 0.3333333333333333,
       "tokens": 708,
-      "sufficient": false,
-      "ms": 3.6080519999999865,
+      "likely": false,
+      "ms": 3.1514470000000188,
       "tests": 0.5
     },
     {
@@ -498,9 +498,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 1,
-      "tokens": 696,
-      "sufficient": true,
-      "ms": 2.980634000000009,
+      "tokens": 711,
+      "likely": true,
+      "ms": 2.6327080000000365,
       "tests": 0.6666666666666666
     },
     {
@@ -511,9 +511,9 @@
       "hit": 1,
       "all": 0.8,
       "mrr": 0.25,
-      "tokens": 456,
-      "sufficient": true,
-      "ms": 2.654502999999977
+      "tokens": 471,
+      "likely": true,
+      "ms": 2.5640229999999633
     },
     {
       "id": "pr-79-ajustes",
@@ -523,9 +523,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 624,
-      "sufficient": true,
-      "ms": 2.643572000000006,
+      "tokens": 640,
+      "likely": true,
+      "ms": 2.765029000000027,
       "tests": 1
     },
     {
@@ -536,9 +536,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 360,
-      "sufficient": true,
-      "ms": 3.1477179999999976
+      "tokens": 375,
+      "likely": true,
+      "ms": 3.079905999999994
     },
     {
       "id": "analisis-sentencia-destructiva",
@@ -548,9 +548,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 375,
-      "sufficient": true,
-      "ms": 2.648145999999997,
+      "tokens": 390,
+      "likely": true,
+      "ms": 2.3301590000000374,
       "tests": 0
     },
     {
@@ -562,8 +562,8 @@
       "all": 0.75,
       "mrr": 1,
       "tokens": 339,
-      "sufficient": false,
-      "ms": 2.4618340000000103
+      "likely": false,
+      "ms": 2.465779999999995
     },
     {
       "id": "n01-salida-copiar-lineas",
@@ -574,8 +574,8 @@
       "all": 0.6666666666666666,
       "mrr": 1,
       "tokens": 604,
-      "sufficient": false,
-      "ms": 2.08442500000001,
+      "likely": false,
+      "ms": 2.016584000000023,
       "tests": 1
     },
     {
@@ -587,8 +587,8 @@
       "all": 0.5,
       "mrr": 0.5,
       "tokens": 542,
-      "sufficient": false,
-      "ms": 2.051054000000022
+      "likely": false,
+      "ms": 2.083861000000013
     },
     {
       "id": "n03-arrastre-libre",
@@ -598,9 +598,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 470,
-      "sufficient": true,
-      "ms": 1.7921140000000264,
+      "tokens": 486,
+      "likely": true,
+      "ms": 1.7249029999999834,
       "tests": 1
     },
     {
@@ -611,9 +611,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 0.5,
-      "tokens": 508,
-      "sufficient": true,
-      "ms": 2.2195970000000216,
+      "tokens": 524,
+      "likely": true,
+      "ms": 2.192799999999977,
       "tests": 1
     },
     {
@@ -624,9 +624,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 475,
-      "sufficient": true,
-      "ms": 1.6163559999999961,
+      "tokens": 490,
+      "likely": true,
+      "ms": 1.6324789999999894,
       "tests": 0.5
     },
     {
@@ -638,8 +638,8 @@
       "all": 0.75,
       "mrr": 1,
       "tokens": 597,
-      "sufficient": false,
-      "ms": 1.6093270000000075,
+      "likely": false,
+      "ms": 1.5991460000000188,
       "tests": 1
     },
     {
@@ -651,8 +651,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 571,
-      "sufficient": false,
-      "ms": 1.8097000000000207,
+      "likely": false,
+      "ms": 1.7897049999999695,
       "tests": 1
     },
     {
@@ -664,8 +664,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 487,
-      "sufficient": false,
-      "ms": 1.9570790000000216
+      "likely": false,
+      "ms": 2.123512000000005
     },
     {
       "id": "n09-shell-cabecera",
@@ -676,8 +676,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 589,
-      "sufficient": false,
-      "ms": 2.0501480000000356
+      "likely": false,
+      "ms": 2.2730549999999994
     },
     {
       "id": "n10-aviso-imagen",
@@ -687,9 +687,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 565,
-      "sufficient": true,
-      "ms": 2.0030680000000416
+      "tokens": 581,
+      "likely": true,
+      "ms": 1.9408919999999625
     },
     {
       "id": "n11-terminal-espacio-propio",
@@ -700,8 +700,8 @@
       "all": 0.5,
       "mrr": 1,
       "tokens": 503,
-      "sufficient": false,
-      "ms": 1.9169320000000312
+      "likely": false,
+      "ms": 1.9090100000000234
     },
     {
       "id": "n12-un-dueno-por-comando",
@@ -712,8 +712,8 @@
       "all": 0.3333333333333333,
       "mrr": 0.2,
       "tokens": 415,
-      "sufficient": false,
-      "ms": 1.6656480000000329,
+      "likely": false,
+      "ms": 1.6857820000000174,
       "tests": 1
     },
     {
@@ -725,8 +725,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 672,
-      "sufficient": false,
-      "ms": 2.0289020000000164,
+      "likely": false,
+      "ms": 2.049804999999992,
       "tests": 1
     },
     {
@@ -738,8 +738,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 540,
-      "sufficient": false,
-      "ms": 1.8993480000000318,
+      "likely": false,
+      "ms": 1.81796700000001,
       "tests": 1
     },
     {
@@ -751,8 +751,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 465,
-      "sufficient": false,
-      "ms": 1.9999459999999658,
+      "likely": false,
+      "ms": 1.9175950000000057,
       "tests": 0
     },
     {
@@ -764,8 +764,8 @@
       "all": 0.3333333333333333,
       "mrr": 0.25,
       "tokens": 400,
-      "sufficient": false,
-      "ms": 2.340407999999968,
+      "likely": false,
+      "ms": 1.949138000000005,
       "tests": 1
     },
     {
@@ -776,9 +776,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 0.3333333333333333,
-      "tokens": 371,
-      "sufficient": true,
-      "ms": 2.297108000000037,
+      "tokens": 386,
+      "likely": true,
+      "ms": 2.1485199999999622,
       "tests": 1
     },
     {
@@ -789,9 +789,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 320,
-      "sufficient": true,
-      "ms": 1.4269109999999614,
+      "tokens": 335,
+      "likely": true,
+      "ms": 1.3918879999999945,
       "tests": 1
     },
     {
@@ -803,8 +803,8 @@
       "all": 0.5,
       "mrr": 0.3333333333333333,
       "tokens": 357,
-      "sufficient": false,
-      "ms": 1.4063429999999926,
+      "likely": false,
+      "ms": 1.4622439999999983,
       "tests": 1
     },
     {
@@ -815,9 +815,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 281,
-      "sufficient": true,
-      "ms": 1.0985129999999685
+      "tokens": 296,
+      "likely": true,
+      "ms": 1.0824230000000057
     },
     {
       "id": "n21-sql-mode",
@@ -827,9 +827,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 408,
-      "sufficient": true,
-      "ms": 1.4083830000000148
+      "tokens": 424,
+      "likely": true,
+      "ms": 1.3608209999999872
     },
     {
       "id": "n22-tests-driver-harness",
@@ -839,9 +839,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 448,
-      "sufficient": true,
-      "ms": 1.3311759999999708,
+      "tokens": 463,
+      "likely": true,
+      "ms": 1.2987760000000321,
       "tests": 0
     },
     {
@@ -853,8 +853,8 @@
       "all": 0.6666666666666666,
       "mrr": 0,
       "tokens": 503,
-      "sufficient": false,
-      "ms": 1.767957000000024
+      "likely": false,
+      "ms": 1.6190849999999841
     },
     {
       "id": "p01-sentencia-bajo-cursor",
@@ -864,9 +864,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 527,
-      "sufficient": true,
-      "ms": 1.6552220000000375,
+      "tokens": 542,
+      "likely": true,
+      "ms": 1.6082630000000222,
       "tests": 1
     },
     {
@@ -878,8 +878,8 @@
       "all": 0.6666666666666666,
       "mrr": 1,
       "tokens": 627,
-      "sufficient": false,
-      "ms": 1.5519989999999666
+      "likely": false,
+      "ms": 1.5962860000000205
     },
     {
       "id": "p03-idioma-primera-vez",
@@ -890,8 +890,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 73,
-      "sufficient": false,
-      "ms": 0.7902950000000146
+      "likely": false,
+      "ms": 0.7370690000000195
     },
     {
       "id": "p04-menu-contextual-nativo",
@@ -901,9 +901,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 345,
-      "sufficient": true,
-      "ms": 1.7272880000000441
+      "tokens": 360,
+      "likely": true,
+      "ms": 1.57654500000001
     },
     {
       "id": "p05-pastillas-cambios",
@@ -913,9 +913,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 466,
-      "sufficient": true,
-      "ms": 1.4904470000000174
+      "tokens": 481,
+      "likely": true,
+      "ms": 1.548688000000027
     },
     {
       "id": "p06-error-aplicar-cambios",
@@ -925,9 +925,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 499,
-      "sufficient": true,
-      "ms": 1.835051999999962
+      "tokens": 515,
+      "likely": true,
+      "ms": 1.7702219999999897
     },
     {
       "id": "p07-editar-conexion",
@@ -938,8 +938,8 @@
       "all": 0.6666666666666666,
       "mrr": 0.5,
       "tokens": 489,
-      "sufficient": false,
-      "ms": 1.563921999999991
+      "likely": false,
+      "ms": 1.5063570000000368
     },
     {
       "id": "p08-formulario-entornos",
@@ -949,9 +949,9 @@
       "hit": 1,
       "all": 0.25,
       "mrr": 0.2,
-      "tokens": 505,
-      "sufficient": true,
-      "ms": 1.4327989999999886,
+      "tokens": 520,
+      "likely": true,
+      "ms": 1.5025430000000028,
       "tests": 1
     },
     {
@@ -963,8 +963,8 @@
       "all": 0.5,
       "mrr": 0.25,
       "tokens": 718,
-      "sufficient": false,
-      "ms": 2.192662999999982,
+      "likely": false,
+      "ms": 2.2622749999999883,
       "tests": 0
     },
     {
@@ -976,8 +976,8 @@
       "all": 1,
       "mrr": 0.25,
       "tokens": 691,
-      "sufficient": false,
-      "ms": 1.5155320000000074
+      "likely": false,
+      "ms": 1.5457980000000475
     },
     {
       "id": "p11-filtros-compactos",
@@ -987,9 +987,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 530,
-      "sufficient": true,
-      "ms": 1.5145129999999654,
+      "tokens": 545,
+      "likely": true,
+      "ms": 1.5078080000000114,
       "tests": 1
     },
     {
@@ -1000,9 +1000,9 @@
       "hit": 1,
       "all": 0.3333333333333333,
       "mrr": 0.5,
-      "tokens": 505,
-      "sufficient": true,
-      "ms": 1.6197139999999877
+      "tokens": 520,
+      "likely": true,
+      "ms": 1.5681149999999775
     },
     {
       "id": "p13-catalogo-conexion",
@@ -1012,9 +1012,9 @@
       "hit": 1,
       "all": 0.25,
       "mrr": 0.3333333333333333,
-      "tokens": 470,
-      "sufficient": true,
-      "ms": 2.185209000000043
+      "tokens": 486,
+      "likely": true,
+      "ms": 2.1793989999999894
     },
     {
       "id": "p14-release-paralelo",
@@ -1024,9 +1024,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 383,
-      "sufficient": true,
-      "ms": 1.5753419999999778,
+      "tokens": 398,
+      "likely": true,
+      "ms": 1.4736720000000219,
       "tests": 1
     },
     {
@@ -1038,8 +1038,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 382,
-      "sufficient": false,
-      "ms": 1.6032590000000368,
+      "likely": false,
+      "ms": 1.5898899999999685,
       "tests": 0
     },
     {
@@ -1051,8 +1051,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 349,
-      "sufficient": false,
-      "ms": 1.3662800000000175
+      "likely": false,
+      "ms": 1.3989469999999642
     },
     {
       "id": "p17-grafo-desde-codigo",
@@ -1062,9 +1062,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 399,
-      "sufficient": true,
-      "ms": 1.4568330000000174
+      "tokens": 415,
+      "likely": true,
+      "ms": 1.458358999999973
     },
     {
       "id": "p18-ciclos-recursos",
@@ -1074,9 +1074,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 343,
-      "sufficient": true,
-      "ms": 1.505659000000037
+      "tokens": 358,
+      "likely": true,
+      "ms": 1.4592939999999999
     },
     {
       "id": "p19-motor-sin-lineas",
@@ -1087,8 +1087,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 334,
-      "sufficient": false,
-      "ms": 1.3355470000000196
+      "likely": false,
+      "ms": 1.390829999999994
     },
     {
       "id": "p20-prueba-huerfana",
@@ -1099,8 +1099,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 401,
-      "sufficient": false,
-      "ms": 1.4153539999999794
+      "likely": false,
+      "ms": 1.3689099999999712
     },
     {
       "id": "p21-paquetes-soporte",
@@ -1110,9 +1110,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 490,
-      "sufficient": true,
-      "ms": 1.454137000000003
+      "tokens": 506,
+      "likely": true,
+      "ms": 1.3873849999999948
     },
     {
       "id": "p22-servidores-digest",
@@ -1122,9 +1122,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 396,
-      "sufficient": true,
-      "ms": 1.4694010000000048,
+      "tokens": 411,
+      "likely": true,
+      "ms": 1.5373569999999859,
       "tests": 0
     },
     {
@@ -1135,9 +1135,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 371,
-      "sufficient": true,
-      "ms": 1.4362130000000093
+      "tokens": 386,
+      "likely": true,
+      "ms": 1.4626309999999876
     },
     {
       "id": "p24-na-con-prueba",
@@ -1148,8 +1148,8 @@
       "all": 0.5,
       "mrr": 0.2,
       "tokens": 428,
-      "sufficient": false,
-      "ms": 1.365979999999979,
+      "likely": false,
+      "ms": 1.31249600000001,
       "tests": 1
     },
     {
@@ -1160,9 +1160,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 390,
-      "sufficient": true,
-      "ms": 1.4466820000000098
+      "tokens": 406,
+      "likely": true,
+      "ms": 1.4706630000000018
     },
     {
       "id": "p26-rebranding",
@@ -1173,8 +1173,8 @@
       "all": 0.25,
       "mrr": 0.3333333333333333,
       "tokens": 551,
-      "sufficient": false,
-      "ms": 1.382298999999989
+      "likely": false,
+      "ms": 1.4723520000000008
     },
     {
       "id": "p27-tema-rowly",
@@ -1184,9 +1184,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 563,
-      "sufficient": true,
-      "ms": 1.3748800000000188
+      "tokens": 578,
+      "likely": true,
+      "ms": 1.417079000000001
     },
     {
       "id": "p28-fabrica-drivers",
@@ -1197,8 +1197,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 573,
-      "sufficient": false,
-      "ms": 1.4955980000000295
+      "likely": false,
+      "ms": 1.504165999999998
     },
     {
       "id": "p29-pestanas-consola-resaltado",
@@ -1209,8 +1209,8 @@
       "all": 0.5,
       "mrr": 0,
       "tokens": 540,
-      "sufficient": false,
-      "ms": 1.508890000000008
+      "likely": false,
+      "ms": 1.626275000000021
     },
     {
       "id": "p30-resumen-vista-previa",
@@ -1220,9 +1220,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.5,
-      "tokens": 477,
-      "sufficient": true,
-      "ms": 1.4740659999999934
+      "tokens": 492,
+      "likely": true,
+      "ms": 1.5336030000000278
     },
     {
       "id": "q01-3fb2fef",
@@ -1233,8 +1233,8 @@
       "all": 1,
       "mrr": 0,
       "tokens": 548,
-      "sufficient": false,
-      "ms": 1.9669749999999908
+      "likely": false,
+      "ms": 2.0387209999999527
     },
     {
       "id": "q02-b5f994d",
@@ -1245,8 +1245,8 @@
       "all": 1,
       "mrr": 0.3333333333333333,
       "tokens": 527,
-      "sufficient": false,
-      "ms": 1.8029339999999934
+      "likely": false,
+      "ms": 1.8657010000000014
     },
     {
       "id": "q03-147cb7c",
@@ -1257,8 +1257,8 @@
       "all": 0.6,
       "mrr": 0.5,
       "tokens": 549,
-      "sufficient": false,
-      "ms": 1.8472289999999703,
+      "likely": false,
+      "ms": 2.058700999999985,
       "tests": 0
     },
     {
@@ -1270,8 +1270,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 715,
-      "sufficient": false,
-      "ms": 2.6341730000000325
+      "likely": false,
+      "ms": 2.6620120000000043
     },
     {
       "id": "q05-e8ab84b",
@@ -1281,9 +1281,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 452,
-      "sufficient": true,
-      "ms": 1.545424999999966
+      "tokens": 468,
+      "likely": true,
+      "ms": 1.6976399999999785
     },
     {
       "id": "q06-a28139a",
@@ -1294,8 +1294,8 @@
       "all": 0.5,
       "mrr": 1,
       "tokens": 486,
-      "sufficient": false,
-      "ms": 1.487099999999998,
+      "likely": false,
+      "ms": 1.57511199999999,
       "tests": 0
     },
     {
@@ -1307,8 +1307,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 547,
-      "sufficient": false,
-      "ms": 1.7950179999999705
+      "likely": false,
+      "ms": 1.6356309999999894
     },
     {
       "id": "q08-68fb03f",
@@ -1318,9 +1318,9 @@
       "hit": 1,
       "all": 0.75,
       "mrr": 1,
-      "tokens": 430,
-      "sufficient": true,
-      "ms": 1.4500140000000101,
+      "tokens": 445,
+      "likely": true,
+      "ms": 1.496095999999966,
       "tests": 0
     },
     {
@@ -1332,8 +1332,8 @@
       "all": 0.6666666666666666,
       "mrr": 0.5,
       "tokens": 621,
-      "sufficient": false,
-      "ms": 1.616503000000023
+      "likely": false,
+      "ms": 1.4993600000000242
     },
     {
       "id": "q10-c59cb22",
@@ -1343,9 +1343,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 435,
-      "sufficient": true,
-      "ms": 1.465765000000033
+      "tokens": 450,
+      "likely": true,
+      "ms": 1.4443999999999733
     },
     {
       "id": "q11-5ece585",
@@ -1356,8 +1356,8 @@
       "all": 1,
       "mrr": 0,
       "tokens": 487,
-      "sufficient": false,
-      "ms": 1.5770279999999843
+      "likely": false,
+      "ms": 1.4446740000000204
     },
     {
       "id": "q12-34ac668",
@@ -1367,9 +1367,9 @@
       "hit": 1,
       "all": 0.6666666666666666,
       "mrr": 1,
-      "tokens": 483,
-      "sufficient": true,
-      "ms": 1.4625560000000064
+      "tokens": 498,
+      "likely": true,
+      "ms": 1.440528000000029
     },
     {
       "id": "q13-d36ef4d",
@@ -1380,8 +1380,8 @@
       "all": 1,
       "mrr": 0,
       "tokens": 519,
-      "sufficient": false,
-      "ms": 1.4310120000000097
+      "likely": false,
+      "ms": 1.390326000000016
     },
     {
       "id": "q14-760a464",
@@ -1392,8 +1392,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 524,
-      "sufficient": false,
-      "ms": 1.5810430000000224,
+      "likely": false,
+      "ms": 1.503816000000029,
       "tests": 1
     },
     {
@@ -1405,8 +1405,8 @@
       "all": 0.5,
       "mrr": 0.25,
       "tokens": 521,
-      "sufficient": false,
-      "ms": 1.5865719999999897
+      "likely": false,
+      "ms": 1.4700659999999743
     },
     {
       "id": "q16-f8c905d",
@@ -1417,8 +1417,8 @@
       "all": 1,
       "mrr": 0.5,
       "tokens": 555,
-      "sufficient": false,
-      "ms": 1.9814559999999801
+      "likely": false,
+      "ms": 1.9858859999999936
     },
     {
       "id": "q17-44ab672",
@@ -1429,8 +1429,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 397,
-      "sufficient": false,
-      "ms": 1.4092810000000213
+      "likely": false,
+      "ms": 1.434707000000003
     },
     {
       "id": "q18-9597b7d",
@@ -1441,8 +1441,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 479,
-      "sufficient": false,
-      "ms": 1.306966999999986
+      "likely": false,
+      "ms": 1.19923399999999
     },
     {
       "id": "q19-81aa10b",
@@ -1453,8 +1453,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 516,
-      "sufficient": false,
-      "ms": 1.3417559999999753
+      "likely": false,
+      "ms": 1.2942649999999958
     },
     {
       "id": "q20-f8a495b",
@@ -1465,8 +1465,8 @@
       "all": 0.6,
       "mrr": 1,
       "tokens": 353,
-      "sufficient": false,
-      "ms": 1.2330230000000029
+      "likely": false,
+      "ms": 1.2232470000000149
     },
     {
       "id": "q21-f5486f2",
@@ -1477,8 +1477,8 @@
       "all": 0.6666666666666666,
       "mrr": 0.2,
       "tokens": 391,
-      "sufficient": false,
-      "ms": 1.4967459999999733
+      "likely": false,
+      "ms": 1.5406709999999748
     },
     {
       "id": "q22-8e967e5",
@@ -1488,9 +1488,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 449,
-      "sufficient": true,
-      "ms": 1.4928480000000377
+      "tokens": 464,
+      "likely": true,
+      "ms": 1.5260940000000005
     },
     {
       "id": "q23-79a1c7a",
@@ -1500,9 +1500,9 @@
       "hit": 1,
       "all": 0.5,
       "mrr": 1,
-      "tokens": 464,
-      "sufficient": true,
-      "ms": 1.520054000000016
+      "tokens": 479,
+      "likely": true,
+      "ms": 1.5209409999999934
     },
     {
       "id": "q24-25086ea",
@@ -1513,8 +1513,8 @@
       "all": 0.5,
       "mrr": 0.3333333333333333,
       "tokens": 499,
-      "sufficient": false,
-      "ms": 1.5116840000000025,
+      "likely": false,
+      "ms": 1.571327999999994,
       "tests": 1
     },
     {
@@ -1526,8 +1526,8 @@
       "all": 1,
       "mrr": 1,
       "tokens": 440,
-      "sufficient": false,
-      "ms": 1.4160679999999957
+      "likely": false,
+      "ms": 1.9242649999999912
     },
     {
       "id": "q26-21d6136",
@@ -1537,9 +1537,9 @@
       "hit": 0,
       "all": 0,
       "mrr": 0,
-      "tokens": 506,
-      "sufficient": true,
-      "ms": 2.07325400000002
+      "tokens": 521,
+      "likely": true,
+      "ms": 1.6004140000000007
     },
     {
       "id": "q27-817354e",
@@ -1550,8 +1550,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 505,
-      "sufficient": false,
-      "ms": 1.5942360000000235
+      "likely": false,
+      "ms": 1.6779900000000225
     },
     {
       "id": "q28-7cd0bcb",
@@ -1561,9 +1561,9 @@
       "hit": 0,
       "all": 1,
       "mrr": 0,
-      "tokens": 686,
-      "sufficient": true,
-      "ms": 1.5636319999999841
+      "tokens": 702,
+      "likely": true,
+      "ms": 1.5611569999999801
     },
     {
       "id": "q29-4563a96",
@@ -1573,9 +1573,9 @@
       "hit": 1,
       "all": 0.8333333333333334,
       "mrr": 1,
-      "tokens": 466,
-      "sufficient": true,
-      "ms": 1.457757000000015,
+      "tokens": 481,
+      "likely": true,
+      "ms": 1.4831590000000006,
       "tests": 0.6
     },
     {
@@ -1587,8 +1587,8 @@
       "all": 0.2857142857142857,
       "mrr": 0.3333333333333333,
       "tokens": 415,
-      "sufficient": false,
-      "ms": 1.5900800000000004,
+      "likely": false,
+      "ms": 1.8142220000000293,
       "tests": 0
     },
     {
@@ -1599,9 +1599,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 1,
-      "tokens": 423,
-      "sufficient": true,
-      "ms": 1.5601409999999873,
+      "tokens": 438,
+      "likely": true,
+      "ms": 1.6105099999999766,
       "tests": 1
     },
     {
@@ -1612,9 +1612,9 @@
       "hit": 1,
       "all": 0.375,
       "mrr": 1,
-      "tokens": 447,
-      "sufficient": true,
-      "ms": 1.4799989999999639,
+      "tokens": 463,
+      "likely": true,
+      "ms": 1.3988779999999679,
       "tests": 0
     },
     {
@@ -1625,9 +1625,9 @@
       "hit": 1,
       "all": 1,
       "mrr": 0.3333333333333333,
-      "tokens": 401,
-      "sufficient": true,
-      "ms": 1.3566900000000146
+      "tokens": 416,
+      "likely": true,
+      "ms": 1.3745519999999942
     },
     {
       "id": "q34-16308b2",
@@ -1638,8 +1638,8 @@
       "all": 0,
       "mrr": 0,
       "tokens": 354,
-      "sufficient": false,
-      "ms": 1.435303000000033
+      "likely": false,
+      "ms": 1.2825559999999996
     }
   ]
 }

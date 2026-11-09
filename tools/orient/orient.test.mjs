@@ -100,7 +100,7 @@ test("la tarjeta dice donde, que leer, que depende y que pruebas correr", () => 
   assert.match(out.markdown, /`app\/src\/lib\/results\/gridScroll\.ts` .* (read|outline): edgeStep L2-4/);
   assert.match(out.markdown, /used by 1: `Grid\.svelte`/);
   assert.match(out.markdown, /cd app && npx vitest run src\/lib\/results\/gridScroll\.test\.ts/);
-  assert.match(out.markdown, /## Next\n(SUFFICIENT|PARTIAL|AMBIGUOUS)/);
+  assert.match(out.markdown, /## Next\n(LIKELY|PARTIAL|AMBIGUOUS)/);
   assert.deepEqual(out.tests, ["app/src/lib/results/gridScroll.test.ts"]);
   assert.ok(out.files.includes("app/src/lib/results/gridScroll.ts") && out.primary[0] === "app/src/lib/results/gridScroll.ts");
 });
@@ -135,7 +135,7 @@ test("sin coincidencias lo dice en vez de inventar archivos", () => {
   const out = card(p, retrieve(p, "zzzz qqqq"), "zzzz qqqq");
   assert.match(out.markdown, /NO MATCH/);
   assert.deepEqual(out.files, []);
-  assert.equal(out.sufficient, false);
+  assert.equal(out.likely, false);
 });
 
 test("detectIntent distingue bug, funcionalidad, refactor, analisis y pruebas", () => {
@@ -189,7 +189,7 @@ test("sobre el repo real, sin graphify y sin cache: toda tarjeta del oro cabe en
   for (const task of loadGold().tasks) {
     const out = orient.run(task.task);
     assert.ok(out.tokens <= BUDGET, `${task.id}: ${out.tokens} tokens`);
-    assert.match(out.markdown, /## Next\n(SUFFICIENT|PARTIAL|AMBIGUOUS|NO MATCH)|NO MATCH/, task.id);
+    assert.match(out.markdown, /## Next\n(LIKELY|PARTIAL|AMBIGUOUS|NO MATCH)|NO MATCH/, task.id);
     // NO MATCH es un resultado valido: lo que se exige es que, si propone algo, lo diga.
     if (!/NO MATCH/.test(out.markdown)) assert.ok(out.files.length > 0, task.id);
     assert.doesNotMatch(out.markdown, /graphify \(by name/, task.id);
@@ -234,7 +234,7 @@ test("levelOf: sin evidencia no hay nada, y solo margen, cobertura y evidencia j
 test("una palabra comun suelta no basta para fingir que sabe: sin evidencia dice NO MATCH", () => {
   const p = prepared();
   const out = card(p, retrieve(p, "cuenta"), "cuenta");
-  assert.equal(out.sufficient, false);
+  assert.equal(out.likely, false);
   assert.equal(out.noMatch, true);
 });
 
@@ -245,13 +245,13 @@ test("pickTests da a cada archivo principal su mejor prueba, aunque el inventari
   assert.equal(tests[0].path, "app/src/lib/results/gridScroll.test.ts");
 });
 
-test("sobre el repo real las tareas fuera de alcance nunca declaran SUFFICIENT", () => {
+test("sobre el repo real las tareas fuera de alcance nunca declaran LIKELY", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
   const negatives = JSON.parse(readFileSync(new URL("../../tests/orient/negatives.json", import.meta.url), "utf8")).tasks;
   assert.ok(negatives.length >= 12);
   for (const task of negatives) {
     const out = orient.run(task.task);
-    assert.equal(out.sufficient, false, task.id);
+    assert.equal(out.likely, false, task.id);
     assert.ok(out.tokens <= BUDGET, task.id);
   }
 });
