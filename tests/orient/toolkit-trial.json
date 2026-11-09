@@ -91,5 +91,99 @@
     "callsB": 26,
     "playbookUsed": 0,
     "note": "Ninguno de los 6 agentes B ejecuto orient --playbook ni abrio una skill o PLAYBOOKS.md; B2 cito el playbook ipc-command sin abrirlo. El efecto medido es el del AGENTS.md reorganizado, no el de los playbooks."
+  },
+  "second": {
+    "about": "Segunda prueba (una corrida, 6 peticiones NUEVAS, Haiku, solo lectura): A = develop tras #157 (AGENTS.md menciona --playbook), B = la rama de este PR (--playbook como primer paso). En las peticiones release y docs-shortcut mi prompt decia 'no ejecutes nada', asi que ninguno pudo usar --playbook: es un error de la prueba.",
+    "requests": [
+      {
+        "id": "export-csv",
+        "a": {
+          "tokens": 50364,
+          "calls": 5
+        },
+        "b": {
+          "tokens": 53872,
+          "calls": 7
+        },
+        "checklist": "ambos detectaron que la opcion de encabezado ya existe y ambos ejecutaron --playbook (ninguno coincidio) y --impact",
+        "verdict": "empate"
+      },
+      {
+        "id": "bug-close-console",
+        "a": {
+          "tokens": 54852,
+          "calls": 6
+        },
+        "b": {
+          "tokens": 47084,
+          "calls": 3
+        },
+        "checklist": "A solo la tarjeta, sin --playbook; B ejecuto --playbook y la tarjeta y dio la regla del playbook (prueba de regresion primero); ambos nombraron archivos y pruebas de consoleFiles/queryConsoles",
+        "verdict": "B mas barato y con el procedimiento"
+      },
+      {
+        "id": "diagnostic-select-star",
+        "a": {
+          "tokens": 53685,
+          "calls": 6
+        },
+        "b": {
+          "tokens": 51707,
+          "calls": 6
+        },
+        "checklist": "ambos ejecutaron --playbook, leyeron SQL_ENGINE 6.2 y vieron que SELECT * no es un error (A4); B ademas uso --expand sql-diagnostics",
+        "verdict": "empate"
+      },
+      {
+        "id": "release",
+        "a": {
+          "tokens": 60206,
+          "calls": 7
+        },
+        "b": {
+          "tokens": 56892,
+          "calls": 4
+        },
+        "checklist": "ambos leyeron PLAYBOOKS.md y CONTRIBUTING; mismo contenido; mi prompt prohibia ejecutar, asi que ninguno pudo usar --playbook",
+        "verdict": "empate (confusion mia: no ejecutar)"
+      },
+      {
+        "id": "docs-shortcut",
+        "a": {
+          "tokens": 60124,
+          "calls": 5
+        },
+        "b": {
+          "tokens": 59594,
+          "calls": 5
+        },
+        "checklist": "ambos: README en y es juntos, bloque generado intacto; ninguno abrio keybindings.ts; mi prompt prohibia ejecutar",
+        "verdict": "empate (confusion mia: no ejecutar)"
+      },
+      {
+        "id": "tests-formatter",
+        "a": {
+          "tokens": 52076,
+          "calls": 6
+        },
+        "b": {
+          "tokens": 51677,
+          "calls": 5
+        },
+        "checklist": "ambos: formatter.test.ts, registro en inventory.json, comando vitest; B encontro que --playbook devolvia sql-behavior en vez de add-tests",
+        "verdict": "empate; defecto de B corregido en este PR"
+      }
+    ],
+    "summary": {
+      "tokensA": 331307,
+      "tokensB": 320826,
+      "tokenChange": "-3 %",
+      "callsA": 35,
+      "callsB": 30,
+      "playbookRunnableRequests": 4,
+      "playbookUsedA": 3,
+      "playbookUsedB": 4,
+      "note": "A ya mencionaba --playbook y 3 de 4 lo usaron; B 4 de 4. La diferencia entre condiciones es pequena y dentro del ruido de una corrida."
+    }
   }
 }

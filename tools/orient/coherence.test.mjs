@@ -177,3 +177,12 @@ test("el registro de la prueba con agentes suma lo que dice su resumen", () => {
   assert.equal(trial.summary.callsB, sum("b", "calls"));
   assert.equal(trial.summary.tokenChange, `${Math.round(((trial.summary.tokensB - trial.summary.tokensA) / trial.summary.tokensA) * 100)} %`);
 });
+
+test("la segunda prueba con agentes suma lo que dice su resumen", () => {
+  const { second } = json("tests/orient/toolkit-trial.json");
+  const sum = (side, key) => second.requests.reduce((total, request) => total + request[side][key], 0);
+  assert.equal(second.summary.tokensA, sum("a", "tokens"));
+  assert.equal(second.summary.tokensB, sum("b", "tokens"));
+  assert.equal(second.summary.callsA, sum("a", "calls"));
+  assert.equal(second.summary.callsB, sum("b", "calls"));
+});

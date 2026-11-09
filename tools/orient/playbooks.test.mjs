@@ -72,6 +72,8 @@ const ASKED = [
   ["we need a new version line for postgres", "add-engine"],
   ["escribir pruebas para esta función", "add-tests"],
   ["how to run the tests of an area", "add-tests"],
+  // Observada por un agente en la segunda prueba: "SQL" y "editor" la llevaban a sql-behavior.
+  ["Quiero añadir pruebas para el formateador de SQL del editor. ¿Dónde van y qué tengo que registrar?", "add-tests"],
   ["cambiar el workflow de github del ci", "tooling-ci"],
   ["edit the architecture rules and allowed dependencies", "tooling-ci"],
   ["actualizar la documentación del readme", "write-docs"],
