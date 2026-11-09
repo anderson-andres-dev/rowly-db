@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs.",
+  "about": "Prueba de oro del orientador. Cada tarea sale de un PR o commit real: `files` son los archivos de codigo que tocó (la respuesta correcta) y `tests` los archivos de prueba que tocó. El texto es como lo diria quien pide la tarea, no el del PR. `split` reparte las tareas en `train` (se puede ajustar contra ellas) y `holdout` (solo se mide). Ver tools/orient/eval.mjs. Fase 3: las tareas `n*` se anadieron antes de tocar nada del orientador; sus `train` se usan para ajustar y sus `validation` no se miran hasta la medicion final.",
   "tasks": [
     {
       "id": "issue-98-autoscroll",
@@ -8,8 +8,13 @@
       "split": "train",
       "source": "60645e7 (issue #98)",
       "task": "Al seleccionar celdas arrastrando el mouse más allá de lo que se ve en pantalla la grilla no hace scroll automático para seguir seleccionando.",
-      "files": ["app/src/lib/results/gridAutoScroll.ts", "app/src/lib/components/results/DataGrid.svelte"],
-      "tests": ["app/src/lib/results/gridAutoScroll.test.ts"]
+      "files": [
+        "app/src/lib/results/gridAutoScroll.ts",
+        "app/src/lib/components/results/DataGrid.svelte"
+      ],
+      "tests": [
+        "app/src/lib/results/gridAutoScroll.test.ts"
+      ]
     },
     {
       "id": "issue-104-null",
@@ -17,8 +22,14 @@
       "split": "holdout",
       "source": "dab2c73 (issue #104)",
       "task": "Al insertar un registro no me deja dejar en NULL un campo que no es obligatorio; escribir la palabra NULL tampoco funciona y tengo que usar un botón incómodo de la esquina.",
-      "files": ["app/src/lib/results/resultEditing.ts", "app/src/lib/components/results/DataGrid.svelte", "app/src/lib/components/results/ResultPane.svelte"],
-      "tests": ["app/src/lib/results/resultEditing.test.ts"]
+      "files": [
+        "app/src/lib/results/resultEditing.ts",
+        "app/src/lib/components/results/DataGrid.svelte",
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
+      "tests": [
+        "app/src/lib/results/resultEditing.test.ts"
+      ]
     },
     {
       "id": "issue-105-sin-base",
@@ -37,7 +48,11 @@
         "crates/drivers/postgres/src/lib.rs",
         "crates/drivers/mysql/src/lib.rs"
       ],
-      "tests": ["app/src/lib/connections/explorerTree.test.ts", "app/src/lib/stores/connectionCatalog.test.ts", "crates/server-tests/tests/contract.rs"]
+      "tests": [
+        "app/src/lib/connections/explorerTree.test.ts",
+        "app/src/lib/stores/connectionCatalog.test.ts",
+        "crates/server-tests/tests/contract.rs"
+      ]
     },
     {
       "id": "issue-106-schemas-cortado",
@@ -45,7 +60,9 @@
       "split": "holdout",
       "source": "3c38d9e (issue #106)",
       "task": "Cada vez que se muestran los schemas en el explorador la lista se corta y no se ve completa.",
-      "files": ["app/src/lib/components/SchemaTree.svelte"],
+      "files": [
+        "app/src/lib/components/SchemaTree.svelte"
+      ],
       "tests": []
     },
     {
@@ -70,7 +87,10 @@
       "split": "holdout",
       "source": "PR #92",
       "task": "Las pruebas de recursos fallan porque tras cerrar sesiones de terminal quedan hilos y trabajo vivo; hay que medirlo después de cerrar.",
-      "files": ["app/src/lib/components/TerminalSession.svelte", "app/tests/e2e/resources.mjs"],
+      "files": [
+        "app/src/lib/components/TerminalSession.svelte",
+        "app/tests/e2e/resources.mjs"
+      ],
       "tests": []
     },
     {
@@ -79,7 +99,9 @@
       "split": "train",
       "source": "PR #87",
       "task": "La pestaña del resultado queda despuntada en la esquina superior del panel de resultados.",
-      "files": ["app/src/lib/components/results/ResultPane.svelte"],
+      "files": [
+        "app/src/lib/components/results/ResultPane.svelte"
+      ],
       "tests": []
     },
     {
@@ -88,7 +110,10 @@
       "split": "holdout",
       "source": "PR #78",
       "task": "En Linux con un portal de escritorio roto la aplicación tarda unos 25 segundos en arrancar.",
-      "files": ["app/src-tauri/src/desktop_portal.rs", "app/src-tauri/src/lib.rs"],
+      "files": [
+        "app/src-tauri/src/desktop_portal.rs",
+        "app/src-tauri/src/lib.rs"
+      ],
       "tests": []
     },
     {
@@ -97,8 +122,12 @@
       "split": "train",
       "source": "PR #77",
       "task": "Cada vez que abro y cierro una consola quedan objetos vivos en memoria que nunca se recuperan.",
-      "files": ["app/src/lib/components/Workspace.svelte"],
-      "tests": ["app/src/lib/workspace/consoleLifecycle.test.ts"]
+      "files": [
+        "app/src/lib/components/Workspace.svelte"
+      ],
+      "tests": [
+        "app/src/lib/workspace/consoleLifecycle.test.ts"
+      ]
     },
     {
       "id": "pr-76-resaltado-barra",
@@ -106,8 +135,12 @@
       "split": "holdout",
       "source": "PR #76",
       "task": "El resaltado del editor no sigue la barra invertida según el modo de la sesión: marca como escape lo que en este modo no lo es.",
-      "files": ["app/src/lib/editor/completionSource.ts"],
-      "tests": ["app/src/lib/editor/backslashHighlight.test.ts"]
+      "files": [
+        "app/src/lib/editor/completionSource.ts"
+      ],
+      "tests": [
+        "app/src/lib/editor/backslashHighlight.test.ts"
+      ]
     },
     {
       "id": "pr-76-red-soporte",
@@ -115,8 +148,13 @@
       "split": "train",
       "source": "PR #76",
       "task": "Cuando falla la red al buscar paquetes de soporte de versiones el error sale sin traducir, en inglés técnico.",
-      "files": ["app/src-tauri/src/support.rs", "app/src/lib/i18n/messages/backend.ts"],
-      "tests": ["app/src/lib/backend.test.ts"]
+      "files": [
+        "app/src-tauri/src/support.rs",
+        "app/src/lib/i18n/messages/backend.ts"
+      ],
+      "tests": [
+        "app/src/lib/backend.test.ts"
+      ]
     },
     {
       "id": "pr-83-terminal-panel",
@@ -131,7 +169,9 @@
         "app/src/lib/workspace/commands.ts",
         "app/src/lib/keybindings.ts"
       ],
-      "tests": ["app/src/lib/terminal.test.ts"]
+      "tests": [
+        "app/src/lib/terminal.test.ts"
+      ]
     },
     {
       "id": "pr-82-terminal-backend",
@@ -139,8 +179,16 @@
       "split": "train",
       "source": "PR #82",
       "task": "Backend de la terminal integrada: crear una sesión de shell con PTY, escribir, redimensionar y cerrarla desde el frontend.",
-      "files": ["app/src-tauri/src/terminal.rs", "app/src-tauri/src/state.rs", "app/src-tauri/src/lib.rs", "app/src-tauri/src/webkit_env.rs", "app/src/lib/terminal.ts"],
-      "tests": ["app/src/lib/backend.test.ts"]
+      "files": [
+        "app/src-tauri/src/terminal.rs",
+        "app/src-tauri/src/state.rs",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/webkit_env.rs",
+        "app/src/lib/terminal.ts"
+      ],
+      "tests": [
+        "app/src/lib/backend.test.ts"
+      ]
     },
     {
       "id": "pr-65-guard-final",
@@ -148,8 +196,14 @@
       "split": "holdout",
       "source": "PR #65",
       "task": "Lo que llega al servidor al ordenar, paginar o contar un resultado no pasa por la guarda de seguridad de sentencias destructivas.",
-      "files": ["app/src-tauri/src/commands/query.rs", "app/src-tauri/src/commands/results.rs", "crates/engine/src/pagination.rs"],
-      "tests": ["crates/server-tests/tests/safety.rs"]
+      "files": [
+        "app/src-tauri/src/commands/query.rs",
+        "app/src-tauri/src/commands/results.rs",
+        "crates/engine/src/pagination.rs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/safety.rs"
+      ]
     },
     {
       "id": "pr-61-primera-consola",
@@ -157,8 +211,14 @@
       "split": "train",
       "source": "PR #61",
       "task": "En PostgreSQL abrir la primera consola se cuenta como perder una sesión y avisa de un error que no existe.",
-      "files": ["crates/driver-core/src/console.rs", "crates/driver-core/src/lib.rs", "app/src-tauri/src/state.rs"],
-      "tests": ["crates/server-tests/tests/contract.rs"]
+      "files": [
+        "crates/driver-core/src/console.rs",
+        "crates/driver-core/src/lib.rs",
+        "app/src-tauri/src/state.rs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/contract.rs"
+      ]
     },
     {
       "id": "pr-46-confirmar-produccion",
@@ -166,7 +226,11 @@
       "split": "holdout",
       "source": "PR #46",
       "task": "En una conexión de producción se pueden aplicar los cambios hechos en la grilla de resultados sin pedir la confirmación; el backend debe exigirla.",
-      "files": ["app/src/lib/results/resultEditing.ts", "app/src-tauri/src/lib.rs", "app/src/lib/components/Workspace.svelte"],
+      "files": [
+        "app/src/lib/results/resultEditing.ts",
+        "app/src-tauri/src/lib.rs",
+        "app/src/lib/components/Workspace.svelte"
+      ],
       "tests": []
     },
     {
@@ -175,8 +239,12 @@
       "split": "train",
       "source": "PR #44",
       "task": "Los nombres de columnas y tablas que genera el constructor de filtros no se citan con las reglas del motor y fallan con identificadores especiales.",
-      "files": ["app/src/lib/results/filterBuilder.ts"],
-      "tests": ["app/src/lib/results/filterBuilder.test.ts"]
+      "files": [
+        "app/src/lib/results/filterBuilder.ts"
+      ],
+      "tests": [
+        "app/src/lib/results/filterBuilder.test.ts"
+      ]
     },
     {
       "id": "pr-37-diagnosticos",
@@ -184,7 +252,10 @@
       "split": "holdout",
       "source": "PR #37",
       "task": "Los mensajes de diagnóstico del editor son conversacionales y repiten lo que ya se ve; deberían ser técnicos y breves.",
-      "files": ["app/src/lib/i18n/messages/editor.ts", "app/src/lib/i18n/messages/backend.ts"],
+      "files": [
+        "app/src/lib/i18n/messages/editor.ts",
+        "app/src/lib/i18n/messages/backend.ts"
+      ],
       "tests": []
     },
     {
@@ -199,7 +270,11 @@
         "app/src/lib/workspace/resultTabs.ts",
         "app/src/lib/workspace/tableQueries.ts"
       ],
-      "tests": ["app/src/lib/workspace/executionSession.test.ts", "app/src/lib/workspace/resultTabs.test.ts", "app/src/lib/workspace/tableQueries.test.ts"]
+      "tests": [
+        "app/src/lib/workspace/executionSession.test.ts",
+        "app/src/lib/workspace/resultTabs.test.ts",
+        "app/src/lib/workspace/tableQueries.test.ts"
+      ]
     },
     {
       "id": "pr-48-workspace-parte-2",
@@ -214,7 +289,10 @@
         "app/src/lib/workspace/executionSession.ts",
         "app/src/lib/workspace/resultTabs.ts"
       ],
-      "tests": ["app/src/lib/workspace/consoleFiles.test.ts", "app/src/lib/workspace/resultChanges.test.ts"]
+      "tests": [
+        "app/src/lib/workspace/consoleFiles.test.ts",
+        "app/src/lib/workspace/resultChanges.test.ts"
+      ]
     },
     {
       "id": "pr-50-editor",
@@ -229,7 +307,11 @@
         "app/src/lib/editor/configuration.ts",
         "app/src/lib/editor/diagnosticPresentation.ts"
       ],
-      "tests": ["app/src/lib/editor/analysisSession.test.ts", "app/src/lib/editor/commands.dom.test.ts", "app/src/lib/editor/configuration.dom.test.ts"]
+      "tests": [
+        "app/src/lib/editor/analysisSession.test.ts",
+        "app/src/lib/editor/commands.dom.test.ts",
+        "app/src/lib/editor/configuration.dom.test.ts"
+      ]
     },
     {
       "id": "pr-47-piso-compatibilidad",
@@ -260,7 +342,10 @@
         "app/src-tauri/src/updates.rs",
         "app/src/lib/stores/updates.ts"
       ],
-      "tests": ["app/src/lib/stores/updates.test.ts", "app/src/lib/stores/updatesPrompt.test.ts"]
+      "tests": [
+        "app/src/lib/stores/updates.test.ts",
+        "app/src/lib/stores/updatesPrompt.test.ts"
+      ]
     },
     {
       "id": "analisis-mosaico",
@@ -268,7 +353,11 @@
       "split": "holdout",
       "source": "docs/ARCHITECTURE.md, Tiled tab groups",
       "task": "¿Cómo se organizan los grupos de pestañas en mosaico y dónde viven las reglas para reordenarlos?",
-      "files": ["app/src/lib/workspace/mosaic.ts", "app/src/lib/workspace/tabGroups.ts", "app/src/lib/components/MosaicArea.svelte"],
+      "files": [
+        "app/src/lib/workspace/mosaic.ts",
+        "app/src/lib/workspace/tabGroups.ts",
+        "app/src/lib/components/MosaicArea.svelte"
+      ],
       "tests": []
     },
     {
@@ -277,8 +366,13 @@
       "split": "train",
       "source": "crates/engine/src/execution_guard.rs",
       "task": "¿Dónde se decide que una sentencia es destructiva y necesita confirmación antes de ejecutarse?",
-      "files": ["crates/engine/src/execution_guard.rs", "app/src-tauri/src/commands/query.rs"],
-      "tests": ["crates/server-tests/tests/safety.rs"]
+      "files": [
+        "crates/engine/src/execution_guard.rs",
+        "app/src-tauri/src/commands/query.rs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/safety.rs"
+      ]
     },
     {
       "id": "analisis-nuevo-motor",
@@ -286,7 +380,325 @@
       "split": "holdout",
       "source": "ENGINE_GUIDE.md",
       "task": "¿Qué hay que tocar para agregar el soporte de un motor de base de datos nuevo y dónde se registra?",
-      "files": ["tools/engine/new.mjs", "app/src-tauri/src/drivers.rs", "crates/engine/src/dialects/mod.rs", "app/src/lib/engines/index.ts"],
+      "files": [
+        "tools/engine/new.mjs",
+        "app/src-tauri/src/drivers.rs",
+        "crates/engine/src/dialects/mod.rs",
+        "app/src/lib/engines/index.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n01-salida-copiar-lineas",
+      "kind": "feature",
+      "split": "train",
+      "source": "a85dd2e (fase 3)",
+      "task": "En el panel de Salida permitir copiar solo las últimas N líneas y poder seleccionar el texto como un texto corrido.",
+      "files": [
+        "app/src/lib/components/results/OutputLog.svelte",
+        "app/src/lib/results/outputCopy.ts",
+        "app/src/lib/i18n/messages/results.ts"
+      ],
+      "tests": [
+        "app/src/lib/results/outputCopy.test.ts"
+      ]
+    },
+    {
+      "id": "n02-franja-grupos-angostos",
+      "kind": "bug",
+      "split": "validation",
+      "source": "5f356f0 (fase 3)",
+      "task": "En los grupos angostos de pestañas aparece una franja que sobra, y copiar la Salida debería hacerse solo con el icono.",
+      "files": [
+        "app/src/lib/components/MosaicArea.svelte",
+        "app/src/lib/components/results/OutputLog.svelte",
+        "app/src/lib/tabScroll.ts",
+        "app/src/lib/i18n/messages/results.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n03-arrastre-libre",
+      "kind": "bug",
+      "split": "train",
+      "source": "b1a2a79 (fase 3)",
+      "task": "Al soltar una pestaña arrastrada la ventana fantasma tarda en liberarse; debería quedar libre enseguida.",
+      "files": [
+        "app/src/lib/dragGhost.ts"
+      ],
+      "tests": [
+        "app/src/lib/dragGhost.dom.test.ts"
+      ]
+    },
+    {
+      "id": "n04-consola-al-lado",
+      "kind": "bug",
+      "split": "validation",
+      "source": "456bcfe (fase 3)",
+      "task": "No se puede poner una consola al lado de otra cuando las pestañas están apiladas en el mosaico.",
+      "files": [
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/workspace/mosaic.ts",
+        "app/src/lib/i18n/messages/mosaic.ts"
+      ],
+      "tests": [
+        "app/src/lib/workspace/mosaic.test.ts"
+      ]
+    },
+    {
+      "id": "n05-tab-del-editor",
+      "kind": "bug",
+      "split": "train",
+      "source": "621cd7f (fase 3)",
+      "task": "La tecla Tab debe volver a ser del editor; para moverse entre zonas se usa Ctrl+Shift+Alt con las flechas.",
+      "files": [
+        "app/src/lib/focusZones.ts",
+        "app/src/lib/workspace/commands.ts"
+      ],
+      "tests": [
+        "app/src/lib/focusZones.keys.test.ts",
+        "app/src/lib/treeKeys.dom.test.ts"
+      ]
+    },
+    {
+      "id": "n06-modo-mover",
+      "kind": "feature",
+      "split": "validation",
+      "source": "a93150b (fase 3)",
+      "task": "Agregar el modo mover con Ctrl+Shift+W, también cuando el foco está en la terminal.",
+      "files": [
+        "app/src/lib/components/results/DataGrid.svelte",
+        "app/src/lib/focusZones.ts",
+        "app/src/lib/keybindings.ts",
+        "app/src/lib/workspace/commands.ts"
+      ],
+      "tests": [
+        "app/src/lib/focusZones.keys.test.ts"
+      ]
+    },
+    {
+      "id": "n07-tabscroll",
+      "kind": "bug",
+      "split": "train",
+      "source": "1a41556 (fase 3)",
+      "task": "Al agregar o quitar pestañas la barra de pestañas no se reacomoda al instante y desborda; debe volver al principio sin desborde.",
+      "files": [
+        "app/src/lib/tabScroll.ts"
+      ],
+      "tests": [
+        "app/src/lib/tabScroll.dom.test.ts"
+      ]
+    },
+    {
+      "id": "n08-bash-historial",
+      "kind": "bug",
+      "split": "validation",
+      "source": "2456462 (fase 3)",
+      "task": "Las pruebas de la terminal fallan porque bash expande el historial con el signo de exclamación.",
+      "files": [
+        "app/src-tauri/src/terminal.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n09-shell-cabecera",
+      "kind": "feature",
+      "split": "train",
+      "source": "02cfde9 (fase 3)",
+      "task": "Al crear una sesión de terminal devolver cuál es el shell y la carpeta actual para mostrarlos en la cabecera.",
+      "files": [
+        "app/src-tauri/src/terminal.rs",
+        "app/src/lib/terminal.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n10-aviso-imagen",
+      "kind": "modify",
+      "split": "validation",
+      "source": "3412c73 (fase 3)",
+      "task": "En el aviso de nueva versión la imagen del destacado se ve angosta; hacerla más ancha.",
+      "files": [
+        "app/src/lib/components/UpdatePrompt.svelte"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n11-terminal-espacio-propio",
+      "kind": "feature",
+      "split": "train",
+      "source": "9b95a71 (fase 3)",
+      "task": "La terminal debería ser un espacio propio que alterna con los datos del resultado, con el atajo Ctrl+T.",
+      "files": [
+        "app/src/lib/components/Terminal.svelte",
+        "app/src/lib/components/Workspace.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/i18n/messages/workspace.ts"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n12-un-dueno-por-comando",
+      "kind": "refactor",
+      "split": "validation",
+      "source": "7519f94 (fase 3)",
+      "task": "Quitar código y textos que ya no se usan y dejar un solo dueño por cada comando del backend.",
+      "files": [
+        "app/src/lib/i18n/messages/common.ts",
+        "app/src/lib/i18n/messages/updates.ts",
+        "app/src/lib/workspace/commands.ts"
+      ],
+      "tests": [
+        "app/src/lib/backend.test.ts"
+      ]
+    },
+    {
+      "id": "n13-contrato-motores",
+      "kind": "refactor",
+      "split": "train",
+      "source": "627be6a (fase 3)",
+      "task": "Un contrato de motores compartido entre Rust, el backend y el frontend para que agregar un motor no deje piezas sueltas.",
+      "files": [
+        "app/src-tauri/src/drivers.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "tests": [
+        "app/src/lib/engines/contract.test.ts"
+      ]
+    },
+    {
+      "id": "n14-plantilla-motor",
+      "kind": "feature",
+      "split": "validation",
+      "source": "f89f238 (fase 3)",
+      "task": "Una plantilla para agregar un motor nuevo y comprobaciones que no dejen nada a medias.",
+      "files": [
+        "crates/engine/src/lib.rs",
+        "tools/engine/new.mjs",
+        "tools/inventory/coverage.mjs"
+      ],
+      "tests": [
+        "app/src/lib/engines/contract.test.ts"
+      ]
+    },
+    {
+      "id": "n15-sqlx-oficial",
+      "kind": "bug",
+      "split": "train",
+      "source": "adc7c1f (fase 3)",
+      "task": "Quitar el fork de sqlx y usar la versión oficial; el tipo VECTOR de MySQL 9 queda como un hueco conocido.",
+      "files": [
+        "crates/drivers/mysql/src/lib.rs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/version_lines.rs"
+      ]
+    },
+    {
+      "id": "n16-ventana-calidad",
+      "kind": "bug",
+      "split": "validation",
+      "source": "d360f16 (fase 3)",
+      "task": "La ventana de soporte hace fallar la calidad del CI porque se confunde «verificada antes» con «soportada hoy», que son datos distintos.",
+      "files": [
+        "tools/inventory/status.mjs",
+        "tools/test-dbs/evidence.mjs",
+        "tools/test-dbs/window.mjs"
+      ],
+      "tests": [
+        "tools/test-dbs/window.test.mjs"
+      ]
+    },
+    {
+      "id": "n17-release-evidencia",
+      "kind": "feature",
+      "split": "train",
+      "source": "a85f9ad (fase 3)",
+      "task": "La release solo debe publicarse si existe la evidencia de pruebas de ese mismo commit.",
+      "files": [
+        "tools/support/publish.mjs",
+        "tools/test-dbs/evidence.mjs"
+      ],
+      "tests": [
+        "tools/test-dbs/evidence.test.mjs"
+      ]
+    },
+    {
+      "id": "n18-checks-por-areas",
+      "kind": "feature",
+      "split": "validation",
+      "source": "6d72450 (fase 3)",
+      "task": "Elegir qué checks del CI corren según las áreas que cambió el PR, con compuertas que siempre informen.",
+      "files": [
+        "tools/ci/select.mjs"
+      ],
+      "tests": [
+        "tools/ci/select.test.mjs"
+      ]
+    },
+    {
+      "id": "n19-recursos-paralelo",
+      "kind": "feature",
+      "split": "train",
+      "source": "d650b0f (fase 3)",
+      "task": "Correr los escenarios de recursos del E2E en paralelo en vez de uno tras otro.",
+      "files": [
+        "tools/ci/scenarios.mjs",
+        "app/tests/e2e/resources.mjs"
+      ],
+      "tests": [
+        "tools/ci/scenarios.test.mjs"
+      ]
+    },
+    {
+      "id": "n20-capturas-web",
+      "kind": "feature",
+      "split": "validation",
+      "source": "493e72b (fase 3)",
+      "task": "Generar las capturas de la web desde la app real, con datos de ejemplo.",
+      "files": [
+        "tools/site-shots/app.mjs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n21-sql-mode",
+      "kind": "bug",
+      "split": "train",
+      "source": "0f47fc9 (fase 3)",
+      "task": "El harness de pruebas con servidor real debe restaurar el sql_mode que cambia y rechazar un modo que no corresponde.",
+      "files": [
+        "crates/server-tests/src/lib.rs"
+      ],
+      "tests": []
+    },
+    {
+      "id": "n22-tests-driver-harness",
+      "kind": "refactor",
+      "split": "validation",
+      "source": "4b9f7ee (fase 3)",
+      "task": "Pasar los tests de los drivers al harness de servidores reales, uno por cada versión exacta.",
+      "files": [
+        "crates/drivers/mysql/src/lib.rs",
+        "crates/drivers/postgres/src/lib.rs",
+        "crates/server-tests/src/lib.rs",
+        "tools/test-dbs/evidence.mjs"
+      ],
+      "tests": [
+        "crates/server-tests/tests/contract.rs"
+      ]
+    },
+    {
+      "id": "n24-pestanas-carpeta",
+      "kind": "modify",
+      "split": "validation",
+      "source": "1d41187 (fase 3)",
+      "task": "Las pestañas del panel inferior deben verse con estilo de carpeta, como las de las consolas.",
+      "files": [
+        "app/src/lib/components/Terminal.svelte",
+        "app/src/lib/components/results/ResultPane.svelte",
+        "app/src/lib/styles/tabs.css"
+      ],
       "tests": []
     }
   ]

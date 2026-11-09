@@ -6,7 +6,7 @@ const STOP = new Set(
   (
     // espanol
     "a al algo algun alguna algunos ante aqui asi aun cada como con cual cuando de del desde donde dos e el ella ellos en entre era es esta estan este esto estos fue ha han hay la las le les lo los mas me mi mismo mucho muy ni no nos o otra otro para pero poco por porque que quien se sea ser si sin sobre su sus tambien tan te tiene todo todos tu un una uno unos y ya " +
-    "ve ven va van vas debe deberia deberian puede pueden poder quiero quisiera necesito hay hacer hace hacen haga cuando cuanto vez vezes siempre nunca ahora luego despues antes " +
+    "sistema funcionalidad modulo componente archivo codigo aplicacion usuario opcion forma manera cosa nuevo nueva ve ven va van vas debe deberia deberian puede pueden poder quiero quisiera necesito hay hacer hace hacen haga cuando cuanto vez vezes siempre nunca ahora luego despues antes " +
     // ingles
     "an and any are as at be been but by can could did do does for from had has have how if in into is it its may more my no not of on or our should so some than that the their then there these they this to too up was we were what when where which who why will with would you your"
   ).split(/\s+/),

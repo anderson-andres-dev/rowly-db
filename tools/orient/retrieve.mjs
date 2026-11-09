@@ -16,7 +16,8 @@ export const PARAMS = {
   neighbor: 0.1,
   test: { name: 2, property: 2, owner: 1 },
   perFeature: 3,
-  confidence: { margin: 0.2, coverage: 0.35 },
+  keep: 0.5,
+  confidence: { margin: 0.2, coverage: 0.35, none: 4, high: 10 },
 };
 
 const norm = (text) => tokens(text);
@@ -48,6 +49,17 @@ export function prepare(index, { useTerms = true } = {}) {
   );
   const maxIn = Math.max(1, ...[...index.files.keys()].map((path) => index.indegree(path)));
   return { index, features, files, tests, maxIn };
+}
+
+// De las senales a un nivel: `high` es lo unico que permite decir SUFFICIENT. `evidence` es
+// la rareza (idf) sumada de las palabras de la tarea que aparecen en la funcionalidad o en
+// los primeros archivos: una palabra comun suelta no es evidencia; una rara si.
+export function levelOf({ margin, coverage, evidence }, rule) {
+  if (evidence < rule.none) return "none";
+  const strong = margin >= rule.margin;
+  const covered = coverage >= rule.coverage;
+  if (strong && covered && evidence >= rule.high) return "high";
+  return strong || covered ? "medium" : "low";
 }
 
 export function retrieve(prepared, task, params = PARAMS) {
@@ -103,8 +115,9 @@ export function retrieve(prepared, task, params = PARAMS) {
   const margin = topFeature ? (topFeature - second) / topFeature : 0;
   const seen = new Set([...(featureScores[0]?.matched ?? []), ...(ranked[0]?.matched ?? [])]);
   const coverage = unique.length ? unique.filter((term) => seen.has(term)).length / unique.length : 0;
-  const level = margin >= params.confidence.margin && coverage >= params.confidence.coverage ? "high" : margin >= params.confidence.margin || coverage >= params.confidence.coverage ? "medium" : "low";
-
+  const evidence = [...new Set([...(featureScores[0]?.matched ?? []), ...ranked.slice(0, 3).flatMap((item) => item.matched)])].reduce((sum, term) => sum + files.idf(term), 0);
+  const signals = { margin, coverage, evidence };
+  const level = levelOf(signals, params.confidence);
   const testHits = tests.score(query);
 
   return {
@@ -113,7 +126,7 @@ export function retrieve(prepared, task, params = PARAMS) {
     features: featureScores,
     files: ranked,
     symbolsMatching,
-    confidence: { level, margin, coverage },
+    confidence: { level, ...signals },
   };
 }
 

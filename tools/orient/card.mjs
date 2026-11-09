@@ -57,11 +57,12 @@ export function testsOf(index, paths) {
 
 // Los mejores archivos, sin dejar que una sola funcionalidad se quede con todos los
 // lugares si otra cercana tambien encaja: una tarea suele cruzar dos areas.
-export function pickPrimary(files, cap, perFeature = PARAMS.perFeature) {
+export function pickPrimary(files, cap, perFeature = PARAMS.perFeature, keep = PARAMS.keep) {
   const taken = [];
   const skipped = [];
   const count = new Map();
-  for (const item of files.filter((file) => file.score > 0).slice(0, 40)) {
+  const floor = (files[0]?.score ?? 0) * keep;
+  for (const item of files.filter((file) => file.score > 0 && file.score >= floor).slice(0, 40)) {
     if (taken.length >= cap) break;
     const used = count.get(item.feature) ?? 0;
     if (used >= perFeature) skipped.push(item);
@@ -76,15 +77,29 @@ export function pickPrimary(files, cap, perFeature = PARAMS.perFeature) {
 
 // Pruebas: las de los archivos elegidos, y las que por su nombre o por la propiedad
 // que protegen coinciden con la tarea, dentro de las funcionalidades que encajan.
-export function pickTests(index, result, primaryPaths, scope) {
+export function pickTests(index, result) {
   const byPath = new Map(index.inventory.tests.map((test) => [test.path, test]));
+  const strongest = result.files[0]?.score || 1;
+  const strength = new Map(result.files.slice(0, 12).filter((file) => file.score > 0).map((file) => [file.path, file.score / strongest]));
   const near = new Set(result.features.slice(0, 2).map((item) => item.id));
   const inNear = (owner) => index.files.get(owner)?.features.some((id) => near.has(id));
   const top = Math.max(1e-9, ...[...result.testHits.values()].map((hit) => hit.score));
-  const candidates = new Map(testsOf(index, scope).map((test) => [test.path, test]));
+  const candidates = new Map(testsOf(index, [...strength.keys()]).map((test) => [test.path, test]));
   for (const path of result.testHits.keys()) if (!candidates.has(path) && inNear(byPath.get(path)?.owner)) candidates.set(path, byPath.get(path));
-  const value = (test) => (primaryPaths.includes(test.owner) ? 1 : 0) + 0.7 * ((result.testHits.get(test.path)?.score ?? 0) / top) + (inNear(test.owner) ? 0.2 : 0);
-  return [...candidates.values()].sort((a, b) => value(b) - value(a) || a.path.localeCompare(b.path));
+  // Un test vale lo que el archivo que protege, mas su coincidencia con la tarea.
+  const ownerStrength = (test) => strength.get(test.owner) ?? [...strength].find(([path]) => test.path.startsWith(path.replace(/\.[a-z]+$/, ".")))?.[1] ?? 0;
+  const value = (test) => ownerStrength(test) + 0.7 * ((result.testHits.get(test.path)?.score ?? 0) / top) + (inNear(test.owner) ? 0.1 : 0);
+  const ranked = [...candidates.values()].sort((a, b) => value(b) - value(a) || a.path.localeCompare(b.path));
+  // Cada uno de los primeros archivos aporta su mejor prueba antes de que una sola
+  // funcionalidad se quede con todos los lugares.
+  const owners = [...strength.keys()].slice(0, 4);
+  const protects = (test, path) => test.owner === path || test.path.startsWith(`${path.replace(/\.[a-z]+$/, "")}.`);
+  const picked = [];
+  for (const path of owners) {
+    const own = ranked.find((test) => protects(test, path) && !picked.includes(test));
+    if (own) picked.push(own);
+  }
+  return [...picked, ...ranked.filter((test) => !picked.includes(test))];
 }
 
 const short = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
@@ -138,9 +153,9 @@ function compose(prepared, result, intent, ctx, detail) {
 
   lines.push(`# orient: ${intent}`, "", `confidence: ${result.confidence.level} · task: ${short(ctx.task.replace(/\s+/g, " "), 90)}`, "");
 
-  if (!feature || primary.length === 0) {
+  if (!feature || primary.length === 0 || result.confidence.level === "none") {
     lines.push("NO MATCH: nothing in the catalogue or the code uses those words.", "NEXT: rephrase with words from the interface or a file name, or search the code directly.");
-    return { lines, files: [], tests: [] };
+    return { lines, files: [], tests: [], primary: [], noMatch: true };
   }
 
   const where = [`## Where`, `- \`${feature.id}\` (${feature.domain ?? "no domain"}): ${feature.summary}`];
@@ -200,15 +215,15 @@ function compose(prepared, result, intent, ctx, detail) {
 
   // Pruebas: las que protegen estos archivos, con el comando; en refactor, tambien las de quienes los usan.
   const scope = intent === "refactor" ? [...primaryPaths, ...extraFiles] : primaryPaths;
-  const tests = pickTests(index, result, primaryPaths, scope);
+  const tests = pickTests(index, result);
   const testLines = ["## Tests"];
-  const shownTests = tests.slice(0, detail >= 2 ? 4 : 2);
+  const shownTests = tests.slice(0, detail >= 2 ? 5 : 2);
   for (const test of shownTests) {
     const command = testCommand(test.path, index);
     const meta = [test.gate, /server|mysql|postgres/i.test(test.environment ?? "") ? `needs ${test.environment}` : null].filter(Boolean).join(", ");
     testLines.push(`- \`${test.path}\`${meta ? ` (${meta})` : ""}${command ? `: \`${command}\`` : ""}`);
   }
-  if (tests.length > (detail >= 2 ? 4 : 2)) testLines.push(`- +${tests.length - (detail >= 2 ? 4 : 2)} more in tests/inventory.json`);
+  if (tests.length > shownTests.length) testLines.push(`- +${tests.length - shownTests.length} more in tests/inventory.json`);
   if (tests.length === 0) {
     const all = testsFor(feature, index.inventory);
     testLines.push(all.length ? `- none for these files; the feature has ${all.length}: e.g. \`${all[0]}\`` : "- none found: add one next to the code and list it in tests/inventory.json");

@@ -5,41 +5,41 @@
   "graphBuiltAt": "ab59f8a7ffad7b4ecb569810cea5019f4a315681",
   "graphNodes": 5238,
   "summary": {
-    "tasks": 26,
-    "recall": 0.09166666666666666,
-    "hit": 0.2692307692307692,
-    "all": 0.3474358974358974,
-    "mrr": 0.16747557997558,
-    "tests": 0.14583333333333334,
-    "tokens": 1821.2692307692307
+    "tasks": 49,
+    "recall": 0.11666666666666667,
+    "hit": 0.24489795918367346,
+    "all": 0.32551020408163267,
+    "mrr": 0.1585729746444032,
+    "tests": 0.23655913978494625,
+    "tokens": 1751.3061224489795
   },
   "byKind": {
     "bug": {
-      "tasks": 14,
-      "recall": 0.09523809523809523,
-      "hit": 0.21428571428571427,
-      "all": 0.32142857142857134,
-      "mrr": 0.11278344671201813,
-      "tests": 0.25,
-      "tokens": 1953
+      "tasks": 23,
+      "recall": 0.14492753623188404,
+      "hit": 0.21739130434782608,
+      "all": 0.3840579710144927,
+      "mrr": 0.13543823326432022,
+      "tests": 0.21428571428571427,
+      "tokens": 1843.8260869565217
     },
     "feature": {
-      "tasks": 5,
-      "recall": 0.16,
-      "hit": 0.6,
-      "all": 0.26666666666666666,
-      "mrr": 0.3622222222222222,
-      "tests": 0,
-      "tokens": 1682.2
+      "tasks": 14,
+      "recall": 0.11666666666666667,
+      "hit": 0.35714285714285715,
+      "all": 0.19047619047619047,
+      "mrr": 0.2355609668109668,
+      "tests": 0.2,
+      "tokens": 1675.9285714285713
     },
     "refactor": {
-      "tasks": 4,
-      "recall": 0.0625,
-      "hit": 0.25,
-      "all": 0.4875,
-      "mrr": 0.16815476190476192,
-      "tests": 0.1111111111111111,
-      "tokens": 1664.25
+      "tasks": 7,
+      "recall": 0.10714285714285714,
+      "hit": 0.2857142857142857,
+      "all": 0.4571428571428572,
+      "mrr": 0.1522108843537415,
+      "tests": 0.38888888888888884,
+      "tokens": 1670.7142857142858
     },
     "analysis": {
       "tasks": 3,
@@ -49,17 +49,26 @@
       "mrr": 0.09722222222222221,
       "tests": 0,
       "tokens": 1647.6666666666667
+    },
+    "modify": {
+      "tasks": 2,
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tests": null,
+      "tokens": 1652.5
     }
   },
   "bySplit": {
     "train": {
-      "tasks": 13,
-      "recall": 0.11923076923076924,
-      "hit": 0.38461538461538464,
-      "all": 0.2833333333333333,
-      "mrr": 0.2173076923076923,
-      "tests": 0.1212121212121212,
-      "tokens": 1665.7692307692307
+      "tasks": 24,
+      "recall": 0.16180555555555556,
+      "hit": 0.375,
+      "all": 0.3444444444444444,
+      "mrr": 0.204598063973064,
+      "tests": 0.22807017543859648,
+      "tokens": 1668.75
     },
     "holdout": {
       "tasks": 13,
@@ -69,6 +78,15 @@
       "mrr": 0.11764346764346766,
       "tests": 0.2,
       "tokens": 1976.7692307692307
+    },
+    "validation": {
+      "tasks": 12,
+      "recall": 0.08333333333333333,
+      "hit": 0.08333333333333333,
+      "all": 0.19444444444444442,
+      "mrr": 0.11086309523809523,
+      "tests": 0.2857142857142857,
+      "tokens": 1672.1666666666667
     }
   },
   "tasks": [
@@ -295,6 +313,205 @@
       "all": 0.25,
       "mrr": 0.125,
       "tokens": 1646
+    },
+    {
+      "id": "n01-salida-copiar-lineas",
+      "recall": 0.3333333333333333,
+      "hit": 1,
+      "all": 0.3333333333333333,
+      "mrr": 0.3333333333333333,
+      "tokens": 1673,
+      "tests": 1
+    },
+    {
+      "id": "n02-franja-grupos-angostos",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1685
+    },
+    {
+      "id": "n03-arrastre-libre",
+      "recall": 0,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.1,
+      "tokens": 1656,
+      "tests": 0
+    },
+    {
+      "id": "n04-consola-al-lado",
+      "recall": 0,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.125,
+      "tokens": 1684,
+      "tests": 1
+    },
+    {
+      "id": "n05-tab-del-editor",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1669,
+      "tests": 0
+    },
+    {
+      "id": "n06-modo-mover",
+      "recall": 0,
+      "hit": 0,
+      "all": 0.25,
+      "mrr": 0.0625,
+      "tokens": 1673,
+      "tests": 0
+    },
+    {
+      "id": "n07-tabscroll",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1691,
+      "tests": 0
+    },
+    {
+      "id": "n08-bash-historial",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 1631
+    },
+    {
+      "id": "n09-shell-cabecera",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 1,
+      "tokens": 1689
+    },
+    {
+      "id": "n10-aviso-imagen",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1644
+    },
+    {
+      "id": "n11-terminal-espacio-propio",
+      "recall": 0,
+      "hit": 0,
+      "all": 0.25,
+      "mrr": 0.09090909090909091,
+      "tokens": 1682
+    },
+    {
+      "id": "n12-un-dueno-por-comando",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1691,
+      "tests": 0
+    },
+    {
+      "id": "n13-contrato-motores",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.25,
+      "tokens": 1668,
+      "tests": 1
+    },
+    {
+      "id": "n14-plantilla-motor",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1691,
+      "tests": 0
+    },
+    {
+      "id": "n15-sqlx-oficial",
+      "recall": 0,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.1111111111111111,
+      "tokens": 1662,
+      "tests": 0
+    },
+    {
+      "id": "n16-ventana-calidad",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1713,
+      "tests": 0
+    },
+    {
+      "id": "n17-release-evidencia",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1674,
+      "tests": 1
+    },
+    {
+      "id": "n18-checks-por-areas",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1644,
+      "tests": 0
+    },
+    {
+      "id": "n19-recursos-paralelo",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1656,
+      "tests": 0
+    },
+    {
+      "id": "n20-capturas-web",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1670
+    },
+    {
+      "id": "n21-sql-mode",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.2,
+      "tokens": 1675
+    },
+    {
+      "id": "n22-tests-driver-harness",
+      "recall": 0,
+      "hit": 0,
+      "all": 0.75,
+      "mrr": 0.14285714285714285,
+      "tokens": 1679,
+      "tests": 1
+    },
+    {
+      "id": "n24-pestanas-carpeta",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1661
     }
   ]
 }
