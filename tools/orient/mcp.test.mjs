@@ -37,7 +37,7 @@ test("tools/list expone las seis herramientas con esquema, `start` la primera, y
   }
   assert.equal(TOOLS.length, 6);
   assert.match(INSTRUCTIONS, /Call `start` first/);
-  assert.deepEqual(tools.filter((tool) => tool._meta?.["anthropic/alwaysLoad"]).map((tool) => tool.name), ["start"]);
+  assert.deepEqual(tools.filter((tool) => tool._meta?.["anthropic/alwaysLoad"]).map((tool) => tool.name), ["start", "stack"]);
 });
 
 test("playbook, orient, expand, impact y stack devuelven lo mismo que la linea de comandos", () => {
@@ -58,6 +58,8 @@ test("start junta el procedimiento y la tarjeta en una llamada, y sin procedimie
   assert.match(both, /^# Playbook: fix-bug/);
   assert.match(both, /# orient:/);
   assert.ok(both.length / 4 < 2600, "cabe en el presupuesto de start");
+  assert.match(both, /Stop rule:/);
+  assert.match(callTool("playbook", { request: "arregla el bug de la grilla" }), /^(?![\s\S]*Stop rule)/, "el playbook solo no lleva la regla");
   const card = callTool("start", { request: "xyzzy plugh" });
   assert.match(card, /^# orient:/);
   assert.doesNotMatch(card, /# Playbook:/);

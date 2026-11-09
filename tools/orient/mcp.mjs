@@ -29,7 +29,8 @@ export const INSTRUCTIONS =
 
 const string = (description, extra = {}) => ({ type: "string", description, ...extra });
 // Claude Code difiere las herramientas MCP detras de ToolSearch; esta marca (documentada en su guia
-// de MCP) hace que solo `start` se cargue desde el principio, sin una vuelta extra para encontrarla.
+// de MCP) hace que `start` y `stack` se carguen desde el principio, sin una vuelta extra para
+// encontrarlas. Las demas (que `start` ya cubre) siguen diferidas para no gastar contexto.
 const LOAD_UPFRONT = { "anthropic/alwaysLoad": true };
 export const TOOLS = [
   { name: "start", description: "Call this FIRST for any change, bug or question about the code. One call: the procedure for that kind of change (what to read, steps, rules, checks) plus where it lives (files with line ranges, what to reuse, tests to run). Spanish or English.", inputSchema: { type: "object", properties: { request: string("The user's request, as they wrote it"), budget: { type: "number", description: "Token cap of the whole answer (default 2000)" } }, required: ["request"] }, _meta: LOAD_UPFRONT },
@@ -37,7 +38,7 @@ export const TOOLS = [
   { name: "orient", description: "Orientation card for a task: where it lives, line ranges to read, what to reuse, what depends on it, tests to run and whether that is enough.", inputSchema: { type: "object", properties: { task: string("The task or the symptom"), intent: string("Force the kind of task", { enum: ["bug", "feature", "refactor", "analysis", "tests", "modify"] }), budget: { type: "number", description: "Token cap of the card (default 1200)" } }, required: ["task"] } },
   { name: "expand", description: "All the files of one feature with their main symbols and line ranges.", inputSchema: { type: "object", properties: { feature: string("A feature id from the map in AGENTS.md, e.g. results-grid") }, required: ["feature"] } },
   { name: "impact", description: "Who uses a file or feature, whom it uses, and the tests of both. Run it before changing anything shared.", inputSchema: { type: "object", properties: { target: string("A repository path or a feature id") }, required: ["target"] } },
-  { name: "stack", description: "The version this repository really resolves for a dependency and where to read the docs of that version. Without a name, lists the key libraries.", inputSchema: { type: "object", properties: { name: string("Part of a crate or npm package name, e.g. tauri, svelte, sqlx") } } },
+  { name: "stack", description: "Which version of a library or dependency this project uses (Tauri, Svelte, SvelteKit, sqlx, tokio, CodeMirror, Vite...) and where to read the docs of that exact version. Use it for any question about versions or library docs.", inputSchema: { type: "object", properties: { name: string("Part of a crate or npm package name, e.g. tauri, svelte, sqlx; empty lists the key libraries") } }, _meta: LOAD_UPFRONT },
 ];
 
 function text(value, name) {

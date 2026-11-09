@@ -77,13 +77,18 @@ export function playbookFor(request, model = loadModel()) {
   return match && ranked[0].matched.length >= 2 ? { pb: match, strong, model } : null;
 }
 
+// Sin tope, una tarea vaga ("investiga por que va lenta") se queda escaneando hasta agotar las vueltas
+// y no responde. Esta linea es la regla de AGENTS.md ("Budget") puesta donde el agente la lee.
+export const STOP_RULE = "Stop rule: this is enough to start. Read about five line ranges, then answer; if something stays unverified, say so instead of scanning on.";
+
 // La respuesta de "por donde empiezo": el procedimiento si la peticion tiene uno, y donde esta
 // (la tarjeta, con lo que el procedimiento deje del presupuesto). La usan `--playbook` y la
 // herramienta `start` del servidor MCP, para que den lo mismo en una sola llamada.
 export function startAnswer(orient, request, { budget = 2000 } = {}) {
   const found = playbookFor(request, orient.prepared.index.model);
   const procedure = found ? `${playbookText(found.model, found.pb)}\n---\n\n` : "";
-  return `${procedure}${orient.run(request, { budget: Math.max(700, budget - Math.ceil(procedure.length / 4)) }).markdown}`;
+  const card = orient.run(request, { budget: Math.max(700, budget - Math.ceil(procedure.length / 4)) }).markdown;
+  return `${procedure}${card}\n${STOP_RULE}\n`;
 }
 
 export function playbookJson(pb, model) {
