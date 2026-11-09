@@ -13,7 +13,7 @@ Nada depende de un proveedor: la fuente es Markdown, JSON y scripts de Node. Los
 | Conocimiento | El mapa: cada funcionalidad, sus archivos, sus pruebas, sus vecinas; búsqueda sobre él. | `tools/architecture/model.json` (`features`), [docs/map/FEATURES.md](map/FEATURES.md), `tools/orient/` |
 | Skills | Un procedimiento por tipo de cambio: qué leer, pasos, reglas, comprobaciones. | `model.json` (`playbooks`), [docs/map/PLAYBOOKS.md](map/PLAYBOOKS.md), `.claude/skills/` y `.agents/skills/` (generadas) |
 | Reglas | Las decisiones persistentes, cada una con su razón y el comando que la comprueba. | `model.json` (`rules`), el bloque de [AGENTS.md](../AGENTS.md) |
-| Interfaz de herramientas | Una línea de comandos que responde «dónde está, qué más cambia, qué pruebas». | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, `--json` versionado) |
+| Interfaz de herramientas | Una línea de comandos y un servidor MCP que responden «dónde está, qué más cambia, qué pruebas». | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, `--json` versionado), `tools/orient/mcp.mjs` vía `.mcp.json` |
 | Documentación | La versión real de cada dependencia y dónde leer la documentación de esa versión. | [docs/map/STACK.md](map/STACK.md), generado desde los lockfiles |
 
 Hay **una** fuente curada, `tools/architecture/model.json`. Todo lo demás se genera desde ella (o desde los lockfiles) y se comprueba en CI, así nada se desfasa.
@@ -29,13 +29,38 @@ Hay **una** fuente curada, `tools/architecture/model.json`. Todo lo demás se ge
 
 | Agente | Entrada | Nota |
 | :--- | :--- | :--- |
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) y las skills de `.claude/skills/` | Claude lee `AGENTS.md` por sí mismo solo si no hay `CLAUDE.md`, por eso ese archivo lo importa. |
+| Claude Code | `CLAUDE.md` (`@AGENTS.md`), las skills de `.claude/skills/` y el servidor MCP de `.mcp.json` | Claude lee `AGENTS.md` por sí mismo solo si no hay `CLAUDE.md`, por eso ese archivo lo importa. |
 | Codex | `AGENTS.md` y las skills de `.agents/skills/` | Codex recorre `.agents/skills` desde el directorio de trabajo hasta la raíz del repositorio. |
 | GitHub Copilot | `AGENTS.md` | Nada que añadir. |
 | Gemini CLI | `GEMINI.md`, un puntero de una línea a `AGENTS.md` | |
 | Cursor y otros | `AGENTS.md` si lo leen; si no, indícales que lo lean | Cualquier agente que pueda ejecutar un comando de terminal puede usar `orient`. |
 
 Los archivos de puntero y las skills no llevan instrucciones propias: se generan y `node tools/orient/features.mjs --check` falla si difieren de la fuente. Lo que documenta cada proveedor, en detalle: [tools/orient/README.es.md](../tools/orient/README.es.md#cómo-encuentra-cada-agente-la-entrada).
+
+## El servidor MCP
+
+`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. No hay nada que arrancar a mano; el cliente lo lanza. La entrada es un alias de `git` (`git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`) a propósito: git lo ejecuta desde la raíz del repositorio, así que funciona aunque abras Claude Code dentro de `app/` (un `node tools/orient/mcp.mjs` a secas fallaba ahí; comprobado, y cuesta unos 6 ms). La configuración para Codex y otros está en el [README](../README.es.md#trabajar-con-agentes-de-ia). `node tools/orient/mcp.mjs --help` explica cómo registrarlo en cada cliente; `--check` lo ejercita sin cliente y muestra el tiempo de cada llamada; `ORIENT_MCP_DEBUG=1` deja cada llamada y su duración en stderr (Claude Code lo muestra en `/mcp`).
+
+Ocho herramientas de solo lectura, con el mismo texto que la línea de comandos:
+
+| Herramienta | Hace | Línea de comandos |
+| :--- | :--- | :--- |
+| `start` | **Llamar primero.** El procedimiento de la petición más dónde está (archivos con rangos de líneas, pruebas) y una regla de parada (responder tras unas cinco lecturas). Si la petición cita un texto («Ejecutar») o nombra un comando IPC, también lo contesta | `orient --playbook` |
+| `ui_text` | Dónde vive un texto visible de la interfaz o su clave i18n, en español o inglés: clave, ambos textos, archivo y línea de mensajes, componentes que la usan | `orient --text` |
+| `ipc` | Comandos del backend: archivo y línea de Rust, registro en `lib.rs`, dueño en el frontend, quién los invoca; marca las inconsistencias | `orient --ipc [filtro]` |
+| `stack` | La versión resuelta de una dependencia y el enlace a su documentación | (ver `docs/map/STACK.md`) |
+| `playbook` | Solo el procedimiento (cae a la tarjeta si ninguno coincide) | `orient --playbook --json` |
+| `orient` | Solo la tarjeta de orientación | `orient "<tarea>"` |
+| `expand` | Los archivos de una funcionalidad | `orient --expand` |
+| `impact` | Quién usa un archivo o una funcionalidad | `orient --impact` |
+
+`ui_text` e `ipc` salen de lo que Laravel Boost hace con rutas y documentación, reducido a lo que este repositorio necesita: responden desde el mismo índice, sin ningún servicio más. Existen porque el fallo más frecuente en las pruebas con agentes era cambiar un texto visible (la tarjeta no llevaba a la clave). `ipc` además comprueba que cada comando de Rust esté registrado y tenga dueño, así que sirve también de comprobación de consistencia.
+
+**No debe empeorar nunca a un agente.** La línea de comandos da las mismas respuestas, `AGENTS.md` nombra las dos y el servidor es solo una entrada más cómoda. Tres cosas lo hacen barato:
+
+- El índice vive en memoria y se rehace solo cuando cambia un archivo del repositorio: una llamada cuesta unos 20 ms en caliente (la línea de comandos, unos 215 ms con su propio proceso; la espera del modelo por vuelta son segundos).
+- Se calienta en cuanto el cliente se conecta, así la primera llamada lo encuentra listo.
+- `start`, `ui_text`, `ipc` y `stack` llevan la marca `anthropic/alwaysLoad`, que Claude Code documenta para las herramientas que no deben esperar tras `ToolSearch`. Sin ella los agentes seguían usando la línea de comandos (0 de 4 usaron el servidor; con la herramienta diferida, 1 de 4). La orden de Codex del README sigue `codex mcp add --help`; no se ejecutó aquí. Los clientes anteriores a Claude Code 2.1.285 ignoran la marca y la herramienta se encuentra igualmente con `ToolSearch`.
 
 ## Cambiar el toolkit
 
@@ -51,6 +76,6 @@ Los archivos de puntero y las skills no llevan instrucciones propias: se generan
 - Con el toolkit completo, seis peticiones genéricas en un modelo pequeño (Haiku, una corrida, solo lectura; [registro](../tests/orient/toolkit-trial.json)) costaron un 4 % menos de tokens y 26 llamadas en vez de 34 respecto al estado anterior, con la misma lista de comprobación cumplida en cinco de seis y una petición (cambiar un texto de la UI) en la que la respuesta con el toolkit no encontró la clave ni el componente. Ninguna de las seis usó `--playbook` ni una skill: el efecto medido es el del `AGENTS.md` reorganizado, no el de los playbooks.
 - Una segunda corrida con seis peticiones nuevas, tras poner `--playbook` como primer paso en `AGENTS.md`: un 3 % menos de tokens y 30 llamadas en vez de 35 respecto al estado anterior; donde se permitía ejecutar comandos, 4 de 4 agentes usaron `--playbook` (3 de 4 antes, porque el texto anterior ya lo mencionaba). La diferencia está dentro del ruido de una corrida. Destapó un mal enrutado real (una petición sobre pruebas iba a `sql-behavior`), corregido con una prueba de regresión.
 - Los playbooks se eligen con una búsqueda por palabras comprobada con 20 frases escritas por los autores, no con peticiones independientes.
-- No se construyó: un servicio de recuperación de documentación ni un servidor MCP. `orient --json` es toda la interfaz si quieres uno.
+- El servidor MCP, medido con sesiones reales de Claude Code en un modelo pequeño ([registro](../tests/orient/mcp-trial.json); 16 sesiones con él, 16 sin él, 8 peticiones dos veces): el agente llama a `start` primero 16 de 16 veces; mismas vueltas (4,0), algo más rápido (8,5 s contra 9,8 s), los archivos esperados nombrados en el 100 % de las respuestas contra el 94 % (comprobación burda). Las medianas de tokens son iguales; la media es mayor con el servidor por unas pocas sesiones largas. No es medible que sea mucho mejor que la línea de comandos; lo que aporta es descubrirse sin configurar nada y una sola llamada. Una última pasada con 14 tareas ficticias nuevas (genéricas, específicas y dos trampas: una función que no existe y una pregunta fuera del repositorio), en solo lectura para que los agentes solo planifiquen: ninguno editó nada, las trampas se contestaron con honestidad («ese modo no existe», «no hay licencia de pago») y dos tareas vagas de «investiga» terminaron sin respuesta hasta que `start` recibió una regla de parada (responder tras unas cinco lecturas); después, las repetidas y las nuevas tareas vagas se respondieron todas, aunque la más lenta aún tardó 19 vueltas. Un primer lote de 32 sesiones se descartó: mi lanzador daba a cada sesión las demás peticiones. No se construyó: un servicio de recuperación de documentación.
 
 Mediciones y límites en detalle: [tools/orient/README.es.md](../tools/orient/README.es.md).

@@ -162,6 +162,19 @@ Los paquetes quedan en `target/release/bundle/`.
 
 </details>
 
+## Trabajar con agentes de IA
+
+Rowly DB trae un servidor [MCP](https://modelcontextprotocol.io) para que un agente de IA sepa dónde está todo sin escanear el repositorio: ante cualquier petición devuelve el procedimiento a seguir y los archivos, rangos de líneas y pruebas que importan. Necesita Node 20+ y nada más.
+
+| Con | Haz |
+| :--- | :--- |
+| **Claude Code** | Abre el repositorio y aprueba `rowly-orient` cuando te lo pida (está declarado en `.mcp.json`). No hay nada que arrancar a mano: el cliente lo lanza. `claude mcp list` lo muestra. |
+| **Codex** | Desde la raíz del repositorio: `codex mcp add rowly-orient -- node "$PWD/tools/orient/mcp.mjs"` |
+| **Cualquier otro cliente MCP** | Ejecuta `node tools/orient/mcp.mjs` como servidor stdio. |
+| **Sin MCP** | `node tools/orient/orient.mjs --playbook "<tu petición>"` da la misma respuesta; [AGENTS.md](AGENTS.md) les dice a los agentes que usen cualquiera de las dos. |
+
+`node tools/orient/mcp.mjs --help` explica cómo registrarlo en cada cliente y `--check` lo prueba sin cliente. Cómo funciona, qué se midió y sus límites: [docs/AI.es.md](docs/AI.es.md).
+
 ## Contribuir
 
 Los reportes de errores y los pull requests son bienvenidos; para algo grande, [abre un issue](https://github.com/anderson-andres-dev/rowly-db/issues) primero. Por dónde empezar:

@@ -1,0 +1,139 @@
+{
+  "about": "Prueba del servidor MCP con sesiones reales de Claude Code (claude -p, modelo Haiku, solo lectura, misma maquina). A = sin MCP (el agente usa la CLI por Bash, como dice AGENTS.md); B = con .mcp.json. La calidad es solo la presencia de los archivos o claves esperados en la respuesta (comprobacion burda, no una evaluacion). Los numeros son de una corrida y de un modelo pequeno.",
+  "adoption": [
+    {
+      "stage": "AGENTS.md solo nombra la CLI; el MCP esta conectado",
+      "runs": 4,
+      "usedMcp": 0,
+      "note": "el agente prefirio el comando que AGENTS.md le daba"
+    },
+    {
+      "stage": "AGENTS.md dice 'start si esta listada'; las herramientas MCP quedan diferidas tras ToolSearch",
+      "runs": 4,
+      "usedMcp": 1,
+      "note": "usar una herramienta diferida cuesta una vuelta de ToolSearch y la CLI no"
+    },
+    {
+      "stage": "start marcada con _meta anthropic/alwaysLoad (carga inicial)",
+      "runs": 4,
+      "usedMcp": 4,
+      "note": "tras esto, 16 de 16 en la corrida final"
+    }
+  ],
+  "final": {
+    "runsPerCondition": 16,
+    "prompts": 8,
+    "repetitions": 2,
+    "A": {
+      "turns": 4.0,
+      "seconds": 9.8,
+      "tokensMean": 94022,
+      "tokensMedian": 90744,
+      "quality": 0.94,
+      "usedMcp": "0/16",
+      "firstCallBash": 14
+    },
+    "B": {
+      "turns": 4.0,
+      "seconds": 8.5,
+      "tokensMean": 110675,
+      "tokensMedian": 91852,
+      "quality": 1.0,
+      "usedMcp": "16/16",
+      "firstCallStart": 16
+    }
+  },
+  "discarded": "32 sesiones anteriores: un bucle de shell dejo el archivo de peticiones como entrada estandar de cada sesion y cada una contesto todas. Error mio; se repitieron con la entrada aislada.",
+  "latencyMs": {
+    "cliPerCall": 215,
+    "mcpFirstCall": 157,
+    "mcpWarmCall": 20,
+    "mcpInitialize": 59,
+    "note": "el servidor conserva el indice en memoria y lo rehace solo si cambia algun archivo; la espera del modelo (segundos por vuelta) domina sobre esto"
+  },
+  "conclusion": "El MCP no empeora al agente: mismas vueltas, algo mas rapido, calidad igual o superior en esta comprobacion burda, y 16 de 16 lo usan primero. No es medible que sea mucho mejor que la CLI; su ventaja real es el descubrimiento sin configurar nada y una sola llamada. La media de tokens de B es mayor por unas pocas sesiones largas; las medianas son iguales.",
+  "behaviorPass": {
+    "about": "Ultima pasada: 14 tareas ficticias nuevas (6 genericas, 6 especificas, 2 trampas: una funcion que no existe y una pregunta fuera del repo), con el MCP, solo lectura (los agentes planifican, no ejecutan). Haiku, claude -p, una corrida.",
+    "before": {
+      "tasks": 14,
+      "edits": 0,
+      "startFirst": "10 de 14 (G6, S3, S6 y T2 no la usaron)",
+      "noAnswer": [
+        "G3",
+        "G5"
+      ],
+      "noAnswerWhy": "tareas vagas de 'investiga': se quedaron escaneando hasta agotar las vueltas (~500 k tokens)",
+      "meanTurns": 7.2,
+      "meanSeconds": 14.3,
+      "traps": "T1 dijo que ese modo no existe y que no pudo verificar nada fuera del repo; T2 dijo que no hay licencia de pago y cito donde lo lee",
+      "stackUsedForVersionQuestion": false
+    },
+    "fix": [
+      "`start` y `orient --playbook` terminan con una regla de parada (responder tras unas cinco lecturas y decir lo no verificado)",
+      "`stack` tambien se carga desde el inicio y su descripcion habla de versiones y documentacion de librerias"
+    ],
+    "after": {
+      "rerun": [
+        "G3",
+        "G5",
+        "S2",
+        "S6"
+      ],
+      "new": [
+        "V1",
+        "V2",
+        "V3"
+      ],
+      "allAnswered": true,
+      "edits": 0,
+      "G3": "13 vueltas sin respuesta -> 8 con respuesta",
+      "S2": "17 vueltas -> 8",
+      "S6": "4 busquedas -> 1 llamada a stack (2 vueltas)",
+      "G5": "sin respuesta -> respondio, pero sigue siendo la mas larga (19 vueltas, ~430 k tokens)",
+      "V1_V2_V3": "8, 9 y 2 vueltas, todas con respuesta"
+    },
+    "caveat": "G3, G5, S2 y S6 son las tareas con las que se diseno el arreglo; V1 a V3 son nuevas. Una corrida, un modelo pequeno."
+  },
+  "uiTextAndIpc": {
+    "about": "Prueba de ui_text e ipc con sesiones reales (Haiku, claude -p, solo lectura): 3 tareas de cambiar un texto de la interfaz y 3 de comandos IPC, 2 repeticiones, antes (el PR sin ellas) y despues. Una corrida; la calidad es la presencia de archivos o claves esperados (comprobacion burda: los 3 'fallos' de despues eran falsos negativos al leerlos).",
+    "ui": {
+      "before": {
+        "runs": 6,
+        "turns": 4.3,
+        "seconds": 9.3,
+        "tokensMean": 115000,
+        "quality": 1.0
+      },
+      "after": {
+        "runs": 6,
+        "turns": 3.2,
+        "seconds": 6.1,
+        "tokensMean": 82000,
+        "quality": 1.0,
+        "firstCallUiText": "6 de 6"
+      }
+    },
+    "ipc": {
+      "before": {
+        "runs": 6,
+        "turns": 5.3,
+        "seconds": 11.9,
+        "tokensMean": 127000
+      },
+      "after": {
+        "runs": 6,
+        "turns": 4.2,
+        "seconds": 7.6,
+        "tokensMean": 103000,
+        "firstCallIpc": "5 de 6"
+      }
+    },
+    "reading": "Los agentes usan las herramientas nuevas como primera llamada y bajan vueltas (-26 % y -21 %), tiempo (-34 % y -36 %) y tokens (-29 % y -19 %) sin perder calidad en esta comprobacion. En la pregunta de inconsistencias, el agente verifico igualmente con Bash tras responder ipc.",
+    "caveat": "Un modelo pequeno, una corrida, 6 sesiones por celda."
+  },
+  "entryFromSubfolder": {
+    "before": "con `node tools/orient/mcp.mjs` en .mcp.json, abrir Claude Code dentro de app/ dejaba el servidor en 'failed' (CONNECTION_CLOSED): la ruta relativa se resolvia contra la carpeta actual. `${CLAUDE_PROJECT_DIR:-.}` tampoco lo arregla (esa variable no existe en el proceso de Claude).",
+    "after": "la entrada es `git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`; git la ejecuta desde la raiz. Conectado desde app/ y desde la raiz (sesiones reales con --settings enableAllProjectMcpServers); sobrecoste ~6 ms.",
+    "caveat": "En Windows depende de que git traiga sh (Git for Windows lo trae); no se probo en Windows."
+  }
+}

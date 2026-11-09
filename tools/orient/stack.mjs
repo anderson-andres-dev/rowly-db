@@ -125,8 +125,10 @@ export function npmDependencies(pkg, lock) {
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const rustDocs = (row) => `[docs.rs](https://docs.rs/${row.name}/${row.resolved})`;
-const npmDocs = (row) => `[npm](https://www.npmjs.com/package/${row.name}/v/${row.resolved})`;
+export const rustDocsUrl = (row) => `https://docs.rs/${row.name}/${row.resolved}`;
+export const npmDocsUrl = (row) => `https://www.npmjs.com/package/${row.name}/v/${row.resolved}`;
+const rustDocs = (row) => `[docs.rs](${rustDocsUrl(row)})`;
+const npmDocs = (row) => `[npm](${npmDocsUrl(row)})`;
 const guide = (name) => (GUIDES[name] ? ` · [${GUIDES[name][0]} guide](${GUIDES[name][1]})` : "");
 const cell = (text) => text.replace(/\|/g, "\\|");
 

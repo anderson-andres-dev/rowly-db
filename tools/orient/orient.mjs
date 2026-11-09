@@ -9,7 +9,10 @@
 //   node tools/orient/orient.mjs --expand <feature>   sus archivos con simbolos (nivel 1)
 //   node tools/orient/orient.mjs --impact <ruta|feature>   quien la usa y a quien usa (nivel 2)
 //
-//   node tools/orient/orient.mjs --playbook "<peticion>"   el procedimiento del tipo de cambio (sin coincidencia: la tarjeta)
+//   node tools/orient/orient.mjs --playbook "<peticion>"   por donde empezar: el procedimiento del tipo de cambio y la tarjeta (--json: solo el procedimiento)
+//
+//   node tools/orient/orient.mjs --text "<texto>"   donde vive un texto de la interfaz (o una clave), en es y en
+//   node tools/orient/orient.mjs --ipc [filtro]   comandos IPC: Rust, registro, dueno y quien los invoca
 //
 //   --intent bug|feature|refactor|analysis|tests|modify   fuerza el tipo de tarea
 //   --budget <tokens>   tope de la tarjeta (1200 por defecto)
@@ -25,6 +28,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { BUDGET, card, expand, impact } from "./card.mjs";
 import { loadGraph } from "./graphify.mjs";
 import { loadIndex } from "./index.mjs";
+import { findText, hintsBlock, listCommands } from "./lookup.mjs";
 import { findPlaybook, playbookText } from "./playbooks.mjs";
 import { prepare, retrieve } from "./retrieve.mjs";
 
@@ -36,6 +40,7 @@ export function createOrient({ root = ROOT, useCache = true, rebuild = false, us
   const prepared = prepare(index, { useTerms });
   const graph = injected ?? (useGraph ? loadGraph(root) : null);
   return {
+    root,
     stats,
     prepared,
     graph: Boolean(graph),
@@ -77,6 +82,22 @@ export function playbookFor(request, model = loadModel()) {
   return match && ranked[0].matched.length >= 2 ? { pb: match, strong, model } : null;
 }
 
+// Sin tope, una tarea vaga ("investiga por que va lenta") se queda escaneando hasta agotar las vueltas
+// y no responde. Esta linea es la regla de AGENTS.md ("Budget") puesta donde el agente la lee.
+export const STOP_RULE = "Stop rule: this is enough to start. Read about five line ranges, then answer; if something stays unverified, say so instead of scanning on.";
+
+// La respuesta de "por donde empiezo": el procedimiento si la peticion tiene uno, y donde esta
+// (la tarjeta, con lo que el procedimiento deje del presupuesto). La usan `--playbook` y la
+// herramienta `start` del servidor MCP, para que den lo mismo en una sola llamada.
+export function startAnswer(orient, request, { budget = 2000 } = {}) {
+  const found = playbookFor(request, orient.prepared.index.model);
+  const procedure = found ? `${playbookText(found.model, found.pb)}\n---\n\n` : "";
+  // Un texto entre comillas o un comando IPC exacto en la peticion: se contestan aqui mismo.
+  const hints = hintsBlock(orient, orient.root, request);
+  const card = orient.run(request, { budget: Math.max(700, budget - Math.ceil((procedure.length + hints.length) / 4)) }).markdown;
+  return `${procedure}${hints ? `${hints}\n---\n\n` : ""}${card}\n${STOP_RULE}\n`;
+}
+
 export function playbookJson(pb, model) {
   const rules = new Map((model.rules ?? []).map((rule) => [rule.id, rule.rule]));
   return { schemaVersion: SCHEMA_VERSION, kind: "playbook", id: pb.id, title: pb.title, read: pb.read, steps: pb.steps, rules: (pb.rules ?? []).map((id) => ({ id, rule: rules.get(id) })), checks: pb.checks ?? [] };
@@ -114,15 +135,33 @@ function main(args) {
     }
     return;
   }
-  const valued = new Set(["--intent", "--budget", "--expand", "--impact", "--playbook"]);
+  const valued = new Set(["--intent", "--budget", "--expand", "--impact", "--playbook", "--text", "--ipc"]);
   const task = args.filter((arg, i) => !arg.startsWith("--") && !valued.has(args[i - 1])).join(" ").trim();
+  if (args.includes("--text") || args.includes("--ipc")) {
+    const orient = createOrient({ rebuild: args.includes("--rebuild"), useGraph: false });
+    try {
+      if (args.includes("--text")) process.stdout.write(findText(orient, ROOT, flag("--text") ?? ""));
+      else {
+        const next = flag("--ipc");
+        process.stdout.write(listCommands(orient, ROOT, next && !next.startsWith("--") ? next : ""));
+      }
+    } catch (error) {
+      console.error(error.message);
+      process.exit(2);
+    }
+    return;
+  }
   const asked = flag("--playbook");
   const request = asked && !asked.startsWith("--") ? asked : task;
   if (args.includes("--playbook") && request) {
     const found = playbookFor(request);
-    if (found) {
-      if (args.includes("--json")) console.log(JSON.stringify(playbookJson(found.pb, found.model), null, 2));
-      else process.stdout.write(playbookText(found.model, found.pb));
+    if (found && args.includes("--json")) {
+      console.log(JSON.stringify(playbookJson(found.pb, found.model), null, 2));
+      return;
+    }
+    if (!args.includes("--json")) {
+      const orient = createOrient({ rebuild: args.includes("--rebuild"), useTerms: !args.includes("--no-terms"), useGraph: !args.includes("--no-graph") });
+      process.stdout.write(startAnswer(orient, request));
       return;
     }
     process.stderr.write("Ningun playbook coincide con la peticion; esta es la tarjeta.\n");
@@ -130,7 +169,7 @@ function main(args) {
   const cardTask = task || request;
   const wantsCard = Boolean(cardTask);
   if (!wantsCard && !flag("--expand") && !flag("--impact")) {
-    console.error('Uso: orient.mjs "<tarea>" | --expand <feature> | --impact <ruta|feature>   [--intent T] [--budget N] [--json [--with-markdown]] [--log] [--no-graph] [--no-terms] [--rebuild]\n     orient.mjs --feedback good|partial|bad [nota]');
+    console.error('Uso: orient.mjs "<tarea>" | --playbook "<peticion>" | --text "<texto>" | --ipc [filtro] | --expand <feature> | --impact <ruta|feature>   [--intent T] [--budget N] [--json [--with-markdown]] [--log] [--no-graph] [--no-terms] [--rebuild]\n     orient.mjs --feedback good|partial|bad [nota]');
     process.exit(2);
   }
   const orient = createOrient({ rebuild: args.includes("--rebuild"), useTerms: !args.includes("--no-terms"), useGraph: !args.includes("--no-graph") });

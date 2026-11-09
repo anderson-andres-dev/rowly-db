@@ -13,7 +13,7 @@ Nothing here depends on a provider: the source is Markdown, JSON and Node script
 | Knowledge | The map: every feature, its files, its tests, its neighbours; search over it. | `tools/architecture/model.json` (`features`), [docs/map/FEATURES.md](map/FEATURES.md), `tools/orient/` |
 | Skills | One procedure per kind of change: what to read, steps, rules, checks. | `model.json` (`playbooks`), [docs/map/PLAYBOOKS.md](map/PLAYBOOKS.md), `.claude/skills/` and `.agents/skills/` (generated) |
 | Rules | The persistent decisions, each with its reason and the command that checks it. | `model.json` (`rules`), the block in [AGENTS.md](../AGENTS.md) |
-| Tool interface | A command line that answers "where is it, what else changes, which tests". | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, versioned `--json`) |
+| Tool interface | A command line and an MCP server that answer "where is it, what else changes, which tests". | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, versioned `--json`), `tools/orient/mcp.mjs` via `.mcp.json` |
 | Documentation | The real version of each dependency and where to read the docs of that version. | [docs/map/STACK.md](map/STACK.md), generated from the lockfiles |
 
 There is **one** curated source, `tools/architecture/model.json`. Everything else is generated from it (or from the lockfiles) and checked in CI, so nothing drifts.
@@ -29,13 +29,38 @@ There is **one** curated source, `tools/architecture/model.json`. Everything els
 
 | Agent | Entry | Note |
 | :--- | :--- | :--- |
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) and the skills in `.claude/skills/` | Claude reads `AGENTS.md` itself only when there is no `CLAUDE.md`, so the file imports it. |
+| Claude Code | `CLAUDE.md` (`@AGENTS.md`), the skills in `.claude/skills/` and the MCP server in `.mcp.json` | Claude reads `AGENTS.md` itself only when there is no `CLAUDE.md`, so the file imports it. |
 | Codex | `AGENTS.md` and the skills in `.agents/skills/` | Codex scans `.agents/skills` from the working directory to the repository root. |
 | GitHub Copilot | `AGENTS.md` | Nothing to add. |
 | Gemini CLI | `GEMINI.md`, a one-line pointer to `AGENTS.md` | |
 | Cursor and others | `AGENTS.md` if they read it; otherwise point them at it | Any agent that can run a terminal command can use `orient`. |
 
 The pointer and skill files hold no instructions of their own: they are generated and `node tools/orient/features.mjs --check` fails if they differ from the source. Details on what each vendor documents: [tools/orient/README.md](../tools/orient/README.md#how-each-agent-finds-the-entry-point).
+
+## The MCP server
+
+`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Nothing needs to be started by hand; the client launches it. The entry is a `git` alias (`git -c alias.rowly-orient=!node tools/orient/mcp.mjs rowly-orient`) on purpose: git runs it from the repository root, so it works even if you open Claude Code inside `app/` (a plain `node tools/orient/mcp.mjs` failed there; checked, and the cost is about 6 ms). Setup for Codex and others is in the [README](../README.md#working-with-ai-agents). `node tools/orient/mcp.mjs --help` explains how to register it in each client; `--check` exercises it without a client and prints the time of each call; `ORIENT_MCP_DEBUG=1` logs every call and its duration to stderr (Claude Code shows it in `/mcp`).
+
+Eight read-only tools, the same text as the command line:
+
+| Tool | Does | Command line |
+| :--- | :--- | :--- |
+| `start` | **Call first.** The procedure for the request plus where it lives (files with line ranges, tests) and a stop rule (answer after about five reads). If the request quotes a text («Ejecutar») or names an IPC command, it answers that too | `orient --playbook` |
+| `ui_text` | Where a visible interface text or i18n key lives, in Spanish or English: key, both texts, messages file and line, components that use it | `orient --text` |
+| `ipc` | Backend commands: Rust file and line, registration in `lib.rs`, frontend owner, callers; flags inconsistencies | `orient --ipc [filter]` |
+| `stack` | The resolved version of a dependency and its docs link | (see `docs/map/STACK.md`) |
+| `playbook` | Only the procedure (falls back to the card when none matches) | `orient --playbook --json` |
+| `orient` | Only the orientation card | `orient "<task>"` |
+| `expand` | The files of one feature | `orient --expand` |
+| `impact` | Who uses a file or feature | `orient --impact` |
+
+`ui_text` and `ipc` come from what Laravel Boost does for routes and docs, scaled down to what this repository needs: they answer from the same index, with no extra service. They exist because the most frequent failure in the agent trials was changing a visible text (the card did not lead to the key). `ipc` also checks that every Rust command is registered and has an owner, so it doubles as a consistency check.
+
+**It must never make an agent worse.** The command line gives the same answers, `AGENTS.md` names both, and the server is only an easier way in. Three things make it cheap:
+
+- The index stays in memory and is rebuilt only when a file of the repository changes: a call costs about 20 ms warm (the command line, about 215 ms with its own process; the model's wait per turn is seconds).
+- It warms up as soon as the client connects, so the first call finds it ready.
+- `start`, `ui_text`, `ipc` and `stack` are marked `anthropic/alwaysLoad`, which Claude Code documents for tools that should not wait behind `ToolSearch`. Without it, agents kept using the command line (0 of 4 used the server; with the tool deferred, 1 of 4). The Codex command in the README follows `codex mcp add --help`; it was not run here. Clients older than Claude Code 2.1.285 ignore the mark and the tool is still found through `ToolSearch`.
 
 ## Changing the toolkit
 
@@ -51,6 +76,6 @@ The pointer and skill files hold no instructions of their own: they are generate
 - With the full toolkit, six generic requests on a small model (Haiku, one run, read-only; [record](../tests/orient/toolkit-trial.json)) cost 4 % fewer tokens and 26 tool calls instead of 34 than at the previous state, with the same checklist met on five of six and one request (change a UI text) where the toolkit answer did not find the key or the component. None of the six used `--playbook` or a skill: the measured effect is that of the reorganized `AGENTS.md`, not of the playbooks.
 - A second run with six new requests, after making `--playbook` the first step in `AGENTS.md`: 3 % fewer tokens and 30 tool calls instead of 35 against the previous state; where running commands was allowed, 4 of 4 agents used `--playbook` (3 of 4 before, since the previous text already mentioned it). The difference is within the noise of one run. It exposed a real misrouting (a request about tests went to `sql-behavior`), fixed with a regression test.
 - Playbooks are matched by a keyword search checked against 20 phrases written by the authors, not against independent requests.
-- Not built: a documentation retrieval service or an MCP server. `orient --json` is the whole interface if you want one.
+- The MCP server, measured with real Claude Code sessions on a small model ([record](../tests/orient/mcp-trial.json); 16 sessions with it, 16 without, 8 requests twice): the agent calls `start` first 16 times out of 16; same turns (4.0), a little faster (8.5 s against 9.8 s), the expected files named in 100 % of the answers against 94 % (a crude check). Medians of tokens are equal; the mean is higher with the server because of a few long sessions. It is not measurably much better than the command line; what it adds is discovery without setup and a single call. A last pass with 14 new made-up tasks (generic, specific and two traps: a feature that does not exist and a question outside the repository), read-only so the agents only plan: no agent edited anything, the traps were answered honestly ("that mode does not exist", "there is no paid licence"), and two vague "investigate" tasks ended without an answer until `start` got a stop rule (answer after about five reads); after it, all re-run and new vague tasks answered, though the slowest still took 19 turns. A first batch of 32 sessions was discarded: my launcher fed every session the other requests. Not built: a documentation retrieval service.
 
 Measurements and limits in detail: [tools/orient/README.md](../tools/orient/README.md).
