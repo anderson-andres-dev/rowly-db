@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rowly-orient": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tools/orient/mcp.mjs"]
+    }
+  }
+}

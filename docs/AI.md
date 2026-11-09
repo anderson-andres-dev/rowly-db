@@ -13,7 +13,7 @@ Nothing here depends on a provider: the source is Markdown, JSON and Node script
 | Knowledge | The map: every feature, its files, its tests, its neighbours; search over it. | `tools/architecture/model.json` (`features`), [docs/map/FEATURES.md](map/FEATURES.md), `tools/orient/` |
 | Skills | One procedure per kind of change: what to read, steps, rules, checks. | `model.json` (`playbooks`), [docs/map/PLAYBOOKS.md](map/PLAYBOOKS.md), `.claude/skills/` and `.agents/skills/` (generated) |
 | Rules | The persistent decisions, each with its reason and the command that checks it. | `model.json` (`rules`), the block in [AGENTS.md](../AGENTS.md) |
-| Tool interface | A command line that answers "where is it, what else changes, which tests". | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, versioned `--json`) |
+| Tool interface | A command line and an MCP server that answer "where is it, what else changes, which tests". | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, versioned `--json`), `tools/orient/mcp.mjs` via `.mcp.json` |
 | Documentation | The real version of each dependency and where to read the docs of that version. | [docs/map/STACK.md](map/STACK.md), generated from the lockfiles |
 
 There is **one** curated source, `tools/architecture/model.json`. Everything else is generated from it (or from the lockfiles) and checked in CI, so nothing drifts.
@@ -29,13 +29,27 @@ There is **one** curated source, `tools/architecture/model.json`. Everything els
 
 | Agent | Entry | Note |
 | :--- | :--- | :--- |
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) and the skills in `.claude/skills/` | Claude reads `AGENTS.md` itself only when there is no `CLAUDE.md`, so the file imports it. |
+| Claude Code | `CLAUDE.md` (`@AGENTS.md`), the skills in `.claude/skills/` and the MCP server in `.mcp.json` | Claude reads `AGENTS.md` itself only when there is no `CLAUDE.md`, so the file imports it. |
 | Codex | `AGENTS.md` and the skills in `.agents/skills/` | Codex scans `.agents/skills` from the working directory to the repository root. |
 | GitHub Copilot | `AGENTS.md` | Nothing to add. |
 | Gemini CLI | `GEMINI.md`, a one-line pointer to `AGENTS.md` | |
 | Cursor and others | `AGENTS.md` if they read it; otherwise point them at it | Any agent that can run a terminal command can use `orient`. |
 
 The pointer and skill files hold no instructions of their own: they are generated and `node tools/orient/features.mjs --check` fails if they differ from the source. Details on what each vendor documents: [tools/orient/README.md](../tools/orient/README.md#how-each-agent-finds-the-entry-point).
+
+## The MCP server
+
+`.mcp.json` at the repository root declares `rowly-orient`, a stdio server (`node tools/orient/mcp.mjs`, no dependencies) that Claude Code finds by itself: the first time you open the repository it asks you to approve it, and `claude mcp list` shows it. Its instructions tell the agent to call `playbook` first. Five read-only tools return the same text as the command line:
+
+| Tool | Does |
+| :--- | :--- |
+| `playbook` | The procedure for a request (falls back to the card when none matches) |
+| `orient` | The orientation card: where, line ranges, tests |
+| `expand` | The files of one feature |
+| `impact` | Who uses a file or feature |
+| `stack` | The resolved version of a dependency and its docs link |
+
+Other agents that read an MCP configuration can run `node tools/orient/mcp.mjs` as a stdio server; the rest use the command line, which needs nothing.
 
 ## Changing the toolkit
 
@@ -51,6 +65,6 @@ The pointer and skill files hold no instructions of their own: they are generate
 - With the full toolkit, six generic requests on a small model (Haiku, one run, read-only; [record](../tests/orient/toolkit-trial.json)) cost 4 % fewer tokens and 26 tool calls instead of 34 than at the previous state, with the same checklist met on five of six and one request (change a UI text) where the toolkit answer did not find the key or the component. None of the six used `--playbook` or a skill: the measured effect is that of the reorganized `AGENTS.md`, not of the playbooks.
 - A second run with six new requests, after making `--playbook` the first step in `AGENTS.md`: 3 % fewer tokens and 30 tool calls instead of 35 against the previous state; where running commands was allowed, 4 of 4 agents used `--playbook` (3 of 4 before, since the previous text already mentioned it). The difference is within the noise of one run. It exposed a real misrouting (a request about tests went to `sql-behavior`), fixed with a regression test.
 - Playbooks are matched by a keyword search checked against 20 phrases written by the authors, not against independent requests.
-- Not built: a documentation retrieval service or an MCP server. `orient --json` is the whole interface if you want one.
+- The MCP server was checked with a real Claude Code session calling `playbook`; its usefulness to agents is not measured. Not built: a documentation retrieval service.
 
 Measurements and limits in detail: [tools/orient/README.md](../tools/orient/README.md).

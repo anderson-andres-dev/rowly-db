@@ -9,7 +9,7 @@ This file is the entry point for any coding agent. It is a map of where the cont
 1. **Playbooks**: every kind of change has a procedure (what to read, steps, rules, checks). **Run `orient --playbook "<the request>"` first** for any change.
 2. **Map**: every feature and its entry file, below. Never list directories to find one.
 3. **Rules**: the persistent decisions, each with why and the command that checks it.
-4. **Tools**: `node tools/orient/orient.mjs` (written `orient` below) answers "where is it, what else changes, which tests". Only Node and the repository.
+4. **Tools**: `node tools/orient/orient.mjs` (written `orient` below) answers "where is it, what else changes, which tests". Only Node; also an MCP server (`.mcp.json`).
 5. **Versions**: [docs/map/STACK.md](docs/map/STACK.md) has the real version of each dependency and its docs.
 
 ## The repository in one minute

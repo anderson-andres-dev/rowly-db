@@ -13,7 +13,7 @@ Nada depende de un proveedor: la fuente es Markdown, JSON y scripts de Node. Los
 | Conocimiento | El mapa: cada funcionalidad, sus archivos, sus pruebas, sus vecinas; búsqueda sobre él. | `tools/architecture/model.json` (`features`), [docs/map/FEATURES.md](map/FEATURES.md), `tools/orient/` |
 | Skills | Un procedimiento por tipo de cambio: qué leer, pasos, reglas, comprobaciones. | `model.json` (`playbooks`), [docs/map/PLAYBOOKS.md](map/PLAYBOOKS.md), `.claude/skills/` y `.agents/skills/` (generadas) |
 | Reglas | Las decisiones persistentes, cada una con su razón y el comando que la comprueba. | `model.json` (`rules`), el bloque de [AGENTS.md](../AGENTS.md) |
-| Interfaz de herramientas | Una línea de comandos que responde «dónde está, qué más cambia, qué pruebas». | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, `--json` versionado) |
+| Interfaz de herramientas | Una línea de comandos y un servidor MCP que responden «dónde está, qué más cambia, qué pruebas». | `node tools/orient/orient.mjs` (`--playbook`, `--expand`, `--impact`, `--json` versionado), `tools/orient/mcp.mjs` vía `.mcp.json` |
 | Documentación | La versión real de cada dependencia y dónde leer la documentación de esa versión. | [docs/map/STACK.md](map/STACK.md), generado desde los lockfiles |
 
 Hay **una** fuente curada, `tools/architecture/model.json`. Todo lo demás se genera desde ella (o desde los lockfiles) y se comprueba en CI, así nada se desfasa.
@@ -29,13 +29,27 @@ Hay **una** fuente curada, `tools/architecture/model.json`. Todo lo demás se ge
 
 | Agente | Entrada | Nota |
 | :--- | :--- | :--- |
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) y las skills de `.claude/skills/` | Claude lee `AGENTS.md` por sí mismo solo si no hay `CLAUDE.md`, por eso ese archivo lo importa. |
+| Claude Code | `CLAUDE.md` (`@AGENTS.md`), las skills de `.claude/skills/` y el servidor MCP de `.mcp.json` | Claude lee `AGENTS.md` por sí mismo solo si no hay `CLAUDE.md`, por eso ese archivo lo importa. |
 | Codex | `AGENTS.md` y las skills de `.agents/skills/` | Codex recorre `.agents/skills` desde el directorio de trabajo hasta la raíz del repositorio. |
 | GitHub Copilot | `AGENTS.md` | Nada que añadir. |
 | Gemini CLI | `GEMINI.md`, un puntero de una línea a `AGENTS.md` | |
 | Cursor y otros | `AGENTS.md` si lo leen; si no, indícales que lo lean | Cualquier agente que pueda ejecutar un comando de terminal puede usar `orient`. |
 
 Los archivos de puntero y las skills no llevan instrucciones propias: se generan y `node tools/orient/features.mjs --check` falla si difieren de la fuente. Lo que documenta cada proveedor, en detalle: [tools/orient/README.es.md](../tools/orient/README.es.md#cómo-encuentra-cada-agente-la-entrada).
+
+## El servidor MCP
+
+`.mcp.json` en la raíz del repositorio declara `rowly-orient`, un servidor stdio (`node tools/orient/mcp.mjs`, sin dependencias) que Claude Code encuentra solo: la primera vez que abres el repositorio te pide aprobarlo, y `claude mcp list` lo muestra. Sus instrucciones le dicen al agente que llame primero a `playbook`. Cinco herramientas de solo lectura devuelven el mismo texto que la línea de comandos:
+
+| Herramienta | Hace |
+| :--- | :--- |
+| `playbook` | El procedimiento de una petición (cae a la tarjeta si ninguno coincide) |
+| `orient` | La tarjeta de orientación: dónde, rangos de líneas, pruebas |
+| `expand` | Los archivos de una funcionalidad |
+| `impact` | Quién usa un archivo o una funcionalidad |
+| `stack` | La versión resuelta de una dependencia y el enlace a su documentación |
+
+Otros agentes que lean una configuración MCP pueden ejecutar `node tools/orient/mcp.mjs` como servidor stdio; el resto usa la línea de comandos, que no necesita nada.
 
 ## Cambiar el toolkit
 
@@ -51,6 +65,6 @@ Los archivos de puntero y las skills no llevan instrucciones propias: se generan
 - Con el toolkit completo, seis peticiones genéricas en un modelo pequeño (Haiku, una corrida, solo lectura; [registro](../tests/orient/toolkit-trial.json)) costaron un 4 % menos de tokens y 26 llamadas en vez de 34 respecto al estado anterior, con la misma lista de comprobación cumplida en cinco de seis y una petición (cambiar un texto de la UI) en la que la respuesta con el toolkit no encontró la clave ni el componente. Ninguna de las seis usó `--playbook` ni una skill: el efecto medido es el del `AGENTS.md` reorganizado, no el de los playbooks.
 - Una segunda corrida con seis peticiones nuevas, tras poner `--playbook` como primer paso en `AGENTS.md`: un 3 % menos de tokens y 30 llamadas en vez de 35 respecto al estado anterior; donde se permitía ejecutar comandos, 4 de 4 agentes usaron `--playbook` (3 de 4 antes, porque el texto anterior ya lo mencionaba). La diferencia está dentro del ruido de una corrida. Destapó un mal enrutado real (una petición sobre pruebas iba a `sql-behavior`), corregido con una prueba de regresión.
 - Los playbooks se eligen con una búsqueda por palabras comprobada con 20 frases escritas por los autores, no con peticiones independientes.
-- No se construyó: un servicio de recuperación de documentación ni un servidor MCP. `orient --json` es toda la interfaz si quieres uno.
+- El servidor MCP se comprobó con una sesión real de Claude Code llamando a `playbook`; su utilidad para los agentes no está medida. No se construyó: un servicio de recuperación de documentación.
 
 Mediciones y límites en detalle: [tools/orient/README.es.md](../tools/orient/README.es.md).

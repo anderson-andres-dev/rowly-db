@@ -66,6 +66,7 @@
         "tools/inventory/**",
         "tools/architecture/**",
         "tools/orient/**",
+        ".mcp.json",
         "tests/inventory.json",
         "tests/orient/**"
       ],
