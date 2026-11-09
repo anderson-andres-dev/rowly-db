@@ -1,7 +1,7 @@
 // Las referencias que el codigo declara entre archivos y dominios. Las usan
 // graph.mjs (dependencias entre dominios, comprobadas en CI) y tools/orient
 // (dependencias entre archivos, para decir que mas hay que mirar al tocar uno).
-import { dirname, join, normalize } from "node:path";
+import { dirname, join, normalize } from "node:path/posix";
 
 // Codigo sin pruebas ni comentarios de linea: lo que la app ejecuta.
 export function code(path, text) {

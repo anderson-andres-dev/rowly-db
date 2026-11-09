@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { code, createDomainOf, createReferences } from "../architecture/deps.mjs";
-import { covers, slug } from "./features.mjs";
+import { slug } from "./features.mjs";
 import { extractFile, isTestFile } from "./extract.mjs";
 import { tokens, words } from "./text.mjs";
 
@@ -53,7 +53,15 @@ export function buildIndex({ tracked, model, inventory, fs, cache, signature = S
   const references = createReferences(model);
   const domainOf = createDomainOf(model);
   const entries = model.features.items.flatMap((feature) => feature.entry.map((entry) => ({ feature: feature.id, entry })));
-  const featuresOf = (path) => [...new Set(entries.filter(({ entry }) => covers(entry, path)).map(({ feature }) => feature))];
+  // Funcionalidades de una ruta: las que nombran el archivo o alguna de sus carpetas. Se busca
+  // por prefijo en un mapa en vez de recorrer todas las entradas por cada archivo.
+  const byEntry = new Map();
+  for (const { feature, entry } of entries) byEntry.set(entry, [...(byEntry.get(entry) ?? []), feature]);
+  const featuresOf = (path) => {
+    const found = new Set(byEntry.get(path) ?? []);
+    for (let at = path.indexOf("/"); at >= 0; at = path.indexOf("/", at + 1)) for (const feature of byEntry.get(path.slice(0, at + 1)) ?? []) found.add(feature);
+    return [...found];
+  };
 
   const stats = { files: 0, reused: 0, parsed: 0, removed: 0 };
   const previous = cache?.signature === signature ? cache.files : {};

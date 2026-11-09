@@ -34,6 +34,10 @@ node tools/orient/hooks.mjs uninstall              # quita solo lo que puso inst
 
 Nada los instala: ningún script de npm, ningún workflow, ninguna otra herramienta. Añaden un bloque marcado a un hook de shell existente (jamás pisan un hook que no sea de shell) y no pueden hacer fallar un commit: no imprimen nada y terminan bien incluso sin Node o sin `tools/orient`. `--graphify` además corre `graphify update .` en segundo plano si Graphify está instalado.
 
+## Envolverlo para otra herramienta (MCP, skill)
+
+No se construyó, a propósito: cualquier agente que pueda ejecutar un comando de terminal ya puede usar `orient.mjs`, y un envoltorio sería una cosa más que mantener sincronizada. Si quieres uno, `orient.mjs "<tarea>" --json` es toda la interfaz (ver el contrato de arriba): un servidor MCP necesita una herramienta, `orient`, que reciba `task` (y opcionalmente `intent`, `budget`) y devuelva ese JSON o la tarjeta con `--with-markdown`; una skill es un `SKILL.md` cuyo cuerpo dice que ejecute el comando y lea la línea `Next` de la tarjeta. Guarda en el envoltorio la versión del esquema para notar un cambio de contrato.
+
 ## Cómo encuentra cada agente la entrada
 
 `AGENTS.md` es la entrada. Lo que documenta cada proveedor (según las páginas enlazadas; el estado dice hasta dónde se comprobó):
@@ -90,6 +94,24 @@ En `validation5` ambas condiciones encontraron todos los archivos; en `seen4` (g
 
 Límites de la medición: una corrida por condición y 20 tareas; los agentes trabajan sobre HEAD, donde cada arreglo ya existe, y la copia conserva los documentos de arquitectura y `tools/architecture/model.json`, que ya son un mapa; la cifra de tokens incluye unos 40 000 tokens de sobrecarga fija de cada subagente, así que los ahorros pequeños no se ven; mide localización, no resolver la tarea.
 
+
+## Portabilidad y rendimiento
+
+Usa solo la biblioteca estándar de Node y `git`; Node 20 o superior. Las rutas del repositorio se manejan como rutas con `/` en cualquier sistema, se toleran los finales de línea CRLF, y lo único que necesita un `sh` POSIX son los hooks de git opcionales (sus pruebas se omiten en Windows). El job `orient-portable` de `node.yml` ejecuta las pruebas y `eval.mjs --check` en Ubuntu, macOS y Windows con Node 20 y 22. **Se añadió aquí pero todavía no ha corrido**: hasta que corra, solo está verificado en Linux con Node 24, y las entradas de macOS y Windows son informativas (un fallo ahí no bloquea el CI) hasta que corran en verde una vez.
+
+`node tools/orient/bench.mjs` arma un repositorio sintético y lo mide. En la máquina usada (una corrida, léelo como orden de magnitud):
+
+| archivos | índice desde cero | índice con caché | una tarjeta |
+|---|---|---|---|
+| 1 000 | 0,15 s | 0,09 s | 3 ms |
+| 5 000 | 0,5 s | 0,4 s | 9 ms |
+| 20 000 | 1,7 s | 1,2 s | 36 ms |
+
+Este repositorio tiene unos 300 archivos indexados (0,1 s). El banco encontró un costo real (buscar las funcionalidades de cada archivo contra todas las entradas del catálogo) que hacía que 20 000 archivos tardaran 3,8 s; está corregido.
+
+`eval.mjs --check --strict` además falla ante cualquier caída por encima del umbral de aviso. Corre en la validación completa nocturna y manual, para que una deriva lenta no se acumule sin que nadie la vea; los pull requests mantienen la tolerancia normal.
+
+Ya no queda historial sin usar con el que armar más tareas de evaluación: cada commit que podía convertirse en tarea ya lo es. Ajustar de nuevo exige trabajo real nuevo. `--log` y `--feedback` (arriba) son la forma de recogerlo.
 
 ## Medirlo
 

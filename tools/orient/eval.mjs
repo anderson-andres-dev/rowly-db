@@ -10,6 +10,7 @@
 //   node tools/orient/eval.mjs --check-gold                 valida el conjunto de oro
 //   node tools/orient/eval.mjs --runner graphify            mide `graphify query`
 //   node tools/orient/eval.mjs --runner graphify --write    guarda tests/orient/baseline.json
+//   node tools/orient/eval.mjs --check --strict                  ademas falla ante cualquier caida por encima de `warn` (nocturno)
 //   node tools/orient/eval.mjs --report                          tabla de lo registrado: orient frente a graphify
 //   node tools/orient/eval.mjs --check                           control de regresiones (CI): compara con tests/orient/orient.json
 //   node tools/orient/eval.mjs --runner orient --split train     mide el orientador (solo train mientras se ajusta)
@@ -171,7 +172,7 @@ export function scoreNegatives(rows) {
 // Compara una medicion con la registrada. Falla solo si algo empeora mas que la tolerancia
 // de `fail`; entre `warn` y `fail` avisa. Mejorar nunca falla. Mira los totales, no tarea
 // por tarea: renombrar un archivo no debe romper el CI por una tarea.
-export function compareRecords(recorded, current, tolerance) {
+export function compareRecords(recorded, current, tolerance, { strict = false } = {}) {
   const failures = [];
   const warnings = [];
   const rules = [
@@ -193,7 +194,8 @@ export function compareRecords(recorded, current, tolerance) {
     if (worse > tol.fail) failures.push(text);
     else if (worse > tol.warn) warnings.push(text);
   }
-  return { failures, warnings };
+  // En modo estricto cualquier caida por encima de `warn` falla.
+  return strict ? { failures: [...failures, ...warnings], warnings: [] } : { failures, warnings };
 }
 
 // Tabla de Markdown con lo registrado: orient frente a la linea de graphify, por particion.
@@ -314,7 +316,7 @@ function main(args) {
     const run = RUNNERS.orient(["--no-graph"]);
     const { results, negatives, short } = measure("orient", run, gold.tasks);
     const current = { summary: summarize(results), negatives, short };
-    const { failures, warnings } = compareRecords(recorded, current, recorded.tolerance ?? DEFAULT_TOLERANCE);
+    const { failures, warnings } = compareRecords(recorded, current, recorded.tolerance ?? DEFAULT_TOLERANCE, { strict: args.includes("--strict") });
     const annotate = process.env.GITHUB_ACTIONS ? (kind, text) => `::${kind}::orient ${text}` : (kind, text) => `${kind === "error" ? "FALLA" : "aviso"}: ${text}`;
     for (const text of warnings) console.log(annotate("warning", text));
     for (const text of failures) console.error(annotate("error", text));
