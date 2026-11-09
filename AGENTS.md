@@ -6,6 +6,10 @@ This file is the entry point for any coding agent. It points to the documents th
 
 ## Find your way
 
+Start with `node tools/orient/orient.mjs "<what you were asked>"` (bug, new feature, change, refactor, tests or a question). It returns a card of about 500 tokens: the feature involved, the line ranges to read, what to reuse, what depends on it, the tests to run and whether that is enough. If the card says `PARTIAL` or `AMBIGUOUS`, go one level deeper with `--expand <feature>` (its files and symbols) or `--impact <path|feature>` (who uses it and whom it uses). It needs only Node and the repository; the optional graph below adds hints when present. The index is cached in `.orient/` and refreshes itself.
+
+The documents it draws from:
+
 1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules between domains are data in `tools/architecture/model.json` and are checked in CI.
 2. What a task names ("the grid", "the explorer", "the terminal") and the files and tests behind it: [docs/map/FEATURES.md](docs/map/FEATURES.md), generated from the `features` key of `model.json`. Add a file to the feature it belongs to; CI fails on a code file no feature lists.
 3. Which tests protect an area, with owner and CI gate: `tests/inventory.json`. A test sits next to the code it covers.

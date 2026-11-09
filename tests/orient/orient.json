@@ -1,0 +1,381 @@
+{
+  "format": 1,
+  "about": "Lo que mide el orientador sobre tests/orient/gold.json. Se regenera con `node tools/orient/eval.mjs --runner orient --write`. Los pesos de tools/orient/retrieve.mjs se ajustaron solo contra `train`; `holdout` solo se mide.",
+  "runner": "orient",
+  "variant": [
+    "--no-graph"
+  ],
+  "summary": {
+    "sufficientRate": 0.6153846153846154,
+    "sufficientOk": 1,
+    "sufficientStrong": 0.75,
+    "p95ms": 5.220771000000013,
+    "tasks": 26,
+    "recall": 0.5461538461538462,
+    "hit": 0.8846153846153846,
+    "all": 0.6745726495726494,
+    "mrr": 0.6307692307692307,
+    "tests": 0.41666666666666663,
+    "tokens": 489.96153846153845
+  },
+  "byKind": {
+    "bug": {
+      "sufficientRate": 0.42857142857142855,
+      "sufficientOk": 1,
+      "sufficientStrong": 1,
+      "p95ms": 16.36390499999999,
+      "tasks": 14,
+      "recall": 0.5833333333333334,
+      "hit": 0.7857142857142857,
+      "all": 0.6428571428571429,
+      "mrr": 0.425,
+      "tests": 0.25,
+      "tokens": 449.07142857142856
+    },
+    "feature": {
+      "sufficientRate": 0.8,
+      "sufficientOk": 1,
+      "sufficientStrong": 0.75,
+      "p95ms": 3.4041310000000067,
+      "tasks": 5,
+      "recall": 0.5599999999999999,
+      "hit": 1,
+      "all": 0.7244444444444444,
+      "mrr": 1,
+      "tests": 0.9166666666666666,
+      "tokens": 616.8
+    },
+    "refactor": {
+      "sufficientRate": 0.75,
+      "sufficientOk": 1,
+      "sufficientStrong": 0.3333333333333333,
+      "p95ms": 2.607020000000034,
+      "tasks": 4,
+      "recall": 0.4125,
+      "hit": 1,
+      "all": 0.625,
+      "mrr": 0.6125,
+      "tests": 0.3333333333333333,
+      "tokens": 576
+    },
+    "analysis": {
+      "sufficientRate": 1,
+      "sufficientOk": 1,
+      "sufficientStrong": 0.6666666666666666,
+      "p95ms": 3.0260360000000333,
+      "tasks": 3,
+      "recall": 0.5277777777777778,
+      "hit": 1,
+      "all": 0.8055555555555555,
+      "mrr": 1,
+      "tests": 0,
+      "tokens": 354.6666666666667
+    }
+  },
+  "bySplit": {
+    "train": {
+      "sufficientRate": 0.6153846153846154,
+      "sufficientOk": 1,
+      "sufficientStrong": 0.875,
+      "p95ms": 16.36390499999999,
+      "tasks": 13,
+      "recall": 0.6474358974358976,
+      "hit": 1,
+      "all": 0.7914529914529915,
+      "mrr": 0.6910256410256411,
+      "tests": 0.5151515151515151,
+      "tokens": 522.6153846153846
+    },
+    "holdout": {
+      "sufficientRate": 0.6153846153846154,
+      "sufficientOk": 1,
+      "sufficientStrong": 0.625,
+      "p95ms": 5.220771000000013,
+      "tasks": 13,
+      "recall": 0.44487179487179496,
+      "hit": 0.7692307692307693,
+      "all": 0.5576923076923076,
+      "mrr": 0.5705128205128205,
+      "tests": 0.2,
+      "tokens": 457.3076923076923
+    }
+  },
+  "tasks": [
+    {
+      "id": "issue-98-autoscroll",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 418,
+      "sufficient": true,
+      "ms": 16.36390499999999,
+      "tests": 0
+    },
+    {
+      "id": "issue-104-null",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 390,
+      "sufficient": false,
+      "ms": 3.2960350000000176,
+      "tests": 0
+    },
+    {
+      "id": "issue-105-sin-base",
+      "recall": 0.4,
+      "hit": 1,
+      "all": 0.5555555555555556,
+      "mrr": 1,
+      "tokens": 701,
+      "sufficient": false,
+      "ms": 2.4711980000000153,
+      "tests": 0.6666666666666666
+    },
+    {
+      "id": "issue-106-schemas-cortado",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.3333333333333333,
+      "tokens": 451,
+      "sufficient": true,
+      "ms": 1.8246730000000184
+    },
+    {
+      "id": "issue-107-terminal-conectada",
+      "recall": 0.6,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 591,
+      "sufficient": true,
+      "ms": 3.4041310000000067
+    },
+    {
+      "id": "pr-92-terminal-recursos",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.5,
+      "tokens": 397,
+      "sufficient": false,
+      "ms": 5.220771000000013
+    },
+    {
+      "id": "pr-87-pestana-esquina",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.25,
+      "tokens": 497,
+      "sufficient": true,
+      "ms": 1.7787190000000237
+    },
+    {
+      "id": "pr-78-portal-linux",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 408,
+      "sufficient": true,
+      "ms": 1.6365939999999455
+    },
+    {
+      "id": "pr-77-fuga-consola",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.2,
+      "tokens": 437,
+      "sufficient": false,
+      "ms": 1.8491169999999784,
+      "tests": 1
+    },
+    {
+      "id": "pr-76-resaltado-barra",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 440,
+      "sufficient": false,
+      "ms": 1.5459500000000048,
+      "tests": 0
+    },
+    {
+      "id": "pr-76-red-soporte",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.3333333333333333,
+      "tokens": 349,
+      "sufficient": true,
+      "ms": 1.6124020000000314,
+      "tests": 0
+    },
+    {
+      "id": "pr-83-terminal-panel",
+      "recall": 0.6,
+      "hit": 1,
+      "all": 0.8,
+      "mrr": 1,
+      "tokens": 593,
+      "sufficient": true,
+      "ms": 1.583985000000041,
+      "tests": 1
+    },
+    {
+      "id": "pr-82-terminal-backend",
+      "recall": 0.4,
+      "hit": 1,
+      "all": 0.6,
+      "mrr": 1,
+      "tokens": 591,
+      "sufficient": true,
+      "ms": 2.0881149999999593,
+      "tests": 1
+    },
+    {
+      "id": "pr-65-guard-final",
+      "recall": 0.3333333333333333,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 410,
+      "sufficient": false,
+      "ms": 1.5142850000000294,
+      "tests": 0
+    },
+    {
+      "id": "pr-61-primera-consola",
+      "recall": 0.6666666666666666,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 0.5,
+      "tokens": 529,
+      "sufficient": false,
+      "ms": 1.7379669999999692,
+      "tests": 0
+    },
+    {
+      "id": "pr-46-confirmar-produccion",
+      "recall": 0.6666666666666666,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 0.3333333333333333,
+      "tokens": 505,
+      "sufficient": true,
+      "ms": 2.0232540000000085
+    },
+    {
+      "id": "pr-44-nombres-citados",
+      "recall": 1,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.5,
+      "tokens": 508,
+      "sufficient": false,
+      "ms": 1.3568609999999808,
+      "tests": 1
+    },
+    {
+      "id": "pr-37-diagnosticos",
+      "recall": 0,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 548,
+      "sufficient": false,
+      "ms": 1.3170259999999985
+    },
+    {
+      "id": "pr-45-workspace-puro",
+      "recall": 0.25,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.2,
+      "tokens": 528,
+      "sufficient": false,
+      "ms": 1.5336110000000076,
+      "tests": 0.6666666666666666
+    },
+    {
+      "id": "pr-48-workspace-parte-2",
+      "recall": 0.2,
+      "hit": 1,
+      "all": 0.6,
+      "mrr": 1,
+      "tokens": 680,
+      "sufficient": true,
+      "ms": 2.3825410000000034,
+      "tests": 0
+    },
+    {
+      "id": "pr-50-editor",
+      "recall": 0.8,
+      "hit": 1,
+      "all": 0.8,
+      "mrr": 1,
+      "tokens": 662,
+      "sufficient": true,
+      "ms": 2.607020000000034,
+      "tests": 0.3333333333333333
+    },
+    {
+      "id": "pr-47-piso-compatibilidad",
+      "recall": 0.4,
+      "hit": 1,
+      "all": 0.6,
+      "mrr": 0.25,
+      "tokens": 434,
+      "sufficient": true,
+      "ms": 1.7719400000000292
+    },
+    {
+      "id": "pr-79-ajustes",
+      "recall": 0.8,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 608,
+      "sufficient": true,
+      "ms": 1.7982360000000313,
+      "tests": 1
+    },
+    {
+      "id": "analisis-mosaico",
+      "recall": 0.3333333333333333,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 1,
+      "tokens": 347,
+      "sufficient": true,
+      "ms": 3.0260360000000333
+    },
+    {
+      "id": "analisis-sentencia-destructiva",
+      "recall": 0.5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 1,
+      "tokens": 375,
+      "sufficient": true,
+      "ms": 1.714679999999987,
+      "tests": 0
+    },
+    {
+      "id": "analisis-nuevo-motor",
+      "recall": 0.75,
+      "hit": 1,
+      "all": 0.75,
+      "mrr": 1,
+      "tokens": 342,
+      "sufficient": true,
+      "ms": 1.4980429999999956
+    }
+  ]
+}

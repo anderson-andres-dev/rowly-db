@@ -10,3 +10,4 @@
 # y el workflow Graph lo publica como artefacto de CI (.github/workflows/graph.yml).
 /graphify-out/
 _site/
+/.orient/
