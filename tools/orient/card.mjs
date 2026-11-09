@@ -20,7 +20,7 @@ const INTENTS = [
 ];
 
 export function detectIntent(task) {
-  return INTENTS.find(([, pattern]) => pattern.test(task))?.[0] ?? "modify";
+  return INTENTS.find(([, pattern]) => pattern.test(task))?.[0] ?? "feature";
 }
 
 // `cargo test`, `vitest` o `node --test` segun donde viva la prueba.
@@ -201,8 +201,8 @@ function compose(prepared, result, intent, ctx, detail) {
   const subjects = primaryPaths.slice(0, intent === "refactor" ? Math.max(3, cap) : 2);
   for (const path of subjects) {
     const file = index.files.get(path);
-    const users = [...file.rdeps, ...file.callers];
-    const uses = [...file.deps, ...file.calls];
+    const users = [...new Set([...file.rdeps, ...file.callers, ...file.rustUsedBy])];
+    const uses = [...new Set([...file.deps, ...file.calls, ...file.rustUses])];
     const label = (list, n) => shown(list, n).map((item) => `\`${item.split("/").pop()}\``).join(", ") + (list.length > n ? ` +${list.length - n}` : "");
     const parts = [];
     if (users.length) parts.push(`used by ${users.length}: ${label(users, detail >= 2 ? 4 : 2)}`);
@@ -300,8 +300,8 @@ export function impact(prepared, target, budget = BUDGET * 2) {
   const uses = new Map();
   for (const path of known) {
     const file = index.files.get(path);
-    for (const other of [...file.rdeps, ...file.callers]) if (!inside.has(other)) used.set(other, [...(used.get(other) ?? []), path]);
-    for (const other of [...file.deps, ...file.calls]) if (!inside.has(other)) uses.set(other, [...(uses.get(other) ?? []), path]);
+    for (const other of [...new Set([...file.rdeps, ...file.callers, ...file.rustUsedBy])]) if (!inside.has(other)) used.set(other, [...(used.get(other) ?? []), path]);
+    for (const other of [...new Set([...file.deps, ...file.calls, ...file.rustUses])]) if (!inside.has(other)) uses.set(other, [...(uses.get(other) ?? []), path]);
   }
   const show = (title, map) => {
     lines.push(`## ${title} (${map.size})`);

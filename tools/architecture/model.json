@@ -2030,6 +2030,49 @@
           "ci-release"
         ],
         "untested": "checked by .github/scripts/check-site.py in CI, not by an inventoried test"
+      },
+      {
+        "id": "build-config",
+        "summary": "Project configuration files: Cargo workspace and app manifests, Vite, Vitest, Svelte and TypeScript config, and the Tauri configuration.",
+        "terms": {
+          "es": [
+            "cargo",
+            "tsconfig",
+            "vitest",
+            "svelte.config",
+            "tauri.conf",
+            "package.json",
+            "manifiesto"
+          ],
+          "en": [
+            "cargo",
+            "tsconfig",
+            "vitest",
+            "svelte.config",
+            "tauri.conf",
+            "package.json",
+            "manifest"
+          ]
+        },
+        "entry": [
+          "Cargo.toml",
+          "app/package.json",
+          "app/vite.config.js",
+          "app/vitest.config.ts",
+          "app/svelte.config.js",
+          "app/tsconfig.json",
+          "app/src-tauri/tauri.conf.json",
+          "app/src-tauri/tauri.release.conf.json",
+          "app/src-tauri/Cargo.toml"
+        ],
+        "docs": [
+          "CONTRIBUTING.md"
+        ],
+        "related": [
+          "ci-release",
+          "app-shell"
+        ],
+        "untested": "configuration files: checked by the build and by CI, not by an inventoried test"
       }
     ]
   }

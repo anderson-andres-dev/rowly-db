@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Tareas fuera del alcance del proyecto: no hay nada correcto que encontrar. El orientador no debe declarar SUFFICIENT; lo ideal es NO MATCH. Se usan para vigilar la falsa confianza. `split`: las primeras seis se usan al ajustar la confianza; las otras seis no se miran hasta la medicion final. Fase 5: las seis `validation` de la fase 3 pasan a `seen` (se miraron al ajustar); las neg-13 a neg-18 son `train` y neg-19 a neg-24 `validation2` (no se miran hasta el final). Fase 6: neg-19 a neg-24 pasan a `seen2`; neg-25 a neg-30 son `train` y neg-31 a neg-36 `validation3` (no se miran hasta el final).",
+  "about": "Tareas fuera del alcance del proyecto: no hay nada correcto que encontrar. El orientador no debe declarar SUFFICIENT; lo ideal es NO MATCH. Se usan para vigilar la falsa confianza. `split`: las primeras seis se usan al ajustar la confianza; las otras seis no se miran hasta la medicion final. Fase 5: las seis `validation` de la fase 3 pasan a `seen` (se miraron al ajustar); las neg-13 a neg-18 son `train` y neg-19 a neg-24 `validation2` (no se miran hasta el final). Fase 6: neg-19 a neg-24 pasan a `seen2`; neg-25 a neg-30 son `train` y neg-31 a neg-36 `validation3` (no se miran hasta el final). Fase 7b: neg-31 a neg-36 pasan a `seen3`; neg-37 a neg-42 son `train` y neg-43 a neg-48 `validation4`.",
   "tasks": [
     {
       "id": "neg-01",
@@ -155,32 +155,92 @@
     {
       "id": "neg-31",
       "task": "Controlar el aire acondicionado de la oficina desde la aplicación.",
-      "split": "validation3"
+      "split": "seen3"
     },
     {
       "id": "neg-32",
       "task": "Publicar automáticamente las consultas favoritas en una red social.",
-      "split": "validation3"
+      "split": "seen3"
     },
     {
       "id": "neg-33",
       "task": "Planificar rutas de reparto optimizando el combustible.",
-      "split": "validation3"
+      "split": "seen3"
     },
     {
       "id": "neg-34",
       "task": "Diagnosticar enfermedades a partir de las fotos de una radiografía.",
-      "split": "validation3"
+      "split": "seen3"
     },
     {
       "id": "neg-35",
       "task": "Subastar los resultados de las consultas al mejor postor.",
-      "split": "validation3"
+      "split": "seen3"
     },
     {
       "id": "neg-36",
       "task": "Teñir las pestañas con los colores de la bandera del país del usuario.",
-      "split": "validation3"
+      "split": "seen3"
+    },
+    {
+      "id": "neg-37",
+      "task": "Integrar un chatbot que conteste preguntas frecuentes de los clientes.",
+      "split": "train"
+    },
+    {
+      "id": "neg-38",
+      "task": "Calcular la huella de carbono de cada servidor del centro de datos.",
+      "split": "train"
+    },
+    {
+      "id": "neg-39",
+      "task": "Agregar un modo daltónico que reemplace los colores por patrones de texturas generadas con IA.",
+      "split": "train"
+    },
+    {
+      "id": "neg-40",
+      "task": "Traducir en vivo las reuniones de videollamada.",
+      "split": "train"
+    },
+    {
+      "id": "neg-41",
+      "task": "Registrar la asistencia de los empleados con huella digital.",
+      "split": "train"
+    },
+    {
+      "id": "neg-42",
+      "task": "Recomendar recetas según los ingredientes que haya en la nevera.",
+      "split": "train"
+    },
+    {
+      "id": "neg-43",
+      "task": "Conectar la aplicación con una impresora 3D para imprimir las tablas.",
+      "split": "seen4"
+    },
+    {
+      "id": "neg-44",
+      "task": "Predecir el precio de las acciones con una red neuronal.",
+      "split": "seen4"
+    },
+    {
+      "id": "neg-45",
+      "task": "Pedir un taxi desde la barra de estado.",
+      "split": "seen4"
+    },
+    {
+      "id": "neg-46",
+      "task": "Programar el riego automático del jardín con sensores de humedad.",
+      "split": "seen4"
+    },
+    {
+      "id": "neg-47",
+      "task": "Generar música a partir de los resultados de una consulta.",
+      "split": "seen4"
+    },
+    {
+      "id": "neg-48",
+      "task": "Verificar la identidad de los usuarios con reconocimiento facial.",
+      "split": "seen4"
     }
   ]
 }

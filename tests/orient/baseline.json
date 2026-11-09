@@ -5,49 +5,49 @@
   "graphBuiltAt": "83316038d05ecf337816b134adc6c3b77969c0f5",
   "graphNodes": 5446,
   "summary": {
-    "tasks": 113,
-    "recall": 0.06297935103244838,
-    "hit": 0.1415929203539823,
-    "precision": 0.031858407079646024,
-    "shown": 4.9734513274336285,
-    "all": 0.2548883270122208,
-    "mrr": 0.10225866225338813,
-    "tests": 0.15833333333333333,
-    "tokens": 1720.1858407079646
+    "tasks": 177,
+    "recall": 0.06205273069679849,
+    "hit": 0.12994350282485875,
+    "precision": 0.02937853107344634,
+    "shown": 4.971751412429379,
+    "all": 0.23654829163303748,
+    "mrr": 0.09334186314075595,
+    "tests": 0.12777777777777777,
+    "tokens": 1710.7627118644068
   },
   "byKind": {
     "bug": {
-      "tasks": 36,
-      "recall": 0.09259259259259259,
-      "hit": 0.1388888888888889,
-      "precision": 0.027777777777777776,
-      "shown": 4.972222222222222,
-      "all": 0.35648148148148145,
-      "mrr": 0.10751953656365422,
-      "tests": 0.11764705882352941,
-      "tokens": 1753.7222222222222
+      "tasks": 51,
+      "recall": 0.10294117647058823,
+      "hit": 0.1568627450980392,
+      "precision": 0.03529411764705882,
+      "shown": 4.96078431372549,
+      "all": 0.31862745098039214,
+      "mrr": 0.10110622749031054,
+      "tests": 0.10606060606060606,
+      "tokens": 1722.4901960784314
     },
     "feature": {
-      "tasks": 52,
-      "recall": 0.03397435897435897,
-      "hit": 0.09615384615384616,
-      "precision": 0.023076923076923075,
-      "shown": 4.961538461538462,
-      "all": 0.1217948717948718,
-      "mrr": 0.06350735886920097,
-      "tests": 0.11904761904761904,
-      "tokens": 1724.2115384615386
+      "tasks": 82,
+      "recall": 0.04532520325203252,
+      "hit": 0.10975609756097561,
+      "precision": 0.024390243902439022,
+      "shown": 4.975609756097561,
+      "all": 0.1660569105691057,
+      "mrr": 0.07879977799265346,
+      "tests": 0.1,
+      "tokens": 1695.658536585366
     },
     "refactor": {
-      "tasks": 11,
-      "recall": 0.18333333333333332,
-      "hit": 0.5454545454545454,
-      "precision": 0.12727272727272726,
+      "tasks": 14,
+      "recall": 0.14404761904761904,
+      "hit": 0.42857142857142855,
+      "precision": 0.09999999999999999,
       "shown": 5,
-      "all": 0.5441558441558442,
-      "mrr": 0.3531746031746032,
-      "tests": 0.2625,
-      "tokens": 1657.5454545454545
+      "all": 0.46564625850340136,
+      "mrr": 0.2901316937031223,
+      "tests": 0.23333333333333334,
+      "tokens": 1662.2142857142858
     },
     "analysis": {
       "tasks": 3,
@@ -61,28 +61,28 @@
       "tokens": 1652.6666666666667
     },
     "modify": {
-      "tasks": 11,
+      "tasks": 27,
       "recall": 0,
       "hit": 0,
       "precision": 0,
-      "shown": 5,
-      "all": 0.21818181818181817,
-      "mrr": 0.01868686868686869,
-      "tests": 1,
-      "tokens": 1672.4545454545455
+      "shown": 4.962962962962963,
+      "all": 0.15679012345679014,
+      "mrr": 0.020370370370370372,
+      "tests": 0.25,
+      "tokens": 1766.111111111111
     }
   },
   "bySplit": {
     "train": {
-      "tasks": 45,
-      "recall": 0.08703703703703704,
-      "hit": 0.2222222222222222,
-      "precision": 0.048888888888888885,
-      "shown": 4.977777777777778,
-      "all": 0.29153439153439153,
-      "mrr": 0.1305730319063652,
-      "tests": 0.21153846153846154,
-      "tokens": 1652.9555555555555
+      "tasks": 60,
+      "recall": 0.07777777777777778,
+      "hit": 0.2,
+      "precision": 0.043333333333333335,
+      "shown": 4.966666666666667,
+      "all": 0.23531746031746031,
+      "mrr": 0.11333381433381431,
+      "tests": 0.1896551724137931,
+      "tokens": 1651.2666666666667
     },
     "holdout": {
       "tasks": 13,
@@ -117,7 +117,7 @@
       "tests": 0,
       "tokens": 1671.85
     },
-    "validation3": {
+    "seen3": {
       "tasks": 23,
       "recall": 0.05942028985507246,
       "hit": 0.13043478260869565,
@@ -127,6 +127,28 @@
       "mrr": 0.10910864497821018,
       "tests": 0.02,
       "tokens": 1796.1739130434783
+    },
+    "seen4": {
+      "tasks": 25,
+      "recall": 0.08466666666666667,
+      "hit": 0.16,
+      "precision": 0.04,
+      "shown": 4.96,
+      "all": 0.268,
+      "mrr": 0.11920634920634923,
+      "tests": 0.07575757575757575,
+      "tokens": 1723.2
+    },
+    "validation5": {
+      "tasks": 24,
+      "recall": 0.041666666666666664,
+      "hit": 0.041666666666666664,
+      "precision": 0.008333333333333333,
+      "shown": 5,
+      "all": 0.22361111111111112,
+      "mrr": 0.04424499111999111,
+      "tests": 0,
+      "tokens": 1693.7916666666667
     }
   },
   "tasks": [
@@ -1307,6 +1329,664 @@
       "all": 0,
       "mrr": 0,
       "tokens": 1651
+    },
+    {
+      "id": "r01-12bfef8",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1662
+    },
+    {
+      "id": "r02-cb4a9cc",
+      "recall": 0,
+      "precision": 0,
+      "shown": 4,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1643,
+      "tests": 0
+    },
+    {
+      "id": "r03-41c55dd",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1669
+    },
+    {
+      "id": "r04-512793b",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1702,
+      "tests": 0
+    },
+    {
+      "id": "r05-07f0ef5",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.5,
+      "mrr": 0.16666666666666666,
+      "tokens": 1677
+    },
+    {
+      "id": "r06-d1c272d",
+      "recall": 0.5,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.5,
+      "mrr": 0.3333333333333333,
+      "tokens": 1621,
+      "tests": 0
+    },
+    {
+      "id": "r07-f998f0a",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.25,
+      "tokens": 1631,
+      "tests": 0
+    },
+    {
+      "id": "r08-d0750c5",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1669
+    },
+    {
+      "id": "r09-702513f",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.5,
+      "mrr": 0.125,
+      "tokens": 1636,
+      "tests": 0
+    },
+    {
+      "id": "r10-a781c04",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1667
+    },
+    {
+      "id": "r11-c541dea",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1636
+    },
+    {
+      "id": "r12-82838ed",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.5,
+      "mrr": 0.05,
+      "tokens": 1694
+    },
+    {
+      "id": "r13-8d67a0a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1485
+    },
+    {
+      "id": "r14-bdb977f",
+      "recall": 0.25,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.25,
+      "mrr": 0.5,
+      "tokens": 1706
+    },
+    {
+      "id": "r15-13c1bb2",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.14285714285714285,
+      "tokens": 1677
+    },
+    {
+      "id": "r16-9fe8e94",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1678,
+      "tests": 0
+    },
+    {
+      "id": "r17-c9bf339",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1658,
+      "tests": 0
+    },
+    {
+      "id": "r18-b90621c",
+      "recall": 0.2,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.4,
+      "mrr": 1,
+      "tokens": 1686,
+      "tests": 0.5
+    },
+    {
+      "id": "r19-1c2ca38",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1618
+    },
+    {
+      "id": "r20-df690e5",
+      "recall": 0.25,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.75,
+      "mrr": 0.3333333333333333,
+      "tokens": 1648
+    },
+    {
+      "id": "r21-2a56629",
+      "recall": 0.6666666666666666,
+      "precision": 0.4,
+      "shown": 5,
+      "hit": 1,
+      "all": 0.6666666666666666,
+      "mrr": 0.3333333333333333,
+      "tokens": 1647,
+      "tests": 0.3333333333333333
+    },
+    {
+      "id": "r22-198ba65",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1665
+    },
+    {
+      "id": "r23-7e1ac96",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1663
+    },
+    {
+      "id": "r24-719e36c",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1635
+    },
+    {
+      "id": "r25-84eb032",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.25,
+      "mrr": 0.1,
+      "tokens": 1665,
+      "tests": 0
+    },
+    {
+      "id": "r26-51e07a2",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1646
+    },
+    {
+      "id": "r27-0b5d181",
+      "recall": 0,
+      "precision": 0,
+      "shown": 4,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1621
+    },
+    {
+      "id": "r28-bef6b9a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1639
+    },
+    {
+      "id": "r29-f393cab",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1665,
+      "tests": 0
+    },
+    {
+      "id": "r30-60ce078",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1618,
+      "tests": 0
+    },
+    {
+      "id": "r31-ae169e4",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.2,
+      "mrr": 0.1111111111111111,
+      "tokens": 1612,
+      "tests": 0
+    },
+    {
+      "id": "r32-6e53c18",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1621
+    },
+    {
+      "id": "r33-5059cf1",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.4,
+      "mrr": 0.14285714285714285,
+      "tokens": 1703
+    },
+    {
+      "id": "r34-b914381",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.125,
+      "tokens": 1661
+    },
+    {
+      "id": "r35-f04fb26",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.25,
+      "mrr": 0.09090909090909091,
+      "tokens": 1657
+    },
+    {
+      "id": "r36-b9b636e",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 3392
+    },
+    {
+      "id": "r37-0524c44",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1646
+    },
+    {
+      "id": "r38-4e8b0b2",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1651
+    },
+    {
+      "id": "r39-ad21e1d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.2,
+      "mrr": 0.1,
+      "tokens": 1675,
+      "tests": 0
+    },
+    {
+      "id": "r40-9081c27",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1628
+    },
+    {
+      "id": "s01-3dc8700",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1698
+    },
+    {
+      "id": "s02-2513052",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1704
+    },
+    {
+      "id": "s03-9efd978",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1634
+    },
+    {
+      "id": "s04-341c2e7",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1659
+    },
+    {
+      "id": "s05-b504aa5",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1658
+    },
+    {
+      "id": "s06-7c467a3",
+      "recall": 1,
+      "precision": 0.2,
+      "shown": 5,
+      "hit": 1,
+      "all": 1,
+      "mrr": 0.3333333333333333,
+      "tokens": 1634,
+      "tests": 0
+    },
+    {
+      "id": "s07-e0ff437",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1670,
+      "tests": 0
+    },
+    {
+      "id": "s08-2fc3910",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.2,
+      "mrr": 0.09090909090909091,
+      "tokens": 1627
+    },
+    {
+      "id": "s09-a0ded77",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1635
+    },
+    {
+      "id": "s10-00419dd",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1639
+    },
+    {
+      "id": "s11-0c5a002",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1675,
+      "tests": 0
+    },
+    {
+      "id": "s12-6576b22",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1638
+    },
+    {
+      "id": "s13-396bc52",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.16666666666666666,
+      "tokens": 1641
+    },
+    {
+      "id": "s14-c46e604",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.06666666666666667,
+      "tokens": 1666
+    },
+    {
+      "id": "s15-48e8a5a",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.5,
+      "mrr": 0.1111111111111111,
+      "tokens": 1692,
+      "tests": 0
+    },
+    {
+      "id": "s16-dd803ae",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.07692307692307693,
+      "tokens": 1735
+    },
+    {
+      "id": "s17-2013f67",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1704
+    },
+    {
+      "id": "s18-6b49eb6",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 2528
+    },
+    {
+      "id": "s19-e5dd986",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1623
+    },
+    {
+      "id": "s20-7e39edb",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 1,
+      "mrr": 0.03571428571428571,
+      "tokens": 1641
+    },
+    {
+      "id": "s21-3babb3d",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1652
+    },
+    {
+      "id": "s22-0e68418",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.3333333333333333,
+      "mrr": 0.125,
+      "tokens": 1612
+    },
+    {
+      "id": "s23-a03fe3c",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0,
+      "mrr": 0,
+      "tokens": 1632
+    },
+    {
+      "id": "s24-0777ab4",
+      "recall": 0,
+      "precision": 0,
+      "shown": 5,
+      "hit": 0,
+      "all": 0.6666666666666666,
+      "mrr": 0.05555555555555555,
+      "tokens": 1654
     }
   ]
 }

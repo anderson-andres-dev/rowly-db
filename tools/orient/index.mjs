@@ -59,8 +59,10 @@ export function buildIndex({ tracked, model, inventory, fs, cache, signature = S
   const previous = cache?.signature === signature ? cache.files : {};
   const next = {};
   const files = new Map();
+  // Los archivos que una funcionalidad nombra uno por uno (configuracion) tambien se indexan.
+  const exact = new Set(entries.filter(({ entry }) => !entry.endsWith("/")).map(({ entry }) => entry));
   for (const path of tracked) {
-    if (!CODE.test(path) || isTestFile(path)) continue;
+    if (!(CODE.test(path) || exact.has(path)) || isTestFile(path)) continue;
     const owners = featuresOf(path);
     if (owners.length === 0) continue;
     const { size, mtimeMs } = fs.stat(path);
@@ -74,11 +76,18 @@ export function buildIndex({ tracked, model, inventory, fs, cache, signature = S
       stats.parsed += 1;
     }
     next[path] = { size, mtimeMs, rec };
-    files.set(path, { path, rec, domain: domainOf(path), features: owners, deps: [], rdeps: [], calls: [], callers: [], ui: "" });
+    files.set(path, { path, rec, domain: domainOf(path), features: owners, deps: [], rdeps: [], calls: [], callers: [], rustUses: [], rustUsedBy: [], ui: "" });
   }
   stats.files = files.size;
   stats.removed = Object.keys(previous).filter((path) => !(path in next)).length;
 
+  // Paquete de Cargo de cada carpeta con Cargo.toml: para `cargo test -p <paquete>`.
+  const packages = new Map(
+    tracked
+      .filter((path) => path.endsWith("/Cargo.toml"))
+      .map((path) => [path.slice(0, -"Cargo.toml".length), /^name\s*=\s*"([^"]+)"/m.exec(fs.read(path))?.[1]])
+      .filter(([, name]) => name),
+  );
   // Dependencias entre archivos: imports resueltos y comandos IPC invocados.
   const trackedSet = new Set(tracked);
   const resolve = (target) => EXTENSIONS.map((ext) => `${target}${ext}`).find((candidate) => trackedSet.has(candidate) && files.has(candidate));
@@ -87,14 +96,38 @@ export function buildIndex({ tracked, model, inventory, fs, cache, signature = S
   const link = (from, to, kind) => {
     if (!to || to === from.path) return;
     const target = files.get(to);
-    const list = kind === "ipc" ? from.calls : from.deps;
+    // Las dependencias de Rust por `use` solo alimentan Impact: en la busqueda sumaban ruido.
+    const [list, back] = kind === "ipc" ? [from.calls, target.callers] : kind === "rust" ? [from.rustUses, target.rustUsedBy] : [from.deps, target.rdeps];
     if (list.includes(to)) return;
     list.push(to);
-    (kind === "ipc" ? target.callers : target.rdeps).push(from.path);
+    back.push(from.path);
+  };
+
+  // Rust: `crate::a::b` y `khipu_x::a::b` se resuelven por el arbol de modulos hasta el archivo
+  // mas profundo que exista; un item suelto (`crate::Algo`) queda en la raiz de la crate.
+  const crateOf = (path) => [...packages.keys()].filter((dir) => path.startsWith(dir)).sort((x, y) => y.length - x.length)[0];
+  const srcOf = (head, path) => {
+    const dir = head === "crate" ? crateOf(path) : [...packages.entries()].find(([, name]) => name.replace(/-/g, "_") === head)?.[0];
+    return dir ? `${dir}src` : null;
+  };
+  const resolveRust = (path, use) => {
+    const [head, ...segments] = use.split("::");
+    const src = srcOf(head, path);
+    if (!src) return null;
+    let found = [`${src}/lib.rs`, `${src}/main.rs`].find((candidate) => files.has(candidate));
+    let dir = src;
+    for (const segment of segments) {
+      const next = [`${dir}/${segment}.rs`, `${dir}/${segment}/mod.rs`].find((candidate) => files.has(candidate));
+      if (!next) break;
+      found = next;
+      dir = `${dir}/${segment}`;
+    }
+    return found;
   };
   for (const file of files.values()) {
     for (const ref of file.rec.refs) link(file, resolve(ref), "import");
     for (const name of file.rec.invokes) link(file, commandOwner.get(name), "ipc");
+    for (const use of file.rec.uses ?? []) link(file, resolveRust(file.path, use), "rust");
   }
 
   // Textos de interfaz: lo que el usuario lee en cada archivo, en es y en.
@@ -110,13 +143,6 @@ export function buildIndex({ tracked, model, inventory, fs, cache, signature = S
     file.ui = file.rec.literals.filter((key) => keys.has(key)).map((key) => keys.get(key)).join(" ");
   }
 
-  // Paquete de Cargo de cada carpeta con Cargo.toml: para `cargo test -p <paquete>`.
-  const packages = new Map(
-    tracked
-      .filter((path) => path.endsWith("/Cargo.toml"))
-      .map((path) => [path.slice(0, -"Cargo.toml".length), /^name\s*=\s*"([^"]+)"/m.exec(fs.read(path))?.[1]])
-      .filter(([, name]) => name),
-  );
   const docs = DOCS.filter((path) => trackedSet.has(path)).flatMap((path) => headings(path, fs.read(path)));
   const testFiles = tracked.filter(isTestFile);
   const indegree = (path) => files.get(path).rdeps.length + files.get(path).callers.length;

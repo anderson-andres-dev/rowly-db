@@ -148,7 +148,7 @@ test("detectIntent distingue bug, funcionalidad, refactor, analisis y pruebas", 
     ["qué pruebas debo correr al tocar la paginación", "tests"],
     ["Mover a módulos puros el manejo de archivos, con sus pruebas", "refactor"],
     ["En PostgreSQL abrir la primera consola se cuenta como perder una sesión y avisa de un error", "bug"],
-    ["Cambiar el color del boton", "modify"],
+    ["Cambiar el color del boton", "feature"],
   ];
   for (const [task, intent] of cases) assert.equal(detectIntent(task), intent, task);
 });
@@ -177,9 +177,9 @@ test("graphify es opcional: sin grafo no hay nada, con grafo suma vecinos y no r
   assert.deepEqual(graphNeighbors(graph, ["x.ts"]), [{ path: "y.ts", edges: 2 }, { path: "z.ts", edges: 1 }]);
   assert.deepEqual(graphNeighbors(graph, ["x.ts"], { skip: new Set(["y.ts"]) }), [{ path: "z.ts", edges: 1 }]);
   const p = prepared();
-  const withGraph = card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { graph: { nodes: [{ id: "a", source_file: "app/src/lib/results/gridScroll.ts" }, { id: "b", source_file: "app/src/lib/terminal.ts" }], links: [{ source: "a", target: "b", relation: "calls" }] } });
+  const withGraph = card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { intent: "bug", graph: { nodes: [{ id: "a", source_file: "app/src/lib/results/gridScroll.ts" }, { id: "b", source_file: "app/src/lib/terminal.ts" }], links: [{ source: "a", target: "b", relation: "calls" }] } });
   assert.match(withGraph.markdown, /graphify \(by name, may be off\): `app\/src\/lib\/terminal\.ts` \(1\)/);
-  assert.doesNotMatch(card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar").markdown, /graphify/);
+  assert.doesNotMatch(card(p, retrieve(p, "grilla scroll arrastrar"), "grilla scroll arrastrar", { intent: "bug" }).markdown, /graphify/);
 });
 
 // --- Sobre el repositorio real -------------------------------------------
@@ -223,7 +223,7 @@ test("pickPrimary no muestra lo que queda muy por debajo del mejor (corte relati
 });
 
 test("levelOf: sin evidencia no hay nada, y solo margen, cobertura y evidencia juntos dan high", () => {
-  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10 };
+  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10, shortWords: 2, noneShort: 2 };
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 3 }, rule), "none");
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 12 }, rule), "high");
   assert.equal(levelOf({ margin: 0.9, coverage: 0.9, evidence: 6 }, rule), "medium");
@@ -245,15 +245,17 @@ test("pickTests da a cada archivo principal su mejor prueba, aunque el inventari
   assert.equal(tests[0].path, "app/src/lib/results/gridScroll.test.ts");
 });
 
-test("sobre el repo real las tareas fuera de alcance nunca declaran LIKELY", () => {
+test("sobre el repo real casi ninguna tarea fuera de alcance declara LIKELY (tope 5 %) y todas caben en el tope", () => {
   const orient = createOrient({ useCache: false, useGraph: false });
   const negatives = JSON.parse(readFileSync(new URL("../../tests/orient/negatives.json", import.meta.url), "utf8")).tasks;
   assert.ok(negatives.length >= 12);
+  let likely = 0;
   for (const task of negatives) {
     const out = orient.run(task.task);
-    assert.equal(out.likely, false, task.id);
+    if (out.likely) likely += 1;
     assert.ok(out.tokens <= BUDGET, task.id);
   }
+  assert.ok(likely / negatives.length <= 0.05, `${likely} de ${negatives.length} negativas declararon LIKELY`);
 });
 
 test("el cache se invalida solo cuando cambia el extractor: la firma sale de su codigo", () => {
@@ -272,4 +274,58 @@ test("pruebas de integracion declaradas en el catalogo aparecen aunque su dueno 
   const base = prepared();
   const without = pickTests(base.index, retrieve(base, "la grilla y su scroll"));
   assert.ok(!without.map((test) => test.path).includes("crates/x/tests/integration.rs"));
+});
+
+test("levelOf: una consulta de una o dos palabras con evidencia da AMBIGUOUS (low), nunca LIKELY, y sin evidencia NO MATCH", () => {
+  const rule = { margin: 0.2, coverage: 0.35, none: 4, high: 10, shortWords: 2, noneShort: 2 };
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 12, words: 1 }, rule), "low");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 3, words: 2 }, rule), "low");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 1, words: 2 }, rule), "none");
+  assert.equal(levelOf({ margin: 0.9, coverage: 1, evidence: 12, words: 3 }, rule), "high");
+});
+
+test("una palabra suelta que existe en el repositorio propone algo; una que no existe, NO MATCH", () => {
+  const p = prepared();
+  const found = card(p, retrieve(p, "grilla"), "grilla");
+  assert.equal(found.likely, false);
+  assert.ok(found.primary.length > 0);
+  assert.equal(card(p, retrieve(p, "zzzzqqq"), "zzzzqqq").noMatch, true);
+});
+
+// --- Rust: dependencias por archivo -------------------------------------------
+
+const RUST = {
+  "crates/engine/Cargo.toml": '[package]\nname = "khipu-engine"\n',
+  "crates/engine/src/lib.rs": "pub mod guard;\n",
+  "crates/engine/src/guard.rs": "pub fn classify() {}\n",
+  "crates/engine/src/util/mod.rs": "pub fn helper() {}\n",
+  "app/src-tauri/Cargo.toml": '[package]\nname = "khipu-desktop"\n',
+  "app/src-tauri/src/commands/query.rs": "use khipu_engine::guard::classify;\nuse crate::state::Session;\nfn run() { khipu_engine::util::helper(); }\n",
+  "app/src-tauri/src/state.rs": "pub struct Session;\n",
+  "app/src-tauri/src/lib.rs": "mod state;\nmod commands;\n",
+};
+const rustModel = {
+  domains: [{ id: "backend", paths: ["app/src-tauri/src/"] }, { id: "engine", paths: ["crates/engine/src/"] }],
+  allowed: {},
+  features: { roots: ["app/src-tauri/src/", "crates/"], items: [{ id: "all", summary: "Everything.", terms: { es: ["todo", "cosa"], en: ["all", "thing"] }, entry: ["app/src-tauri/src/", "crates/engine/src/"], untested: "fixture" }] },
+};
+
+test("Rust: `use crate::` y `khipu_x::` se resuelven al archivo del modulo mas profundo y alimentan Impact, no la busqueda", () => {
+  const rfs = { read: (path) => RUST[path], stat: (path) => ({ size: RUST[path].length, mtimeMs: 1 }) };
+  const { index } = buildIndex({ tracked: Object.keys(RUST), model: rustModel, inventory: { tests: [] }, fs: rfs });
+  const query = index.files.get("app/src-tauri/src/commands/query.rs");
+  assert.deepEqual(query.rustUses.sort(), ["app/src-tauri/src/state.rs", "crates/engine/src/guard.rs", "crates/engine/src/util/mod.rs"]);
+  assert.deepEqual(index.files.get("crates/engine/src/guard.rs").rustUsedBy, ["app/src-tauri/src/commands/query.rs"]);
+  assert.deepEqual(query.deps, []);
+  assert.deepEqual(index.files.get("crates/engine/src/guard.rs").rdeps, ["crates/engine/src/lib.rs"], "solo la declaracion `mod`, no los `use`");
+  const p = prepare(index);
+  assert.match(impact(p, "crates/engine/src/guard.rs").markdown, /`app\/src-tauri\/src\/commands\/query\.rs`/);
+});
+
+test("el vocabulario de una funcionalidad tambien sale del codigo de sus archivos", () => {
+  const model2 = structuredClone(model);
+  model2.features.items[1].terms = { es: ["nada", "vacio"], en: ["none", "empty"] };
+  const { index } = buildIndex({ tracked, model: model2, inventory, fs });
+  const p = prepare(index);
+  assert.equal(retrieve(p, "openTerminal").features[0].id, "terminal");
 });

@@ -39,9 +39,10 @@ import { createOrient } from "./orient.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLD = join(ROOT, "tests/orient/gold.json");
 const NEGATIVES = join(ROOT, "tests/orient/negatives.json");
+const SHORT = join(ROOT, "tests/orient/short.json");
 const OUT = { graphify: join(ROOT, "tests/orient/baseline.json"), orient: join(ROOT, "tests/orient/orient.json") };
 const KINDS = ["bug", "feature", "refactor", "analysis", "modify"];
-const SPLITS = ["train", "holdout", "seen", "seen2", "validation3"];
+const SPLITS = ["train", "holdout", "seen", "seen2", "seen3", "seen4", "validation5"];
 const TOP = 5;
 
 // Un archivo de prueba: por nombre o por carpeta, salvo que la tarea lo cuente
@@ -181,6 +182,7 @@ export function compareRecords(recorded, current, tolerance) {
     ["likelyStrong", "LIKELY fuerte", current.summary.likelyStrong, recorded.summary.likelyStrong, "down"],
     ["falseLikely", "falsa confianza", current.negatives?.falseLikely, recorded.negatives?.falseLikely, "up"],
     ["tokens", "tokens", current.summary.tokens, recorded.summary.tokens, "up-relative"],
+    ["short", "consultas cortas hit@5", current.short?.hit, recorded.short?.hit, "down"],
   ];
   for (const [key, label, now, before, direction] of rules) {
     if (now === undefined || now === null || before === undefined || before === null) continue;
@@ -208,6 +210,17 @@ export function report(orient, baseline) {
   const n = orient.negatives;
   if (n) lines.push("", `Out-of-scope tasks (${n.tasks}): false LIKELY ${p(n.falseLikely)}, NO MATCH ${p(n.noMatch)}.`);
   return `${lines.join("\n")}\n`;
+}
+
+export function loadShort() {
+  return JSON.parse(readFileSync(SHORT, "utf8")).tasks;
+}
+
+// Consultas de una o dos palabras: lo que importa es que no acaben en NO MATCH y que algun
+// archivo correcto este entre los propuestos.
+export function scoreShort(rows) {
+  const n = rows.length || 1;
+  return { tasks: rows.length, hit: rows.filter((row) => row.hit).length / n, noMatch: rows.filter((row) => row.noMatch).length / n };
 }
 
 export function loadGold() {
@@ -251,9 +264,10 @@ export const DEFAULT_TOLERANCE = {
   likelyStrong: { warn: 0.05, fail: 0.12 },
   falseLikely: { warn: 0.05, fail: 0.15 },
   tokens: { warn: 0.15, fail: 0.5 },
+  short: { warn: 0.1, fail: 0.25 },
 };
 
-const NEGATIVE_SPLITS = ["train", "seen", "seen2", "validation3"];
+const NEGATIVE_SPLITS = ["train", "seen", "seen2", "seen3", "seen4"];
 
 function measure(name, run, tasks, only = null) {
   const results = tasks.map((task) => ({ task, ...score(task, run(task)) }));
@@ -264,7 +278,17 @@ function measure(name, run, tasks, only = null) {
     const rows = loadNegatives().filter((task) => !only || task.split === only).map((task) => ({ split: task.split, ...run(task) }));
     negatives = { ...scoreNegatives(rows), bySplit: Object.fromEntries(NEGATIVE_SPLITS.filter((part) => rows.some((row) => row.split === part)).map((part) => [part, scoreNegatives(rows.filter((row) => row.split === part))])) };
   }
-  return { results, negatives };
+  let short = null;
+  if (name === "orient") {
+    const rows = loadShort()
+      .filter((task) => !only || task.split === only)
+      .map((task) => {
+        const out = run(task);
+        return { hit: task.files.some((path) => (out.primary ?? []).includes(path)), noMatch: Boolean(out.noMatch) };
+      });
+    short = scoreShort(rows);
+  }
+  return { results, negatives, short };
 }
 
 function main(args) {
@@ -288,8 +312,8 @@ function main(args) {
   if (args.includes("--check")) {
     const recorded = JSON.parse(readFileSync(OUT.orient, "utf8"));
     const run = RUNNERS.orient(["--no-graph"]);
-    const { results, negatives } = measure("orient", run, gold.tasks);
-    const current = { summary: summarize(results), negatives };
+    const { results, negatives, short } = measure("orient", run, gold.tasks);
+    const current = { summary: summarize(results), negatives, short };
     const { failures, warnings } = compareRecords(recorded, current, recorded.tolerance ?? DEFAULT_TOLERANCE);
     const annotate = process.env.GITHUB_ACTIONS ? (kind, text) => `::${kind}::orient ${text}` : (kind, text) => `${kind === "error" ? "FALLA" : "aviso"}: ${text}`;
     for (const text of warnings) console.log(annotate("warning", text));
@@ -310,13 +334,13 @@ function main(args) {
   const name = args[args.indexOf("--runner") + 1];
   const runner = RUNNERS[name];
   if (!args.includes("--runner") || !runner) {
-    console.error(`Uso: eval.mjs --check-gold | --check | --report | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|seen|seen2|validation3] [--verbose] [--write]`);
+    console.error(`Uso: eval.mjs --check-gold | --check | --report | --runner <${Object.keys(RUNNERS).join("|")}> [--split train|holdout|seen|seen2|seen3|seen4|validation5] [--verbose] [--write]`);
     process.exit(2);
   }
   const split = args.includes("--split") ? args[args.indexOf("--split") + 1] : null;
   const tasks = gold.tasks.filter((task) => !split || task.split === split);
 
-  const { results, negatives } = measure(name, runner(args), tasks, split);
+  const { results, negatives, short } = measure(name, runner(args), tasks, split);
   console.log(`Runner: ${name}${split ? ` · ${split}` : ""}`);
   console.log(`${"".padEnd(10)} ${"n".padStart(3)}  ${`rec@${TOP}`.padEnd(5)} prec  ${`hit@${TOP}`.padEnd(5)} todo  MRR   tests  tokens  shown`);
   console.log(row("todas", summarize(results)));
@@ -335,6 +359,7 @@ function main(args) {
     const part = (name) => (negatives.bySplit[name] ? ` · ${name} ${pct(negatives.bySplit[name].falseLikely).trim()}/${pct(negatives.bySplit[name].noMatch).trim()}` : "");
     console.log(`negativas (${negatives.tasks}): falsa confianza ${pct(negatives.falseLikely).trim()} · NO MATCH ${pct(negatives.noMatch).trim()} · ${Math.round(negatives.tokens)} tokens · (falsa confianza/NO MATCH)${NEGATIVE_SPLITS.map(part).join("")}`);
   }
+  if (short) console.log(`cortas (${short.tasks}): hit@5 ${pct(short.hit).trim()} · NO MATCH ${pct(short.noMatch).trim()}`);
   if (args.includes("--verbose")) {
     for (const result of results) {
       console.log(`${result.task.id.padEnd(34)} rec ${pct(result.recall)} prec ${pct(result.precision)} mrr ${result.mrr.toFixed(2)} tokens ${result.tokens}${result.likely === undefined ? "" : result.likely ? " basta" : ""}`);
@@ -357,6 +382,7 @@ function main(args) {
       ...(graph ? { graphBuiltAt: graph.built_at_commit ?? null, graphNodes: graph.nodes.length } : { variant: args.filter((arg) => arg.startsWith("--no-")), tolerance }),
       summary: summarize(results),
       ...(negatives ? { negatives } : {}),
+      ...(short ? { short } : {}),
       byKind: Object.fromEntries(KINDS.map((kind) => [kind, summarize(results.filter((result) => result.task.kind === kind))])),
       bySplit: Object.fromEntries(SPLITS.map((part) => [part, summarize(results.filter((result) => result.task.split === part))])),
       tasks: results.map(({ task, ...metrics }) => ({ id: task.id, ...metrics })),
