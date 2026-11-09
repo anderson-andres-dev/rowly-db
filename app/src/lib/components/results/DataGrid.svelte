@@ -1891,11 +1891,20 @@
 
 
   $effect(() => {
+    // pointerup solo no alcanza: si el soltar se pierde (pointercancel,
+    // soltar fuera de la ventana, menu contextual) el arrastre quedaria
+    // activo y el autoscroll seguiria al puntero sin ningun clic.
     function onGlobalPointerUp() {
       isDragSelecting = false;
     }
     window.addEventListener("pointerup", onGlobalPointerUp);
-    return () => window.removeEventListener("pointerup", onGlobalPointerUp);
+    window.addEventListener("pointercancel", onGlobalPointerUp);
+    window.addEventListener("blur", onGlobalPointerUp);
+    return () => {
+      window.removeEventListener("pointerup", onGlobalPointerUp);
+      window.removeEventListener("pointercancel", onGlobalPointerUp);
+      window.removeEventListener("blur", onGlobalPointerUp);
+    };
   });
 
   // Arrastrando fuera del area de celdas, la vista sigue de largo y la
@@ -1908,6 +1917,11 @@
     let frame = 0;
     let moved = false;
     function onMove(event: PointerEvent) {
+      // Sin boton apretado ya no hay arrastre, aunque no llegara el soltar.
+      if (event.buttons === 0) {
+        isDragSelecting = false;
+        return;
+      }
       moved = true;
       x = event.clientX;
       y = event.clientY;

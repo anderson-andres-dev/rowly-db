@@ -39,6 +39,7 @@
   import { initLocaleEffects, t } from "$lib/i18n";
   import { checkOnStartup, newerRelease } from "$lib/stores/updates";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import WindowResizeEdges from "$lib/components/WindowResizeEdges.svelte";
   import { fade } from "svelte/transition";
   import {
     ArrowLeft,
@@ -371,6 +372,8 @@
     window.removeEventListener("contextmenu", blockNativeContextMenu);
   });
 </script>
+
+<WindowResizeEdges />
 
 <div class="shell" class:with-sidebar={$connection.connected} class:resizing-sidebar={dragWidth !== null}>
   <!-- El color de la conexion activa tiñe la barra con un degradado que
