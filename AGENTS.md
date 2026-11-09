@@ -31,7 +31,7 @@ Budget: have a plan after about five files. If the map and the card do not answe
 
 Each line is `feature` — what it is → its main file or folder. Generated from `tools/architecture/model.json` (`node tools/orient/features.mjs --write`); the full table with terms, tests and neighbours is [docs/map/FEATURES.md](docs/map/FEATURES.md) (read its index only).
 
-<!-- generated: map (tools/orient/features.mjs) -->
+<!-- generated: map (tools/orient/blocks.mjs) -->
 - `connection-profiles` — Saved connections → `app/src/lib/components/ConnectionForm.svelte`
 - `explorer-tree` — The database explorer → `app/src/lib/components/SchemaTree.svelte`
 - `sql-editor` — The SQL editor itself → `app/src/lib/SqlEditor.svelte`
@@ -81,15 +81,26 @@ Each line is `feature` — what it is → its main file or folder. Generated fro
 3. Which tests protect an area: `tests/inventory.json`. A test sits next to the code it covers.
 4. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
 
-## Rules that are easy to break
+## Rules
 
-- Branch off `develop` and open the pull request into `develop`. `main` and `develop` take no direct pushes.
-- Blocks between `<!-- generated: ... -->` markers are written by tools (`node tools/architecture/graph.mjs --write`, `node tools/inventory/status.mjs --write`, `node tools/orient/features.mjs --write`). Never edit them by hand.
-- Every test file needs an entry in `tests/inventory.json`; `node tools/inventory/tests.mjs --check` fails until it has one. Every code file belongs to a feature in `model.json`; CI fails on one that none lists.
-- Text the user sees goes through `app/src/lib/i18n/messages/` (Spanish and English), not inline strings.
-- Common code never names a concrete engine: engine-specific code lives in its own domain (see ARCHITECTURE, "Where engine-specific code may live").
-- Dependencies are published releases only: no forks, git dependencies or patches (`node tools/inventory/dependencies.mjs`).
-- Docs that have a Spanish pair (`*.es.md`) change together with it.
+Persistent decisions, each with why it exists and the command that checks it (generated from `tools/architecture/model.json`).
+
+<!-- generated: rules (tools/orient/blocks.mjs) -->
+- **branch-flow** — Branch off `develop` and open the pull request into `develop`; `main` and `develop` take no direct pushes. *Why:* Releases come from `main`; `develop` is where the work meets.
+- **generated-blocks** — Never edit by hand what sits between `<!-- generated: ... -->` markers; rerun the tool with `--write`. *Why:* A tool rewrites it and CI fails when it is stale. Check: `node tools/architecture/graph.mjs --check`.
+- **tests-in-inventory** — Every test file has an entry in `tests/inventory.json` (owner, property, risk, gate). *Why:* The inventory is how CI and agents find what protects what. Check: `node tools/inventory/tests.mjs --check`.
+- **code-in-a-feature** — Every code file belongs to a feature in `tools/architecture/model.json`. *Why:* The catalogue is the map agents start from. Check: `node tools/orient/features.mjs --check`.
+- **i18n-texts** — Text the user sees goes through `app/src/lib/i18n/messages/` in Spanish and English, never inline. *Why:* TypeScript requires every language to have the same keys. Check: `cd app && npm run check`.
+- **engine-neutral-common-code** — Common code never names a concrete engine; engine-specific code lives in its own domain. *Why:* Engines differ as declared data, so adding one leaves shared code alone. Check: `node tools/architecture/graph.mjs --check`.
+- **published-deps-only** — Dependencies are published releases only: no forks, git dependencies or patches. *Why:* A missing upstream feature is a documented gap, never a fork. Check: `node tools/inventory/dependencies.mjs`.
+- **spanish-pairs** — Docs that have a Spanish pair (`*.es.md`) change together with it. *Why:* The two languages must not drift apart.
+- **one-owner-per-command** — A new backend command is registered in `lib.rs` and added with its single owner module to `app/src/lib/backend.test.ts`. *Why:* Each IPC command has one owner and the test pins the list. Check: `cd app && npx vitest run src/lib/backend.test.ts`.
+- **one-owner-per-state** — Each piece of state has one owner; others read it through its interface and keep no second mutable copy. *Why:* Connection, catalog, execution, tabs and editor live for different spans.
+- **one-path-to-run-sql** — SQL runs through one path (classify, confirm, execute); the UI never decides whether a statement is safe, the backend guard does. *Why:* Editor, history, table and paging must not each reimplement safety.
+- **proportional-work** — Work is proportional to what is visible, and optional costs fall on whoever enables them. *Why:* The grid is a virtual window; more tabs must not multiply listeners or queries.
+- **names** — Rowly DB is the product and what the user sees; Khipu is the internal engine name (crates, identifiers, settings keys). *Why:* Renaming internals would break settings and crates for no gain.
+- **small-entry-file** — Keep `AGENTS.md` under 14 000 characters: it is loaded in every session. *Why:* Every token there is paid on every request. Check: `node --test tools/orient/coherence.test.mjs`.
+<!-- /generated: rules -->
 
 ## Checks
 

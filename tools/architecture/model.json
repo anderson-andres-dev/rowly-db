@@ -2075,5 +2075,109 @@
         "untested": "configuration files: checked by the build and by CI, not by an inventoried test"
       }
     ]
-  }
+  },
+  "rules": [
+    {
+      "id": "branch-flow",
+      "rule": "Branch off `develop` and open the pull request into `develop`; `main` and `develop` take no direct pushes.",
+      "why": "Releases come from `main`; `develop` is where the work meets.",
+      "docs": [
+        "CONTRIBUTING.md#workflow"
+      ]
+    },
+    {
+      "id": "generated-blocks",
+      "rule": "Never edit by hand what sits between `<!-- generated: ... -->` markers; rerun the tool with `--write`.",
+      "why": "A tool rewrites it and CI fails when it is stale.",
+      "check": "node tools/architecture/graph.mjs --check",
+      "docs": [
+        "CONTRIBUTING.md#workflow"
+      ]
+    },
+    {
+      "id": "tests-in-inventory",
+      "rule": "Every test file has an entry in `tests/inventory.json` (owner, property, risk, gate).",
+      "why": "The inventory is how CI and agents find what protects what.",
+      "check": "node tools/inventory/tests.mjs --check"
+    },
+    {
+      "id": "code-in-a-feature",
+      "rule": "Every code file belongs to a feature in `tools/architecture/model.json`.",
+      "why": "The catalogue is the map agents start from.",
+      "check": "node tools/orient/features.mjs --check"
+    },
+    {
+      "id": "i18n-texts",
+      "rule": "Text the user sees goes through `app/src/lib/i18n/messages/` in Spanish and English, never inline.",
+      "why": "TypeScript requires every language to have the same keys.",
+      "check": "cd app && npm run check"
+    },
+    {
+      "id": "engine-neutral-common-code",
+      "rule": "Common code never names a concrete engine; engine-specific code lives in its own domain.",
+      "why": "Engines differ as declared data, so adding one leaves shared code alone.",
+      "check": "node tools/architecture/graph.mjs --check",
+      "docs": [
+        "docs/ARCHITECTURE.md#where-engine-specific-code-may-live"
+      ]
+    },
+    {
+      "id": "published-deps-only",
+      "rule": "Dependencies are published releases only: no forks, git dependencies or patches.",
+      "why": "A missing upstream feature is a documented gap, never a fork.",
+      "check": "node tools/inventory/dependencies.mjs"
+    },
+    {
+      "id": "spanish-pairs",
+      "rule": "Docs that have a Spanish pair (`*.es.md`) change together with it.",
+      "why": "The two languages must not drift apart."
+    },
+    {
+      "id": "one-owner-per-command",
+      "rule": "A new backend command is registered in `lib.rs` and added with its single owner module to `app/src/lib/backend.test.ts`.",
+      "why": "Each IPC command has one owner and the test pins the list.",
+      "check": "cd app && npx vitest run src/lib/backend.test.ts",
+      "docs": [
+        "CONTRIBUTING.md#workflow"
+      ]
+    },
+    {
+      "id": "one-owner-per-state",
+      "rule": "Each piece of state has one owner; others read it through its interface and keep no second mutable copy.",
+      "why": "Connection, catalog, execution, tabs and editor live for different spans.",
+      "docs": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ]
+    },
+    {
+      "id": "one-path-to-run-sql",
+      "rule": "SQL runs through one path (classify, confirm, execute); the UI never decides whether a statement is safe, the backend guard does.",
+      "why": "Editor, history, table and paging must not each reimplement safety.",
+      "docs": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ]
+    },
+    {
+      "id": "proportional-work",
+      "rule": "Work is proportional to what is visible, and optional costs fall on whoever enables them.",
+      "why": "The grid is a virtual window; more tabs must not multiply listeners or queries.",
+      "docs": [
+        "docs/ARCHITECTURE.md#rules-for-the-app"
+      ]
+    },
+    {
+      "id": "names",
+      "rule": "Rowly DB is the product and what the user sees; Khipu is the internal engine name (crates, identifiers, settings keys).",
+      "why": "Renaming internals would break settings and crates for no gain.",
+      "docs": [
+        "CONTRIBUTING.md#names"
+      ]
+    },
+    {
+      "id": "small-entry-file",
+      "rule": "Keep `AGENTS.md` under 14 000 characters: it is loaded in every session.",
+      "why": "Every token there is paid on every request.",
+      "check": "node --test tools/orient/coherence.test.mjs"
+    }
+  ]
 }
