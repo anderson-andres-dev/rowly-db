@@ -44,7 +44,7 @@ node tools/inventory/status.mjs             # generated state of README and SQL_
 node tools/architecture/graph.mjs --check   # dependencies allowed and architecture graph up to date
 ```
 
-Blocks between `<!-- generated: … -->` markers are written by those tools; never edit them by hand. `status.mjs --write` and `graph.mjs --write` regenerate them. `graphify-out/` is the exploratory symbol graph; refresh it with `graphify update .` when you change code, if you have [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` on PyPI) installed.
+Blocks between `<!-- generated: … -->` markers are written by those tools; never edit them by hand. `status.mjs --write` and `graph.mjs --write` regenerate them. `graphify-out/` is the optional exploratory symbol graph. It is not versioned: build it with `graphify update .` if you have [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` on PyPI) installed, or download the `graphify-out` artifact of the `Graph` workflow, which rebuilds it from `develop`. Agents start from [AGENTS.md](AGENTS.md).
 
 CI runs the same gate with Rust 1.90 (`.github/workflows/rust.yml`, on the packages a change touches and those that depend on them; see `tools/ci/README.md`); a newer local clippy can miss a lint that 1.90 reports, so `cargo +1.90 clippy --workspace --all-targets -- -D warnings` reproduces it exactly. Every test file needs an entry in `tests/inventory.json` with its owner, the property it protects, its risk, its gate and a decision; the `--check` fails until it has one.
 

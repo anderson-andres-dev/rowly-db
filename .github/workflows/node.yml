@@ -100,5 +100,8 @@ jobs:
       - name: Las versiones verificadas son las de la ventana de soporte (SQL_ENGINE §5.2)
         run: node tools/test-dbs/window.mjs
 
+      - name: El conjunto de oro del orientador apunta a archivos que existen
+        run: node tools/orient/eval.mjs --check-gold
+
       - name: Evidencia de la release, latest.json y el planner de CI
-        run: node --test tools/test-dbs/*.test.mjs tools/ci/*.test.mjs tools/release/*.test.mjs
+        run: node --test tools/test-dbs/*.test.mjs tools/ci/*.test.mjs tools/release/*.test.mjs tools/orient/*.test.mjs

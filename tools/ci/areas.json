@@ -43,7 +43,6 @@
         "LICENSE*",
         ".gitignore",
         ".claude/**",
-        "graphify-out/**",
         "tools/bench/**",
         "tools/site-shots/**",
         "tools/engine/**",
@@ -65,7 +64,9 @@
       "paths": [
         "tools/inventory/**",
         "tools/architecture/**",
-        "tests/inventory.json"
+        "tools/orient/**",
+        "tests/inventory.json",
+        "tests/orient/**"
       ],
       "checks": {}
     },
