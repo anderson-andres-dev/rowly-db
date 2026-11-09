@@ -173,7 +173,7 @@ The procedure for each kind of change: what to read, what to do, which rules mat
 
 ## add-tests
 
-**Add or fix tests.** Asked as: "add tests", "write tests", "cover with tests", "failing test", "how to run the tests".
+**Add or fix tests.** Asked as: "add tests", "write tests", "cover with tests", "failing test", "how to run the tests", "add tests for a module", "where the tests go and what to register".
 
 ### Read first
 

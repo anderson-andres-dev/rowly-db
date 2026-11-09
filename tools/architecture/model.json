@@ -2427,14 +2427,18 @@
           "escribir tests",
           "cubrir con pruebas",
           "prueba que falla",
-          "cómo correr las pruebas"
+          "cómo correr las pruebas",
+          "añadir pruebas para un módulo",
+          "dónde van las pruebas y qué registrar"
         ],
         "en": [
           "add tests",
           "write tests",
           "cover with tests",
           "failing test",
-          "how to run the tests"
+          "how to run the tests",
+          "add tests for a module",
+          "where the tests go and what to register"
         ]
       },
       "read": [
