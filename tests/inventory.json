@@ -2,8 +2,8 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 154,
-    "tests": 1604,
+    "files": 155,
+    "tests": 1607,
     "ignored": 32,
     "byDecision": {
       "keep": 154,
@@ -2389,6 +2389,26 @@
       "environment": "happy-dom",
       "dependencies": [
         "treeKeys"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/windowEdges.test.ts",
+      "domain": "desktop",
+      "owner": "app/src/lib/windowEdges.ts",
+      "property": "Los ocho bordes de la ventana sin marco tienen su cursor de redimensionado y no hay borde maximizada ni a pantalla completa",
+      "risk": "P3",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 3,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "windowEdges"
       ],
       "external": [
         "vitest"
