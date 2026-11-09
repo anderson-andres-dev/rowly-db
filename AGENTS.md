@@ -7,16 +7,17 @@ This file is the entry point for any coding agent. It points to the documents th
 ## Find your way
 
 1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules between domains are data in `tools/architecture/model.json` and are checked in CI.
-2. Which tests protect an area, with owner and CI gate: `tests/inventory.json`. A test sits next to the code it covers.
-3. Engines, drivers, generated SQL, analysis or execution: read [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
-4. Optional symbol graph: `graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`. It is not versioned; build it locally with `graphify update .` (`graphifyy` on PyPI). Without it, use 1 and 2 and search the code.
+2. What a task names ("the grid", "the explorer", "the terminal") and the files and tests behind it: [docs/map/FEATURES.md](docs/map/FEATURES.md), generated from the `features` key of `model.json`. Add a file to the feature it belongs to; CI fails on a code file no feature lists.
+3. Which tests protect an area, with owner and CI gate: `tests/inventory.json`. A test sits next to the code it covers.
+4. Engines, drivers, generated SQL, analysis or execution: read [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
+5. Optional symbol graph: `graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`. It is not versioned; build it locally with `graphify update .` (`graphifyy` on PyPI). Without it, use 1 to 3 and search the code.
 
 Read only the area a task touches. Do not scan the whole repository.
 
 ## Rules that are easy to break
 
 - Branch off `develop` and open the pull request into `develop`. `main` and `develop` take no direct pushes.
-- Blocks between `<!-- generated: ... -->` markers are written by tools (`node tools/architecture/graph.mjs --write`, `node tools/inventory/status.mjs --write`). Never edit them by hand.
+- Blocks between `<!-- generated: ... -->` markers are written by tools (`node tools/architecture/graph.mjs --write`, `node tools/inventory/status.mjs --write`, `node tools/orient/features.mjs --write`). Never edit them by hand.
 - Every test file needs an entry in `tests/inventory.json`; `node tools/inventory/tests.mjs --check` fails until it has one.
 - Text the user sees goes through `app/src/lib/i18n/messages/` (Spanish and English), not inline strings.
 - Common code never names a concrete engine: engine-specific code lives in its own domain (see ARCHITECTURE, "Where engine-specific code may live").
