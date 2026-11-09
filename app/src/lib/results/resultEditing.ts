@@ -82,6 +82,37 @@ export function originalValue(raw: string | null): CellValue {
   return raw === null ? { kind: "null" } : { kind: "text", value: raw };
 }
 
+// El valor vigente de una celda: el pendiente si lo hay, si no el original.
+// Mas alla de las filas de la pagina estan las filas nuevas.
+export function currentValue(edits: PendingEdits, rows: readonly QueryRow[], row: number, col: number): CellValue {
+  if (row >= rows.length) return edits.inserted[row - rows.length]?.[col] ?? { kind: "null" };
+  return edits.updates.get(row)?.get(col) ?? originalValue(rows[row][col]);
+}
+
+// Por que una celda no se puede editar, como clave de i18n (`grid.*`) y sus
+// parametros; null si se puede. La rejilla y la vista de registro la usan
+// igual: un solo criterio.
+export interface CellBlock {
+  key: "blocked.result" | "blocked.computedColumn" | "blocked.generatedColumn" | "blocked.deletedRow";
+  params?: { column: string };
+}
+
+export function cellBlock(
+  info: ResultEditInfo | null,
+  edits: PendingEdits,
+  rowCount: number,
+  row: number,
+  col: number,
+  columnName: string,
+): CellBlock | null {
+  if (!info) return { key: "blocked.result" };
+  const column = info.columns[col];
+  if (!column) return { key: "blocked.computedColumn", params: { column: columnName } };
+  if (column.generated) return { key: "blocked.generatedColumn", params: { column: column.name } };
+  if (row < rowCount && edits.deleted.has(row)) return { key: "blocked.deletedRow" };
+  return null;
+}
+
 // Fija el valor de una celda. Volver al valor original la saca de los
 // pendientes; en una fila nueva simplemente se reemplaza.
 export function setCellValue(

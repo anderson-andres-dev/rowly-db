@@ -2,8 +2,8 @@
   "format": 1,
   "about": "Inventario de tests de Rowly DB. Ver tools/inventory/tests.mjs; los campos manuales se editan aqui.",
   "summary": {
-    "files": 154,
-    "tests": 1604,
+    "files": 155,
+    "tests": 1615,
     "ignored": 32,
     "byDecision": {
       "keep": 154,
@@ -1857,6 +1857,27 @@
       "dependencies": [
         "outputCopy",
         "stores/executionLog"
+      ],
+      "external": [
+        "vitest"
+      ],
+      "durationMs": null
+    },
+    {
+      "path": "app/src/lib/results/recordView.test.ts",
+      "domain": "results",
+      "owner": "app/src/lib/results/recordView.ts",
+      "property": "La vista de registro muestra cada columna con su tipo y valor (JSON sangrado sin tocar los numeros, binario en hex con su tamaño), navega saltando las filas ocultas y marca lo editado o invalido igual que la rejilla",
+      "risk": "P2",
+      "gate": "pr",
+      "decision": "keep",
+      "kind": "ts",
+      "tests": 11,
+      "ignored": 0,
+      "environment": "node",
+      "dependencies": [
+        "recordView",
+        "resultEditing"
       ],
       "external": [
         "vitest"

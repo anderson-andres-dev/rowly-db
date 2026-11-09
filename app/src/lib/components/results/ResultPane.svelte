@@ -24,6 +24,7 @@
     Search,
     Filter,
     Icon,
+    PanelRight,
   } from "@lucide/svelte";
   import type { IconNode } from "@lucide/svelte";
   import FindBar from "$lib/components/results/FindBar.svelte";
@@ -40,6 +41,7 @@
   import DataGrid from "$lib/components/results/DataGrid.svelte";
   import ResultPager from "$lib/components/results/ResultPager.svelte";
   import ToolbarButton from "$lib/components/results/ToolbarButton.svelte";
+  import RecordView from "$lib/components/results/RecordView.svelte";
   import {
     EMPTY_EDITS,
     addRow,
@@ -273,6 +275,37 @@
   let gridSelection = $state<RowRange | null>(null);
   // Filas, celdas y suma de lo seleccionado, a la derecha de la barra.
   let selectionSummary = $state<SelectionSummary | null>(null);
+
+  // Vista de registro (#133): la fila seleccionada como formulario. La
+  // seleccion es la de la rejilla; el panel pide moverla y escribe por
+  // commitCell, asi que no hay una segunda copia de nada.
+  let recordOpen = $state(false);
+  let recordView = $state<ReturnType<typeof RecordView>>();
+
+  function toggleRecordView() {
+    if (!showingResult) return;
+    if (recordOpen && document.activeElement?.closest(".record-view")) {
+      closeRecordView();
+      return;
+    }
+    if (recordOpen) {
+      recordView?.focus();
+      return;
+    }
+    recordOpen = true;
+    void tick().then(() => recordView?.focus());
+  }
+
+  function closeRecordView() {
+    recordOpen = false;
+    void tick().then(() => grid?.focusCell());
+  }
+
+  function moveRecord(row: number, col: number) {
+    const range = { minRow: row, maxRow: row, minCol: col, maxCol: col };
+    grid?.selectRange(range);
+    void grid?.reveal(range);
+  }
 
   const rows = $derived(result?.type === "resultSet" ? result.rows : []);
   const pending = $derived(pendingCount(edits));
@@ -621,6 +654,10 @@
       "submit-result-changes": inGrid(() => {
         if (pending > 0) onsubmit();
       }),
+      "toggle-record-view": () => {
+        if (!showingResult) return false;
+        toggleRecordView();
+      },
       // Ctrl+S en el grid con cambios pendientes: aplicarlos. Sin cambios,
       // sigue el guardar de siempre.
       "save-query-console": () => pending > 0 && inGrid(onsubmit)() !== false,
@@ -845,6 +882,13 @@
             shortcut="Ctrl+F"
             onclick={openFind}
           />
+          <ToolbarButton
+            icon={PanelRight}
+            label={$t("results.record.label")}
+            shortcut={shortcutKeys("toggle-record-view")}
+            tone={recordOpen ? "active" : "default"}
+            onclick={toggleRecordView}
+          />
         </div>
         <!-- A la derecha, juntos: con que formato copia Ctrl+C varias celdas
              y exportar (misma familia: sacar datos del resultado). -->
@@ -966,6 +1010,7 @@
     {/if}
   {:else}
     <div class="grid-region">
+      <div class="grid-row">
       <div class="grid-scroll" bind:this={gridScroll}>
 
         <!-- Siempre montado (aunque no haya filas): asi un filtro sin
@@ -1009,6 +1054,24 @@
             {@render cancelButton()}
           </div>
         {/if}
+      </div>
+      {#if recordOpen && result?.type === "resultSet"}
+        <RecordView
+          bind:this={recordView}
+          columns={result.columns}
+          rows={result.rows}
+          {edits}
+          {editInfo}
+          {editBlockedReason}
+          row={gridSelection?.minRow ?? null}
+          column={gridSelection?.minCol ?? 0}
+          hidden={hiddenRows}
+          onmove={moveRecord}
+          oncommit={commitCell}
+          onclose={closeRecordView}
+          {onnotice}
+        />
+      {/if}
       </div>
       <!-- Barra fija al pie: estadisticas a la izquierda y la paginacion
            centrada en el panel (grid de tres columnas: el centro no se
@@ -1361,8 +1424,15 @@
     background: var(--surface-content);
   }
 
+  .grid-row {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+  }
+
   .grid-scroll {
     position: relative;
+    min-width: 0;
     min-height: 0;
     flex: 1;
     overflow: hidden;

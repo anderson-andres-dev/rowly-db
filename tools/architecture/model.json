@@ -994,6 +994,8 @@
         "terms": {
           "es": [
             "editar celdas",
+            "vista de registro",
+            "formulario vertical",
             "insertar fila",
             "NULL",
             "DEFAULT",
@@ -1008,12 +1010,17 @@
             "delete row",
             "NULL",
             "DEFAULT",
+            "record view",
+            "vertical form",
             "apply changes",
             "changes preview"
           ]
         },
         "entry": [
           "app/src/lib/components/results/ChangesPreview.svelte",
+          "app/src/lib/components/results/RecordView.svelte",
+          "app/src/lib/results/recordView.ts",
+          "app/src/lib/stores/recordView.ts",
           "app/src/lib/results/resultEditing.ts",
           "app/src/lib/workspace/resultChanges.ts",
           "app/src/lib/stores/resultEdits.ts",

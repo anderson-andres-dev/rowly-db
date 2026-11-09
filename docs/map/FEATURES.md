@@ -332,10 +332,10 @@ Result tabs and the output log: one tab per result, pinned results and the statu
 Editing data from the grid: changing cells, NULL and DEFAULT, inserting and deleting rows, the preview and applying changes.
 
 - Domain: `frontend`
-- Terms (es): editar celdas, insertar fila, NULL, DEFAULT, aplicar cambios, vista previa de cambios, eliminar fila, guardar cambios
-- Terms (en): edit cells, insert row, delete row, NULL, DEFAULT, apply changes, changes preview
-- Files: `app/src/lib/components/results/ChangesPreview.svelte`, `app/src/lib/results/resultEditing.ts`, `app/src/lib/workspace/resultChanges.ts`, `app/src/lib/stores/resultEdits.ts`, `app/src-tauri/src/services/result_editing.rs`, `crates/engine/src/editing.rs`
-- Tests: `app/src-tauri/src/services/result_editing.rs`, `app/src/lib/results/resultEditing.test.ts`, `app/src/lib/stores/resultEdits.test.ts`, `app/src/lib/workspace/resultChanges.test.ts`, `crates/engine/src/editing.rs`
+- Terms (es): editar celdas, vista de registro, formulario vertical, insertar fila, NULL, DEFAULT, aplicar cambios, vista previa de cambios, eliminar fila, guardar cambios
+- Terms (en): edit cells, insert row, delete row, NULL, DEFAULT, record view, vertical form, apply changes, changes preview
+- Files: `app/src/lib/components/results/ChangesPreview.svelte`, `app/src/lib/components/results/RecordView.svelte`, `app/src/lib/results/recordView.ts`, `app/src/lib/stores/recordView.ts`, `app/src/lib/results/resultEditing.ts`, `app/src/lib/workspace/resultChanges.ts`, `app/src/lib/stores/resultEdits.ts`, `app/src-tauri/src/services/result_editing.rs`, `crates/engine/src/editing.rs`
+- Tests: `app/src-tauri/src/services/result_editing.rs`, `app/src/lib/results/recordView.test.ts`, `app/src/lib/results/resultEditing.test.ts`, `app/src/lib/stores/resultEdits.test.ts`, `app/src/lib/workspace/resultChanges.test.ts`, `crates/engine/src/editing.rs`
 - Related: [`results-grid`](#results-grid), [`execution-guard`](#execution-guard)
 
 ## results-export-copy
