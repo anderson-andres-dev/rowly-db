@@ -42,11 +42,12 @@ node tools/inventory/coverage.mjs           # every SQL_ENGINE §6 row answered 
 node tools/inventory/dependencies.mjs       # only published releases of dependencies
 node tools/inventory/status.mjs             # generated state of README and SQL_ENGINE up to date
 node tools/architecture/graph.mjs --check   # dependencies allowed and architecture graph up to date
-node tools/orient/features.mjs --check      # feature catalogue valid and docs/map/FEATURES.md up to date
+node tools/orient/features.mjs --check      # catalogue, rules and playbooks valid; map, router, skills and docs/map/* up to date
+node tools/orient/stack.mjs --check         # docs/map/STACK.md matches the lockfiles
 node tools/orient/eval.mjs --check          # orient has not got worse than tests/orient/orient.json (tolerance inside)
 ```
 
-Blocks between `<!-- generated: … -->` markers are written by those tools; never edit them by hand. `status.mjs --write` and `graph.mjs --write` regenerate them. `graphify-out/` is the optional exploratory symbol graph. It is not versioned: build it with `graphify update .` if you have [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` on PyPI) installed, or download the `graphify-out` artifact of the `Graph` workflow, which rebuilds it from `develop`. Agents start from [AGENTS.md](AGENTS.md).
+Blocks between `<!-- generated: … -->` markers are written by those tools; never edit them by hand. `status.mjs --write` and `graph.mjs --write` regenerate them. `graphify-out/` is the optional exploratory symbol graph. It is not versioned: build it with `graphify update .` if you have [graphify](https://github.com/Graphify-Labs/graphify) (`graphifyy` on PyPI) installed, or download the `graphify-out` artifact of the `Graph` workflow, which rebuilds it from `develop`. Agents start from [AGENTS.md](AGENTS.md); to change what they are told (features, rules, playbooks), edit `tools/architecture/model.json` and run `node tools/orient/features.mjs --write` ([docs/AI.md](docs/AI.md#changing-the-toolkit)); after changing dependencies, `node tools/orient/stack.mjs --write`.
 
 CI runs the same gate with Rust 1.90 (`.github/workflows/rust.yml`, on the packages a change touches and those that depend on them; see `tools/ci/README.md`); a newer local clippy can miss a lint that 1.90 reports, so `cargo +1.90 clippy --workspace --all-targets -- -D warnings` reproduces it exactly. Every test file needs an entry in `tests/inventory.json` with its owner, the property it protects, its risk, its gate and a decision; the `--check` fails until it has one.
 

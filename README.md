@@ -173,6 +173,7 @@ Bug reports and pull requests are welcome; for anything large, [open an issue](h
 | Add or change a database engine, a version line or a verified release | [ENGINE_GUIDE.md](ENGINE_GUIDE.md) |
 | Set up, branch, run the gates and open a pull request | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Run the tests against real MySQL, MariaDB and PostgreSQL servers | [tools/test-dbs/README.md](tools/test-dbs/README.md) |
+| Work with an AI agent (Claude Code, Codex, Copilot, Gemini, Cursor): how the repository points it to the right context | [AGENTS.md](AGENTS.md), [docs/AI.md](docs/AI.md) |
 
 ## License
 

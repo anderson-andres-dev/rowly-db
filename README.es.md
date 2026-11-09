@@ -173,6 +173,7 @@ Los reportes de errores y los pull requests son bienvenidos; para algo grande, [
 | Añadir o cambiar un motor de base de datos, una línea de versión o una versión verificada | [ENGINE_GUIDE.es.md](ENGINE_GUIDE.es.md) |
 | Preparar el entorno, crear la rama, correr las compuertas y abrir un pull request | [CONTRIBUTING.es.md](CONTRIBUTING.es.md) |
 | Correr las pruebas contra servidores reales de MySQL, MariaDB y PostgreSQL | [tools/test-dbs/README.es.md](tools/test-dbs/README.es.md) |
+| Trabajar con un agente de IA (Claude Code, Codex, Copilot, Gemini, Cursor): cómo el repositorio lo lleva al contexto correcto | [AGENTS.md](AGENTS.md), [docs/AI.es.md](docs/AI.es.md) |
 
 ## Licencia
 

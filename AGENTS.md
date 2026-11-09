@@ -2,7 +2,15 @@
 
 Rowly DB: a desktop SQL client (Tauri 2, Svelte, a Rust workspace) for MySQL, MariaDB and PostgreSQL. Khipu is the internal name of its engine; crates, identifiers and settings keys start with `khipu`, and everything the user sees says Rowly DB.
 
-This file is the entry point for any coding agent and it is the map: **read it before exploring anything**. It points to the documents that own each fact; it does not repeat them.
+This file is the entry point for any coding agent. It is a map of where the context is, not the context: **read it before exploring anything**. It points to the documents that own each fact and does not repeat them. [docs/AI.md](docs/AI.md) explains how the pieces fit.
+
+## How this repo works with you
+
+1. **Playbooks**: every kind of change has a procedure (what to read, steps, rules, checks). Find it below or with `orient --playbook`.
+2. **Map**: every feature and its entry file, below. Never list directories to find one.
+3. **Rules**: the persistent decisions, each with why and the command that checks it.
+4. **Tools**: `node tools/orient/orient.mjs` (written `orient` below) answers "where is it, what else changes, which tests". Only Node and the repository.
+5. **Versions**: [docs/map/STACK.md](docs/map/STACK.md) has the real version of each dependency and its docs.
 
 ## The repository in one minute
 
@@ -13,23 +21,9 @@ This file is the entry point for any coding agent and it is the map: **read it b
 - **Tests** live next to the code (Vitest, `#[cfg(test)]`); `crates/server-tests` runs against real servers; `app/tests/e2e` drives the real app. `tests/inventory.json` lists every test file with its owner and CI gate.
 - **Big files, read them by line range, never whole**: `Workspace.svelte` (~2 000 lines), `DataGrid.svelte` (~3 000), `terminal.rs` (~1 000), `SQL_ENGINE.md` and `docs/ARCHITECTURE.md` (use their section anchors).
 
-## What to do with a generic request
-
-Do not start by scanning. Use the map below and the orientation tool; open files only to confirm.
-
-| You are asked | Do this | Do not |
-|---|---|---|
-| "Analyze / explain the repo" | Answer from this file; add [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) sections "The idea", "Layers and dependencies" and "How SQL flows" if depth is needed. Open at most the entry file of a feature you are asked about. | List directories, read every crate, run repository-wide greps. |
-| "How could I make this change / implement X" | `node tools/orient/orient.mjs "<the request>"`, read the line ranges it names, then `--impact <file>` to see what else changes. Answer with: files to touch, what to reuse, tests to run. | Read many files first and plan afterwards. |
-| "Fix this bug" | `node tools/orient/orient.mjs "<the symptom>"`, read the ranges, run the tests it lists (it gives the command). | Run the whole suite or read whole files. |
-| "Where is X / what does X do" | Find X in the map below, then `node tools/orient/orient.mjs --expand <feature>` for its files and symbols. | `find`, `ls -R`, broad greps. |
-| "Refactor / review" | `node tools/orient/orient.mjs --impact <file or feature>`: who uses it, whom it uses, the tests of both. | Edit before knowing the dependants. |
-
-Budget: have a plan after about five files. If the map and the card do not answer, widen one step (`--expand`, then a targeted `grep` inside the folder they name), not the whole repository. The card is a hint, not an answer: on varied tasks its first five files hold about half of the files a change touched (at least one in about seven cases out of ten), so verify before relying on it. `LIKELY` means probably the right area, not that nothing else needs reading; `PARTIAL`, `AMBIGUOUS` and `NO MATCH` say what to do next. It needs only Node and the repository; `--json` gives a versioned JSON object; details, limits and measurements are in [tools/orient/README.md](tools/orient/README.md).
-
 ## Playbooks
 
-Each kind of change has a procedure: what to read, the steps, the rules that apply and what to run. Find yours with `node tools/orient/orient.mjs --playbook "<the request>"`; the full text of every one is [docs/map/PLAYBOOKS.md](docs/map/PLAYBOOKS.md), and Claude Code and Codex load them as skills (`rowly-<id>`).
+Find yours with `node tools/orient/orient.mjs --playbook "<the request>"`; the steps of all are in [docs/map/PLAYBOOKS.md](docs/map/PLAYBOOKS.md), and Claude Code and Codex load them as skills (`rowly-<id>`).
 
 <!-- generated: router (tools/orient/blocks.mjs) -->
 - `understand-repo` — Understand or explain the repository. Read: docs/ARCHITECTURE.md#the-idea
@@ -44,9 +38,23 @@ Each kind of change has a procedure: what to read, the steps, the rules that app
 - `release` — Publish a release. Read: CONTRIBUTING.md#releasing
 <!-- /generated: router -->
 
+## What to do with a generic request
+
+Do not start by scanning. Use the playbook or this table and the orientation tool; open files only to confirm.
+
+| You are asked | Do this | Do not |
+|---|---|---|
+| "Analyze / explain the repo" | Answer from this file; add [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) sections "The idea", "Layers and dependencies" and "How SQL flows" if depth is needed. | List directories, read every crate, grep the repository. |
+| "How could I make this change / implement X" | `orient "<the request>"`, read the line ranges it names, then `--impact <file>`. Answer with: files to touch, what to reuse, tests to run. | Read many files first and plan afterwards. |
+| "Fix this bug" | `orient "<the symptom>"`, read the ranges, run the tests it lists. | Run the whole suite or read whole files. |
+| "Where is X / what does X do" | Find X in the map below, then `orient --expand <feature>`. | `find`, `ls -R`, broad greps. |
+| "Refactor / review" | `orient --impact <file or feature>`: who uses it, whom it uses, the tests of both. | Edit before knowing the dependants. |
+
+Budget: have a plan after about five files. If the map and the card do not answer, widen one step (`--expand`, then a targeted `grep` inside the folder they name), not the whole repository. The card is a hint: its first five files hold about half of the files a change touched, so verify. `LIKELY` means probably the right area; `PARTIAL`, `AMBIGUOUS` and `NO MATCH` say what to do next. `--json` is versioned; limits and measurements: [tools/orient/README.md](tools/orient/README.md).
+
 ## Map of features
 
-Each line is `feature` — what it is → its main file or folder. Generated from `tools/architecture/model.json` (`node tools/orient/features.mjs --write`); the full table with terms, tests and neighbours is [docs/map/FEATURES.md](docs/map/FEATURES.md) (read its index only).
+Each line is `feature` — what it is → its main file or folder. The full table with terms, tests and neighbours is [docs/map/FEATURES.md](docs/map/FEATURES.md) (read its index only).
 
 <!-- generated: map (tools/orient/blocks.mjs) -->
 - `connection-profiles` — Saved connections → `app/src/lib/components/ConnectionForm.svelte`
@@ -93,15 +101,14 @@ Each line is `feature` — what it is → its main file or folder. Generated fro
 
 ## Where the facts live
 
-1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules between domains are data in `tools/architecture/model.json` and are checked in CI.
-2. Engines, drivers, generated SQL, analysis or execution: read [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
-3. Which tests protect an area: `tests/inventory.json`. A test sits next to the code it covers.
-4. Real versions of every dependency and where to read the docs of that version: [docs/map/STACK.md](docs/map/STACK.md).
-5. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
+1. Layout, domains and where each kind of change goes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The dependency rules are data in `tools/architecture/model.json`, checked in CI.
+2. Engines, drivers, generated SQL, analysis or execution: [SQL_ENGINE.md](SQL_ENGINE.md) first. Adding or changing an engine or a version line: [ENGINE_GUIDE.md](ENGINE_GUIDE.md).
+3. Which tests protect an area: `tests/inventory.json`. Real dependency versions and their docs: [docs/map/STACK.md](docs/map/STACK.md).
+4. Optional symbol graph: `graphify query "<question>"`; not versioned, build it with `graphify update .`. Nothing depends on it.
 
 ## Rules
 
-Persistent decisions, each with why it exists and the command that checks it (generated from `tools/architecture/model.json`).
+Persistent decisions, each with why it exists and the command that checks it.
 
 <!-- generated: rules (tools/orient/blocks.mjs) -->
 - **branch-flow** — Branch off `develop` and open the pull request into `develop`; `main` and `develop` take no direct pushes. *Why:* Releases come from `main`; `develop` is where the work meets.
@@ -123,4 +130,4 @@ Persistent decisions, each with why it exists and the command that checks it (ge
 
 ## Checks
 
-The full list to run before a pull request is in [CONTRIBUTING.md](CONTRIBUTING.md#workflow). CI runs only what a change touches; the plan is in the `Plan` job summary and the rules in `tools/ci/areas.json`.
+The full list to run before a pull request is in [CONTRIBUTING.md](CONTRIBUTING.md#workflow). CI runs only what a change touches; the plan is in the `Plan` job summary and the rules in `tools/ci/areas.json`. To change this toolkit, edit `tools/architecture/model.json` and run `node tools/orient/features.mjs --write` ([docs/AI.md](docs/AI.md#changing-the-toolkit)).
